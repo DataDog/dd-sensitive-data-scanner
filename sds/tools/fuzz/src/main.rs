@@ -1,6 +1,11 @@
+// This needs cleaned up a bit before clippy should run here
+#![allow(clippy::all)]
+
 use afl::fuzz;
 use dd_sds::{MatchAction, PartialRedactDirection, RuleConfig, Scanner, Scope};
 use rand::{rngs::StdRng, Rng, SeedableRng};
+
+
 
 #[cfg(not(feature = "manual_test"))]
 fn main() {
