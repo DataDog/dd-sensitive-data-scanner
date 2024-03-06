@@ -29,12 +29,12 @@ jobs:
       run:
         working-directory: sds
     steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: "Install Hyperscan"
         run: |
           sudo apt-get update
           sudo apt-get install -y libhyperscan-dev
-      - uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
       - name: "Format check"
         run: cargo fmt --check --all
       - name: "Tests"
