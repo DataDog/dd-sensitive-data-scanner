@@ -1,5 +1,4 @@
 // This needs cleaned up a bit before clippy should run here
-#![allow(clippy::all)]
 #![allow(warnings)]
 
 use afl::fuzz;
