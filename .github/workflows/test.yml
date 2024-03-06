@@ -1,0 +1,39 @@
+name: Test Suite
+
+on:
+  pull_request:
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches:
+      - main
+
+concurrency:
+  # For pull requests, cancel running workflows, for main, run all
+  #
+  # `github.event.number` exists for pull requests, otherwise fall back to SHA
+  # for main
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  RUST_BACKTRACE: full
+  VERBOSE: true
+  CI: true
+  PROFILE: debug
+
+jobs:
+  sds:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sds
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: "Format check"
+        run: cargo fmt --check --all
+      - name: "Tests"
+        run: cargo test --workspace
+      - name: "clippy"
+        run: cargo clippy --workspace --all-targets -- -D warnings
