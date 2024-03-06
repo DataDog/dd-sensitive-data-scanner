@@ -1,3 +1,4 @@
 .idea
 target/
 tools/fuzz/out/
+.DS_Store
