@@ -252,6 +252,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
+name = "dd-sds"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "criterion",
+ "farmhash",
+ "hyperscan",
+ "luhn",
+ "nom",
+ "rand",
+ "regex",
+ "regex-automata",
+ "regex-syntax 0.7.5",
+ "regex_generate",
+ "serde",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -709,31 +727,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "sds"
-version = "0.1.0"
-dependencies = [
- "ahash",
- "criterion",
- "farmhash",
- "hyperscan",
- "luhn",
- "nom",
- "rand",
- "regex",
- "regex-automata",
- "regex-syntax 0.7.5",
- "regex_generate",
- "serde",
-]
-
-[[package]]
 name = "sds-fuzz"
 version = "0.1.0"
 dependencies = [
  "afl",
+ "dd-sds",
  "hyperscan",
  "rand",
- "sds",
 ]
 
 [[package]]

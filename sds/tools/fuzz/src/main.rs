@@ -1,6 +1,6 @@
 use afl::fuzz;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use sds::{MatchAction, PartialRedactDirection, RuleConfig, Scanner, Scope};
+use dd_sds::{MatchAction, PartialRedactDirection, RuleConfig, Scanner, Scope};
 
 #[cfg(not(feature = "manual_test"))]
 fn main() {
