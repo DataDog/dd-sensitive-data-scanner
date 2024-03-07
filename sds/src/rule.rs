@@ -1,8 +1,8 @@
+use crate::match_action::MatchAction;
+use crate::path::Path;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DefaultOnNull;
-use crate::match_action::MatchAction;
-use crate::path::Path;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RuleConfig {
