@@ -70,7 +70,6 @@ pub fn validate_and_create_regex(input: &str) -> Result<meta::Regex, RegexValida
 
 #[cfg(test)]
 mod test {
-    use crate::normalization::test::read_file_lines;
     use crate::validation::{validate_regex, RegexValidationError};
 
     #[test]
@@ -104,9 +103,5 @@ mod test {
             validate_regex(&("(".repeat(1000) + "x" + &")".repeat(1000))),
             Err(RegexValidationError::ExceededDepthLimit)
         );
-    }
-
-    fn get_pattern_strings() -> Vec<String> {
-        read_file_lines("data/patterns.txt")
     }
 }
