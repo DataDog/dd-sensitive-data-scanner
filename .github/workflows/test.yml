@@ -58,7 +58,9 @@ jobs:
           cd go
           LD_LIBRARY_PATH=../rust/target/release go test -v ./...
       - name: "Make sure the example builds and stays relevant"
-        run: go build -buildvcs=false
+        run: |
+          cd go/example
+          go build -buildvcs=false
   license-3rdparty:
     runs-on: ubuntu-latest
     steps:
