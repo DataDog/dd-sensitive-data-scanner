@@ -1,5 +1,7 @@
 use crate::encoding::Encoding;
 use crate::event::Event;
+use crate::observability::labels::{Labels, NO_LABEL};
+
 use crate::proximity_keywords::CompiledProximityKeywords;
 use crate::rule::RuleConfig;
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
@@ -33,6 +35,18 @@ pub struct Scanner {
 
 impl Scanner {
     pub fn new(rules: &[RuleConfig]) -> Result<Self, CreateScannerError> {
+        Scanner::new_internal(rules, NO_LABEL)
+    }
+
+    #[cfg(feature = "observability")]
+    pub fn new_with_labels(
+        rules: &[RuleConfig],
+        labels: Labels,
+    ) -> Result<Self, CreateScannerError> {
+        Scanner::new_internal(rules, labels)
+    }
+
+    pub fn new_internal(rules: &[RuleConfig], labels: Labels) -> Result<Self, CreateScannerError> {
         let compiled_rules = rules
             .iter()
             .enumerate()
@@ -45,7 +59,7 @@ impl Scanner {
                     .proximity_keywords
                     .clone()
                     .map_or(Ok(CompiledProximityKeywords::default()), |keywords| {
-                        CompiledProximityKeywords::try_from(keywords)
+                        CompiledProximityKeywords::try_new(keywords, &labels)
                     })?;
 
                 Ok(CompiledRule {
@@ -330,6 +344,8 @@ impl Scanner {
 #[cfg(test)]
 mod test {
     use crate::match_action::{MatchAction, MatchActionValidationError};
+    #[cfg(feature = "observability")]
+    use crate::observability::labels::Labels;
     use crate::rule::{
         ProximityKeywordsConfig, RuleConfig, RuleConfigBuilder, SecondaryValidator::LuhnChecksum,
     };
@@ -345,6 +361,27 @@ mod test {
                 replacement: "[REDACTED]".to_string(),
             })
             .build()])
+        .unwrap();
+
+        let mut input = "text with secret".to_owned();
+
+        let matched_rules = scanner.scan(&mut input);
+
+        assert_eq!(matched_rules.len(), 1);
+        assert_eq!(input, "text with [REDACTED]");
+    }
+
+    #[test]
+    #[cfg(feature = "observability")]
+    fn simple_redaction_with_additional_labels() {
+        let scanner = Scanner::new_with_labels(
+            &[RuleConfig::builder("secret".to_string())
+                .match_action(MatchAction::Redact {
+                    replacement: "[REDACTED]".to_string(),
+                })
+                .build()],
+            Labels::new(vec![("key".to_string(), "value".to_string())]),
+        )
         .unwrap();
 
         let mut input = "text with secret".to_owned();
