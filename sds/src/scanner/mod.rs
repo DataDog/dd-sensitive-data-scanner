@@ -35,18 +35,13 @@ pub struct Scanner {
 
 impl Scanner {
     pub fn new(rules: &[RuleConfig]) -> Result<Self, CreateScannerError> {
-        Scanner::new_internal(rules, NO_LABEL)
+        Scanner::new_with_labels(rules, NO_LABEL)
     }
 
-    #[cfg(feature = "observability")]
     pub fn new_with_labels(
         rules: &[RuleConfig],
         labels: Labels,
     ) -> Result<Self, CreateScannerError> {
-        Scanner::new_internal(rules, labels)
-    }
-
-    pub fn new_internal(rules: &[RuleConfig], labels: Labels) -> Result<Self, CreateScannerError> {
         let compiled_rules = rules
             .iter()
             .enumerate()
@@ -344,7 +339,6 @@ impl Scanner {
 #[cfg(test)]
 mod test {
     use crate::match_action::{MatchAction, MatchActionValidationError};
-    #[cfg(feature = "observability")]
     use crate::observability::labels::Labels;
     use crate::rule::{
         ProximityKeywordsConfig, RuleConfig, RuleConfigBuilder, SecondaryValidator::LuhnChecksum,
@@ -372,7 +366,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "observability")]
     fn simple_redaction_with_additional_labels() {
         let scanner = Scanner::new_with_labels(
             &[RuleConfig::builder("secret".to_string())
