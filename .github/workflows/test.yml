@@ -55,7 +55,7 @@ jobs:
           cargo build --release
       - name: "Run the Go unit tests"
         run: |
-          cd ../go
+          cd go
           LD_LIBRARY_PATH=../rust/target/release go test -v ./...
       - name: "Make sure the example builds and stays relevant"
         run: go build -buildvcs=false
@@ -63,5 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: "Install dd-rust-license-tool"
+        run: cargo install dd-rust-license-tool
       - name: "Check LICENSE-3rdparty.csv"
         run: ./scripts/generate_license_3rdparty.sh check
