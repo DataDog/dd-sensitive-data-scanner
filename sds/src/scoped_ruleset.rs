@@ -1,113 +1,112 @@
 use crate::event::{EventVisitor, VisitStringResult};
 use crate::{Event, Path, PathSegment, Scope};
-use ahash::{AHashMap, AHashSet};
+use ahash::AHashMap;
 
-/// A `ScopedRuleSet` determines which rules will be used to scan each field of an event.
+/// A `ScopedRuleSet` determines which rules will be used to scan each field of an event, and which
+/// paths are considered `excluded`.
+#[derive(Debug)]
 pub struct ScopedRuleSet {
-    include_tree: RuleTree,
-    exclude_tree: RuleTree,
-    initial_exclude_rules: AHashSet<usize>,
+    tree: RuleTree,
 }
 
 impl ScopedRuleSet {
     /// The scopes for each rule. The indices of the scopes MUST match the rule index.
     pub fn new(rules_scopes: &[Scope]) -> Self {
-        let mut include_tree = RuleTree::new();
-        let mut exclude_tree = RuleTree::new();
-        let mut initial_exclude_rules = AHashSet::new();
+        let mut tree = RuleTree::new();
 
         for (rule_index, scope) in rules_scopes.iter().enumerate() {
-            match &scope {
-                Scope::Include(paths) => {
-                    for path in paths {
-                        include_tree.insert_rule(path, rule_index);
+            match scope {
+                Scope::Include { include, exclude } => {
+                    for path in exclude {
+                        tree.insert_rule_removal(path, rule_index);
+                    }
+
+                    for path in include {
+                        tree.insert_rule_add(path, rule_index);
                     }
                 }
                 Scope::Exclude(paths) => {
-                    initial_exclude_rules.insert(rule_index);
+                    tree.insert_rule_add(&Path::root(), rule_index);
                     for path in paths {
-                        exclude_tree.insert_rule(path, rule_index);
+                        tree.insert_rule_removal(path, rule_index);
                     }
-                }
-                Scope::All => {
-                    // TODO: This variant should not exist (Should be Exclude(vec![]) instead)
-                    include_tree.insert_rule(&Path::root(), rule_index);
                 }
             }
         }
-        Self {
-            include_tree,
-            exclude_tree,
-            initial_exclude_rules,
-        }
+        Self { tree }
     }
 
-    pub fn visit_string_rule_combinations(
-        &self,
-        event: &mut impl Event,
-        visit: impl FnMut(&Path, &str, RuleIndexVisitor) -> bool,
+    pub fn visit_string_rule_combinations<'path, 'c: 'path>(
+        &'c self,
+        event: &'path mut impl Event,
+        content_visitor: impl ContentVisitor<'path>,
     ) {
-        event.visit_event(&mut ScopedRuledSetEventVisitor {
-            visit,
-            include_tree_nodes: vec![&self.include_tree],
-            exclude_tree_nodes: vec![&self.exclude_tree],
+        let mut visitor = ScopedRuledSetEventVisitor {
+            content_visitor,
+            tree_nodes: vec![&self.tree],
             path: Path::root(),
-            exclusion_rule_ids: self.initial_exclude_rules.clone(),
-        })
+        };
+
+        event.visit_event(&mut visitor)
     }
 }
 
-struct ScopedRuledSetEventVisitor<'a, F> {
-    visit: F,
+pub struct ExclusionCheck<'a> {
+    tree_nodes: &'a [&'a RuleTree],
+}
+impl<'a> ExclusionCheck<'a> {
+    pub fn is_excluded(&self, rule_index: usize) -> bool {
+        for include_node in self.tree_nodes {
+            for change in &include_node.rule_changes {
+                match change {
+                    RuleChange::Add(_) => { /* ignore */ }
+                    RuleChange::Remove(i) => {
+                        if *i == rule_index {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+}
 
-    // `include_tree_nodes` is a list of all the nodes from the root to the current node.
-    // This list contains all of the tree nodes that ADD rules, so iterating all of the rules
-    // requires simply iterating through this list. Going deeper in the tree (pushing a segment)
-    // adds to this list, and going back up (popping a segment) removes from the list.
-    include_tree_nodes: Vec<&'a RuleTree>,
+pub trait ContentVisitor<'path> {
+    fn visit_content<'content_visitor>(
+        &'content_visitor mut self,
+        path: &Path<'path>,
+        content: &str,
+        rules: RuleIndexVisitor,
+        is_excluded: ExclusionCheck<'content_visitor>,
+    ) -> bool;
+}
 
-    // `exclude_tree_nodes` is a list of all the nodes from the root to the current node.
-    // This list contains all of the tree nodes that REMOVE rules. The actual active rules with
-    // excluded scopes are kept in `exclusion_rule_ids`. This is just used to remember which rules
-    // need to be removed as you go back up the tree (segments are popped from the event).
-    exclude_tree_nodes: Vec<&'a RuleTree>,
+struct ScopedRuledSetEventVisitor<'a, C> {
+    // The struct that will receive content / rules.
+    content_visitor: C,
+
+    // This is a list of parent tree nodes, which is a list of all of the "active" rule changes.
+    // If an "Add" exists for a rule in this list, it will be scanned. If a single "Remove" exists, it will cause the `ExclusionCheck` to return true.
+    tree_nodes: Vec<&'a RuleTree>,
 
     // The current path being visited
     path: Path<'a>,
-
-    // The current list of rules that had `Exclude` scopes. This starts as the whole list.
-    // They are removed as nodes are pushed, and inserted when they are popped.
-    exclusion_rule_ids: AHashSet<usize>,
 }
 
-impl<'a, F> EventVisitor<'a> for ScopedRuledSetEventVisitor<'a, F>
+impl<'path: 'content_visitor, 'content_visitor, C> EventVisitor<'path>
+    for ScopedRuledSetEventVisitor<'path, C>
 where
-    F: FnMut(&Path<'a>, &str, RuleIndexVisitor) -> bool,
+    C: ContentVisitor<'path>,
 {
-    fn push_segment(&mut self, segment: PathSegment<'a>) {
-        // update include tree
+    fn push_segment(&mut self, segment: PathSegment<'path>) {
+        // update the tree
         // The current path may go beyond what is stored in the "include" tree, so the tree is only updated if they are at the same height.
-        if self.path.len() + 1 == self.include_tree_nodes.len() {
-            let last_tree = *self.include_tree_nodes.last().unwrap();
+        if self.path.len() + 1 == self.tree_nodes.len() {
+            let last_tree = *self.tree_nodes.last().unwrap();
             if let Some(child) = last_tree.children.get(&segment) {
                 // All of the rules from the `child` node should be applied to the current path (and anything below it)
-                self.include_tree_nodes.push(child);
-            }
-        }
-
-        // update exclude tree
-        // The current path may go beyond what is stored in the "exclude" tree, so the tree is only updated if they are at the same height.
-        if self.path.len() + 1 == self.exclude_tree_nodes.len() {
-            let last_tree = *self.exclude_tree_nodes.last().unwrap();
-            if let Some(child) = last_tree.children.get(&segment) {
-                for rule_id in &child.rules_ids {
-                    // All rules included in this node will now be excluded, so it's removed from the `exclusion_rule_ids` set.
-                    let was_present = self.exclusion_rule_ids.remove(rule_id);
-                    debug_assert!(was_present);
-                }
-
-                // Save the tree node for later so the rules stored in it can be added back to the `exclusion_rule_ids` when the segment is popped
-                self.exclude_tree_nodes.push(child);
+                self.tree_nodes.push(child);
             }
         }
 
@@ -115,28 +114,22 @@ where
     }
 
     fn pop_segment(&mut self) {
-        if self.path.len() + 1 == self.include_tree_nodes.len() {
+        if self.path.len() + 1 == self.tree_nodes.len() {
             // The rules from the last node are no longer active, so remove them.
-            self.include_tree_nodes.pop();
-        }
-
-        if self.path.len() + 1 == self.exclude_tree_nodes.len() {
-            let popped = self.exclude_tree_nodes.pop().unwrap();
-            for rule_id in &popped.rules_ids {
-                // The rules from the latest node are no longer being excluded, so add them back to the `exclusion_rule_ids` set.
-                self.exclusion_rule_ids.insert(*rule_id);
-            }
+            let _popped = self.tree_nodes.pop();
         }
         self.path.segments.pop();
     }
 
-    fn visit_string<'b>(&'b mut self, value: &str) -> VisitStringResult<'b, 'a> {
-        let will_mutate = (self.visit)(
+    fn visit_string<'s>(&'s mut self, value: &str) -> VisitStringResult<'s, 'path> {
+        let will_mutate = self.content_visitor.visit_content(
             &self.path,
             value,
             RuleIndexVisitor {
-                include_tree_nodes: &self.include_tree_nodes,
-                exclusion_rule_ids: &self.exclusion_rule_ids,
+                tree_nodes: &self.tree_nodes,
+            },
+            ExclusionCheck {
+                tree_nodes: &self.tree_nodes,
             },
         );
         VisitStringResult {
@@ -147,8 +140,7 @@ where
 }
 
 pub struct RuleIndexVisitor<'a> {
-    include_tree_nodes: &'a Vec<&'a RuleTree>,
-    exclusion_rule_ids: &'a AHashSet<usize>,
+    tree_nodes: &'a Vec<&'a RuleTree>,
 }
 
 impl<'a> RuleIndexVisitor<'a> {
@@ -156,46 +148,72 @@ impl<'a> RuleIndexVisitor<'a> {
     /// potentially return no rule indices at all.
     pub fn visit_rule_indices(&self, mut visit: impl FnMut(usize)) {
         // visit rules with an `Include` scope
-        for include_node in self.include_tree_nodes {
-            for rule_id in &include_node.rules_ids {
-                (visit)(*rule_id);
+        for include_node in self.tree_nodes {
+            for change in &include_node.rule_changes {
+                match change {
+                    RuleChange::Add(rule_id) => {
+                        (visit)(*rule_id);
+                    }
+                    RuleChange::Remove(_) => {
+                        /* ignore removals, they can be checked as needed later */
+                    }
+                }
             }
-        }
-
-        // visit rules with an `Exclude` scope
-        for rule_id in self.exclusion_rule_ids {
-            (visit)(*rule_id)
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum RuleChange {
+    Add(usize),
+    Remove(usize),
+}
+
+#[derive(Clone, Debug)]
 struct RuleTree {
-    rules_ids: Vec<usize>,
+    rule_changes: Vec<RuleChange>,
     children: AHashMap<PathSegment<'static>, RuleTree>,
 }
 
 impl RuleTree {
     pub fn new() -> Self {
         Self {
-            rules_ids: vec![],
+            rule_changes: vec![],
             children: AHashMap::new(),
         }
     }
 
-    pub fn insert_rule(&mut self, path: &Path<'static>, rule_index: usize) {
-        self.insert_rule_inner(&path.segments, rule_index);
+    pub fn insert_rule_add(&mut self, path: &Path<'static>, rule_index: usize) {
+        self.insert_rule_inner(&path.segments, RuleChange::Add(rule_index));
     }
 
-    fn insert_rule_inner(&mut self, path: &[PathSegment<'static>], rule_index: usize) {
+    pub fn insert_rule_removal(&mut self, path: &Path<'static>, rule_index: usize) {
+        self.insert_rule_inner(&path.segments, RuleChange::Remove(rule_index));
+    }
+
+    fn insert_rule_inner(&mut self, path: &[PathSegment<'static>], rule_change: RuleChange) {
+        if self.rule_changes.contains(&rule_change) {
+            return;
+        }
         if let Some((first, remaining)) = path.split_first() {
             let child_tree = self
                 .children
                 .entry(first.clone())
                 .or_insert_with(RuleTree::new);
-            child_tree.insert_rule_inner(remaining, rule_index);
+            child_tree.insert_rule_inner(remaining, rule_change);
         } else {
-            self.rules_ids.push(rule_index);
+            // remove any recursive children, since they will be duplicated
+            self.recursively_remove(rule_change);
+            self.rule_changes.push(rule_change);
+        }
+    }
+
+    // Remove the given change from all children (recursive). This is used
+    // to remove duplicates.
+    fn recursively_remove(&mut self, rule_change: RuleChange) {
+        self.rule_changes.retain(|x| *x != rule_change);
+        for child_tree in self.children.values_mut() {
+            child_tree.recursively_remove(rule_change);
         }
     }
 }
@@ -206,31 +224,54 @@ mod test {
 
     use super::*;
 
-    fn visit_event(
-        event: &mut impl Event,
-        ruleset: &ScopedRuleSet,
-    ) -> Vec<(Path<'static>, String, Vec<usize>)> {
-        let mut paths = vec![];
-        ruleset.visit_string_rule_combinations(event, |path, value, rule_iter| {
-            let mut rules_for_path = vec![];
-            rule_iter.visit_rule_indices(|rule_index| {
-                rules_for_path.push(rule_index);
-            });
-            rules_for_path.sort();
-            paths.push((path.into_static(), value.to_string(), rules_for_path));
-            true
-        });
-        paths.sort();
-        paths
+    #[derive(Debug, PartialEq, Eq)]
+    struct Visited {
+        paths: Vec<(Path<'static>, String, Vec<(usize, bool)>)>,
+    }
+
+    fn visit_event(event: &mut impl Event, ruleset: &ScopedRuleSet) -> Visited {
+        let mut visited = Visited { paths: vec![] };
+
+        struct RecordingContentVisitor<'a> {
+            visited: &'a mut Visited,
+        }
+
+        impl<'a> ContentVisitor<'a> for RecordingContentVisitor<'a> {
+            fn visit_content<'content_visitor>(
+                &'content_visitor mut self,
+                path: &Path<'a>,
+                content: &str,
+                rule_iter: RuleIndexVisitor,
+                exclusion_check: ExclusionCheck<'content_visitor>,
+            ) -> bool {
+                let mut rules = vec![];
+                rule_iter.visit_rule_indices(|rule_index| {
+                    rules.push((rule_index, exclusion_check.is_excluded(rule_index)));
+                });
+                rules.sort();
+                self.visited
+                    .paths
+                    .push((path.into_static(), content.to_string(), rules));
+                true
+            }
+        }
+
+        ruleset.visit_string_rule_combinations(
+            event,
+            RecordingContentVisitor {
+                visited: &mut visited,
+            },
+        );
+        visited.paths.sort();
+        visited
     }
 
     #[test]
     fn test_inclusive_scopes() {
         let ruleset = ScopedRuleSet::new(&[
-            Scope::Include(vec![Path::from(vec!["a".into()])]),
-            Scope::Include(vec![Path::from(vec!["a".into(), "b".into()])]),
-            // matches nothing
-            Scope::Include(vec![]),
+            Scope::include(vec![Path::from(vec!["a".into()])]),
+            Scope::include(vec![Path::from(vec!["a".into(), "b".into()])]),
+            Scope::none(),
         ]);
 
         let mut event = SimpleEvent::Map(
@@ -254,28 +295,30 @@ mod test {
 
         assert_eq!(
             paths,
-            vec![
-                (
-                    Path::from(vec!["a".into(), "b".into()]),
-                    "value-ab".into(),
-                    vec![0, 1]
-                ),
-                (
-                    Path::from(vec!["a".into(), "c".into()]),
-                    "value-ac".into(),
-                    vec![0]
-                ),
-                (Path::from(vec!["d".into()]), "value-d".into(), vec![])
-            ]
+            Visited {
+                paths: vec![
+                    (
+                        Path::from(vec!["a".into(), "b".into()]),
+                        "value-ab".into(),
+                        vec![(0, false), (1, false)]
+                    ),
+                    (
+                        Path::from(vec!["a".into(), "c".into()]),
+                        "value-ac".into(),
+                        vec![(0, false)]
+                    ),
+                    (Path::from(vec!["d".into()]), "value-d".into(), vec![])
+                ],
+            }
         );
     }
 
     #[test]
     fn test_inclusive_scopes_array() {
         let ruleset = ScopedRuleSet::new(&[
-            Scope::Include(vec![Path::from(vec![0.into()])]),
-            Scope::Include(vec![Path::from(vec![1.into(), 0.into()])]),
-            Scope::Include(vec![Path::from(vec![2.into(), 0.into()])]),
+            Scope::include(vec![Path::from(vec![0.into()])]),
+            Scope::include(vec![Path::from(vec![1.into(), 0.into()])]),
+            Scope::include(vec![Path::from(vec![2.into(), 0.into()])]),
         ]);
 
         let mut event = SimpleEvent::List(vec![
@@ -289,26 +332,32 @@ mod test {
 
         assert_eq!(
             paths,
-            vec![
-                (Path::from(vec![0.into()]), "value-0".into(), vec![0]),
-                (Path::from(vec![1.into()]), "value-1".into(), vec![]),
-                (
-                    Path::from(vec![2.into(), 0.into()]),
-                    "value-2-0".into(),
-                    vec![2]
-                ),
-                (Path::from(vec![3.into()]), "value-3".into(), vec![]),
-            ]
+            Visited {
+                paths: vec![
+                    (
+                        Path::from(vec![0.into()]),
+                        "value-0".into(),
+                        vec![(0, false)]
+                    ),
+                    (Path::from(vec![1.into()]), "value-1".into(), vec![]),
+                    (
+                        Path::from(vec![2.into(), 0.into()]),
+                        "value-2-0".into(),
+                        vec![(2, false)]
+                    ),
+                    (Path::from(vec![3.into()]), "value-3".into(), vec![]),
+                ],
+            }
         );
     }
 
     #[test]
     fn test_exclusive_scopes() {
         let ruleset = ScopedRuleSet::new(&[
-            Scope::Exclude(vec![Path::from(vec!["a".into()])]),
-            Scope::Exclude(vec![Path::from(vec!["a".into(), "b".into()])]),
+            Scope::exclude(vec![Path::from(vec!["a".into()])]),
+            Scope::exclude(vec![Path::from(vec!["a".into(), "b".into()])]),
             // matches everything
-            Scope::Exclude(vec![]),
+            Scope::all(),
         ]);
 
         let mut event = SimpleEvent::Map(
@@ -333,32 +382,34 @@ mod test {
 
         assert_eq!(
             paths,
-            vec![
-                (
-                    Path::from(vec!["a".into(), "b".into()]),
-                    "value-ab".into(),
-                    vec![2]
-                ),
-                (
-                    Path::from(vec!["a".into(), "c".into()]),
-                    "value-ac".into(),
-                    vec![1, 2]
-                ),
-                (
-                    Path::from(vec!["d".into()]),
-                    "value-d".into(),
-                    vec![0, 1, 2]
-                )
-            ]
+            Visited {
+                paths: vec![
+                    (
+                        Path::from(vec!["a".into(), "b".into()]),
+                        "value-ab".into(),
+                        vec![(0, true), (1, true), (2, false)]
+                    ),
+                    (
+                        Path::from(vec!["a".into(), "c".into()]),
+                        "value-ac".into(),
+                        vec![(0, true), (1, false), (2, false)]
+                    ),
+                    (
+                        Path::from(vec!["d".into()]),
+                        "value-d".into(),
+                        vec![(0, false), (1, false), (2, false)]
+                    )
+                ],
+            },
         );
     }
 
     #[test]
     fn test_exclusive_scopes_array() {
         let ruleset = ScopedRuleSet::new(&[
-            Scope::Exclude(vec![Path::from(vec![0.into()])]),
-            Scope::Exclude(vec![Path::from(vec![1.into(), 0.into()])]),
-            Scope::Exclude(vec![Path::from(vec![2.into(), 0.into()])]),
+            Scope::exclude(vec![Path::from(vec![0.into()])]),
+            Scope::exclude(vec![Path::from(vec![1.into(), 0.into()])]),
+            Scope::exclude(vec![Path::from(vec![2.into(), 0.into()])]),
         ]);
 
         let mut event = SimpleEvent::List(vec![
@@ -372,16 +423,257 @@ mod test {
 
         assert_eq!(
             paths,
-            vec![
-                (Path::from(vec![0.into()]), "value-0".into(), vec![1, 2]),
-                (Path::from(vec![1.into()]), "value-1".into(), vec![0, 1, 2]),
+            Visited {
+                paths: vec![
+                    (
+                        Path::from(vec![0.into()]),
+                        "value-0".into(),
+                        vec![(0, true), (1, false), (2, false)]
+                    ),
+                    (
+                        Path::from(vec![1.into()]),
+                        "value-1".into(),
+                        vec![(0, false), (1, false), (2, false)]
+                    ),
+                    (
+                        Path::from(vec![2.into(), 0.into()]),
+                        "value-2-0".into(),
+                        vec![(0, false), (1, false), (2, true)]
+                    ),
+                    (
+                        Path::from(vec![3.into()]),
+                        "value-3".into(),
+                        vec![(0, false), (1, false), (2, false)]
+                    ),
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_include_and_exclude() {
+        let ruleset = ScopedRuleSet::new(&[Scope::include_and_exclude(
+            vec![Path::from(vec![2.into()])],
+            vec![Path::from(vec![2.into(), 0.into()])],
+        )]);
+
+        let mut event = SimpleEvent::List(vec![
+            SimpleEvent::String("value-0".into()),
+            SimpleEvent::String("value-1".into()),
+            SimpleEvent::List(vec![
+                SimpleEvent::String("value-2-0".into()),
+                SimpleEvent::String("value-2-1".into()),
+            ]),
+            SimpleEvent::String("value-3".into()),
+        ]);
+
+        let paths = visit_event(&mut event, &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![
+                    (Path::from(vec![0.into()]), "value-0".into(), vec![]),
+                    (Path::from(vec![1.into()]), "value-1".into(), vec![]),
+                    (
+                        Path::from(vec![2.into(), 0.into()]),
+                        "value-2-0".into(),
+                        vec![(0, true)]
+                    ),
+                    (
+                        Path::from(vec![2.into(), 1.into()]),
+                        "value-2-1".into(),
+                        vec![(0, false)]
+                    ),
+                    (Path::from(vec![3.into()]), "value-3".into(), vec![]),
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_include_and_exclude_priority() {
+        // exclude paths have priority, and override any include path. (even if the include is more specific)
+
+        let ruleset = ScopedRuleSet::new(&[Scope::include_and_exclude(
+            // This include is ignored, since an exclude overrides it
+            vec![Path::from(vec![1.into(), 0.into()])],
+            vec![Path::from(vec![1.into()])],
+        )]);
+
+        let mut event = SimpleEvent::List(vec![
+            SimpleEvent::String("value-0".into()),
+            SimpleEvent::List(vec![
+                SimpleEvent::String("value-1-0".into()),
+                SimpleEvent::String("value-1-1".into()),
+            ]),
+        ]);
+
+        let paths = visit_event(&mut event, &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![
+                    (Path::from(vec![0.into()]), "value-0".into(), vec![]),
+                    (
+                        Path::from(vec![1.into(), 0.into()]),
+                        "value-1-0".into(),
+                        vec![(0, true)]
+                    ),
+                    (
+                        Path::from(vec![1.into(), 1.into()]),
+                        "value-1-1".into(),
+                        vec![]
+                    ),
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_include_same_change_multiple_times() {
+        // If multiple "include" scopes cover the same field, it should only be returned once.
+
+        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![
+            Path::from(vec!["a".into()]),
+            Path::from(vec!["a".into(), "b".into()]),
+        ])]);
+
+        let mut event = SimpleEvent::Map(
+            [
                 (
-                    Path::from(vec![2.into(), 0.into()]),
-                    "value-2-0".into(),
-                    vec![0, 1]
+                    "a".into(),
+                    SimpleEvent::Map(
+                        [
+                            ("b".into(), SimpleEvent::String("value-ab".into())),
+                            ("c".into(), SimpleEvent::String("value-ac".into())),
+                        ]
+                        .into(),
+                    ),
                 ),
-                (Path::from(vec![3.into()]), "value-3".into(), vec![0, 1, 2]),
+                ("d".into(), SimpleEvent::String("value-d".into())),
             ]
+            .into(),
+        );
+
+        let paths = visit_event(&mut event, &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![
+                    (
+                        Path::from(vec!["a".into(), "b".into()]),
+                        "value-ab".into(),
+                        vec![(0, false)]
+                    ),
+                    (
+                        Path::from(vec!["a".into(), "c".into()]),
+                        "value-ac".into(),
+                        vec![(0, false)]
+                    ),
+                    (Path::from(vec!["d".into()]), "value-d".into(), vec![])
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_include_root_multiple_times() {
+        let ruleset =
+            ScopedRuleSet::new(&[Scope::include(vec![Path::from(vec![]), Path::from(vec![])])]);
+
+        let mut event = SimpleEvent::Map(
+            [
+                (
+                    "a".into(),
+                    SimpleEvent::Map(
+                        [
+                            ("b".into(), SimpleEvent::String("value-ab".into())),
+                            ("c".into(), SimpleEvent::String("value-ac".into())),
+                        ]
+                        .into(),
+                    ),
+                ),
+                ("d".into(), SimpleEvent::String("value-d".into())),
+            ]
+            .into(),
+        );
+
+        let paths = visit_event(&mut event, &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![
+                    (
+                        Path::from(vec!["a".into(), "b".into()]),
+                        "value-ab".into(),
+                        vec![(0, false)]
+                    ),
+                    (
+                        Path::from(vec!["a".into(), "c".into()]),
+                        "value-ac".into(),
+                        vec![(0, false)]
+                    ),
+                    (
+                        Path::from(vec!["d".into()]),
+                        "value-d".into(),
+                        vec![(0, false)]
+                    )
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_include_same_change_multiple_times_reversed() {
+        // If multiple "include" scopes cover the same field, it should only be returned once.
+        // This one specifically tests when a more generic path is added _after_ a specific path.
+        // (The more specific one should be removed from the tree)
+
+        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![
+            Path::from(vec!["a".into(), "b".into()]),
+            Path::from(vec!["a".into()]),
+        ])]);
+
+        let mut event = SimpleEvent::Map(
+            [
+                (
+                    "a".into(),
+                    SimpleEvent::Map(
+                        [
+                            ("b".into(), SimpleEvent::String("value-ab".into())),
+                            ("c".into(), SimpleEvent::String("value-ac".into())),
+                        ]
+                        .into(),
+                    ),
+                ),
+                ("d".into(), SimpleEvent::String("value-d".into())),
+            ]
+            .into(),
+        );
+
+        let paths = visit_event(&mut event, &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![
+                    (
+                        Path::from(vec!["a".into(), "b".into()]),
+                        "value-ab".into(),
+                        vec![(0, false)]
+                    ),
+                    (
+                        Path::from(vec!["a".into(), "c".into()]),
+                        "value-ac".into(),
+                        vec![(0, false)]
+                    ),
+                    (Path::from(vec!["d".into()]), "value-d".into(), vec![])
+                ],
+            }
         );
     }
 }
