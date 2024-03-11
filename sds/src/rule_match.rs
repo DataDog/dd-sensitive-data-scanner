@@ -1,8 +1,9 @@
 use crate::{encoding::Encoding, path::Path};
+use std::fmt::Debug;
 use std::fmt::{Display, Formatter};
 
 /// Metadata about a rule match.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub struct RuleMatch {
     /// The index of the rule that matched. This preserves the order
     /// of rules that were passed into the scanner.
@@ -55,7 +56,7 @@ impl<E: Encoding> InternalRuleMatch<E> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ReplacementType {
     None,
     Placeholder,
