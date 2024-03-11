@@ -710,7 +710,7 @@ mod test {
     }
 
     #[test]
-    fn test_overlapping_matches_mutating_vs_non_mutating() {
+    fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
         let rule_0 = RuleConfig::builder("...".to_owned())
             .match_action(MatchAction::None)
             .build();
