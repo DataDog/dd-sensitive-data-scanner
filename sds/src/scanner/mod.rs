@@ -373,7 +373,7 @@ mod test {
                     replacement: "[REDACTED]".to_string(),
                 })
                 .build()],
-            Labels::new(vec![("key".to_string(), "value".to_string())]),
+            Labels::new(&[("key".to_string(), "value".to_string())]),
         )
         .unwrap();
 

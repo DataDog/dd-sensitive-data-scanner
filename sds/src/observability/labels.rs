@@ -6,38 +6,26 @@ pub struct Labels(Vec<Label>);
 pub const NO_LABEL: Labels = Labels(vec![]);
 
 impl Labels {
+    /// Clone the actual [Labels] with additional key-value labels
     pub fn clone_with_labels(
         &self,
-        additional_labels: Vec<(impl Into<SharedString>, impl Into<SharedString>)>,
+        additional_labels: &[(
+            impl Into<SharedString> + Clone,
+            impl Into<SharedString> + Clone,
+        )],
     ) -> Labels {
         let mut tags = self.0.clone();
-        let mut additional_labels = additional_labels
-            .into_iter()
-            .map(|(k, v)| Label::new(k.into(), v.into()))
-            .collect();
-        tags.append(&mut additional_labels);
+        tags.extend(additional_labels.iter().map(Label::from));
         Labels(tags)
     }
 
-    pub fn clone_with_label(
-        &self,
-        additional_label: (impl Into<SharedString>, impl Into<SharedString>),
-    ) -> Labels {
-        let mut tags = self.0.clone();
-        tags.push(Label::new(
-            additional_label.0.into(),
-            additional_label.1.into(),
-        ));
-        Labels(tags)
-    }
-
-    pub fn new(labels: Vec<(impl Into<SharedString>, impl Into<SharedString>)>) -> Self {
-        Labels(
-            labels
-                .into_iter()
-                .map(|(k, v)| Label::new(k.into(), v.into()))
-                .collect(),
-        )
+    pub fn new(
+        labels: &[(
+            impl Into<SharedString> + Clone,
+            impl Into<SharedString> + Clone,
+        )],
+    ) -> Self {
+        Labels(labels.iter().map(Label::from).collect())
     }
 }
 
@@ -54,14 +42,14 @@ mod test {
 
     #[test]
     fn test_clone_labels() {
-        let labels = Labels::new(vec![("key_1", "value_1")]);
+        let labels = Labels::new(&[("key_1", "value_1")]);
 
-        let labels_2 = labels.clone_with_label(("key_2", "value_2"));
+        let labels_2 = labels.clone_with_labels(&[("key_2", "value_2")]);
         let label_list = labels_2.into_labels();
         assert!(label_list.contains(&Label::new("key_1", "value_1")));
         assert!(label_list.contains(&Label::new("key_2", "value_2")));
 
-        let labels_3 = labels.clone_with_labels(vec![("key_3", "value_3"), ("key_4", "value_4")]);
+        let labels_3 = labels.clone_with_labels(&[("key_3", "value_3"), ("key_4", "value_4")]);
         let label_list = labels_3.into_labels();
         assert!(label_list.contains(&Label::new("key_1", "value_1")));
         assert!(!label_list.contains(&Label::new("key_2", "value_2")));
