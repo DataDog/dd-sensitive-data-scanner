@@ -8,7 +8,7 @@ use regex_automata::{
 use super::CompiledRule;
 
 type CachePoolFn = Box<dyn Fn() -> Vec<Cache> + Send + Sync>;
-type CachePoolGuard<'a> = PoolGuard<'a, Vec<Cache>, CachePoolFn>;
+pub type CachePoolGuard<'a> = PoolGuard<'a, Vec<Cache>, CachePoolFn>;
 
 /// This stores a set of regex caches for a specific scanner. This allows a single scan
 /// operation to only have to lock / fetch a set of caches once, regardless of the
