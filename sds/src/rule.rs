@@ -39,24 +39,17 @@ pub enum Scope {
 }
 
 impl Scope {
-    // All fields of the event are scanned
+    /// All fields of the event are scanned
     pub fn all() -> Self {
         Self::Exclude(vec![])
     }
 
-    // Nothing will be scanned
-    pub fn none() -> Self {
-        Self::Include {
-            include: vec![],
-            exclude: vec![],
-        }
-    }
-
-    // Paths will be scanned if they are children of any `include` path and NOT children of any `exclude` path
+    /// Paths will be scanned if they are children of any `include` path and NOT children of any `exclude` path
     pub fn include_and_exclude(include: Vec<Path<'static>>, exclude: Vec<Path<'static>>) -> Self {
         Self::Include { include, exclude }
     }
 
+    /// Paths will be scanned if they are children of any `include` path
     pub fn include(include: Vec<Path<'static>>) -> Self {
         Self::Include {
             include,
@@ -64,7 +57,7 @@ impl Scope {
         }
     }
 
-    // Paths will be scanned if they are NOT children of any `exclude` path
+    /// Paths will be scanned if they are NOT children of any `exclude` path
     pub fn exclude(exclude: Vec<Path<'static>>) -> Self {
         Self::Exclude(exclude)
     }

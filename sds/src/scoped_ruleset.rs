@@ -224,11 +224,25 @@ mod test {
 
     use super::*;
 
-    #[derive(Debug, PartialEq, Eq)]
-    struct Visited {
-        paths: Vec<(Path<'static>, String, Vec<(usize, bool)>)>,
+    #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord)]
+    struct VisitedPath {
+        path: Path<'static>,
+        content: String,
+        rules: Vec<VisitedRule>,
     }
 
+    #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord)]
+    struct VisitedRule {
+        rule_index: usize,
+        is_excluded: bool,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct Visited {
+        paths: Vec<VisitedPath>,
+    }
+
+    // Visits the event and returns the paths that were visited
     fn visit_event(event: &mut impl Event, ruleset: &ScopedRuleSet) -> Visited {
         let mut visited = Visited { paths: vec![] };
 
@@ -246,12 +260,17 @@ mod test {
             ) -> bool {
                 let mut rules = vec![];
                 rule_iter.visit_rule_indices(|rule_index| {
-                    rules.push((rule_index, exclusion_check.is_excluded(rule_index)));
+                    rules.push(VisitedRule {
+                        rule_index,
+                        is_excluded: exclusion_check.is_excluded(rule_index),
+                    });
                 });
                 rules.sort();
-                self.visited
-                    .paths
-                    .push((path.into_static(), content.to_string(), rules));
+                self.visited.paths.push(VisitedPath {
+                    path: path.into_static(),
+                    content: content.to_string(),
+                    rules,
+                });
                 true
             }
         }
@@ -268,10 +287,11 @@ mod test {
 
     #[test]
     fn test_inclusive_scopes() {
+        // Fields are scanned as long as they are a child of any `include` path
         let ruleset = ScopedRuleSet::new(&[
             Scope::include(vec![Path::from(vec!["a".into()])]),
             Scope::include(vec![Path::from(vec!["a".into(), "b".into()])]),
-            Scope::none(),
+            Scope::include(vec![]),
         ]);
 
         let mut event = SimpleEvent::Map(
@@ -297,17 +317,33 @@ mod test {
             paths,
             Visited {
                 paths: vec![
-                    (
-                        Path::from(vec!["a".into(), "b".into()]),
-                        "value-ab".into(),
-                        vec![(0, false), (1, false)]
-                    ),
-                    (
-                        Path::from(vec!["a".into(), "c".into()]),
-                        "value-ac".into(),
-                        vec![(0, false)]
-                    ),
-                    (Path::from(vec!["d".into()]), "value-d".into(), vec![])
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), "b".into()]),
+                        content: "value-ab".into(),
+                        rules: vec![
+                            VisitedRule {
+                                rule_index: 0,
+                                is_excluded: false
+                            },
+                            VisitedRule {
+                                rule_index: 1,
+                                is_excluded: false
+                            }
+                        ]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), "c".into()]),
+                        content: "value-ac".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["d".into()]),
+                        content: "value-d".into(),
+                        rules: vec![]
+                    }
                 ],
             }
         );
@@ -315,6 +351,7 @@ mod test {
 
     #[test]
     fn test_inclusive_scopes_array() {
+        // Fields are scanned as long as they are a child of any `include` path
         let ruleset = ScopedRuleSet::new(&[
             Scope::include(vec![Path::from(vec![0.into()])]),
             Scope::include(vec![Path::from(vec![1.into(), 0.into()])]),
@@ -334,18 +371,32 @@ mod test {
             paths,
             Visited {
                 paths: vec![
-                    (
-                        Path::from(vec![0.into()]),
-                        "value-0".into(),
-                        vec![(0, false)]
-                    ),
-                    (Path::from(vec![1.into()]), "value-1".into(), vec![]),
-                    (
-                        Path::from(vec![2.into(), 0.into()]),
-                        "value-2-0".into(),
-                        vec![(2, false)]
-                    ),
-                    (Path::from(vec![3.into()]), "value-3".into(), vec![]),
+                    VisitedPath {
+                        path: Path::from(vec![0.into()]),
+                        content: "value-0".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec![1.into()]),
+                        content: "value-1".into(),
+                        rules: vec![]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec![2.into(), 0.into()]),
+                        content: "value-2-0".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 2,
+                            is_excluded: false
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec![3.into()]),
+                        content: "value-3".into(),
+                        rules: vec![]
+                    }
                 ],
             }
         );
@@ -353,10 +404,11 @@ mod test {
 
     #[test]
     fn test_exclusive_scopes() {
+        // All fields are scanned, but fields that are children of any `exclude` path are marked as excluded
         let ruleset = ScopedRuleSet::new(&[
             Scope::exclude(vec![Path::from(vec!["a".into()])]),
             Scope::exclude(vec![Path::from(vec!["a".into(), "b".into()])]),
-            // matches everything
+            // matches everything (it will always be excluded)
             Scope::all(),
         ]);
 
@@ -384,21 +436,60 @@ mod test {
             paths,
             Visited {
                 paths: vec![
-                    (
-                        Path::from(vec!["a".into(), "b".into()]),
-                        "value-ab".into(),
-                        vec![(0, true), (1, true), (2, false)]
-                    ),
-                    (
-                        Path::from(vec!["a".into(), "c".into()]),
-                        "value-ac".into(),
-                        vec![(0, true), (1, false), (2, false)]
-                    ),
-                    (
-                        Path::from(vec!["d".into()]),
-                        "value-d".into(),
-                        vec![(0, false), (1, false), (2, false)]
-                    )
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), "b".into()]),
+                        content: "value-ab".into(),
+                        rules: vec![
+                            VisitedRule {
+                                rule_index: 0,
+                                is_excluded: true
+                            },
+                            VisitedRule {
+                                rule_index: 1,
+                                is_excluded: true
+                            },
+                            VisitedRule {
+                                rule_index: 2,
+                                is_excluded: false
+                            }
+                        ]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), "c".into()]),
+                        content: "value-ac".into(),
+                        rules: vec![
+                            VisitedRule {
+                                rule_index: 0,
+                                is_excluded: true
+                            },
+                            VisitedRule {
+                                rule_index: 1,
+                                is_excluded: false
+                            },
+                            VisitedRule {
+                                rule_index: 2,
+                                is_excluded: false
+                            }
+                        ]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["d".into()]),
+                        content: "value-d".into(),
+                        rules: vec![
+                            VisitedRule {
+                                rule_index: 0,
+                                is_excluded: false
+                            },
+                            VisitedRule {
+                                rule_index: 1,
+                                is_excluded: false
+                            },
+                            VisitedRule {
+                                rule_index: 2,
+                                is_excluded: false
+                            }
+                        ]
+                    }
                 ],
             },
         );
@@ -406,6 +497,7 @@ mod test {
 
     #[test]
     fn test_exclusive_scopes_array() {
+        // All fields are scanned, but fields that are children of any `exclude` path are marked as excluded
         let ruleset = ScopedRuleSet::new(&[
             Scope::exclude(vec![Path::from(vec![0.into()])]),
             Scope::exclude(vec![Path::from(vec![1.into(), 0.into()])]),
@@ -425,26 +517,78 @@ mod test {
             paths,
             Visited {
                 paths: vec![
-                    (
-                        Path::from(vec![0.into()]),
-                        "value-0".into(),
-                        vec![(0, true), (1, false), (2, false)]
-                    ),
-                    (
-                        Path::from(vec![1.into()]),
-                        "value-1".into(),
-                        vec![(0, false), (1, false), (2, false)]
-                    ),
-                    (
-                        Path::from(vec![2.into(), 0.into()]),
-                        "value-2-0".into(),
-                        vec![(0, false), (1, false), (2, true)]
-                    ),
-                    (
-                        Path::from(vec![3.into()]),
-                        "value-3".into(),
-                        vec![(0, false), (1, false), (2, false)]
-                    ),
+                    VisitedPath {
+                        path: Path::from(vec![0.into()]),
+                        content: "value-0".into(),
+                        rules: vec![
+                            VisitedRule {
+                                rule_index: 0,
+                                is_excluded: true
+                            },
+                            VisitedRule {
+                                rule_index: 1,
+                                is_excluded: false
+                            },
+                            VisitedRule {
+                                rule_index: 2,
+                                is_excluded: false
+                            }
+                        ]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec![1.into()]),
+                        content: "value-1".into(),
+                        rules: vec![
+                            VisitedRule {
+                                rule_index: 0,
+                                is_excluded: false
+                            },
+                            VisitedRule {
+                                rule_index: 1,
+                                is_excluded: false
+                            },
+                            VisitedRule {
+                                rule_index: 2,
+                                is_excluded: false
+                            }
+                        ]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec![2.into(), 0.into()]),
+                        content: "value-2-0".into(),
+                        rules: vec![
+                            VisitedRule {
+                                rule_index: 0,
+                                is_excluded: false
+                            },
+                            VisitedRule {
+                                rule_index: 1,
+                                is_excluded: false
+                            },
+                            VisitedRule {
+                                rule_index: 2,
+                                is_excluded: true
+                            }
+                        ]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec![3.into()]),
+                        content: "value-3".into(),
+                        rules: vec![
+                            VisitedRule {
+                                rule_index: 0,
+                                is_excluded: false
+                            },
+                            VisitedRule {
+                                rule_index: 1,
+                                is_excluded: false
+                            },
+                            VisitedRule {
+                                rule_index: 2,
+                                is_excluded: false
+                            }
+                        ]
+                    }
                 ],
             }
         );
@@ -452,6 +596,8 @@ mod test {
 
     #[test]
     fn test_include_and_exclude() {
+        // Fields that are children of any `include` path are scanned, but they are only marked as
+        // excluded if they are children of any `exclude` path
         let ruleset = ScopedRuleSet::new(&[Scope::include_and_exclude(
             vec![Path::from(vec![2.into()])],
             vec![Path::from(vec![2.into(), 0.into()])],
@@ -473,20 +619,38 @@ mod test {
             paths,
             Visited {
                 paths: vec![
-                    (Path::from(vec![0.into()]), "value-0".into(), vec![]),
-                    (Path::from(vec![1.into()]), "value-1".into(), vec![]),
-                    (
-                        Path::from(vec![2.into(), 0.into()]),
-                        "value-2-0".into(),
-                        vec![(0, true)]
-                    ),
-                    (
-                        Path::from(vec![2.into(), 1.into()]),
-                        "value-2-1".into(),
-                        vec![(0, false)]
-                    ),
-                    (Path::from(vec![3.into()]), "value-3".into(), vec![]),
-                ],
+                    VisitedPath {
+                        path: Path::from(vec![0.into()]),
+                        content: "value-0".into(),
+                        rules: vec![]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec![1.into()]),
+                        content: "value-1".into(),
+                        rules: vec![]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec![2.into(), 0.into()]),
+                        content: "value-2-0".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: true
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec![2.into(), 1.into()]),
+                        content: "value-2-1".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec![3.into()]),
+                        content: "value-3".into(),
+                        rules: vec![]
+                    },
+                ]
             }
         );
     }
@@ -515,17 +679,24 @@ mod test {
             paths,
             Visited {
                 paths: vec![
-                    (Path::from(vec![0.into()]), "value-0".into(), vec![]),
-                    (
-                        Path::from(vec![1.into(), 0.into()]),
-                        "value-1-0".into(),
-                        vec![(0, true)]
-                    ),
-                    (
-                        Path::from(vec![1.into(), 1.into()]),
-                        "value-1-1".into(),
-                        vec![]
-                    ),
+                    VisitedPath {
+                        path: Path::from(vec![0.into()]),
+                        content: "value-0".into(),
+                        rules: vec![]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec![1.into(), 0.into()]),
+                        content: "value-1-0".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: true
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec![1.into(), 1.into()]),
+                        content: "value-1-1".into(),
+                        rules: vec![]
+                    }
                 ],
             }
         );
@@ -563,17 +734,27 @@ mod test {
             paths,
             Visited {
                 paths: vec![
-                    (
-                        Path::from(vec!["a".into(), "b".into()]),
-                        "value-ab".into(),
-                        vec![(0, false)]
-                    ),
-                    (
-                        Path::from(vec!["a".into(), "c".into()]),
-                        "value-ac".into(),
-                        vec![(0, false)]
-                    ),
-                    (Path::from(vec!["d".into()]), "value-d".into(), vec![])
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), "b".into()]),
+                        content: "value-ab".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), "c".into()]),
+                        content: "value-ac".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["d".into()]),
+                        content: "value-d".into(),
+                        rules: vec![]
+                    }
                 ],
             }
         );
@@ -581,6 +762,7 @@ mod test {
 
     #[test]
     fn test_include_root_multiple_times() {
+        // This makes sure duplicate rule changes (at the root of the tree) are removed
         let ruleset =
             ScopedRuleSet::new(&[Scope::include(vec![Path::from(vec![]), Path::from(vec![])])]);
 
@@ -607,21 +789,30 @@ mod test {
             paths,
             Visited {
                 paths: vec![
-                    (
-                        Path::from(vec!["a".into(), "b".into()]),
-                        "value-ab".into(),
-                        vec![(0, false)]
-                    ),
-                    (
-                        Path::from(vec!["a".into(), "c".into()]),
-                        "value-ac".into(),
-                        vec![(0, false)]
-                    ),
-                    (
-                        Path::from(vec!["d".into()]),
-                        "value-d".into(),
-                        vec![(0, false)]
-                    )
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), "b".into()]),
+                        content: "value-ab".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), "c".into()]),
+                        content: "value-ac".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["d".into()]),
+                        content: "value-d".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    }
                 ],
             }
         );
@@ -661,17 +852,27 @@ mod test {
             paths,
             Visited {
                 paths: vec![
-                    (
-                        Path::from(vec!["a".into(), "b".into()]),
-                        "value-ab".into(),
-                        vec![(0, false)]
-                    ),
-                    (
-                        Path::from(vec!["a".into(), "c".into()]),
-                        "value-ac".into(),
-                        vec![(0, false)]
-                    ),
-                    (Path::from(vec!["d".into()]), "value-d".into(), vec![])
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), "b".into()]),
+                        content: "value-ab".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), "c".into()]),
+                        content: "value-ac".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["d".into()]),
+                        content: "value-d".into(),
+                        rules: vec![]
+                    }
                 ],
             }
         );
