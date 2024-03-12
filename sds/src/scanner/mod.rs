@@ -256,9 +256,6 @@ impl Scanner {
             debug_assert!(content.is_char_boundary(mutated_utf8_match_start));
             debug_assert!(content.is_char_boundary(mutated_utf8_match_end));
 
-            // It is not safe to get the `matched_content` slice unless the rule is mutating,
-            // since non-mutating rules can currently have invalid indices due to overlapping
-            // with mutated content.
             let matched_content = &content[mutated_utf8_match_start..mutated_utf8_match_end];
 
             if let Some(replacement) = rule.match_action.get_replacement(matched_content) {
@@ -303,27 +300,55 @@ impl Scanner {
         // Some of the scanner code relies on the behavior here, such as the sort order and removal of overlapping mutating rules.
         // Be very careful if this function is modified.
 
-        // sort by start index, then rule id
         rule_matches.sort_unstable_by(|a, b| {
-            a.utf8_start
-                .cmp(&b.utf8_start)
-                // TODO Add a normalization to make sure that the longer one is first and it keeps only the longest one
-                .then(a.len().cmp(&b.len()).reverse())
-                .then(a.rule_index.cmp(&b.rule_index))
+            // Mutating rules are a higher priority (earlier in the list)
+            let ord = self.rules[a.rule_index]
+                .match_action
+                .is_mutating()
+                .cmp(&self.rules[b.rule_index].match_action.is_mutating())
+                .reverse();
+
+            // Earlier start offset
+            let ord = ord.then(a.utf8_start.cmp(&b.utf8_start));
+
+            // Longer matches
+            let ord = ord.then(a.len().cmp(&b.len()).reverse());
+
+            // Matches from earlier rules
+            let ord = ord.then(a.rule_index.cmp(&b.rule_index));
+
+            // swap the order of everything so matches can be efficiently popped off the back as they are processed
+            ord.reverse()
         });
 
-        let mut end_of_last_mutating = 0;
-        rule_matches.retain(|rule_match| {
+        let mut retained_rules: Vec<InternalRuleMatch<E::Encoding>> = vec![];
+
+        'rule_matches: while let Some(rule_match) = rule_matches.pop() {
             if self.rules[rule_match.rule_index].match_action.is_mutating() {
-                // Mutating rules are kept only if they don't overlap with a previous mutating rule.
-                let retain = end_of_last_mutating <= rule_match.utf8_start;
-                end_of_last_mutating = rule_match.utf8_end;
-                retain
+                // Mutating rules are kept only if they don't overlap with a previous rule.
+                if let Some(last) = retained_rules.last() {
+                    if last.utf8_end > rule_match.utf8_start {
+                        continue;
+                    }
+                }
             } else {
-                // All non-mutating rules are kept, even if they overlap
-                true
-            }
-        });
+                // Only retain if it doesn't overlap with any other rule. Since mutating matches are sorted before non-mutated matches
+                // this needs to check all retained matches (instead of just the last one)
+                for retained_rule in &retained_rules {
+                    if retained_rule.utf8_start < rule_match.utf8_end
+                        && retained_rule.utf8_end > rule_match.utf8_start
+                    {
+                        continue 'rule_matches;
+                    }
+                }
+            };
+            retained_rules.push(rule_match);
+        }
+
+        // ensure rules are sorted by start index (other parts of the library required this to function correctly)
+        retained_rules.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
+
+        *rule_matches = retained_rules;
     }
 }
 
@@ -682,5 +707,196 @@ mod test {
         fn assert_send<T: Send + Sync>() {}
 
         assert_send::<Scanner>();
+    }
+
+    #[test]
+    fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
+        let rule_0 = RuleConfig::builder("...".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let rule_1 = RuleConfig::builder("...".to_owned())
+            .match_action(MatchAction::Redact {
+                replacement: "***".to_string(),
+            })
+            .build();
+
+        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let mut content = "hello world".to_string();
+        let mut matches = scanner.scan(&mut content);
+        matches.sort();
+
+        assert_eq!(matches.len(), 3);
+        assert_eq!(content, "*********ld");
+
+        assert_eq!(
+            matches[0],
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::Placeholder,
+                start_index: 0,
+                end_index_exclusive: 3,
+                shift_offset: 0
+            }
+        );
+
+        assert_eq!(
+            matches[1],
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::Placeholder,
+                start_index: 3,
+                end_index_exclusive: 6,
+                shift_offset: 0
+            }
+        );
+
+        assert_eq!(
+            matches[2],
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::Placeholder,
+                start_index: 6,
+                end_index_exclusive: 9,
+                shift_offset: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_overlapping_mutation_higher_priority() {
+        // A mutating match is a higher priority even if it starts after a non-mutating match
+
+        let rule_0 = RuleConfig::builder("abc".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let rule_1 = RuleConfig::builder("bcd".to_owned())
+            .match_action(MatchAction::Redact {
+                replacement: "***".to_string(),
+            })
+            .build();
+
+        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let mut content = "abcdef".to_string();
+        let mut matches = scanner.scan(&mut content);
+        matches.sort();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "a***ef");
+
+        assert_eq!(
+            matches[0],
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::Placeholder,
+                start_index: 1,
+                end_index_exclusive: 4,
+                shift_offset: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_overlapping_start_offset() {
+        // The match that starts first is used (if the mutation is the same)
+
+        let rule_0 = RuleConfig::builder("abc".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let rule_1 = RuleConfig::builder("bcd".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let mut content = "abcdef".to_string();
+        let mut matches = scanner.scan(&mut content);
+        matches.sort();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "abcdef");
+
+        assert_eq!(
+            matches[0],
+            RuleMatch {
+                rule_index: 0,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::None,
+                start_index: 0,
+                end_index_exclusive: 3,
+                shift_offset: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_overlapping_length() {
+        // If 2 matches have the same mutation and same start, the longer one is taken
+
+        let rule_0 = RuleConfig::builder("abc".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let rule_1 = RuleConfig::builder("abcd".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let mut content = "abcdef".to_string();
+        let mut matches = scanner.scan(&mut content);
+        matches.sort();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "abcdef");
+
+        assert_eq!(
+            matches[0],
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::None,
+                start_index: 0,
+                end_index_exclusive: 4,
+                shift_offset: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_overlapping_rule_order() {
+        // If 2 matches have the same mutation, same start, and the same length, the one with the lower rule index is used
+
+        let rule_0 = RuleConfig::builder("abc".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let rule_1 = RuleConfig::builder("abc".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let mut content = "abcdef".to_string();
+        let mut matches = scanner.scan(&mut content);
+        matches.sort();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "abcdef");
+
+        assert_eq!(
+            matches[0],
+            RuleMatch {
+                rule_index: 0,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::None,
+                start_index: 0,
+                end_index_exclusive: 3,
+                shift_offset: 0
+            }
+        );
     }
 }
