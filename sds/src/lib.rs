@@ -2,6 +2,7 @@ mod encoding;
 mod event;
 mod match_action;
 mod normalization;
+mod observability;
 mod parser;
 mod path;
 mod proximity_keywords;
