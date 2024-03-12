@@ -28,7 +28,7 @@ pub use validation::{validate_regex, RegexValidationError};
 
 #[cfg(feature = "bench")]
 pub use crate::{
-    scoped_ruleset::ScopedRuleSet,
+    scoped_ruleset::{ContentVisitor, ExclusionCheck, RuleIndexVisitor, ScopedRuleSet},
     secondary_validation::{LuhnChecksum, Validator},
     simple_event::SimpleEvent,
 };

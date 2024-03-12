@@ -5,14 +5,14 @@ use crate::observability::labels::{Labels, NO_LABEL};
 use crate::proximity_keywords::CompiledProximityKeywords;
 use crate::rule::RuleConfig;
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
-use crate::scoped_ruleset::ScopedRuleSet;
+use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::validation::validate_and_create_regex;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Scope};
 use regex_automata::meta::Regex as MetaRegex;
 use std::sync::Arc;
 
-use self::cache_pool::CachePool;
+use self::cache_pool::{CachePool, CachePoolGuard};
 
 mod cache_pool;
 pub mod error;
@@ -90,77 +90,25 @@ impl Scanner {
     pub fn scan<E: Event>(&self, event: &mut E) -> Vec<RuleMatch> {
         // This is a set of caches (1 for each rule) that can be used for scanning. This is obtained once per scan to reduce
         // lock contention. (Normally it has to be obtained for each regex scan individually)
-        let mut caches = self.cache_pool.get();
+        let caches: regex_automata::util::pool::PoolGuard<
+            '_,
+            Vec<regex_automata::meta::Cache>,
+            Box<dyn Fn() -> Vec<regex_automata::meta::Cache> + Send + Sync>,
+        > = self.cache_pool.get();
 
         // all matches, after overlapping rules have been filtered
         let mut rule_matches = vec![];
 
-        self.scoped_ruleset
-            .visit_string_rule_combinations(event, |path, value, rule_visitor| {
-                // matches for a single path
-                let mut path_rules_matches = vec![];
+        self.scoped_ruleset.visit_string_rule_combinations(
+            event,
+            ScannerContentVisitor {
+                scanner: self,
+                caches,
+                rule_matches: &mut rule_matches,
+            },
+        );
 
-                rule_visitor.visit_rule_indices(|rule_index| {
-                    let rule = &self.rules[rule_index];
-                    let cache = &mut caches[rule_index];
-
-                    // `find_iter` already skips overlapping matches for the same rule,
-                    // so those don't need to be filtered out here
-
-                    let mut it = regex_automata::util::iter::Searcher::new(value.into());
-                    while let Some(regex_match) =
-                        it.advance(|input| Ok(rule.regex.search_with(cache, input)))
-                    {
-                        if rule
-                            .proximity_keywords
-                            .is_false_positive_match(value, regex_match.start())
-                        {
-                            // proximity keywords consider this match as false positive, so it is dropped
-                            continue;
-                        }
-                        if let Some(validator) = rule.validator.as_ref() {
-                            if !validator.is_valid_match(&value[regex_match.range()]) {
-                                continue;
-                            };
-                        }
-
-                        path_rules_matches.push(InternalRuleMatch {
-                            path: path.into_static(),
-                            rule_index,
-                            utf8_start: regex_match.start(),
-                            utf8_end: regex_match.end(),
-                            custom_start: <E::Encoding as Encoding>::zero_index(),
-                            custom_end: <E::Encoding as Encoding>::zero_index(),
-                        });
-                    }
-                });
-
-                self.sort_and_remove_overlapping_rules::<E>(&mut path_rules_matches);
-
-                <E::Encoding as Encoding>::calculate_indices(
-                    value,
-                    path_rules_matches.iter_mut().map(
-                        |rule_match: &mut InternalRuleMatch<E::Encoding>| EncodeIndices {
-                            utf8_start: rule_match.utf8_start,
-                            utf8_end: rule_match.utf8_end,
-                            custom_start: &mut rule_match.custom_start,
-                            custom_end: &mut rule_match.custom_end,
-                        },
-                    ),
-                );
-
-                let will_mutate = path_rules_matches
-                    .iter()
-                    .any(|rule_match| self.rules[rule_match.rule_index].match_action.is_mutating());
-
-                rule_matches.extend(path_rules_matches);
-
-                will_mutate
-            });
-
-        // TODO: more processing is expected here which might look at multiple strings / filter out matches. If this doesn't happen,
-        //       `apply_match_actions` can be moved into the `visit_string_rule_combinations` closure and some optimizations can happen
-
+        // TODO: multipass V0 logic will go here
         self.apply_match_actions(event, rule_matches)
     }
 
@@ -265,9 +213,6 @@ impl Scanner {
             debug_assert!(content.is_char_boundary(mutated_utf8_match_start));
             debug_assert!(content.is_char_boundary(mutated_utf8_match_end));
 
-            // It is not safe to get the `matched_content` slice unless the rule is mutating,
-            // since non-mutating rules can currently have invalid indices due to overlapping
-            // with mutated content.
             let matched_content = &content[mutated_utf8_match_start..mutated_utf8_match_end];
 
             if let Some(replacement) = rule.match_action.get_replacement(matched_content) {
@@ -305,34 +250,147 @@ impl Scanner {
         }
     }
 
-    fn sort_and_remove_overlapping_rules<E: Event>(
+    fn sort_and_remove_overlapping_rules<E: Encoding>(
         &self,
-        rule_matches: &mut Vec<InternalRuleMatch<E::Encoding>>,
+        rule_matches: &mut Vec<InternalRuleMatch<E>>,
     ) {
         // Some of the scanner code relies on the behavior here, such as the sort order and removal of overlapping mutating rules.
         // Be very careful if this function is modified.
 
-        // sort by start index, then rule id
         rule_matches.sort_unstable_by(|a, b| {
-            a.utf8_start
-                .cmp(&b.utf8_start)
-                // TODO Add a normalization to make sure that the longer one is first and it keeps only the longest one
-                .then(a.len().cmp(&b.len()).reverse())
-                .then(a.rule_index.cmp(&b.rule_index))
+            // Mutating rules are a higher priority (earlier in the list)
+            let ord = self.rules[a.rule_index]
+                .match_action
+                .is_mutating()
+                .cmp(&self.rules[b.rule_index].match_action.is_mutating())
+                .reverse();
+
+            // Earlier start offset
+            let ord = ord.then(a.utf8_start.cmp(&b.utf8_start));
+
+            // Longer matches
+            let ord = ord.then(a.len().cmp(&b.len()).reverse());
+
+            // Matches from earlier rules
+            let ord = ord.then(a.rule_index.cmp(&b.rule_index));
+
+            // swap the order of everything so matches can be efficiently popped off the back as they are processed
+            ord.reverse()
         });
 
-        let mut end_of_last_mutating = 0;
-        rule_matches.retain(|rule_match| {
+        let mut retained_rules: Vec<InternalRuleMatch<E>> = vec![];
+
+        'rule_matches: while let Some(rule_match) = rule_matches.pop() {
             if self.rules[rule_match.rule_index].match_action.is_mutating() {
-                // Mutating rules are kept only if they don't overlap with a previous mutating rule.
-                let retain = end_of_last_mutating <= rule_match.utf8_start;
-                end_of_last_mutating = rule_match.utf8_end;
-                retain
+                // Mutating rules are kept only if they don't overlap with a previous rule.
+                if let Some(last) = retained_rules.last() {
+                    if last.utf8_end > rule_match.utf8_start {
+                        continue;
+                    }
+                }
             } else {
-                // All non-mutating rules are kept, even if they overlap
-                true
+                // Only retain if it doesn't overlap with any other rule. Since mutating matches are sorted before non-mutated matches
+                // this needs to check all retained matches (instead of just the last one)
+                for retained_rule in &retained_rules {
+                    if retained_rule.utf8_start < rule_match.utf8_end
+                        && retained_rule.utf8_end > rule_match.utf8_start
+                    {
+                        continue 'rule_matches;
+                    }
+                }
+            };
+            retained_rules.push(rule_match);
+        }
+
+        // ensure rules are sorted by start index (other parts of the library required this to function correctly)
+        retained_rules.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
+
+        *rule_matches = retained_rules;
+    }
+}
+
+struct ScannerContentVisitor<'a, E: Encoding> {
+    scanner: &'a Scanner,
+    caches: CachePoolGuard<'a>,
+    rule_matches: &'a mut Vec<InternalRuleMatch<E>>,
+}
+
+impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
+    fn visit_content<'b>(
+        &'b mut self,
+        path: &crate::Path<'a>,
+        content: &str,
+        rule_visitor: crate::scoped_ruleset::RuleIndexVisitor,
+        exclusion_check: ExclusionCheck<'b>,
+    ) -> bool {
+        // |path, value, rule_visitor| {
+        // matches for a single path
+        let mut path_rules_matches = vec![];
+
+        rule_visitor.visit_rule_indices(|rule_index| {
+            let rule = &self.scanner.rules[rule_index];
+            let cache = &mut self.caches[rule_index];
+
+            // `find_iter` already skips overlapping matches for the same rule,
+            // so those don't need to be filtered out here
+
+            let mut it = regex_automata::util::iter::Searcher::new(content.into());
+            while let Some(regex_match) =
+                it.advance(|input| Ok(rule.regex.search_with(cache, input)))
+            {
+                if exclusion_check.is_excluded(rule_index) {
+                    // TODO: Multipass V0 logic will go here.
+                    continue;
+                }
+
+                if rule
+                    .proximity_keywords
+                    .is_false_positive_match(content, regex_match.start())
+                {
+                    // proximity keywords consider this match as false positive, so it is dropped
+                    continue;
+                }
+                if let Some(validator) = rule.validator.as_ref() {
+                    if !validator.is_valid_match(&content[regex_match.range()]) {
+                        continue;
+                    };
+                }
+
+                path_rules_matches.push(InternalRuleMatch {
+                    path: path.into_static(),
+                    rule_index,
+                    utf8_start: regex_match.start(),
+                    utf8_end: regex_match.end(),
+                    custom_start: E::zero_index(),
+                    custom_end: E::zero_index(),
+                });
             }
         });
+
+        self.scanner
+            .sort_and_remove_overlapping_rules::<E>(&mut path_rules_matches);
+
+        E::calculate_indices(
+            content,
+            path_rules_matches
+                .iter_mut()
+                .map(|rule_match: &mut InternalRuleMatch<E>| EncodeIndices {
+                    utf8_start: rule_match.utf8_start,
+                    utf8_end: rule_match.utf8_end,
+                    custom_start: &mut rule_match.custom_start,
+                    custom_end: &mut rule_match.custom_end,
+                }),
+        );
+
+        let will_mutate = path_rules_matches.iter().any(|rule_match| {
+            self.scanner.rules[rule_match.rule_index]
+                .match_action
+                .is_mutating()
+        });
+
+        self.rule_matches.extend(path_rules_matches);
+
+        will_mutate
     }
 }
 
@@ -403,7 +461,7 @@ mod test {
                 direction: crate::PartialRedactDirection::LastCharacters,
                 character_count: 0,
             },
-            scope: Scope::All,
+            scope: Scope::all(),
             proximity_keywords: None,
             validator: None,
         }]);
@@ -712,5 +770,196 @@ mod test {
         fn assert_send<T: Send + Sync>() {}
 
         assert_send::<Scanner>();
+    }
+
+    #[test]
+    fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
+        let rule_0 = RuleConfig::builder("...".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let rule_1 = RuleConfig::builder("...".to_owned())
+            .match_action(MatchAction::Redact {
+                replacement: "***".to_string(),
+            })
+            .build();
+
+        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let mut content = "hello world".to_string();
+        let mut matches = scanner.scan(&mut content);
+        matches.sort();
+
+        assert_eq!(matches.len(), 3);
+        assert_eq!(content, "*********ld");
+
+        assert_eq!(
+            matches[0],
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::Placeholder,
+                start_index: 0,
+                end_index_exclusive: 3,
+                shift_offset: 0
+            }
+        );
+
+        assert_eq!(
+            matches[1],
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::Placeholder,
+                start_index: 3,
+                end_index_exclusive: 6,
+                shift_offset: 0
+            }
+        );
+
+        assert_eq!(
+            matches[2],
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::Placeholder,
+                start_index: 6,
+                end_index_exclusive: 9,
+                shift_offset: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_overlapping_mutation_higher_priority() {
+        // A mutating match is a higher priority even if it starts after a non-mutating match
+
+        let rule_0 = RuleConfig::builder("abc".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let rule_1 = RuleConfig::builder("bcd".to_owned())
+            .match_action(MatchAction::Redact {
+                replacement: "***".to_string(),
+            })
+            .build();
+
+        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let mut content = "abcdef".to_string();
+        let mut matches = scanner.scan(&mut content);
+        matches.sort();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "a***ef");
+
+        assert_eq!(
+            matches[0],
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::Placeholder,
+                start_index: 1,
+                end_index_exclusive: 4,
+                shift_offset: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_overlapping_start_offset() {
+        // The match that starts first is used (if the mutation is the same)
+
+        let rule_0 = RuleConfig::builder("abc".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let rule_1 = RuleConfig::builder("bcd".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let mut content = "abcdef".to_string();
+        let mut matches = scanner.scan(&mut content);
+        matches.sort();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "abcdef");
+
+        assert_eq!(
+            matches[0],
+            RuleMatch {
+                rule_index: 0,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::None,
+                start_index: 0,
+                end_index_exclusive: 3,
+                shift_offset: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_overlapping_length() {
+        // If 2 matches have the same mutation and same start, the longer one is taken
+
+        let rule_0 = RuleConfig::builder("abc".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let rule_1 = RuleConfig::builder("abcd".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let mut content = "abcdef".to_string();
+        let mut matches = scanner.scan(&mut content);
+        matches.sort();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "abcdef");
+
+        assert_eq!(
+            matches[0],
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::None,
+                start_index: 0,
+                end_index_exclusive: 4,
+                shift_offset: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_overlapping_rule_order() {
+        // If 2 matches have the same mutation, same start, and the same length, the one with the lower rule index is used
+
+        let rule_0 = RuleConfig::builder("abc".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let rule_1 = RuleConfig::builder("abc".to_owned())
+            .match_action(MatchAction::None)
+            .build();
+
+        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let mut content = "abcdef".to_string();
+        let mut matches = scanner.scan(&mut content);
+        matches.sort();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "abcdef");
+
+        assert_eq!(
+            matches[0],
+            RuleMatch {
+                rule_index: 0,
+                path: Path::root(),
+                replacement_type: crate::ReplacementType::None,
+                start_index: 0,
+                end_index_exclusive: 3,
+                shift_offset: 0
+            }
+        );
     }
 }

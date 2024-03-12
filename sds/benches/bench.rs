@@ -1,8 +1,12 @@
 use criterion::{criterion_group, criterion_main};
 
 mod scope_benchmark {
+    use core::num;
     use criterion::Criterion;
-    use sds::{Path, PathSegment, Scope, ScopedRuleSet, SimpleEvent};
+    use sds::{
+        ContentVisitor, ExclusionCheck, Path, PathSegment, RuleIndexVisitor, Scope, ScopedRuleSet,
+        SimpleEvent,
+    };
     use std::collections::BTreeMap;
 
     pub fn criterion_benchmark(c: &mut Criterion) {
@@ -13,7 +17,7 @@ mod scope_benchmark {
                 format!("key-{}", i).into(),
             )]));
         }
-        let scope = Scope::Include(paths.clone());
+        let scope = Scope::include(paths.clone());
         let exclude_scope = Scope::Exclude(paths);
 
         let mut event_map = BTreeMap::new();
@@ -40,17 +44,32 @@ mod scope_benchmark {
         c.bench_function("scoped_rule_set", |b| {
             b.iter(|| {
                 let mut num_visited = 0;
+                struct Counter<'a> {
+                    num_visited: &'a mut i32,
+                }
+
+                impl<'a> ContentVisitor<'a> for Counter<'a> {
+                    fn visit_content(
+                        &mut self,
+                        path: &Path<'a>,
+                        content: &str,
+                        rules: RuleIndexVisitor,
+                        _check: ExclusionCheck,
+                    ) -> bool {
+                        rules.visit_rule_indices(|_rule_index| {
+                            *self.num_visited += 1;
+                        });
+                        false
+                    }
+                }
+
                 fast_rule_set.visit_string_rule_combinations(
                     &mut event,
-                    |_path, _string, rule_visitor| {
-                        rule_visitor.visit_rule_indices(|_rule_index| {
-                            num_visited += 1;
-                        });
-
-                        false
+                    Counter {
+                        num_visited: &mut num_visited,
                     },
                 );
-                assert_eq!(num_visited, 10_000);
+                assert_eq!(num_visited, 20_000);
             })
         });
     }
