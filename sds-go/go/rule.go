@@ -46,7 +46,7 @@ func NewMatchingRule(id string, pattern string) Rule {
 	}
 }
 
-// NewRedacting rule returns a matching rule redacting events.
+// NewRedactingRule returns a matching rule redacting events.
 func NewRedactingRule(id string, pattern string, redactionValue string) Rule {
 	return Rule{
 		Id:      id,
