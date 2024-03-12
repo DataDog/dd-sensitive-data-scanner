@@ -269,7 +269,7 @@ impl Scanner {
             ord.reverse()
         });
 
-        let mut retained_rules: Vec<InternalRuleMatch<E::Encoding>> = vec![];
+        let mut retained_rules: Vec<InternalRuleMatch<E>> = vec![];
 
         'rule_matches: while let Some(rule_match) = rule_matches.pop() {
             if self.rules[rule_match.rule_index].match_action.is_mutating() {
