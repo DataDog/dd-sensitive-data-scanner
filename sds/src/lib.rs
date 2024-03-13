@@ -20,6 +20,7 @@ mod simple_event;
 pub use encoding::{EncodeIndices, Encoding, Utf8Encoding};
 pub use event::{Event, EventVisitor, VisitStringResult};
 pub use match_action::{MatchAction, PartialRedactDirection};
+pub use observability::labels;
 pub use path::{Path, PathSegment};
 pub use rule::{ProximityKeywordsConfig, RuleConfig, RuleConfigBuilder, Scope, SecondaryValidator};
 pub use rule_match::{ReplacementType, RuleMatch};
