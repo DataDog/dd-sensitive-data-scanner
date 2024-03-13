@@ -128,7 +128,13 @@ impl Scanner {
 
                 self.sort_and_remove_overlapping_rules::<E::Encoding>(rule_matches);
 
+                let will_mutate = rule_matches
+                    .iter()
+                    .any(|rule_match| self.rules[rule_match.rule_index].match_action.is_mutating());
+
                 self.apply_match_actions(content, rule_matches, &mut output_rule_matches);
+
+                will_mutate
             });
         }
 
@@ -348,13 +354,13 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
         // If there are any matches, the string will need to be accessed to check for false positives from
         // excluded matches, any to potentially mutate the string.
-        let will_mutate = !path_rules_matches.is_empty();
+        let has_match = !path_rules_matches.is_empty();
 
-        if !path_rules_matches.is_empty() {
+        if has_match {
             self.rule_matches.push(path_rules_matches);
         }
 
-        will_mutate
+        has_match
     }
 }
 

@@ -14,7 +14,8 @@ pub trait Event: Sized {
 
     /// Visit the string at the specified path. The path is guaranteed to be valid, it will be a path
     /// that was previously used in `visit_event'. This is used to replace redacted content.
-    fn visit_string_mut(&mut self, path: &Path, visit: impl FnMut(&mut String));
+    /// `visit` returns a bool indiciating if the string was mutated.
+    fn visit_string_mut(&mut self, path: &Path, visit: impl FnMut(&mut String) -> bool);
 }
 
 pub trait EventVisitor<'path> {
@@ -26,7 +27,7 @@ pub trait EventVisitor<'path> {
 pub struct VisitStringResult<'s, 'path> {
     /// This will be true if `visit_string_mut` may be called in the future for the string that was just visited.
     /// This is intended as a flag for performance optimization.
-    pub will_mutate: bool,
+    pub might_mutate: bool,
     pub path: &'s Path<'path>,
 }
 
@@ -37,8 +38,8 @@ impl Event for String {
         let _result = visitor.visit_string(self);
     }
 
-    fn visit_string_mut(&mut self, _path: &Path, mut visit: impl FnMut(&mut String)) {
-        (visit)(self)
+    fn visit_string_mut(&mut self, _path: &Path, mut visit: impl FnMut(&mut String) -> bool) {
+        (visit)(self);
     }
 }
 
@@ -73,7 +74,7 @@ pub(crate) mod test {
         fn visit_string<'s>(&'s mut self, value: &str) -> VisitStringResult<'s, 'path> {
             self.ops.push(VisitOp::Visit(value.to_string()));
             VisitStringResult {
-                will_mutate: true,
+                might_mutate: true,
                 path: &self.path,
             }
         }

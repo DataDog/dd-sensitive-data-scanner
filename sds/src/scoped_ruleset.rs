@@ -133,7 +133,7 @@ where
             },
         );
         VisitStringResult {
-            will_mutate,
+            might_mutate: will_mutate,
             path: &self.path,
         }
     }
