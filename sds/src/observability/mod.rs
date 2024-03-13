@@ -1,1 +1,1 @@
-pub(crate) mod labels;
+pub mod labels;
