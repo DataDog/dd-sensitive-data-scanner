@@ -192,6 +192,10 @@ func TestSecondaryValidator(t *testing.T) {
 	defer scanner.Delete()
 
 	testData := map[string]testResult{
+		"this is a log to process, no match no partial redact nor anything": {
+			str:   "",
+			rules: []RuleMatch{},
+		},
 		"here card 237339, this one should match, but this second one 382448 should not as it's not prefixed by card": {
 			str: "",
 			rules: []RuleMatch{{
@@ -199,8 +203,8 @@ func TestSecondaryValidator(t *testing.T) {
 				StartIndex:        10,
 				EndIndexExclusive: 16,
 				ShiftOffset:       0,
-			}},
-		},
+			}, 
+		}},
 	}
 
 	runTest(t, scanner, testData)
@@ -221,8 +225,12 @@ func TestPartialRedact(t *testing.T) {
 	defer scanner.Delete()
 
 	testData := map[string]testResult{
-		"here card ****39, this one should match, but this second one 382448 should not as it's not prefixed by card": {
-			str: "",
+		"this is a log to process, no match no partial redact nor anything": {
+			str:   "",
+			rules: []RuleMatch{},
+		},
+		"here card 328339, this one should match, but this second one 382448 should not as it's not prefixed by card": {
+			str: "here card ****39, this one should match, but this second one 382448 should not as it's not prefixed by card",
 			rules: []RuleMatch{{
 				RuleIdx:           0,
 				StartIndex:        10,
