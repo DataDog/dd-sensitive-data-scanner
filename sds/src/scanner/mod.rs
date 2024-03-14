@@ -155,7 +155,7 @@ impl Scanner {
         for rule_match in rule_matches {
             output_rule_matches.push(self.apply_match_actions_for_string::<E>(
                 content,
-                &rule_match,
+                rule_match,
                 &mut utf8_byte_delta,
                 &mut custom_index_delta,
             ));
