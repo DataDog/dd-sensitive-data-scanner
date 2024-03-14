@@ -514,24 +514,24 @@ mod test {
             .build();
 
         let test_cases = vec![
-            // (vec![detect_test_rule.clone()], "test1", vec![(0, 4, 0)]),
-            // (vec![redact_test_rule.clone()], "test2", vec![(0, 6, 2)]),
-            // (vec![redact_test_rule.clone()], "xtestx", vec![(1, 7, 2)]),
-            // (
-            //     vec![redact_test_rule.clone()],
-            //     "xtestxtestx",
-            //     vec![(1, 7, 2), (8, 14, 4)],
-            // ),
-            // (
-            //     vec![redact_test_rule_2.clone()],
-            //     "xtestxabx",
-            //     vec![(6, 10, 2)],
-            // ),
-            // (
-            //     vec![redact_test_rule_2.clone(), redact_test_rule.clone()],
-            //     "xtestxabx",
-            //     vec![(1, 7, 2), (8, 12, 4)],
-            // ),
+            (vec![detect_test_rule.clone()], "test1", vec![(0, 4, 0)]),
+            (vec![redact_test_rule.clone()], "test2", vec![(0, 6, 2)]),
+            (vec![redact_test_rule.clone()], "xtestx", vec![(1, 7, 2)]),
+            (
+                vec![redact_test_rule.clone()],
+                "xtestxtestx",
+                vec![(1, 7, 2), (8, 14, 4)],
+            ),
+            (
+                vec![redact_test_rule_2.clone()],
+                "xtestxabx",
+                vec![(6, 10, 2)],
+            ),
+            (
+                vec![redact_test_rule_2.clone(), redact_test_rule.clone()],
+                "xtestxabx",
+                vec![(1, 7, 2), (8, 12, 4)],
+            ),
             (
                 vec![detect_test_rule.clone(), redact_test_rule_2.clone()],
                 "ab-test",
@@ -937,7 +937,7 @@ mod test {
     }
 
     #[test]
-    fn shouldSkipMatchWhenPresentInExcludedMatches() {
+    fn should_skip_match_when_present_in_excluded_matches() {
         // If 2 matches have the same mutation and same start, the longer one is taken
 
         let rule_0 = RuleConfig::builder("b.*".to_owned())
@@ -959,7 +959,7 @@ mod test {
             ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
         ]));
 
-        let mut matches = scanner.scan(&mut content);
+        let matches = scanner.scan(&mut content);
 
         // The match from the "test" field (which is excluded) is the same as the match from "message", so it is
         // treated as a false positive.

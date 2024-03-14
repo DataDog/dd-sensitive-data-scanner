@@ -35,7 +35,7 @@ impl Event for SimpleEvent {
         }
     }
 
-    fn visit_string_mut(&mut self, path: &Path, mut visit: impl FnMut(&mut String)) {
+    fn visit_string_mut(&mut self, path: &Path, mut visit: impl FnMut(&mut String) -> bool) {
         let mut value = self;
 
         for segment in &path.segments {
