@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::match_action::MatchAction;
 use crate::path::Path;
+use serde_with::{serde_as, DefaultOnNull};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RuleConfig {
@@ -69,12 +70,20 @@ impl Default for Scope {
     }
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ProximityKeywordsConfig {
     pub look_ahead_character_count: usize,
+
+    #[serde_as(deserialize_as = "DefaultOnNull")]
+    #[serde(default)]
     pub included_keywords: Vec<String>,
+
+    #[serde_as(deserialize_as = "DefaultOnNull")]
+    #[serde(default)]
     pub excluded_keywords: Vec<String>,
 }
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "type")]
 pub enum SecondaryValidator {
@@ -141,7 +150,7 @@ impl RuleConfigBuilder {
 
 #[cfg(test)]
 mod test {
-    use crate::{MatchAction, RuleConfig, Scope};
+    use crate::{MatchAction, ProximityKeywordsConfig, RuleConfig, Scope};
 
     #[test]
     fn should_override_pattern() {
@@ -162,6 +171,31 @@ mod test {
                 scope: Scope::all(),
                 proximity_keywords: None,
                 validator: None,
+            }
+        );
+    }
+
+    #[test]
+    fn proximity_keywords_should_have_default() {
+        let json_config = r#"{"look_ahead_character_count": 0}"#;
+        let test: ProximityKeywordsConfig = serde_json::from_str(json_config).unwrap();
+        assert_eq!(
+            test,
+            ProximityKeywordsConfig {
+                look_ahead_character_count: 0,
+                included_keywords: vec![],
+                excluded_keywords: vec![]
+            }
+        );
+
+        let json_config = r#"{"look_ahead_character_count": 0, "excluded_keywords": null, "included_keywords": null}"#;
+        let test: ProximityKeywordsConfig = serde_json::from_str(json_config).unwrap();
+        assert_eq!(
+            test,
+            ProximityKeywordsConfig {
+                look_ahead_character_count: 0,
+                included_keywords: vec![],
+                excluded_keywords: vec![]
             }
         );
     }
