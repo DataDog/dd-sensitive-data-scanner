@@ -80,6 +80,7 @@ pub struct ProximityKeywordsConfig {
 pub enum SecondaryValidator {
     LuhnChecksum,
     ChineseIdChecksum,
+    GithubTokenChecksum,
 }
 
 pub struct RuleConfigBuilder {
