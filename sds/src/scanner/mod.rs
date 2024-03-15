@@ -374,10 +374,9 @@ mod test {
     use crate::scanner::{CreateScannerError, Scanner};
     use crate::validation::RegexValidationError;
     use crate::SecondaryValidator::ChineseIdChecksum;
-    use crate::{
-        simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch, Scope,
-    };
     use std::collections::BTreeMap;
+    use crate::SecondaryValidator::GithubTokenChecksum;
+    use crate::{ simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch, Scope};
 
     #[test]
     fn simple_redaction() {
@@ -662,6 +661,36 @@ mod test {
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "[IDCARD] 513231200012121651");
+    }
+
+    #[test]
+    fn test_github_token_checksum() {
+        let pattern = "\\bgh[opsu]_[0-9a-zA-Z]{36}\\b";
+        let rule = RuleConfig::builder(pattern.to_string())
+            .match_action(MatchAction::Redact {
+                replacement: "[GITHUB]".to_string(),
+            })
+            .build();
+
+        let rule_with_checksum = RuleConfigBuilder::from(&rule)
+            .validator(GithubTokenChecksum)
+            .build();
+
+        let scanner = Scanner::new(&[rule]).unwrap();
+        let mut content =
+            "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 ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5"
+                .to_string();
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 2);
+        assert_eq!(content, "[GITHUB] [GITHUB]");
+
+        let scanner = Scanner::new(&[rule_with_checksum]).unwrap();
+        let mut content =
+            "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 ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5"
+                .to_string();
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "[GITHUB] ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5");
     }
 
     #[test]
