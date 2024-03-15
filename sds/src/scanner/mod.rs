@@ -374,9 +374,11 @@ mod test {
     use crate::scanner::{CreateScannerError, Scanner};
     use crate::validation::RegexValidationError;
     use crate::SecondaryValidator::ChineseIdChecksum;
-    use std::collections::BTreeMap;
     use crate::SecondaryValidator::GithubTokenChecksum;
-    use crate::{ simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch, Scope};
+    use crate::{
+        simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch, Scope,
+    };
+    use std::collections::BTreeMap;
 
     #[test]
     fn simple_redaction() {
