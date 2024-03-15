@@ -103,7 +103,7 @@ impl Validator for GithubTokenChecksum {
         if parts.len() < 2 {
             return false;
         }
-        let last_part = parts[parts.len() - 1];
+        let last_part = parts.last().unwrap();
         // check that last part is only made with base62 chars
         if !last_part.chars().all(|c| c.is_ascii_alphanumeric()) {
             return false;
