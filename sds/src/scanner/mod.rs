@@ -308,13 +308,6 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
             while let Some(regex_match) =
                 it.advance(|input| Ok(rule.regex.search_with(cache, input)))
             {
-                if exclusion_check.is_excluded(rule_index) {
-                    // Matches from excluded paths are saved and used to treat additional equal matches as false positives
-                    self.excluded_matches
-                        .insert(content[regex_match.range()].to_string());
-                    continue;
-                }
-
                 if rule
                     .proximity_keywords
                     .is_false_positive_match(content, regex_match.start())
@@ -328,6 +321,14 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     };
                 }
 
+                if exclusion_check.is_excluded(rule_index) {
+                    // Matches from excluded paths are saved and used to treat additional equal matches as false positives
+                    self.excluded_matches
+                        .insert(content[regex_match.range()].to_string());
+                    continue;
+                }
+
+                println!("Is valid match");
                 path_rules_matches.push(InternalRuleMatch {
                     rule_index,
                     utf8_start: regex_match.start(),
@@ -983,7 +984,7 @@ mod test {
 
         let mut content = SimpleEvent::Map(BTreeMap::from([
             (
-                "zessage".to_string(),
+                "message".to_string(),
                 SimpleEvent::String("abcdef".to_string()),
             ),
             ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
@@ -994,5 +995,41 @@ mod test {
         // The match from the "test" field (which is excluded) is the same as the match from "message", so it is
         // treated as a false positive.
         assert_eq!(matches.len(), 0);
+    }
+
+    #[test]
+    fn should_not_exclude_false_positive_matches() {
+        // If a match in an excluded scope is a false-positive due to keyword proximity matching,
+        // it is not saved in the excluded matches.
+
+        let rule_0 = RuleConfig::builder("b.*".to_owned())
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["secret".to_string()],
+                excluded_keywords: vec![],
+            })
+            .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
+                "test".into(),
+            )])]))
+            .match_action(MatchAction::Redact {
+                replacement: "[scrub]".to_string(),
+            })
+            .build();
+
+        let scanner = Scanner::new(&[rule_0]).unwrap();
+
+        let mut content = SimpleEvent::Map(BTreeMap::from([
+            (
+                "message".to_string(),
+                SimpleEvent::String("secret abcdef".to_string()),
+            ),
+            ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
+        ]));
+
+        let matches = scanner.scan(&mut content);
+
+        // The match from the "test" field (which is excluded) is the same as the match from "message", so it is
+        // treated as a false positive.
+        assert_eq!(matches.len(), 1);
     }
 }
