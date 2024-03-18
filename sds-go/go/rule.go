@@ -27,6 +27,7 @@ const (
 	LastCharacters  = PartialRedactionDirection("LastCharacters")
 )
 
+
 // Rule is sent to the core library to create scanners.
 type Rule struct {
 	Id                 string                   `json:"id"`
