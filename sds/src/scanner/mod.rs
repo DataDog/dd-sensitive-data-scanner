@@ -8,7 +8,7 @@ use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::validation::validate_and_create_regex;
-use crate::{CreateScannerError, EncodeIndices, MatchAction, Scope};
+use crate::{CreateScannerError, EncodeIndices, MatchAction, Path, Scope};
 use regex_automata::meta::Regex as MetaRegex;
 use std::sync::Arc;
 
@@ -114,13 +114,9 @@ impl Scanner {
         );
         let mut output_rule_matches = vec![];
 
-        for rule_matches in &mut rule_matches_list {
+        for (path, rule_matches) in &mut rule_matches_list {
             // All rule matches in each inner list are for a single path, so they can be processed independently.
-
-            // TODO: remove the clone here
-            let path = rule_matches.first().unwrap().path.clone();
-
-            event.visit_string_mut(&path, |content| {
+            event.visit_string_mut(path, |content| {
                 // filter out any matches where the content is included in `excluded_matches`.
                 rule_matches.retain(|rule_match| {
                     !excluded_matches.contains(&content[rule_match.utf8_start..rule_match.utf8_end])
@@ -132,7 +128,7 @@ impl Scanner {
                     .iter()
                     .any(|rule_match| self.rules[rule_match.rule_index].match_action.is_mutating());
 
-                self.apply_match_actions(content, rule_matches, &mut output_rule_matches);
+                self.apply_match_actions(content, path, rule_matches, &mut output_rule_matches);
 
                 will_mutate
             });
@@ -146,6 +142,7 @@ impl Scanner {
     fn apply_match_actions<E: Encoding>(
         &self,
         content: &mut String,
+        path: &Path<'static>,
         rule_matches: &mut [InternalRuleMatch<E>],
         output_rule_matches: &mut Vec<RuleMatch>,
     ) {
@@ -155,6 +152,7 @@ impl Scanner {
         for rule_match in rule_matches {
             output_rule_matches.push(self.apply_match_actions_for_string::<E>(
                 content,
+                path.clone(),
                 rule_match,
                 &mut utf8_byte_delta,
                 &mut custom_index_delta,
@@ -166,6 +164,7 @@ impl Scanner {
     fn apply_match_actions_for_string<E: Encoding>(
         &self,
         content: &mut String,
+        path: Path<'static>,
         rule_match: &InternalRuleMatch<E>,
         // The current difference in length between the original and mutated string
         utf8_byte_delta: &mut isize,
@@ -214,7 +213,7 @@ impl Scanner {
 
         RuleMatch {
             rule_index: rule_match.rule_index,
-            path: rule_match.path.into_static(),
+            path,
             replacement_type: rule.match_action.replacement_type(),
             start_index: custom_start,
             end_index_exclusive: custom_end,
@@ -284,7 +283,7 @@ impl Scanner {
 struct ScannerContentVisitor<'a, E: Encoding> {
     scanner: &'a Scanner,
     caches: CachePoolGuard<'a>,
-    rule_matches: &'a mut Vec<Vec<InternalRuleMatch<E>>>,
+    rule_matches: &'a mut Vec<(crate::Path<'static>, Vec<InternalRuleMatch<E>>)>,
     excluded_matches: &'a mut AHashSet<String>,
 }
 
@@ -330,7 +329,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 }
 
                 path_rules_matches.push(InternalRuleMatch {
-                    path: path.into_static(),
+                    // path: path.into_static(),
                     rule_index,
                     utf8_start: regex_match.start(),
                     utf8_end: regex_match.end(),
@@ -357,7 +356,8 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         let has_match = !path_rules_matches.is_empty();
 
         if has_match {
-            self.rule_matches.push(path_rules_matches);
+            self.rule_matches
+                .push((path.into_static(), path_rules_matches));
         }
 
         has_match

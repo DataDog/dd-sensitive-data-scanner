@@ -31,9 +31,6 @@ pub struct RuleMatch {
 }
 
 pub struct InternalRuleMatch<E: Encoding> {
-    /// The path to the string where the match occurred.
-    pub path: Path<'static>,
-
     /// index of the rule that matched
     pub rule_index: usize,
 
