@@ -7,9 +7,10 @@ import (
 type MatchActionType string
 
 const (
-	MatchActionNone   = MatchActionType("None")
-	MatchActionRedact = MatchActionType("Redact")
-	MatchActionHash   = MatchActionType("Hash")
+	MatchActionNone          = MatchActionType("None")
+	MatchActionRedact        = MatchActionType("Redact")
+	MatchActionHash          = MatchActionType("Hash")
+	MatchActionPartialRedact = MatchActionType("PartialRedact")
 )
 
 type SecondaryValidator string
@@ -18,6 +19,14 @@ const (
 	LuhnChecksum      = SecondaryValidator("LuhnChecksum")
 	ChineseIdChecksum = SecondaryValidator("ChineseIdChecksum")
 )
+
+type PartialRedactionDirection string
+
+const (
+	FirstCharacters = PartialRedactionDirection("FirstCharacters")
+	LastCharacters  = PartialRedactionDirection("LastCharacters")
+)
+
 
 // Rule is sent to the core library to create scanners.
 type Rule struct {
@@ -70,8 +79,12 @@ type RuleMatch struct {
 // MatchAction is used to configure the rules.
 type MatchAction struct {
 	Type MatchActionType
-	// empty if MatchActionType == MatchActionNone
+	// used when Type == MatchActionRedact, empty otherwise
 	RedactionValue string
+	// used when Type == MatchActionPartialRedact, empty otherwise
+	CharacterCount uint32
+	// used when Type == MatchActionPartialRedact, empty otherwise
+	Direction PartialRedactionDirection
 }
 
 // NewMatchingRule returns a matching rule with no match _action_.
@@ -111,6 +124,20 @@ func NewHashRule(id string, pattern string, extraConfig ExtraConfig) Rule {
 	}
 }
 
+// NewPartialRedactRule returns a matching rule partially redacting matches.
+func NewPartialRedactRule(id string, pattern string, characterCount uint32, direction PartialRedactionDirection, extraConfig ExtraConfig) Rule {
+	return Rule{
+		Id:      id,
+		Pattern: pattern,
+		MatchAction: MatchAction{
+			Type:           MatchActionPartialRedact,
+			CharacterCount: characterCount,
+			Direction:      direction,
+		},
+		ProximityKeywords: extraConfig.ProximityKeywords,
+	}
+}
+
 // MarshalJSON marshales the SecondaryValidator.
 func (s SecondaryValidator) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]string{
@@ -121,9 +148,18 @@ func (s SecondaryValidator) MarshalJSON() ([]byte, error) {
 // MarshalJSON marshals the MatchAction in a format understood by the serde rust
 // JSON library.
 func (m MatchAction) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]string{
+	o := map[string]interface{}{
 		"type":         string(m.Type), // serde (rust) will use this field to know what to use for the enum
 		"match_action": string(m.Type),
-		"replacement":  m.RedactionValue,
-	})
+	}
+
+	switch m.Type {
+	case MatchActionRedact:
+		o["replacement"] = m.RedactionValue
+	case MatchActionPartialRedact:
+		o["character_count"] = m.CharacterCount
+		o["direction"] = string(m.Direction)
+	}
+
+	return json.Marshal(o)
 }
