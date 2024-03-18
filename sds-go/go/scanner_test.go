@@ -12,11 +12,13 @@ type testResult struct {
 }
 
 func TestCreateScannerFailOnBadRegex(t *testing.T) {
+	var extraConfig ExtraConfig
+
 	// scanner ok
 	rules := []Rule{
-		NewMatchingRule("rule_hello", "hello"),
-		NewMatchingRule("rule_world", "(?i)WoRlD"),
-		NewRedactingRule("rule_secret", "se..et", "aaaaaaaaa"),
+		NewMatchingRule("rule_hello", "hello", extraConfig),
+		NewMatchingRule("rule_world", "(?i)WoRlD", extraConfig),
+		NewRedactingRule("rule_secret", "se..et", "aaaaaaaaa", extraConfig),
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -28,9 +30,9 @@ func TestCreateScannerFailOnBadRegex(t *testing.T) {
 	// this scanner creation should fail, one of the rule
 	// contains a bad regex
 	rules = []Rule{
-		NewMatchingRule("rule_hello", "hello"),
-		NewMatchingRule("rule_world", "(?i)Wo))RlD"),
-		NewRedactingRule("rule_secret", "se..et", "aaaaaaaaa"),
+		NewMatchingRule("rule_hello", "hello", extraConfig),
+		NewMatchingRule("rule_world", "(?i)Wo))RlD", extraConfig),
+		NewRedactingRule("rule_secret", "se..et", "aaaaaaaaa", extraConfig),
 	}
 
 	scanner, err = CreateScanner(rules)
@@ -43,10 +45,12 @@ func TestCreateScannerFailOnBadRegex(t *testing.T) {
 }
 
 func TestCreateScanner(t *testing.T) {
+	var extraConfig ExtraConfig
+
 	rules := []Rule{
-		NewMatchingRule("rule_hello", "hello"),
-		NewMatchingRule("rule_world", "(?i)WoRlD"),
-		NewRedactingRule("rule_secret", "se..et", "aaaaaaaaa"),
+		NewMatchingRule("rule_hello", "hello", extraConfig),
+		NewMatchingRule("rule_world", "(?i)WoRlD", extraConfig),
+		NewRedactingRule("rule_secret", "se..et", "aaaaaaaaa", extraConfig),
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -63,10 +67,12 @@ func TestCreateScanner(t *testing.T) {
 }
 
 func TestScanStringEvent(t *testing.T) {
+	var extraConfig ExtraConfig
+
 	rules := []Rule{
-		NewMatchingRule("rule_hello", "hello"),
-		NewMatchingRule("rule_world", "(?i)WoRlD"),
-		NewRedactingRule("rule_secret", "se..et", "[REDACTED]"),
+		NewMatchingRule("rule_hello", "hello", extraConfig),
+		NewMatchingRule("rule_world", "(?i)WoRlD", extraConfig),
+		NewRedactingRule("rule_secret", "se..et", "[REDACTED]", extraConfig),
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -132,10 +138,12 @@ func TestScanStringEvent(t *testing.T) {
 }
 
 func TestScanStringEventMultipleMutations(t *testing.T) {
+	var extraConfig ExtraConfig
+
 	rules := []Rule{
-		NewMatchingRule("rule_hello", "hello"),
-		NewRedactingRule("rule_secret", "se..et", "[REDACTED]"),
-		NewRedactingRule("rule_numbers", "[0-9]{4}", "[NREDAC]"),
+		NewMatchingRule("rule_hello", "hello", extraConfig),
+		NewRedactingRule("rule_secret", "se..et", "[REDACTED]", extraConfig),
+		NewRedactingRule("rule_numbers", "[0-9]{4}", "[NREDAC]", extraConfig),
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -161,6 +169,73 @@ func TestScanStringEventMultipleMutations(t *testing.T) {
 				StartIndex:        95,
 				EndIndexExclusive: 95 + uint32(len("[NREDAC]")),
 				ShiftOffset:       8,
+			}},
+		},
+	}
+
+	runTest(t, scanner, testData)
+}
+
+func TestSecondaryValidator(t *testing.T) {
+	extraConfig := ExtraConfig{
+		ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil),
+	}
+
+	rules := []Rule{
+		NewMatchingRule("rule_6_numbers", "[0-9]{6}", extraConfig),
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create the scanner:", err.Error())
+	}
+	defer scanner.Delete()
+
+	testData := map[string]testResult{
+		"this is a log to process, no match no partial redact nor anything": {
+			str:   "",
+			rules: []RuleMatch{},
+		},
+		"here card 237339, this one should match, but this second one 382448 should not as it's not prefixed by card": {
+			str: "",
+			rules: []RuleMatch{{
+				RuleIdx:           0,
+				StartIndex:        10,
+				EndIndexExclusive: 16,
+				ShiftOffset:       0,
+			}, 
+		}},
+	}
+
+	runTest(t, scanner, testData)
+}
+
+func TestPartialRedact(t *testing.T) {
+	extraConfig := ExtraConfig{
+		ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil),
+	}
+
+	rules := []Rule{
+		NewPartialRedactRule("rule_6_numbers", "[0-9]{6}", 4, FirstCharacters, extraConfig),
+	}
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create the scanner:", err.Error())
+	}
+	defer scanner.Delete()
+
+	testData := map[string]testResult{
+		"this is a log to process, no match no partial redact nor anything": {
+			str:   "",
+			rules: []RuleMatch{},
+		},
+		"here card 328339, this one should match, but this second one 382448 should not as it's not prefixed by card": {
+			str: "here card ****39, this one should match, but this second one 382448 should not as it's not prefixed by card",
+			rules: []RuleMatch{{
+				RuleIdx:           0,
+				StartIndex:        10,
+				EndIndexExclusive: 16,
+				ShiftOffset:       0,
 			}},
 		},
 	}
