@@ -329,7 +329,6 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 }
 
                 path_rules_matches.push(InternalRuleMatch {
-                    // path: path.into_static(),
                     rule_index,
                     utf8_start: regex_match.start(),
                     utf8_end: regex_match.end(),
