@@ -8,11 +8,12 @@ use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::validation::validate_and_create_regex;
-use crate::{CreateScannerError, EncodeIndices, MatchAction, Scope};
+use crate::{CreateScannerError, EncodeIndices, MatchAction, Path, Scope};
 use regex_automata::meta::Regex as MetaRegex;
 use std::sync::Arc;
 
 use self::cache_pool::{CachePool, CachePoolGuard};
+use ahash::AHashSet;
 
 mod cache_pool;
 pub mod error;
@@ -96,113 +97,86 @@ impl Scanner {
             Box<dyn Fn() -> Vec<regex_automata::meta::Cache> + Send + Sync>,
         > = self.cache_pool.get();
 
-        // all matches, after overlapping rules have been filtered
-        let mut rule_matches = vec![];
+        // All matches, after some (but not all) false-positives have been removed.
+        // This is a vec of vecs, where each inner vec is a set of matches for a single path.
+        let mut rule_matches_list = vec![];
+
+        let mut excluded_matches = AHashSet::new();
 
         self.scoped_ruleset.visit_string_rule_combinations(
             event,
             ScannerContentVisitor {
                 scanner: self,
                 caches,
-                rule_matches: &mut rule_matches,
+                rule_matches: &mut rule_matches_list,
+                excluded_matches: &mut excluded_matches,
             },
         );
-
-        // TODO: multipass V0 logic will go here
-        self.apply_match_actions(event, rule_matches)
-    }
-
-    /// Apply mutations from actions, and shift indices to match the mutated values.
-    /// This assumes the matches are grouped by path (order doesn't matter) then sorted by start index.
-    fn apply_match_actions<E: Event>(
-        &self,
-        event: &mut E,
-        rule_matches: Vec<InternalRuleMatch<E::Encoding>>,
-    ) -> Vec<RuleMatch> {
         let mut output_rule_matches = vec![];
 
-        let mut rule_matches_iter = rule_matches.into_iter().peekable();
-
-        while rule_matches_iter.peek().is_some() {
-            let mut rule_match = rule_matches_iter.next().unwrap();
-
-            // If the rule does not mutate the event, indexes (start, end , offset) does not need to be updated and the match action can be skipped
-            // If the next rule is on the same path (and so same content),
-            // the match action of the next rule should have no impact on the offset of the current rule as rules are ordered by start index.
-            if self.rules[rule_match.rule_index].match_action.is_mutating() {
-                let path = rule_match.path.clone();
-
-                event.visit_string_mut(&path, |content| {
-                    let mut utf8_byte_delta: isize = 0;
-                    let mut custom_index_delta: <E::Encoding as Encoding>::IndexShift =
-                        <E::Encoding as Encoding>::zero_shift();
-
-                    // for each rule match on the path, the string content and the indexes (start, end, offset) are updated sequentially in this loop
-                    // rules should be ordered by start index as described in the documentation of the function
-                    loop {
-                        output_rule_matches.push(self.apply_match_actions_for_string::<E>(
-                            content,
-                            &rule_match,
-                            &mut utf8_byte_delta,
-                            &mut custom_index_delta,
-                        ));
-
-                        if let Some(next_match) = rule_matches_iter.peek() {
-                            if next_match.path == rule_match.path {
-                                // next match is on the same string
-                                rule_match = rule_matches_iter.next().unwrap();
-                            } else {
-                                // done mutating the current string
-                                break;
-                            }
-                        } else {
-                            // all rules have been processed
-                            break;
-                        }
-                    }
+        for (path, rule_matches) in &mut rule_matches_list {
+            // All rule matches in each inner list are for a single path, so they can be processed independently.
+            event.visit_string_mut(path, |content| {
+                // filter out any matches where the content is included in `excluded_matches`.
+                rule_matches.retain(|rule_match| {
+                    !excluded_matches.contains(&content[rule_match.utf8_start..rule_match.utf8_end])
                 });
-            } else {
-                output_rule_matches.push(RuleMatch {
-                    rule_index: rule_match.rule_index,
-                    path: rule_match.path.into_static(),
-                    replacement_type: self.rules[rule_match.rule_index]
-                        .match_action
-                        .replacement_type(),
-                    start_index: <E::Encoding as Encoding>::get_index(
-                        &rule_match.custom_start,
-                        rule_match.utf8_start,
-                    ),
-                    end_index_exclusive: <E::Encoding as Encoding>::get_index(
-                        &rule_match.custom_end,
-                        rule_match.utf8_end,
-                    ),
-                    // There were no mutating rules before this, so nothing was shifted
-                    shift_offset: 0,
-                });
-            }
+
+                self.sort_and_remove_overlapping_rules::<E::Encoding>(rule_matches);
+
+                let will_mutate = rule_matches
+                    .iter()
+                    .any(|rule_match| self.rules[rule_match.rule_index].match_action.is_mutating());
+
+                self.apply_match_actions(content, path, rule_matches, &mut output_rule_matches);
+
+                will_mutate
+            });
         }
 
         output_rule_matches
     }
 
-    /// This will be called once for each match of a single string. The rules must be passed in in order of the start index. Mutating rules must not overlap.
-    fn apply_match_actions_for_string<E: Event>(
+    /// Apply mutations from actions, and shift indices to match the mutated values.
+    /// This assumes the matches are all from the content given, and are sorted by start index.
+    fn apply_match_actions<E: Encoding>(
         &self,
         content: &mut String,
-        rule_match: &InternalRuleMatch<E::Encoding>,
+        path: &Path<'static>,
+        rule_matches: &mut [InternalRuleMatch<E>],
+        output_rule_matches: &mut Vec<RuleMatch>,
+    ) {
+        let mut utf8_byte_delta: isize = 0;
+        let mut custom_index_delta: <E>::IndexShift = <E>::zero_shift();
+
+        for rule_match in rule_matches {
+            output_rule_matches.push(self.apply_match_actions_for_string::<E>(
+                content,
+                path.clone(),
+                rule_match,
+                &mut utf8_byte_delta,
+                &mut custom_index_delta,
+            ));
+        }
+    }
+
+    /// This will be called once for each match of a single string. The rules must be passed in in order of the start index. Mutating rules must not overlap.
+    fn apply_match_actions_for_string<E: Encoding>(
+        &self,
+        content: &mut String,
+        path: Path<'static>,
+        rule_match: &InternalRuleMatch<E>,
         // The current difference in length between the original and mutated string
         utf8_byte_delta: &mut isize,
 
         // The difference between the custom index on the original string and the mutated string
-        custom_index_delta: &mut <E::Encoding as Encoding>::IndexShift,
+        custom_index_delta: &mut <E>::IndexShift,
     ) -> RuleMatch {
         let rule = &self.rules[rule_match.rule_index];
 
         let custom_start =
-            (<E::Encoding as Encoding>::get_index(&rule_match.custom_start, rule_match.utf8_start)
-                as isize
-                + <E::Encoding as Encoding>::get_shift(custom_index_delta, *utf8_byte_delta))
-                as usize;
+            (<E>::get_index(&rule_match.custom_start, rule_match.utf8_start) as isize
+                + <E>::get_shift(custom_index_delta, *utf8_byte_delta)) as usize;
 
         if rule.match_action.is_mutating() {
             let mutated_utf8_match_start =
@@ -219,7 +193,7 @@ impl Scanner {
                 let before_replacement = &matched_content[replacement.start..replacement.end];
 
                 // update indices to match the new mutated content
-                <E::Encoding as Encoding>::adjust_shift(
+                <E>::adjust_shift(
                     custom_index_delta,
                     before_replacement,
                     &replacement.replacement,
@@ -233,16 +207,13 @@ impl Scanner {
             }
         }
 
-        let shift_offset =
-            <E::Encoding as Encoding>::get_shift(custom_index_delta, *utf8_byte_delta);
-        let custom_end =
-            (<E::Encoding as Encoding>::get_index(&rule_match.custom_end, rule_match.utf8_end)
-                as isize
-                + shift_offset) as usize;
+        let shift_offset = <E>::get_shift(custom_index_delta, *utf8_byte_delta);
+        let custom_end = (<E>::get_index(&rule_match.custom_end, rule_match.utf8_end) as isize
+            + shift_offset) as usize;
 
         RuleMatch {
             rule_index: rule_match.rule_index,
-            path: rule_match.path.into_static(),
+            path,
             replacement_type: rule.match_action.replacement_type(),
             start_index: custom_start,
             end_index_exclusive: custom_end,
@@ -312,7 +283,8 @@ impl Scanner {
 struct ScannerContentVisitor<'a, E: Encoding> {
     scanner: &'a Scanner,
     caches: CachePoolGuard<'a>,
-    rule_matches: &'a mut Vec<InternalRuleMatch<E>>,
+    rule_matches: &'a mut Vec<(crate::Path<'static>, Vec<InternalRuleMatch<E>>)>,
+    excluded_matches: &'a mut AHashSet<String>,
 }
 
 impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
@@ -323,7 +295,6 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         rule_visitor: crate::scoped_ruleset::RuleIndexVisitor,
         exclusion_check: ExclusionCheck<'b>,
     ) -> bool {
-        // |path, value, rule_visitor| {
         // matches for a single path
         let mut path_rules_matches = vec![];
 
@@ -333,16 +304,10 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
             // `find_iter` already skips overlapping matches for the same rule,
             // so those don't need to be filtered out here
-
             let mut it = regex_automata::util::iter::Searcher::new(content.into());
             while let Some(regex_match) =
                 it.advance(|input| Ok(rule.regex.search_with(cache, input)))
             {
-                if exclusion_check.is_excluded(rule_index) {
-                    // TODO: Multipass V0 logic will go here.
-                    continue;
-                }
-
                 if rule
                     .proximity_keywords
                     .is_false_positive_match(content, regex_match.start())
@@ -356,8 +321,15 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     };
                 }
 
+                if exclusion_check.is_excluded(rule_index) {
+                    // Matches from excluded paths are saved and used to treat additional equal matches as false positives
+                    self.excluded_matches
+                        .insert(content[regex_match.range()].to_string());
+                    continue;
+                }
+
+                println!("Is valid match");
                 path_rules_matches.push(InternalRuleMatch {
-                    path: path.into_static(),
                     rule_index,
                     utf8_start: regex_match.start(),
                     utf8_end: regex_match.end(),
@@ -366,9 +338,6 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 });
             }
         });
-
-        self.scanner
-            .sort_and_remove_overlapping_rules::<E>(&mut path_rules_matches);
 
         E::calculate_indices(
             content,
@@ -382,15 +351,16 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 }),
         );
 
-        let will_mutate = path_rules_matches.iter().any(|rule_match| {
-            self.scanner.rules[rule_match.rule_index]
-                .match_action
-                .is_mutating()
-        });
+        // If there are any matches, the string will need to be accessed to check for false positives from
+        // excluded matches, any to potentially mutate the string.
+        let has_match = !path_rules_matches.is_empty();
 
-        self.rule_matches.extend(path_rules_matches);
+        if has_match {
+            self.rule_matches
+                .push((path.into_static(), path_rules_matches));
+        }
 
-        will_mutate
+        has_match
     }
 }
 
@@ -405,7 +375,10 @@ mod test {
     use crate::validation::RegexValidationError;
     use crate::SecondaryValidator::ChineseIdChecksum;
     use crate::SecondaryValidator::GithubTokenChecksum;
-    use crate::{PartialRedactDirection, Path, RuleMatch, Scope};
+    use crate::{
+        simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch, Scope,
+    };
+    use std::collections::BTreeMap;
 
     #[test]
     fn simple_redaction() {
@@ -992,5 +965,71 @@ mod test {
                 shift_offset: 0
             }
         );
+    }
+
+    #[test]
+    fn should_skip_match_when_present_in_excluded_matches() {
+        // If 2 matches have the same mutation and same start, the longer one is taken
+
+        let rule_0 = RuleConfig::builder("b.*".to_owned())
+            .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
+                "test".into(),
+            )])]))
+            .match_action(MatchAction::Redact {
+                replacement: "[scrub]".to_string(),
+            })
+            .build();
+
+        let scanner = Scanner::new(&[rule_0]).unwrap();
+
+        let mut content = SimpleEvent::Map(BTreeMap::from([
+            (
+                "message".to_string(),
+                SimpleEvent::String("abcdef".to_string()),
+            ),
+            ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
+        ]));
+
+        let matches = scanner.scan(&mut content);
+
+        // The match from the "test" field (which is excluded) is the same as the match from "message", so it is
+        // treated as a false positive.
+        assert_eq!(matches.len(), 0);
+    }
+
+    #[test]
+    fn should_not_exclude_false_positive_matches() {
+        // If a match in an excluded scope is a false-positive due to keyword proximity matching,
+        // it is not saved in the excluded matches.
+
+        let rule_0 = RuleConfig::builder("b.*".to_owned())
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["secret".to_string()],
+                excluded_keywords: vec![],
+            })
+            .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
+                "test".into(),
+            )])]))
+            .match_action(MatchAction::Redact {
+                replacement: "[scrub]".to_string(),
+            })
+            .build();
+
+        let scanner = Scanner::new(&[rule_0]).unwrap();
+
+        let mut content = SimpleEvent::Map(BTreeMap::from([
+            (
+                "message".to_string(),
+                SimpleEvent::String("secret abcdef".to_string()),
+            ),
+            ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
+        ]));
+
+        let matches = scanner.scan(&mut content);
+
+        // The match from the "test" field (which is excluded) is the same as the match from "message", so it is
+        // treated as a false positive.
+        assert_eq!(matches.len(), 1);
     }
 }

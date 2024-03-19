@@ -84,7 +84,7 @@ impl<E: Encoding> Event for BinaryEvent<E> {
 
                     index += len;
                     let visit_result = visitor.visit_string(&content);
-                    if visit_result.will_mutate && !self.storage.contains_key(&visit_result.path) {
+                    if visit_result.might_mutate && !self.storage.contains_key(&visit_result.path) {
                         self.storage.insert(
                             visit_result.path.into_static(),
                             (false, content.to_string()),
@@ -96,11 +96,12 @@ impl<E: Encoding> Event for BinaryEvent<E> {
         }
     }
 
-    fn visit_string_mut(&mut self, path: &Path, mut visit: impl FnMut(&mut String)) {
+    fn visit_string_mut(&mut self, path: &Path, mut visit: impl FnMut(&mut String) -> bool) {
         let content = self.storage.get_mut(&path.into_static()).unwrap();
+        let was_mutated = visit(&mut content.1);
+
         // Mark the string as mutated (can be used for perf optimizations)
-        content.0 = true;
-        visit(&mut content.1);
+        content.0 = was_mutated;
     }
 }
 
