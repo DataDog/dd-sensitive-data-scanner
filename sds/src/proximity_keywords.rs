@@ -1,10 +1,10 @@
-use crate::observability::labels::{Labels, NO_LABEL};
 use crate::proximity_keywords::ProximityKeywordsValidationError::{
     EmptyKeyword, InvalidLookAheadCharacterCount, KeywordTooLong, TooManyKeywords,
 };
 use crate::rule::ProximityKeywordsConfig;
 use metrics::{counter, Counter};
 use regex::{Regex, RegexBuilder};
+use regex_automata::{meta, Input};
 use regex_syntax::ast::{
     Alternation, Assertion, AssertionKind, Ast, Concat, Flag, Flags, FlagsItem, FlagsItemKind,
     Group, GroupKind, Literal, LiteralKind, Position, Span,
@@ -19,8 +19,8 @@ pub const TYPE: &str = "type";
 #[derive(Default)]
 pub struct CompiledProximityKeywords {
     look_ahead_character_count: usize,
-    included_keywords_pattern: Option<Regex>,
-    excluded_keywords_pattern: Option<Regex>,
+    included_keywords_pattern: Option<meta::Regex>,
+    excluded_keywords_pattern: Option<meta::Regex>,
     metrics: Metrics,
 }
 
@@ -28,6 +28,32 @@ pub struct CompiledProximityKeywords {
 const EXCLUDED_KEYWORDS_REMOVED_CHARS: &[char] = &['-', '_'];
 
 impl CompiledProximityKeywords {
+    pub fn is_false_positive_match(&self, content: &str, match_start: usize) -> bool {
+        match (
+            &self.included_keywords_pattern,
+            &self.excluded_keywords_pattern,
+        ) {
+            (Some(included_keywords), _) => !contains_keyword_match(
+                content,
+                match_start,
+                self.look_ahead_character_count,
+                false,
+                included_keywords,
+            ),
+            (None, Some(excluded_keywords)) => contains_keyword_match(
+                content,
+                match_start,
+                self.look_ahead_character_count,
+                true,
+                excluded_keywords,
+            ),
+            (None, None) => {
+                /* no keywords to check */
+                false
+            }
+        }
+    }
+
     pub fn try_new(
         config: ProximityKeywordsConfig,
         labels: &Labels,
@@ -65,39 +91,54 @@ impl CompiledProximityKeywords {
             metrics: Metrics::new(labels),
         })
     }
+}
 
-    pub fn is_false_positive_match(&self, value: &str, match_start: usize) -> bool {
-        if self.included_keywords_pattern.is_none() && self.excluded_keywords_pattern.is_none() {
-            return false;
-        }
+/// Returns the match context which is what is searched for keywords
+/// and the range where matches are searched for. The range is needed since the context is
+/// expanded to ensure regex assertions (e.g. word boundaries) work correctly.
+fn contains_keyword_match(
+    content: &str,
+    match_start: usize,
+    look_ahead_char_count: usize,
+    strip_chars: bool,
+    regex: &meta::Regex,
+) -> bool {
+    let before_match_value = &content[0..match_start];
 
-        let before_match_value = &value[0..match_start];
-        let start_included_keyword_byte = before_match_value
-            .char_indices()
-            .nth_back(self.look_ahead_character_count - 1)
-            .map(|item| item.0)
-            .unwrap_or(0);
-        let match_prefix = &value[start_included_keyword_byte..match_start];
+    let prefix_start = before_match_value
+        .char_indices()
+        .nth_back(look_ahead_char_count - 1)
+        .map(|item| item.0)
+        .unwrap_or(0);
+    let prefix_end = match_start;
 
-        if let Some(included_keywords_pattern) = self.included_keywords_pattern.as_ref() {
-            if !included_keywords_pattern.is_match(match_prefix) {
-                self.metrics.false_positive_included_keywords.increment(1);
-                return true;
-            }
-            return false;
-        };
+    if strip_chars {
+        // Since chars are being removed here (which can be expensive) the context is shrunk to the smallest
+        // possible by only including +1 char on each end which is enough for regex assertions (e.g. word boundaries)
+        // to be accurate.
+        // This can potentially be improved in the future by building the excluded chars into the regex pattern.
 
-        if self
-            .excluded_keywords_pattern
-            .as_ref()
-            // excluded_keywords_pattern is necessarily not none if included_keywords_pattern is none due to the first condition of the function.
-            .unwrap()
-            .is_match(&match_prefix.replace(EXCLUDED_KEYWORDS_REMOVED_CHARS, ""))
-        {
-            self.metrics.false_positive_excluded_keywords.increment(1);
-            return true;
-        }
-        false
+        let adjusted_start = get_previous_char_index(content, prefix_start).unwrap_or(prefix_start);
+
+        // Matches must match at least 1 char, so there will always be room for +1 at the end
+        let adjusted_end = get_next_char_index(content, prefix_end)
+            .expect("Matches must have a length of at least one");
+
+        let added_to_front = adjusted_start != prefix_start;
+
+        let stripped_content =
+            content[adjusted_start..adjusted_end].replace(EXCLUDED_KEYWORDS_REMOVED_CHARS, "");
+        let start = if added_to_front { 1 } else { 0 };
+        let input = Input::new(&stripped_content)
+            .earliest(true)
+            .span(start..stripped_content.len());
+        // The search half just means it ignores the end index of the match (since all we need is a bool)
+        regex.search_half(&input).is_some()
+    } else {
+        let input = Input::new(content)
+            .earliest(true)
+            .span(prefix_start..prefix_end);
+        regex.search_half(&input).is_some()
     }
 }
 
@@ -131,7 +172,7 @@ fn compile_keywords(
     keywords: Vec<String>,
     look_ahead_character_count: usize,
     remove_chars: &[char],
-) -> Result<Option<Regex>, ProximityKeywordsValidationError> {
+) -> Result<Option<meta::Regex>, ProximityKeywordsValidationError> {
     if keywords.is_empty() {
         return Ok(None);
     }
@@ -156,16 +197,16 @@ fn compile_keywords(
     })
     .to_string();
 
-    Ok(Option::from(
-        RegexBuilder::new(&pattern)
-            // Never limit the complexity the keywords patterns to make sure it always compile.
-            // The complexity of the regex should be bounded by:
-            //  - the max number of keywords
-            //  - the max length of keywords
-            // If this limit is reached, the code will panic
-            .size_limit(usize::MAX)
-            .case_insensitive(true)
-            .build()
+    Ok(Some(
+        meta::Regex::builder()
+            .configure(
+                meta::Config::new()
+                    .nfa_size_limit(None)
+                    // This is the default that `Regex` uses
+                    .hybrid_cache_capacity(2 * (1 << 20)),
+            )
+            .syntax(regex_automata::util::syntax::Config::default().case_insensitive(true))
+            .build(&pattern)
             .unwrap(),
     ))
 }
@@ -286,7 +327,7 @@ mod test {
         assert!(!proximity_keywords.is_false_positive_match("hello world", 6));
         assert!(!proximity_keywords.is_false_positive_match("hey, hello world", 11));
 
-        assert!(proximity_keywords.is_false_positive_match("world", 5));
+        assert!(proximity_keywords.is_false_positive_match("world ", 5));
         assert!(proximity_keywords.is_false_positive_match("world", 0));
 
         assert!(proximity_keywords.is_false_positive_match("hello world", 3));
@@ -592,5 +633,88 @@ mod test {
             try_new_compiled_proximity_keyword(5, vec![], vec!["hello1".to_string()]);
         assert!(proximity_keywords.is_err());
         assert_eq!(proximity_keywords.err().unwrap(), KeywordTooLong);
+    }
+
+    #[test]
+    fn test_included_keywords_on_start_boundary() {
+        let keywords = CompiledProximityKeywords::try_from(ProximityKeywordsConfig {
+            look_ahead_character_count: 5,
+            included_keywords: vec!["id".to_string()],
+            excluded_keywords: vec![],
+        })
+        .unwrap();
+
+        let is_false_positive = keywords.is_false_positive_match("invalid   abc", 10);
+
+        assert_eq!(is_false_positive, true);
+    }
+
+    #[test]
+    fn test_included_keywords_on_end_boundary() {
+        let keywords = CompiledProximityKeywords::try_from(ProximityKeywordsConfig {
+            look_ahead_character_count: 5,
+            included_keywords: vec!["id".to_string()],
+            excluded_keywords: vec![],
+        })
+        .unwrap();
+
+        let is_false_positive = keywords.is_false_positive_match("foo idabc", 6);
+
+        assert_eq!(is_false_positive, true);
+    }
+
+    #[test]
+    fn test_included_keywords_on_start_boundary_with_space() {
+        let keywords = CompiledProximityKeywords::try_from(ProximityKeywordsConfig {
+            look_ahead_character_count: 5,
+            included_keywords: vec!["id".to_string()],
+            excluded_keywords: vec![],
+        })
+        .unwrap();
+
+        let is_false_positive = keywords.is_false_positive_match("users id   ab", 11);
+
+        assert_eq!(is_false_positive, false);
+    }
+
+    #[test]
+    fn test_included_keywords_on_start_boundary_with_space_including_word_boundary() {
+        let keywords = CompiledProximityKeywords::try_from(ProximityKeywordsConfig {
+            look_ahead_character_count: 7,
+            included_keywords: vec!["id".to_string()],
+            excluded_keywords: vec![],
+        })
+        .unwrap();
+
+        let is_false_positive = keywords.is_false_positive_match("users id   ab", 11);
+
+        assert_eq!(is_false_positive, false);
+    }
+
+    #[test]
+    fn test_excluded_keywords_on_start_boundary() {
+        let keywords = CompiledProximityKeywords::try_from(ProximityKeywordsConfig {
+            look_ahead_character_count: 5,
+            included_keywords: vec![],
+            excluded_keywords: vec!["id".to_string()],
+        })
+        .unwrap();
+
+        let is_false_positive = keywords.is_false_positive_match("invalid   abc", 10);
+
+        assert_eq!(is_false_positive, false);
+    }
+
+    #[test]
+    fn test_excluded_keywords_on_end_boundary() {
+        let keywords = CompiledProximityKeywords::try_from(ProximityKeywordsConfig {
+            look_ahead_character_count: 5,
+            included_keywords: vec![],
+            excluded_keywords: vec!["id".to_string()],
+        })
+        .unwrap();
+
+        let is_false_positive = keywords.is_false_positive_match("foo idabc", 6);
+        assert_eq!(is_false_positive, false);
     }
 }
