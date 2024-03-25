@@ -328,7 +328,6 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     continue;
                 }
 
-                println!("Is valid match");
                 path_rules_matches.push(InternalRuleMatch {
                     rule_index,
                     utf8_start: regex_match.start(),
