@@ -4,6 +4,7 @@ use crate::match_action::MatchAction;
 use crate::path::Path;
 use serde_with::{serde_as, DefaultOnNull};
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RuleConfig {
     pub pattern: String,
@@ -12,6 +13,9 @@ pub struct RuleConfig {
     pub scope: Scope,
     pub proximity_keywords: Option<ProximityKeywordsConfig>,
     pub validator: Option<SecondaryValidator>,
+    #[serde_as(deserialize_as = "DefaultOnNull")]
+    #[serde(default)]
+    pub labels: Vec<(String, String)>,
 }
 
 impl RuleConfig {
@@ -23,6 +27,7 @@ impl RuleConfig {
             scope: Scope::all(),
             proximity_keywords: None,
             validator: None,
+            labels: vec![],
         }
     }
 }
@@ -99,6 +104,7 @@ pub struct RuleConfigBuilder {
     scope: Scope,
     proximity_keywords: Option<ProximityKeywordsConfig>,
     validator: Option<SecondaryValidator>,
+    labels: Vec<(String, String)>,
 }
 
 impl RuleConfigBuilder {
@@ -128,6 +134,11 @@ impl RuleConfigBuilder {
         self
     }
 
+    pub fn labels(mut self, labels: Vec<(String, String)>) -> RuleConfigBuilder {
+        self.labels = labels;
+        self
+    }
+
     pub fn from(rule: &RuleConfig) -> RuleConfigBuilder {
         RuleConfigBuilder {
             pattern: rule.pattern.clone(),
@@ -135,6 +146,7 @@ impl RuleConfigBuilder {
             scope: rule.scope.clone(),
             proximity_keywords: rule.proximity_keywords.clone(),
             validator: rule.validator.clone(),
+            labels: rule.labels.clone(),
         }
     }
 
@@ -145,6 +157,7 @@ impl RuleConfigBuilder {
             scope: self.scope,
             proximity_keywords: self.proximity_keywords,
             validator: self.validator,
+            labels: self.labels,
         }
     }
 }
@@ -172,6 +185,7 @@ mod test {
                 scope: Scope::all(),
                 proximity_keywords: None,
                 validator: None,
+                labels: vec![],
             }
         );
     }

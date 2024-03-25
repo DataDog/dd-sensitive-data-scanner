@@ -41,7 +41,7 @@ impl Scanner {
 
     pub fn new_with_labels(
         rules: &[RuleConfig],
-        labels: Labels,
+        scanner_labels: Labels,
     ) -> Result<Self, CreateScannerError> {
         let compiled_rules = rules
             .iter()
@@ -51,11 +51,13 @@ impl Scanner {
                 let regex = validate_and_create_regex(&config.pattern)?;
                 config.match_action.validate()?;
 
+                let rule_labels = scanner_labels.clone_with_labels(&config.labels);
+
                 let compiled_keywords = config
                     .proximity_keywords
                     .clone()
                     .map_or(Ok(CompiledProximityKeywords::default()), |keywords| {
-                        CompiledProximityKeywords::try_new(keywords, &labels)
+                        CompiledProximityKeywords::try_new(keywords, &rule_labels)
                     })?;
 
                 Ok(CompiledRule {
@@ -429,16 +431,12 @@ mod test {
 
     #[test]
     fn should_validate_zero_char_count_partial_redact() {
-        let scanner_result = Scanner::new(&[RuleConfig {
-            pattern: ".+".to_owned(),
-            match_action: MatchAction::PartialRedact {
-                direction: crate::PartialRedactDirection::LastCharacters,
+        let scanner_result = Scanner::new(&[RuleConfig::builder("secret".to_owned())
+            .match_action(MatchAction::PartialRedact {
+                direction: PartialRedactDirection::LastCharacters,
                 character_count: 0,
-            },
-            scope: Scope::all(),
-            proximity_keywords: None,
-            validator: None,
-        }]);
+            })
+            .build()]);
 
         assert!(scanner_result.is_err());
         assert_eq!(
