@@ -3,17 +3,13 @@ use crate::proximity_keywords::ProximityKeywordsValidationError::{
     EmptyKeyword, InvalidLookAheadCharacterCount, KeywordTooLong, TooManyKeywords,
 };
 use crate::rule::ProximityKeywordsConfig;
-use crate::str_utils::{get_next_char_index, get_previous_char_index};
 use metrics::{counter, Counter};
-use regex::{Regex, RegexBuilder};
 use regex_automata::{meta, Input};
 use regex_syntax::ast::{
-    Alternation, Assertion, AssertionKind, Ast, Class, ClassBracketed, ClassSet, ClassSetBinaryOp,
-    ClassSetBinaryOpKind, ClassSetItem, ClassSetUnion, Concat, Flag, Flags, FlagsItem,
-    FlagsItemKind, Group, GroupKind, Literal, LiteralKind, Position, Repetition, RepetitionKind,
-    RepetitionOp, Span,
+    Alternation, Assertion, AssertionKind, Ast, Class, ClassBracketed, ClassSet, ClassSetItem,
+    ClassSetUnion, Concat, Flag, Flags, FlagsItem, FlagsItemKind, Group, GroupKind, Literal,
+    LiteralKind, Position, Repetition, RepetitionKind, RepetitionOp, Span,
 };
-// use regex_syntax::ast::ErrorKind::;
 
 const MAX_KEYWORD_COUNT: usize = 50;
 const MAX_LOOK_AHEAD_CHARACTER_COUNT: usize = 50;
@@ -30,6 +26,7 @@ pub struct CompiledProximityKeywords {
 }
 
 /// Characters we strip inside for excluded keywords in order to remove some noise
+/// If this list contains more than a couple chars, some optimizations may be needed below
 const EXCLUDED_KEYWORDS_REMOVED_CHARS: &[char] = &['-', '_'];
 
 impl CompiledProximityKeywords {
@@ -38,18 +35,32 @@ impl CompiledProximityKeywords {
             &self.included_keywords_pattern,
             &self.excluded_keywords_pattern,
         ) {
-            (Some(included_keywords), _) => !contains_keyword_match(
-                content,
-                match_start,
-                self.look_ahead_character_count,
-                included_keywords,
-            ),
-            (None, Some(excluded_keywords)) => contains_keyword_match(
-                content,
-                match_start,
-                self.look_ahead_character_count,
-                excluded_keywords,
-            ),
+            (Some(included_keywords), _) => {
+                let is_false_positive = !contains_keyword_match(
+                    content,
+                    match_start,
+                    self.look_ahead_character_count,
+                    false,
+                    included_keywords,
+                );
+                if is_false_positive {
+                    self.metrics.false_positive_included_keywords.increment(1);
+                }
+                is_false_positive
+            }
+            (None, Some(excluded_keywords)) => {
+                let is_false_positive = contains_keyword_match(
+                    content,
+                    match_start,
+                    self.look_ahead_character_count,
+                    true,
+                    excluded_keywords,
+                );
+                if is_false_positive {
+                    self.metrics.false_positive_excluded_keywords.increment(1);
+                }
+                is_false_positive
+            }
             (None, None) => {
                 /* no keywords to check */
                 false
@@ -102,16 +113,41 @@ impl CompiledProximityKeywords {
 fn contains_keyword_match(
     content: &str,
     match_start: usize,
-    look_ahead_char_count: usize,
+    mut look_ahead_char_count: usize,
+    strip_chars: bool,
     regex: &meta::Regex,
 ) -> bool {
     let prefix = &content[0..match_start];
 
-    let prefix_start = prefix
-        .char_indices()
-        .nth_back(look_ahead_char_count - 1)
-        .map(|item| item.0)
-        .unwrap_or(0);
+    let prefix_start = if strip_chars {
+        let mut prefix_start = match_start;
+        // "EXCLUDED_KEYWORDS_REMOVED_CHARS" don't count towards the "look_ahead_char_count"
+        let mut char_indices = prefix.char_indices();
+
+        while look_ahead_char_count > 0 {
+            match char_indices.next_back() {
+                Some((i, c)) => {
+                    prefix_start = i;
+                    if !EXCLUDED_KEYWORDS_REMOVED_CHARS.contains(&c) {
+                        look_ahead_char_count -= 1;
+                    }
+                }
+                None => {
+                    prefix_start = 0;
+                    break;
+                }
+            }
+        }
+        prefix_start
+    } else {
+        // just get the previous n chars (no chars are skipped)
+        prefix
+            .char_indices()
+            .nth_back(look_ahead_char_count - 1)
+            .map(|item| item.0)
+            .unwrap_or(0)
+    };
+
     let prefix_end = match_start;
 
     let input = Input::new(content)
@@ -680,6 +716,17 @@ mod test {
         let is_false_positive = keywords.is_false_positive_match("users id   ab", 11);
 
         assert_eq!(is_false_positive, false);
+    }
+
+    #[test]
+    fn test_excluded_keyword_strip_chars_dont_count_towards_look_ahead_count() {
+        let keywords =
+            try_new_compiled_proximity_keyword(5, vec![], vec!["id".to_string()]).unwrap();
+
+        // "id" only fits in the match prefix (5 chars) if the "-" char isn't counted towards the 5 chars
+        let is_false_positive = keywords.is_false_positive_match("users i-d   ab", 12);
+
+        assert_eq!(is_false_positive, true);
     }
 
     #[test]
