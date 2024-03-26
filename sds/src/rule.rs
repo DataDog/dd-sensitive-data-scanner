@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::labels::{Labels, NO_LABEL};
 use crate::match_action::MatchAction;
 use crate::path::Path;
 use serde_with::{serde_as, DefaultOnNull};
@@ -15,7 +16,7 @@ pub struct RuleConfig {
     pub validator: Option<SecondaryValidator>,
     #[serde_as(deserialize_as = "DefaultOnNull")]
     #[serde(default)]
-    pub labels: Vec<(String, String)>,
+    pub labels: Labels,
 }
 
 impl RuleConfig {
@@ -27,7 +28,7 @@ impl RuleConfig {
             scope: Scope::all(),
             proximity_keywords: None,
             validator: None,
-            labels: vec![],
+            labels: NO_LABEL,
         }
     }
 }
@@ -104,7 +105,7 @@ pub struct RuleConfigBuilder {
     scope: Scope,
     proximity_keywords: Option<ProximityKeywordsConfig>,
     validator: Option<SecondaryValidator>,
-    labels: Vec<(String, String)>,
+    labels: Labels,
 }
 
 impl RuleConfigBuilder {
@@ -134,7 +135,7 @@ impl RuleConfigBuilder {
         self
     }
 
-    pub fn labels(mut self, labels: Vec<(String, String)>) -> RuleConfigBuilder {
+    pub fn labels(mut self, labels: Labels) -> RuleConfigBuilder {
         self.labels = labels;
         self
     }
@@ -164,6 +165,7 @@ impl RuleConfigBuilder {
 
 #[cfg(test)]
 mod test {
+    use crate::labels::NO_LABEL;
     use crate::{MatchAction, ProximityKeywordsConfig, RuleConfig, Scope};
 
     #[test]
@@ -185,7 +187,7 @@ mod test {
                 scope: Scope::all(),
                 proximity_keywords: None,
                 validator: None,
-                labels: vec![],
+                labels: NO_LABEL,
             }
         );
     }

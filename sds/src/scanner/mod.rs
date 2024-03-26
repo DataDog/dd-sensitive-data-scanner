@@ -51,7 +51,7 @@ impl Scanner {
                 let regex = validate_and_create_regex(&config.pattern)?;
                 config.match_action.validate()?;
 
-                let rule_labels = scanner_labels.clone_with_labels(&config.labels);
+                let rule_labels = scanner_labels.clone_with_labels(config.labels.clone());
 
                 let compiled_keywords = config
                     .proximity_keywords
