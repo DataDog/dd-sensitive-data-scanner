@@ -1,14 +1,19 @@
+use crate::labels::{Labels, NO_LABEL};
 use crate::proximity_keywords::ProximityKeywordsValidationError::{
     EmptyKeyword, InvalidLookAheadCharacterCount, KeywordTooLong, TooManyKeywords,
 };
 use crate::rule::ProximityKeywordsConfig;
+use crate::str_utils::{get_next_char_index, get_previous_char_index};
 use metrics::{counter, Counter};
 use regex::{Regex, RegexBuilder};
 use regex_automata::{meta, Input};
 use regex_syntax::ast::{
-    Alternation, Assertion, AssertionKind, Ast, Concat, Flag, Flags, FlagsItem, FlagsItemKind,
-    Group, GroupKind, Literal, LiteralKind, Position, Span,
+    Alternation, Assertion, AssertionKind, Ast, Class, ClassBracketed, ClassSet, ClassSetBinaryOp,
+    ClassSetBinaryOpKind, ClassSetItem, ClassSetUnion, Concat, Flag, Flags, FlagsItem,
+    FlagsItemKind, Group, GroupKind, Literal, LiteralKind, Position, Repetition, RepetitionKind,
+    RepetitionOp, Span,
 };
+// use regex_syntax::ast::ErrorKind::;
 
 const MAX_KEYWORD_COUNT: usize = 50;
 const MAX_LOOK_AHEAD_CHARACTER_COUNT: usize = 50;
@@ -37,14 +42,12 @@ impl CompiledProximityKeywords {
                 content,
                 match_start,
                 self.look_ahead_character_count,
-                false,
                 included_keywords,
             ),
             (None, Some(excluded_keywords)) => contains_keyword_match(
                 content,
                 match_start,
                 self.look_ahead_character_count,
-                true,
                 excluded_keywords,
             ),
             (None, None) => {
@@ -100,46 +103,21 @@ fn contains_keyword_match(
     content: &str,
     match_start: usize,
     look_ahead_char_count: usize,
-    strip_chars: bool,
     regex: &meta::Regex,
 ) -> bool {
-    let before_match_value = &content[0..match_start];
+    let prefix = &content[0..match_start];
 
-    let prefix_start = before_match_value
+    let prefix_start = prefix
         .char_indices()
         .nth_back(look_ahead_char_count - 1)
         .map(|item| item.0)
         .unwrap_or(0);
     let prefix_end = match_start;
 
-    if strip_chars {
-        // Since chars are being removed here (which can be expensive) the context is shrunk to the smallest
-        // possible by only including +1 char on each end which is enough for regex assertions (e.g. word boundaries)
-        // to be accurate.
-        // This can potentially be improved in the future by building the excluded chars into the regex pattern.
-
-        let adjusted_start = get_previous_char_index(content, prefix_start).unwrap_or(prefix_start);
-
-        // Matches must match at least 1 char, so there will always be room for +1 at the end
-        let adjusted_end = get_next_char_index(content, prefix_end)
-            .expect("Matches must have a length of at least one");
-
-        let added_to_front = adjusted_start != prefix_start;
-
-        let stripped_content =
-            content[adjusted_start..adjusted_end].replace(EXCLUDED_KEYWORDS_REMOVED_CHARS, "");
-        let start = if added_to_front { 1 } else { 0 };
-        let input = Input::new(&stripped_content)
-            .earliest(true)
-            .span(start..stripped_content.len());
-        // The search half just means it ignores the end index of the match (since all we need is a bool)
-        regex.search_half(&input).is_some()
-    } else {
-        let input = Input::new(content)
-            .earliest(true)
-            .span(prefix_start..prefix_end);
-        regex.search_half(&input).is_some()
-    }
+    let input = Input::new(content)
+        .earliest(true)
+        .span(prefix_start..prefix_end);
+    regex.search_half(&input).is_some()
 }
 
 struct Metrics {
@@ -187,7 +165,7 @@ fn compile_keywords(
             if trimmed_keyword.is_empty() {
                 return Err(EmptyKeyword);
             }
-            Ok(calculate_keyword_pattern(&trimmed_keyword))
+            Ok(calculate_keyword_pattern(&trimmed_keyword, remove_chars))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -212,7 +190,7 @@ fn compile_keywords(
 }
 
 /// Transform a keyword in an AST, the keyword MUST NOT be empty
-fn calculate_keyword_pattern(keyword: &str) -> Ast {
+fn calculate_keyword_pattern(keyword: &str, remove_chars: &[char]) -> Ast {
     let mut keyword_pattern: Vec<Ast> = vec![];
     if keyword
         .chars()
@@ -223,17 +201,14 @@ fn calculate_keyword_pattern(keyword: &str) -> Ast {
         keyword_pattern.push(word_boundary())
     }
 
-    for character in keyword.chars() {
-        let kind = if regex_syntax::is_meta_character(character) {
-            LiteralKind::Meta
-        } else {
-            LiteralKind::Verbatim
-        };
-        keyword_pattern.push(Ast::Literal(Literal {
-            span: span(),
-            kind,
-            c: character,
-        }))
+    for (i, c) in keyword.chars().enumerate() {
+        if i != 0 {
+            if let Some(p) = allowed_chars_pattern(remove_chars) {
+                keyword_pattern.push(p);
+            };
+            // allow any number of the "remove_chars" between characters of the keyword
+        }
+        keyword_pattern.push(Ast::Literal(literal_ast(c)))
     }
 
     if keyword
@@ -248,6 +223,48 @@ fn calculate_keyword_pattern(keyword: &str) -> Ast {
         span: span(),
         asts: keyword_pattern,
     })
+}
+
+// This creates a pattern that allows any number of the following chars (including 0)
+fn allowed_chars_pattern(allowed_chars: &[char]) -> Option<Ast> {
+    if allowed_chars.is_empty() {
+        return None;
+    }
+
+    let char_literals = allowed_chars
+        .iter()
+        .map(|c| ClassSetItem::Literal(literal_ast(*c)))
+        .collect::<Vec<_>>();
+
+    Some(Ast::Repetition(Repetition {
+        span: span(),
+        op: RepetitionOp {
+            span: span(),
+            kind: RepetitionKind::ZeroOrMore,
+        },
+        greedy: true,
+        ast: Box::new(Ast::Class(Class::Bracketed(ClassBracketed {
+            span: span(),
+            negated: false,
+            kind: ClassSet::Item(ClassSetItem::Union(ClassSetUnion {
+                span: span(),
+                items: char_literals,
+            })),
+        }))),
+    }))
+}
+
+fn literal_ast(c: char) -> Literal {
+    let kind = if regex_syntax::is_meta_character(c) {
+        LiteralKind::Meta
+    } else {
+        LiteralKind::Verbatim
+    };
+    Literal {
+        span: span(),
+        kind,
+        c,
+    }
 }
 
 // creates a unused span required for the RegexAst
@@ -341,7 +358,7 @@ mod test {
         assert!(proximity_keywords.is_false_positive_match("hello world", 6));
         assert!(proximity_keywords.is_false_positive_match("hey, hello world", 11));
 
-        assert!(!proximity_keywords.is_false_positive_match("world", 5));
+        assert!(!proximity_keywords.is_false_positive_match("world ", 5));
         assert!(!proximity_keywords.is_false_positive_match("world", 0));
 
         assert!(!proximity_keywords.is_false_positive_match("hello world", 3));
@@ -637,12 +654,8 @@ mod test {
 
     #[test]
     fn test_included_keywords_on_start_boundary() {
-        let keywords = CompiledProximityKeywords::try_from(ProximityKeywordsConfig {
-            look_ahead_character_count: 5,
-            included_keywords: vec!["id".to_string()],
-            excluded_keywords: vec![],
-        })
-        .unwrap();
+        let keywords =
+            try_new_compiled_proximity_keyword(5, vec!["id".to_string()], vec![]).unwrap();
 
         let is_false_positive = keywords.is_false_positive_match("invalid   abc", 10);
 
@@ -651,12 +664,8 @@ mod test {
 
     #[test]
     fn test_included_keywords_on_end_boundary() {
-        let keywords = CompiledProximityKeywords::try_from(ProximityKeywordsConfig {
-            look_ahead_character_count: 5,
-            included_keywords: vec!["id".to_string()],
-            excluded_keywords: vec![],
-        })
-        .unwrap();
+        let keywords =
+            try_new_compiled_proximity_keyword(5, vec!["id".to_string()], vec![]).unwrap();
 
         let is_false_positive = keywords.is_false_positive_match("foo idabc", 6);
 
@@ -665,12 +674,8 @@ mod test {
 
     #[test]
     fn test_included_keywords_on_start_boundary_with_space() {
-        let keywords = CompiledProximityKeywords::try_from(ProximityKeywordsConfig {
-            look_ahead_character_count: 5,
-            included_keywords: vec!["id".to_string()],
-            excluded_keywords: vec![],
-        })
-        .unwrap();
+        let keywords =
+            try_new_compiled_proximity_keyword(5, vec!["id".to_string()], vec![]).unwrap();
 
         let is_false_positive = keywords.is_false_positive_match("users id   ab", 11);
 
@@ -679,12 +684,8 @@ mod test {
 
     #[test]
     fn test_included_keywords_on_start_boundary_with_space_including_word_boundary() {
-        let keywords = CompiledProximityKeywords::try_from(ProximityKeywordsConfig {
-            look_ahead_character_count: 7,
-            included_keywords: vec!["id".to_string()],
-            excluded_keywords: vec![],
-        })
-        .unwrap();
+        let keywords =
+            try_new_compiled_proximity_keyword(7, vec!["id".to_string()], vec![]).unwrap();
 
         let is_false_positive = keywords.is_false_positive_match("users id   ab", 11);
 
@@ -693,12 +694,8 @@ mod test {
 
     #[test]
     fn test_excluded_keywords_on_start_boundary() {
-        let keywords = CompiledProximityKeywords::try_from(ProximityKeywordsConfig {
-            look_ahead_character_count: 5,
-            included_keywords: vec![],
-            excluded_keywords: vec!["id".to_string()],
-        })
-        .unwrap();
+        let keywords =
+            try_new_compiled_proximity_keyword(5, vec![], vec!["id".to_string()]).unwrap();
 
         let is_false_positive = keywords.is_false_positive_match("invalid   abc", 10);
 
@@ -707,14 +704,53 @@ mod test {
 
     #[test]
     fn test_excluded_keywords_on_end_boundary() {
-        let keywords = CompiledProximityKeywords::try_from(ProximityKeywordsConfig {
-            look_ahead_character_count: 5,
-            included_keywords: vec![],
-            excluded_keywords: vec!["id".to_string()],
-        })
-        .unwrap();
+        let keywords =
+            try_new_compiled_proximity_keyword(5, vec![], vec!["id".to_string()]).unwrap();
 
         let is_false_positive = keywords.is_false_positive_match("foo idabc", 6);
         assert_eq!(is_false_positive, false);
+    }
+
+    #[test]
+    fn test_compile_keywords() {
+        let regex = compile_keywords(vec!["hello".to_string()], 5, &[])
+            .unwrap()
+            .unwrap();
+        assert_eq!(regex.is_match("hello"), true);
+        assert_eq!(regex.is_match("he-l_lo"), false);
+    }
+
+    #[test]
+    fn test_compile_keywords_with_removed_chars() {
+        let regex = compile_keywords(vec!["hello".to_string()], 5, &['-', '_'])
+            .unwrap()
+            .unwrap();
+        assert_eq!(regex.is_match("hello"), true);
+        assert_eq!(regex.is_match("he-l_lo"), true);
+    }
+
+    #[test]
+    fn test_allowed_chars_pattern() {
+        assert_eq!(
+            allowed_chars_pattern(&['a', 'b', 'c']).map(|p| p.to_string()),
+            Some("[abc]*".to_string())
+        );
+        assert_eq!(
+            allowed_chars_pattern(&['a']).map(|p| p.to_string()),
+            Some("[a]*".to_string())
+        );
+        assert_eq!(allowed_chars_pattern(&[]).map(|p| p.to_string()), None);
+    }
+
+    #[test]
+    fn test_calculate_keyword_pattern() {
+        assert_eq!(
+            calculate_keyword_pattern("test", &['-', '_']).to_string(),
+            "(?-u:\\b)t[\\-_]*e[\\-_]*s[\\-_]*t(?-u:\\b)".to_string()
+        );
+        assert_eq!(
+            calculate_keyword_pattern("test", &[]).to_string(),
+            "(?-u:\\b)test(?-u:\\b)".to_string()
+        );
     }
 }
