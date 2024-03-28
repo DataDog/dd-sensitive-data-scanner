@@ -111,11 +111,11 @@ impl Metrics {
         Metrics {
             false_positive_included_keywords: counter!(
                 "false_positive.proximity_keywords",
-                labels.clone_with_labels(&[(TYPE, "included_keywords".to_string())])
+                labels.clone_with_labels(Labels::new(&[(TYPE, "included_keywords".to_string())]))
             ),
             false_positive_excluded_keywords: counter!(
                 "false_positive.proximity_keywords",
-                labels.clone_with_labels(&[(TYPE, "excluded_keywords".to_string())])
+                labels.clone_with_labels(Labels::new(&[(TYPE, "excluded_keywords".to_string())]))
             ),
         }
     }
