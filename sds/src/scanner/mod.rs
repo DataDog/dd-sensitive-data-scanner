@@ -340,6 +340,9 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
             }
         });
 
+        // calculate_indices requires that matches are sorted by start index
+        path_rules_matches.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
+
         E::calculate_indices(
             content,
             path_rules_matches
@@ -379,6 +382,7 @@ mod test {
     use crate::{
         simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch, Scope,
     };
+    use crate::{Encoding, Utf8Encoding};
     use std::collections::BTreeMap;
 
     #[test]
@@ -1028,5 +1032,78 @@ mod test {
         // The match from the "test" field (which is excluded) is the same as the match from "message", so it is
         // treated as a false positive.
         assert_eq!(matches.len(), 1);
+    }
+
+    #[test]
+    fn panic_test() {
+        // A custom "Event" implementation is used here to use a different encoding that asserts the indices are in order
+        struct OrderAssertEvent(SimpleEvent);
+
+        impl crate::Event for OrderAssertEvent {
+            type Encoding = AssertOrderEncoding;
+
+            fn visit_event<'a>(&'a mut self, visitor: &mut impl crate::EventVisitor<'a>) {
+                self.0.visit_event(visitor)
+            }
+
+            fn visit_string_mut(&mut self, path: &Path, visit: impl FnMut(&mut String) -> bool) {
+                self.0.visit_string_mut(path, visit)
+            }
+        }
+
+        struct AssertOrderEncoding;
+
+        impl Encoding for AssertOrderEncoding {
+            type Index = <Utf8Encoding as Encoding>::Index;
+            type IndexShift = <Utf8Encoding as Encoding>::IndexShift;
+
+            fn zero_index() -> Self::Index {
+                <Utf8Encoding as Encoding>::zero_index()
+            }
+
+            fn zero_shift() -> Self::IndexShift {
+                <Utf8Encoding as Encoding>::zero_shift()
+            }
+
+            fn get_index(value: &Self::Index, utf8_index: usize) -> usize {
+                <Utf8Encoding as Encoding>::get_index(value, utf8_index)
+            }
+
+            fn calculate_indices<'a>(
+                _content: &str,
+                match_visitor: impl Iterator<Item = crate::EncodeIndices<'a, Self>>,
+            ) {
+                let mut prev_start = 0;
+                for indices in match_visitor {
+                    assert!(
+                        indices.utf8_start >= prev_start,
+                        "Indices are not in order."
+                    );
+                    prev_start = indices.utf8_start;
+                }
+            }
+
+            fn adjust_shift(shift: &mut Self::IndexShift, before: &str, after: &str) {
+                <Utf8Encoding as Encoding>::adjust_shift(shift, before, after)
+            }
+
+            fn get_shift(value: &Self::IndexShift, utf8_shift: isize) -> isize {
+                <Utf8Encoding as Encoding>::get_shift(value, utf8_shift)
+            }
+        }
+
+        // `rule_0` has a match after `rule_1` (out of order)
+        let rule_0 = RuleConfig::builder("efg".to_owned()).build();
+        let rule_1 = RuleConfig::builder("abc".to_owned()).build();
+
+        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+
+        let mut content = OrderAssertEvent(SimpleEvent::Map(BTreeMap::from([(
+            "message".to_string(),
+            SimpleEvent::String("abc-efg".to_string()),
+        )])));
+
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 2);
     }
 }
