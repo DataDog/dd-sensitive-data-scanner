@@ -1035,7 +1035,7 @@ mod test {
     }
 
     #[test]
-    fn panic_test() {
+    fn test_calculate_indices_is_called_with_sorted_start_index() {
         // A custom "Event" implementation is used here to use a different encoding that asserts the indices are in order
         struct OrderAssertEvent(SimpleEvent);
 
