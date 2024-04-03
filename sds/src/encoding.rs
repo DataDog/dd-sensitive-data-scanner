@@ -10,6 +10,7 @@ pub trait Encoding: Sized {
     fn get_shift(value: &Self::IndexShift, utf8_shift: isize) -> isize;
 
     /// A iterator of indices. You are given the UTF-8 indices, and need to calculate the "custom" indices.
+    /// The UTF-8 indices are guaranteed to be sorted in ascending order by the start index.
     fn calculate_indices<'a>(
         content: &str,
         match_visitor: impl Iterator<Item = EncodeIndices<'a, Self>>,
