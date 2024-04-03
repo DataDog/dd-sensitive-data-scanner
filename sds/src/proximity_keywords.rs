@@ -20,14 +20,18 @@ pub const TYPE: &str = "type";
 #[derive(Default)]
 pub struct CompiledProximityKeywords {
     look_ahead_character_count: usize,
-    included_keywords_pattern: Option<meta::Regex>,
-    excluded_keywords_pattern: Option<meta::Regex>,
+    included_keywords_pattern: Option<ProximityKeywordsRegex<false>>,
+    excluded_keywords_pattern: Option<ProximityKeywordsRegex<true>>,
     metrics: Metrics,
 }
 
 /// Characters we strip inside for excluded keywords in order to remove some noise
 /// If this list contains more than a couple chars, some optimizations may be needed below
 const EXCLUDED_KEYWORDS_REMOVED_CHARS: &[char] = &['-', '_'];
+
+struct ProximityKeywordsRegex<const EXCLUDED_CHARS: bool> {
+    regex: meta::Regex,
+}
 
 impl CompiledProximityKeywords {
     pub fn is_false_positive_match(&self, content: &str, match_start: usize) -> bool {
@@ -40,7 +44,6 @@ impl CompiledProximityKeywords {
                     content,
                     match_start,
                     self.look_ahead_character_count,
-                    false,
                     included_keywords,
                 );
                 if is_false_positive {
@@ -53,7 +56,6 @@ impl CompiledProximityKeywords {
                     content,
                     match_start,
                     self.look_ahead_character_count,
-                    true,
                     excluded_keywords,
                 );
                 if is_false_positive {
@@ -91,12 +93,15 @@ impl CompiledProximityKeywords {
             config.included_keywords,
             config.look_ahead_character_count,
             &[],
-        )?;
+        )?
+        .map(|regex| ProximityKeywordsRegex { regex });
+
         let excluded_pattern = compile_keywords(
             config.excluded_keywords,
             config.look_ahead_character_count,
             EXCLUDED_KEYWORDS_REMOVED_CHARS,
-        )?;
+        )?
+        .map(|regex| ProximityKeywordsRegex { regex });
 
         Ok(CompiledProximityKeywords {
             look_ahead_character_count: config.look_ahead_character_count,
@@ -110,16 +115,15 @@ impl CompiledProximityKeywords {
 /// Returns the match context which is what is searched for keywords
 /// and the range where matches are searched for. The range is needed since the context is
 /// expanded to ensure regex assertions (e.g. word boundaries) work correctly.
-fn contains_keyword_match(
+fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
     content: &str,
     match_start: usize,
     mut look_ahead_char_count: usize,
-    strip_chars: bool,
-    regex: &meta::Regex,
+    regex: &ProximityKeywordsRegex<EXCLUDED_CHARS>,
 ) -> bool {
     let prefix = &content[0..match_start];
 
-    let prefix_start = if strip_chars {
+    let prefix_start = if EXCLUDED_CHARS {
         let mut prefix_start = match_start;
         // "EXCLUDED_KEYWORDS_REMOVED_CHARS" don't count towards the "look_ahead_char_count"
         let mut char_indices = prefix.char_indices();
@@ -153,7 +157,7 @@ fn contains_keyword_match(
     let input = Input::new(content)
         .earliest(true)
         .span(prefix_start..prefix_end);
-    regex.search_half(&input).is_some()
+    regex.regex.search_half(&input).is_some()
 }
 
 struct Metrics {
