@@ -1,0 +1,2 @@
+github.com/DataDog/dd-sensitive-data-scanner/sds-go/go v0.0.0-20240403140050-042de62f5a24 h1:1/XWOdDhE3q1y4mupjnTJFxDapNngZxmL/UfuEjKQZU=
+github.com/DataDog/dd-sensitive-data-scanner/sds-go/go v0.0.0-20240403140050-042de62f5a24/go.mod h1:TX7CTOQ3LbQjfAi4SwqUoR5gY1zfUk7VRBDTuArjaDc=
