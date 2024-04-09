@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/DataDog/datadog-agent/pkg/sds"
+	"github.com/DataDog/dd-sensitive-data-scanner/sds-go/go"
 )
 
 func main() {
