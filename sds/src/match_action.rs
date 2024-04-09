@@ -138,7 +138,6 @@ impl MatchAction {
             .encode_utf16()
             .flat_map(u16::to_le_bytes)
             .collect::<Vec<_>>();
-        println!("Raw bytes: {:?}", utf16_bytes);
         let hash = farmhash::fingerprint64(&utf16_bytes);
         format!("{hash:0HASH_LEN$x}")
     }
