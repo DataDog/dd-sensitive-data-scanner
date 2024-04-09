@@ -4,10 +4,10 @@ go 1.19
 
 
 require (
-    github.com/DataDog/datadog-agent/pkg/sds v0.0.0
+    github.com/DataDog/dd-sensitive-data-scanner/sds-go/go v0.0.0-20240403140050-042de62f5a24
 )
 
 replace (
-    github.com/DataDog/datadog-agent/pkg/sds => ../
+    github.com/DataDog/dd-sensitive-data-scanner/sds-go/go => ../
 )
 
