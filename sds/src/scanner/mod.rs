@@ -1124,4 +1124,21 @@ mod test {
         // normally 09d99e4b6ad0d289, but the leading 0 is removed
         assert_eq!(content, SimpleEvent::String("9d99e4b6ad0d289".to_string()));
     }
+
+    #[test]
+    fn test_hash_with_leading_zero_utf16() {
+        let rule_0 = RuleConfig::builder(".+".to_owned())
+            .match_action(MatchAction::Utf16Hash)
+            .build();
+
+        let scanner = Scanner::new(&[rule_0]).unwrap();
+
+        let mut content = "rand string that has a leading zero after hashing: S".to_string();
+
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 1);
+
+        // normally 08c3ad1a22e2edb1, but the leading 0 is removed
+        assert_eq!(content, "8c3ad1a22e2edb1");
+    }
 }
