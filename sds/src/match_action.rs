@@ -34,7 +34,6 @@ pub enum PartialRedactDirection {
 }
 
 const PARTIAL_REDACT_CHARACTER: char = '*';
-const HASH_LEN: usize = 16;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum MatchActionValidationError {
@@ -130,7 +129,7 @@ impl MatchAction {
 
     fn hash(match_result: &str) -> String {
         let hash = farmhash::fingerprint64(match_result.as_bytes());
-        format!("{hash:0HASH_LEN$x}")
+        format!("{hash:x}")
     }
 
     #[cfg(feature = "utf16_hash_match_action")]

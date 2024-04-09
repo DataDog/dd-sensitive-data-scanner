@@ -1106,4 +1106,22 @@ mod test {
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 2);
     }
+
+    #[test]
+    fn test_hash_with_leading_zero() {
+        let rule_0 = RuleConfig::builder(".+".to_owned())
+            .match_action(MatchAction::Hash)
+            .build();
+
+        let scanner = Scanner::new(&[rule_0]).unwrap();
+
+        let mut content =
+            SimpleEvent::String("rand string that has a leading zero after hashing: y".to_string());
+
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 1);
+
+        // normally 09d99e4b6ad0d289, but the leading 0 is removed
+        assert_eq!(content, SimpleEvent::String("9d99e4b6ad0d289".to_string()));
+    }
 }
