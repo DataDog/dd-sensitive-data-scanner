@@ -88,16 +88,7 @@ func (s *Scanner) Delete() {
 	s.Rules = nil
 }
 
-// Scan sends the string event to the SDS shared library for processing.
-// Returned values:
-//   - the processed log if any mutation happened
-//   - rules matches if any rule has matched
-//   - a possible error
-//
-// TODO(remy): implement ScanEventsMap, ScanEventsList
-func (s *Scanner) Scan(event []byte) ([]byte, []RuleMatch, error) {
-	encodedEvent := encodeStringEvent(event)
-
+func (s *Scanner) scanEncodedEvent(encodedEvent []byte) ([]byte, []RuleMatch, error) {
 	cdata := C.CBytes(encodedEvent)
 	defer C.free(cdata)
 
@@ -134,14 +125,94 @@ func (s *Scanner) Scan(event []byte) ([]byte, []RuleMatch, error) {
 	return processed, ruleMatches, nil
 }
 
+// Scan sends the string event to the SDS shared library for processing.
+// Returned values:
+//   - the processed log if any mutation happened
+//   - rules matches if any rule has matched
+//   - a possible error
+//
+// TODO(remy): implement ScanEventsMap, ScanEventsList
+func (s *Scanner) Scan(event []byte) ([]byte, []RuleMatch, error) {
+	encodedEvent := make([]byte, 0)
+	encodedEvent, err := encodeStringEvent(event, encodedEvent)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s.scanEncodedEvent(encodedEvent)
+}
+
+func (s *Scanner) ScanEventsMap(event map[string]interface{}) ([]byte, []RuleMatch, error) {
+	encodedEvent := make([]byte, 0)
+	encodedEvent, err := encodeMapEvent(event, encodedEvent)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s.scanEncodedEvent(encodedEvent)
+}
+
+func (s *Scanner) ScanEventsList(event []interface{}) ([]byte, []RuleMatch, error) {
+	encodedEvent := make([]byte, 0)
+	encodedEvent, err := encodeListEvent(event, encodedEvent)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s.scanEncodedEvent(encodedEvent)
+}
+
 // encodeStringEvent encodes teh given event to send it to the SDS shared library.
 // TODO(remy): implement encodeMapEvent, encodeListEvent
-func encodeStringEvent(log []byte) []byte {
-	rv := make([]byte, 0, len(log)+5)
-	rv = append(rv, byte(3)) // string data
-	rv = binary.BigEndian.AppendUint32(rv, uint32(len(log)))
-	rv = append(rv, log...)
-	return rv
+func encodeStringEvent(log []byte, result []byte) ([]byte, error) {
+	result = append(result, byte(3)) // string data
+	result = binary.BigEndian.AppendUint32(result, uint32(len(log)))
+	result = append(result, log...)
+	return result, nil
+}
+
+func encodeValueRecursive(v interface{}, result []byte) ([]byte, error) {
+	switch v := v.(type) {
+	case string:
+		return encodeStringEvent([]byte(v), result)
+	case map[string]interface{}:
+		return encodeMapEvent(v, result)
+	case []interface{}:
+		return encodeListEvent(v, result)
+	default:
+		return result, fmt.Errorf("encodeValueRecursive: unknown type %T", v)
+	}
+
+}
+
+func encodeMapEvent(event map[string]interface{}, result []byte) ([]byte, error) {
+	for k, v := range event {
+		// // push path field
+		result = append(result, 0)                                     // push map type
+		result = binary.BigEndian.AppendUint32(result, uint32(len(k))) // length of the key
+		result = append(result, []byte(k)...)                          // key
+		var err error = nil
+		result, err = encodeValueRecursive(v, result)
+		if err != nil {
+			return result, err
+		}
+		// pop index
+		result = append(result, 2) // pop  path index
+	}
+	return result, nil
+}
+
+func encodeListEvent(log []interface{}, result []byte) ([]byte, error) {
+	for idx, v := range log {
+		// push path field
+		result = append(result, 1)                                  // push index
+		result = binary.BigEndian.AppendUint32(result, uint32(idx)) // index
+		var err error = nil
+		result, err = encodeValueRecursive(v, result)
+		if err != nil {
+			return result, err
+		}
+		// pop index
+		result = append(result, 2) // pop  path index
+	}
+	return result, nil
 }
 
 // decodeResponse reads the binary response returned by the SDS shared library
