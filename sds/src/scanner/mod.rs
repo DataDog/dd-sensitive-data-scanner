@@ -358,11 +358,10 @@ fn get_string_regex_matches<E: Encoding>(
         let input = Input::new(content).range(start..);
         if let Some(regex_match) = rule.regex.search_with(cache, &input) {
             if is_false_positive_match(&regex_match, rule, content) {
-                // The "+1" is safe here because the regex will match at least 1 character
-                if let Some((i, _)) = content[start + 1..].char_indices().next() {
+                if let Some((i, _)) = content[start..].char_indices().skip(1).next() {
                     // Since this is a false positive, the match is ignored and regex matching is
                     // restarted at the next character.
-                    start += i + 1;
+                    start += i;
                 } else {
                     // There are no more chars left in the string to scan
                     return;
