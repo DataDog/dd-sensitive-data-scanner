@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 use self::cache_pool::{CachePool, CachePoolGuard};
 use ahash::AHashSet;
+use regex_automata::Input;
 
 mod cache_pool;
 pub mod error;
@@ -304,40 +305,15 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
             let rule = &self.scanner.rules[rule_index];
             let cache = &mut self.caches[rule_index];
 
-            // `find_iter` already skips overlapping matches for the same rule,
-            // so those don't need to be filtered out here
-            let mut it = regex_automata::util::iter::Searcher::new(content.into());
-            while let Some(regex_match) =
-                it.advance(|input| Ok(rule.regex.search_with(cache, input)))
-            {
-                if rule
-                    .proximity_keywords
-                    .is_false_positive_match(content, regex_match.start())
-                {
-                    // proximity keywords consider this match as false positive, so it is dropped
-                    continue;
-                }
-                if let Some(validator) = rule.validator.as_ref() {
-                    if !validator.is_valid_match(&content[regex_match.range()]) {
-                        continue;
-                    };
-                }
-
-                if exclusion_check.is_excluded(rule_index) {
-                    // Matches from excluded paths are saved and used to treat additional equal matches as false positives
-                    self.excluded_matches
-                        .insert(content[regex_match.range()].to_string());
-                    continue;
-                }
-
-                path_rules_matches.push(InternalRuleMatch {
-                    rule_index,
-                    utf8_start: regex_match.start(),
-                    utf8_end: regex_match.end(),
-                    custom_start: E::zero_index(),
-                    custom_end: E::zero_index(),
-                });
-            }
+            get_string_regex_matches(
+                content,
+                rule,
+                cache,
+                rule_index,
+                &mut path_rules_matches,
+                &exclusion_check,
+                self.excluded_matches,
+            );
         });
 
         // calculate_indices requires that matches are sorted by start index
@@ -366,6 +342,72 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
         has_match
     }
+}
+
+fn get_string_regex_matches<E: Encoding>(
+    content: &str,
+    rule: &CompiledRule,
+    cache: &mut regex_automata::meta::Cache,
+    rule_index: usize,
+    path_rules_matches: &mut Vec<InternalRuleMatch<E>>,
+    exclusion_check: &ExclusionCheck<'_>,
+    excluded_matches: &mut AHashSet<String>,
+) {
+    let mut start = 0;
+    loop {
+        let input = Input::new(content).range(start..);
+        if let Some(regex_match) = rule.regex.search_with(cache, &input) {
+            if is_false_positive_match(&regex_match, rule, content) {
+                // The "+1" is safe here because the regex will match at least 1 character
+                if let Some((i, _)) = content[start + 1..].char_indices().next() {
+                    // Since this is a false positive, the match is ignored and regex matching is
+                    // restarted at the next character.
+                    start += i + 1;
+                } else {
+                    // There are no more chars left in the string to scan
+                    return;
+                }
+            } else {
+                if exclusion_check.is_excluded(rule_index) {
+                    // Matches from excluded paths are saved and used to treat additional equal matches as false positives
+                    excluded_matches.insert(content[regex_match.range()].to_string());
+                } else {
+                    path_rules_matches.push(InternalRuleMatch {
+                        rule_index,
+                        utf8_start: regex_match.start(),
+                        utf8_end: regex_match.end(),
+                        custom_start: E::zero_index(),
+                        custom_end: E::zero_index(),
+                    });
+                }
+
+                // The next match will start at the end of this match. This is fine because
+                // patterns that can match empty matches are rejected.
+                start = regex_match.end()
+            }
+        } else {
+            return;
+        }
+    }
+}
+
+fn is_false_positive_match(
+    regex_match: &regex_automata::Match,
+    rule: &CompiledRule,
+    content: &str,
+) -> bool {
+    if rule
+        .proximity_keywords
+        .is_false_positive_match(content, regex_match.start())
+    {
+        return true;
+    }
+    if let Some(validator) = rule.validator.as_ref() {
+        if !validator.is_valid_match(&content[regex_match.range()]) {
+            return true;
+        };
+    }
+    false
 }
 
 #[cfg(test)]
@@ -1140,5 +1182,29 @@ mod test {
 
         // normally 08c3ad1a22e2edb1, but the leading 0 is removed
         assert_eq!(content, "8c3ad1a22e2edb1");
+    }
+
+    #[test]
+    fn test_internal_overlapping_matches() {
+        // If a regex match is a false-positive, the match is skipped and matching should be
+        // continued from the next character, rather than the end of the match.
+
+        // simple "credit-card" rule
+        let rule_0 = RuleConfig::builder("(,?\\d+){4}".to_owned())
+            .match_action(MatchAction::Redact {
+                replacement: "[credit card]".to_string(),
+            })
+            .validator(LuhnChecksum)
+            .build();
+
+        let scanner = Scanner::new(&[rule_0]).unwrap();
+
+        // The first 4 numbers match as a credit-card, but fail the luhn checksum.
+        // The last 4 numbers (which overlap with the first match) pass the checksum.
+        let mut content = "[5184,5185,5252,5052,5005]".to_string();
+
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "[5184[credit card]]".to_string());
     }
 }
