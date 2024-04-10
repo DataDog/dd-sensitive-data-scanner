@@ -18,7 +18,7 @@ pub enum MatchAction {
     #[deprecated(
         note = "Support hash from UTF-16 encoded bytes for backward compatibility. Users should use instead hash match action."
     )]
-    #[cfg(feature = "utf16_hash_match_action")]
+    #[cfg(any(test, feature = "utf16_hash_match_action"))]
     Utf16Hash,
     /// Replace the first or last n characters with asterisks.
     PartialRedact {
@@ -57,7 +57,7 @@ impl MatchAction {
             MatchAction::None | MatchAction::Redact { replacement: _ } | MatchAction::Hash => {
                 Ok(())
             }
-            #[cfg(feature = "utf16_hash_match_action")]
+            #[cfg(any(test, feature = "utf16_hash_match_action"))]
             #[allow(deprecated)]
             MatchAction::Utf16Hash => Ok(()),
         }
@@ -69,7 +69,7 @@ impl MatchAction {
             MatchAction::None => false,
             MatchAction::Redact { .. } => true,
             MatchAction::Hash { .. } => true,
-            #[cfg(feature = "utf16_hash_match_action")]
+            #[cfg(any(test, feature = "utf16_hash_match_action"))]
             #[allow(deprecated)]
             MatchAction::Utf16Hash { .. } => true,
             MatchAction::PartialRedact { .. } => true,
@@ -81,7 +81,7 @@ impl MatchAction {
             MatchAction::None => ReplacementType::None,
             MatchAction::Redact { .. } => ReplacementType::Placeholder,
             MatchAction::Hash { .. } => ReplacementType::Hash,
-            #[cfg(feature = "utf16_hash_match_action")]
+            #[cfg(any(test, feature = "utf16_hash_match_action"))]
             #[allow(deprecated)]
             MatchAction::Utf16Hash { .. } => ReplacementType::Hash,
             MatchAction::PartialRedact { direction, .. } => match direction {
@@ -104,7 +104,7 @@ impl MatchAction {
                 end: matched_content.len(),
                 replacement: Cow::Owned(Self::hash(matched_content)),
             }),
-            #[cfg(feature = "utf16_hash_match_action")]
+            #[cfg(any(test, feature = "utf16_hash_match_action"))]
             #[allow(deprecated)]
             MatchAction::Utf16Hash => Some(Replacement {
                 start: 0,
@@ -132,14 +132,14 @@ impl MatchAction {
         format!("{hash:x}")
     }
 
-    #[cfg(feature = "utf16_hash_match_action")]
+    #[cfg(any(test, feature = "utf16_hash_match_action"))]
     fn utf16_hash(match_result: &str) -> String {
         let utf16_bytes = match_result
             .encode_utf16()
             .flat_map(u16::to_le_bytes)
             .collect::<Vec<_>>();
         let hash = farmhash::fingerprint64(&utf16_bytes);
-        format!("{hash:0HASH_LEN$x}")
+        format!("{hash:x}")
     }
 
     fn partial_redaction_first(

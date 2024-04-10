@@ -1167,6 +1167,23 @@ mod test {
     }
 
     #[test]
+    fn test_hash_with_leading_zero_utf16() {
+        let rule_0 = RuleConfig::builder(".+".to_owned())
+            .match_action(MatchAction::Utf16Hash)
+            .build();
+
+        let scanner = Scanner::new(&[rule_0]).unwrap();
+
+        let mut content = "rand string that has a leading zero after hashing: S".to_string();
+
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 1);
+
+        // normally 08c3ad1a22e2edb1, but the leading 0 is removed
+        assert_eq!(content, "8c3ad1a22e2edb1");
+    }
+
+    #[test]
     fn test_internal_overlapping_matches() {
         // If a regex match is a false-positive, the match is skipped and matching should be
         // continued from the next character, rather than the end of the match.
