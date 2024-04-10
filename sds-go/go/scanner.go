@@ -130,8 +130,6 @@ func (s *Scanner) scanEncodedEvent(encodedEvent []byte) ([]byte, []RuleMatch, er
 //   - the processed log if any mutation happened
 //   - rules matches if any rule has matched
 //   - a possible error
-//
-// TODO(remy): implement ScanEventsMap, ScanEventsList
 func (s *Scanner) Scan(event []byte) ([]byte, []RuleMatch, error) {
 	encodedEvent := make([]byte, 0)
 	encodedEvent, err := encodeStringEvent(event, encodedEvent)
@@ -160,7 +158,6 @@ func (s *Scanner) ScanEventsList(event []interface{}) ([]byte, []RuleMatch, erro
 }
 
 // encodeStringEvent encodes teh given event to send it to the SDS shared library.
-// TODO(remy): implement encodeMapEvent, encodeListEvent
 func encodeStringEvent(log []byte, result []byte) ([]byte, error) {
 	result = append(result, byte(3)) // string data
 	result = binary.BigEndian.AppendUint32(result, uint32(len(log)))
