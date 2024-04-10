@@ -1181,7 +1181,7 @@ mod test {
 
         let scanner = Scanner::new(&[rule_0]).unwrap();
 
-        // The first 4 numbers match as a credit-card, but false the luhn checksum.
+        // The first 4 numbers match as a credit-card, but fail the luhn checksum.
         // The last 4 numbers (which overlap with the first match) pass the checksum.
         let mut content = "[5184,5185,5252,5052,5005]".to_string();
 
