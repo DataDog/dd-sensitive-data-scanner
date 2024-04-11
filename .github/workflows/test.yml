@@ -53,6 +53,12 @@ jobs:
         run: |
           cd rust
           cargo build --release
+      - name: "Run the Go linter"
+        run: |
+          cd go
+          go install honnef.co/go/tools/cmd/staticcheck@v0.4.7
+          export PATH=$PATH:$(go env GOPATH)/bin
+          LD_LIBRARY_PATH=../rust/target/release staticcheck ./...
       - name: "Run the Go unit tests"
         run: |
           cd go

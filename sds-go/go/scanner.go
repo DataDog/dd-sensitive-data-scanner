@@ -16,10 +16,10 @@ import (
 import "C"
 
 var (
-	UnknownError       error = fmt.Errorf("unknown error")
-	InvalidRegex       error = fmt.Errorf("invalid regex")
-	InvalidKeywords    error = fmt.Errorf("invalid keywords")
-	InvalidMatchAction error = fmt.Errorf("invalid match action")
+	ErrUnknown            error = fmt.Errorf("unknown error")
+	ErrInvalidRegex       error = fmt.Errorf("invalid regex")
+	ErrInvalidKeywords    error = fmt.Errorf("invalid keywords")
+	ErrInvalidMatchAction error = fmt.Errorf("invalid match action")
 )
 
 type Scanner struct {
@@ -36,7 +36,7 @@ type Scanner struct {
 // returned Scanner.
 func CreateScanner(rules []Rule) (*Scanner, error) {
 	if len(rules) == 0 {
-		return nil, fmt.Errorf("No rules provided")
+		return nil, fmt.Errorf("no rules provided")
 	}
 
 	data, err := json.Marshal(rules)
@@ -55,23 +55,23 @@ func CreateScanner(rules []Rule) (*Scanner, error) {
 		switch id {
 		//  see rust/native/create_scanner.rs for the mapping.
 		case -1: // rust unknown error
-			return nil, UnknownError
+			return nil, ErrUnknown
 		case -2: // rust: CreateScannerError::InvalidRegex
-			return nil, InvalidRegex
+			return nil, ErrInvalidRegex
 		case -3: // rust: CreateScannerError::InvalidKeywords
-			return nil, InvalidKeywords
+			return nil, ErrInvalidKeywords
 		case -4: // rust: CreateScannerError::InvalidMatchAction
-			return nil, InvalidMatchAction
+			return nil, ErrInvalidMatchAction
 		case -5: // rust panic
 			if errorString != nil {
 				defer C.free_string(errorString)
-				return nil, fmt.Errorf("Internal panic: %v", C.GoString(errorString))
+				return nil, fmt.Errorf("internal panic: %v", C.GoString(errorString))
 			} else {
-				return nil, fmt.Errorf("Internal panic")
+				return nil, fmt.Errorf("internal panic")
 			}
 		}
 
-		return nil, UnknownError
+		return nil, ErrUnknown
 	}
 
 	return &Scanner{
@@ -99,7 +99,7 @@ func (s *Scanner) scanEncodedEvent(encodedEvent []byte) ([]byte, []RuleMatch, er
 	rvdata := C.scan(C.long(s.Id), cdata, C.long(len(encodedEvent)), (*C.long)(unsafe.Pointer(&retsize)), (*C.long)(unsafe.Pointer(&retcap)), &errorString)
 	if errorString != nil {
 		defer C.free_string(errorString)
-		return nil, nil, fmt.Errorf("Internal panic: %v", C.GoString(errorString))
+		return nil, nil, fmt.Errorf("internal panic: %v", C.GoString(errorString))
 	}
 
 	// nothing has matched, ignore the returned object
@@ -111,15 +111,14 @@ func (s *Scanner) scanEncodedEvent(encodedEvent []byte) ([]byte, []RuleMatch, er
 	// use `free_vec` to let know rust it can drop this memory.
 	defer C.free_vec(rvdata, C.long(retsize), C.long(retcap))
 
-	rv := []byte{}
 	// Note that in the Go 1.21 documentation, GoBytes is part of:
 	// > A few special functions convert between Go and C types by making copies of the data.
 	// Meaning that the data in `rv` is a copy owned by Go of what's in rvdata.
-	rv = C.GoBytes(unsafe.Pointer(rvdata), C.int(retsize))
+	rv := C.GoBytes(unsafe.Pointer(rvdata), C.int(retsize))
 
 	processed, ruleMatches, err := decodeResponse(rv)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Scan: %v", err)
+		return nil, nil, fmt.Errorf("scan: %v", err)
 	}
 
 	return processed, ruleMatches, nil
@@ -319,7 +318,6 @@ func decodeMutation(buf *bytes.Buffer) ([]byte, error) {
 			// reading content string
 			processed = decodeString(buf)
 			done = true
-			break
 		}
 	}
 	return processed, nil
