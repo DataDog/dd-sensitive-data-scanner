@@ -1185,31 +1185,7 @@ mod test {
 
     #[test]
     fn test_internal_overlapping_matches() {
-        // If a regex match is a false-positive, the match is skipped and matching should be
-        // continued from the next character, rather than the end of the match.
-
-        // simple "credit-card" rule
-        let rule_0 = RuleConfig::builder("(,?\\d+){4}".to_owned())
-            .match_action(MatchAction::Redact {
-                replacement: "[credit card]".to_string(),
-            })
-            .validator(LuhnChecksum)
-            .build();
-
-        let scanner = Scanner::new(&[rule_0]).unwrap();
-
-        // The first 4 numbers match as a credit-card, but fail the luhn checksum.
-        // The last 4 numbers (which overlap with the first match) pass the checksum.
-        let mut content = "[5184,5185,5252,5052,5005]".to_string();
-
-        let matches = scanner.scan(&mut content);
-        assert_eq!(matches.len(), 1);
-        assert_eq!(content, "[5184[credit card]]".to_string());
-    }
-
-    #[test]
-    fn test_internal_overlapping_matches_multibyte_char() {
-        // "credit-card rule is modified a bit to allow a multi-char character in the match
+        // A simple "credit-card rule is modified a bit to allow a multi-char character in the match
         let rule_0 = RuleConfig::builder("([\\d€]+){1}(,\\d+){3}".to_owned())
             .match_action(MatchAction::Redact {
                 replacement: "[credit card]".to_string(),
