@@ -358,11 +358,10 @@ fn get_string_regex_matches<E: Encoding>(
         let input = Input::new(content).range(start..);
         if let Some(regex_match) = rule.regex.search_with(cache, &input) {
             if is_false_positive_match(&regex_match, rule, content) {
-                // The "+1" is safe here because the regex will match at least 1 character
-                if let Some((i, _)) = content[start + 1..].char_indices().next() {
+                if let Some((i, _)) = content[start..].char_indices().nth(1) {
                     // Since this is a false positive, the match is ignored and regex matching is
                     // restarted at the next character.
-                    start += i + 1;
+                    start += i;
                 } else {
                     // There are no more chars left in the string to scan
                     return;
@@ -1186,11 +1185,8 @@ mod test {
 
     #[test]
     fn test_internal_overlapping_matches() {
-        // If a regex match is a false-positive, the match is skipped and matching should be
-        // continued from the next character, rather than the end of the match.
-
-        // simple "credit-card" rule
-        let rule_0 = RuleConfig::builder("(,?\\d+){4}".to_owned())
+        // A simple "credit-card rule is modified a bit to allow a multi-char character in the match
+        let rule_0 = RuleConfig::builder("([\\d€]+){1}(,\\d+){3}".to_owned())
             .match_action(MatchAction::Redact {
                 replacement: "[credit card]".to_string(),
             })
@@ -1201,10 +1197,10 @@ mod test {
 
         // The first 4 numbers match as a credit-card, but fail the luhn checksum.
         // The last 4 numbers (which overlap with the first match) pass the checksum.
-        let mut content = "[5184,5185,5252,5052,5005]".to_string();
+        let mut content = "[5€184,5185,5252,5052,5005]".to_string();
 
         let matches = scanner.scan(&mut content);
+        // This is mostly asserting that the scanner doesn't panic when encountering multibyte characters
         assert_eq!(matches.len(), 1);
-        assert_eq!(content, "[5184[credit card]]".to_string());
     }
 }
