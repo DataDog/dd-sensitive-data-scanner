@@ -11,6 +11,11 @@ type testResult struct {
 	rules []RuleMatch
 }
 
+type mapTestResult struct {
+	event map[string]interface{}
+	rules []RuleMatch
+}
+
 func TestCreateScannerFailOnBadRegex(t *testing.T) {
 	var extraConfig ExtraConfig
 
@@ -64,6 +69,105 @@ func TestCreateScanner(t *testing.T) {
 	if len(scanner.Rules) != len(rules) {
 		t.Fatal("Failed to create the scanner: rules number inconsistent")
 	}
+}
+
+func TestScanMapEvent(t *testing.T) {
+	var extraConfig ExtraConfig
+
+	rules := []Rule{
+		NewMatchingRule("rule_hello", "hello", extraConfig),
+		NewMatchingRule("rule_world", "(?i)WoRlD", extraConfig),
+		NewRedactingRule("rule_secret", "se..et", "[REDACTED]", extraConfig),
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create the scanner:", err.Error())
+	}
+	defer scanner.Delete()
+
+	testData := map[string]mapTestResult{
+		// nothing 's matching
+		"this is a log map to process": {
+			event: map[string]interface{}{
+				"message": "this is a log to process",
+			},
+			rules: []RuleMatch{},
+		},
+		// 1 match rules
+		"this is a one match event": {
+			event: map[string]interface{}{
+				"content": "this is a hello event",
+			},
+			rules: []RuleMatch{{
+				Path:              "content",
+				RuleIdx:           0,
+				StartIndex:        10,
+				EndIndexExclusive: 15,
+				ShiftOffset:       0,
+			}},
+		},
+		// 1 match rules with nesting
+		"this is a one match event with nesting": {
+			event: map[string]interface{}{
+				"content": map[string]interface{}{
+					"nested": "this is a hello event",
+				},
+			},
+			rules: []RuleMatch{{
+				Path:              "content.nested",
+				RuleIdx:           0,
+				StartIndex:        10,
+				EndIndexExclusive: 15,
+				ShiftOffset:       0,
+			}},
+		},
+
+		// 1 match rule  with array
+		"this is a one match event with array": {
+			event: map[string]interface{}{
+				"content": []interface{}{
+					"this is a hello event",
+				},
+			},
+			rules: []RuleMatch{{
+				Path:              "content[0]",
+				RuleIdx:           0,
+				StartIndex:        10,
+				EndIndexExclusive: 15,
+				ShiftOffset:       0,
+			}},
+		},
+
+		// 2 match rule with map nested in array
+		"this is a two match event with array": {
+			event: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"nested0": "this is a hello event",
+					},
+					map[string]interface{}{
+						"nested1": "this is a hello event",
+					},
+				},
+			},
+			rules: []RuleMatch{{
+				Path:              "content[0].nested0",
+				RuleIdx:           0,
+				StartIndex:        10,
+				EndIndexExclusive: 15,
+				ShiftOffset:       0,
+			}, {
+				Path:              "content[1].nested1",
+				RuleIdx:           0,
+				StartIndex:        10,
+				EndIndexExclusive: 15,
+				ShiftOffset:       0,
+			}},
+		},
+	}
+
+	runTestMap(t, scanner, testData)
 }
 
 func TestScanStringEvent(t *testing.T) {
@@ -203,8 +307,8 @@ func TestSecondaryValidator(t *testing.T) {
 				StartIndex:        10,
 				EndIndexExclusive: 16,
 				ShiftOffset:       0,
-			}, 
-		}},
+			},
+			}},
 	}
 
 	runTest(t, scanner, testData)
@@ -241,6 +345,33 @@ func TestPartialRedact(t *testing.T) {
 	}
 
 	runTest(t, scanner, testData)
+}
+
+func runTestMap(t *testing.T, scanner *Scanner, testData map[string]mapTestResult) {
+	for key, testResult := range testData {
+
+		_, rulesMatch, err := scanner.ScanEventsMap(testResult.event)
+		if err != nil {
+			t.Fatal("failed to scan the event:", err.Error())
+		}
+
+		if len(rulesMatch) != len(testResult.rules) {
+			t.Fatalf("Failed to scan the event: not the good amount of rules returned for event '%s', expected '%d', received '%d')", key, len(testResult.rules), len(rulesMatch))
+		}
+
+		sort.Slice(rulesMatch, func(i, j int) bool {
+			return sortRulesMatch(rulesMatch[i], rulesMatch[i])
+		})
+		sort.Slice(testResult.rules, func(i, j int) bool {
+			return sortRulesMatch(testResult.rules[i], testResult.rules[i])
+		})
+
+		for i, expected := range testResult.rules {
+			if expected != rulesMatch[i] {
+				t.Fatalf("Failed to scan the event: unexpected rule match for event '%s': expected(%+v), received(%+v)", key, expected, rulesMatch[i])
+			}
+		}
+	}
 }
 
 func runTest(t *testing.T, scanner *Scanner, testData map[string]testResult) {
