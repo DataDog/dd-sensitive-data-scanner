@@ -58,6 +58,7 @@ jobs:
           cd go
           go install honnef.co/go/tools/cmd/staticcheck@latest
           go env GOPATH
+          ls -la /home/runner/go/bin
           LD_LIBRARY_PATH=../rust/target/release go-staticcheck ./...
       - name: "Run the Go unit tests"
         run: |
