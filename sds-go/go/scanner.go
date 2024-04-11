@@ -139,6 +139,11 @@ func (s *Scanner) Scan(event []byte) ([]byte, []RuleMatch, error) {
 	return s.scanEncodedEvent(encodedEvent)
 }
 
+// ScanEventsMap sends a map event to the SDS shared library for processing.
+// Returned values:
+//   - the processed log if any mutation happened
+//   - rules matches if any rule has matched
+//   - a possible error
 func (s *Scanner) ScanEventsMap(event map[string]interface{}) ([]byte, []RuleMatch, error) {
 	encodedEvent := make([]byte, 0)
 	encodedEvent, err := encodeMapEvent(event, encodedEvent)
@@ -148,6 +153,11 @@ func (s *Scanner) ScanEventsMap(event map[string]interface{}) ([]byte, []RuleMat
 	return s.scanEncodedEvent(encodedEvent)
 }
 
+// ScanEventsList sends a list of event to the SDS shared library for processing.
+// Returned values:
+//   - the processed log if any mutation happened
+//   - rules matches if any rule has matched
+//   - a possible error
 func (s *Scanner) ScanEventsList(event []interface{}) ([]byte, []RuleMatch, error) {
 	encodedEvent := make([]byte, 0)
 	encodedEvent, err := encodeListEvent(event, encodedEvent)
