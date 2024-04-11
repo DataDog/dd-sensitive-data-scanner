@@ -358,7 +358,7 @@ fn get_string_regex_matches<E: Encoding>(
         let input = Input::new(content).range(start..);
         if let Some(regex_match) = rule.regex.search_with(cache, &input) {
             if is_false_positive_match(&regex_match, rule, content) {
-                if let Some((i, _)) = content[start..].char_indices().skip(1).next() {
+                if let Some((i, _)) = content[start..].char_indices().nth(1) {
                     // Since this is a false positive, the match is ignored and regex matching is
                     // restarted at the next character.
                     start += i;
