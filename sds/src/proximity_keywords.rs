@@ -10,6 +10,7 @@ use regex_syntax::ast::{
     ClassSetUnion, Concat, Flag, Flags, FlagsItem, FlagsItemKind, Group, GroupKind, Literal,
     LiteralKind, Position, Repetition, RepetitionKind, RepetitionOp, Span,
 };
+use regex_syntax::Parser;
 
 const MAX_KEYWORD_COUNT: usize = 50;
 const MAX_LOOK_AHEAD_CHARACTER_COUNT: usize = 50;
@@ -35,6 +36,10 @@ struct ProximityKeywordsRegex<const EXCLUDED_CHARS: bool> {
 
 impl CompiledProximityKeywords {
     pub fn is_false_positive_match(&self, content: &str, match_start: usize) -> bool {
+        println!(
+            "Is false positive match: {:?} start={:?}",
+            content, match_start
+        );
         match (
             &self.included_keywords_pattern,
             &self.excluded_keywords_pattern,
@@ -122,8 +127,11 @@ fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
     regex: &ProximityKeywordsRegex<EXCLUDED_CHARS>,
 ) -> bool {
     let prefix = &content[0..match_start];
+    println!("Prefix: {:?}", prefix);
+    println!("Exclude chars={}", EXCLUDED_CHARS);
 
     let prefix_start = if EXCLUDED_CHARS {
+        // println!("Is excluding chars");
         let mut prefix_start = match_start;
         // "EXCLUDED_KEYWORDS_REMOVED_CHARS" don't count towards the "look_ahead_char_count"
         let mut char_indices = prefix.char_indices();
@@ -153,11 +161,19 @@ fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
     };
 
     let prefix_end = match_start;
+    println!("Scanned Prefix: {:?}", &content[prefix_start..prefix_end]);
 
     let input = Input::new(content)
         .earliest(true)
         .span(prefix_start..prefix_end);
-    regex.regex.search_half(&input).is_some()
+    let value = regex.regex.search_half(&input).is_some();
+
+    let input2 = Input::new(&content[prefix_start..prefix_end]).earliest(true);
+    let value2 = regex.regex.search_half(&input2).is_some();
+
+    println!("Is match: {:?}", value);
+    println!("Is match2: {:?}", value2);
+    value
 }
 
 struct Metrics {
@@ -215,6 +231,8 @@ fn compile_keywords(
     })
     .to_string();
 
+    println!("Pattern: {}", pattern);
+
     Ok(Some(
         meta::Regex::builder()
             .configure(
@@ -238,7 +256,7 @@ fn calculate_keyword_pattern(keyword: &str, remove_chars: &[char]) -> Ast {
         .map(|char| char.is_ascii_alphabetic() || char.is_ascii_digit())
         .unwrap()
     {
-        keyword_pattern.push(word_boundary())
+        keyword_pattern.push(word_boundary_start())
     }
 
     for (i, c) in keyword.chars().enumerate() {
@@ -257,7 +275,7 @@ fn calculate_keyword_pattern(keyword: &str, remove_chars: &[char]) -> Ast {
         .map(|char| char.is_ascii_alphabetic() || char.is_ascii_digit())
         .unwrap()
     {
-        keyword_pattern.push(word_boundary())
+        keyword_pattern.push(word_boundary_end())
     }
     Ast::Concat(Concat {
         span: span(),
@@ -310,6 +328,17 @@ fn literal_ast(c: char) -> Literal {
 // creates a unused span required for the RegexAst
 fn span() -> Span {
     Span::new(Position::new(0, 0, 0), Position::new(0, 0, 0))
+}
+
+fn word_boundary_start() -> Ast {
+    regex_syntax::ast::parse::Parser::new()
+        .parse("(^|[^a-zA-z0-9\\-_])[\\-_]*")
+        .unwrap()
+}
+fn word_boundary_end() -> Ast {
+    regex_syntax::ast::parse::Parser::new()
+        .parse("[\\-_]*($|[^a-zA-z0-9\\-_])")
+        .unwrap()
 }
 
 fn word_boundary() -> Ast {

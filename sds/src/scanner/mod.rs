@@ -358,10 +358,10 @@ fn get_string_regex_matches<E: Encoding>(
         let input = Input::new(content).range(start..);
         if let Some(regex_match) = rule.regex.search_with(cache, &input) {
             if is_false_positive_match(&regex_match, rule, content) {
-                if let Some((i, _)) = content[start..].char_indices().nth(1) {
+                if let Some((i, _)) = content[regex_match.start()..].char_indices().nth(1) {
                     // Since this is a false positive, the match is ignored and regex matching is
                     // restarted at the next character.
-                    start += i;
+                    start = regex_match.start() + i;
                 } else {
                     // There are no more chars left in the string to scan
                     return;
@@ -1198,6 +1198,31 @@ mod test {
         // The first 4 numbers match as a credit-card, but fail the luhn checksum.
         // The last 4 numbers (which overlap with the first match) pass the checksum.
         let mut content = "[5€184,5185,5252,5052,5005]".to_string();
+
+        let matches = scanner.scan(&mut content);
+        // This is mostly asserting that the scanner doesn't panic when encountering multibyte characters
+        assert_eq!(matches.len(), 1);
+    }
+
+    #[test]
+    fn test_change_my_name() {
+        // A simple "credit-card rule is modified a bit to allow a multi-char character in the match
+        let rule_0 = RuleConfig::builder("[xX]-[aA]mz-[sS]ecurity-[tT]oken((=)|(%3D)|(:)|(':\\s{0,5}b'))\\s{0,10}[a-zA-Z0-9+/%]{20,}".to_owned())
+            .match_action(MatchAction::Redact {
+                replacement: "X-Amz-Security-Token=_redacted_token_".to_string(),
+            })
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec![],
+                excluded_keywords: vec!["date".to_string()],
+            })
+            .build();
+
+        let scanner = Scanner::new(&[rule_0]).unwrap();
+
+        // The first 4 numbers match as a credit-card, but fail the luhn checksum.
+        // The last 4 numbers (which overlap with the first match) pass the checksum.
+        let mut content = "X-Amz-Date: 20240416T172242Z\nX-Amz-Security-Token: IQoJb3JpZ2luX2VjEIrwEaCXVzLWVhc3QtMSJHMEUC".to_string();
 
         let matches = scanner.scan(&mut content);
         // This is mostly asserting that the scanner doesn't panic when encountering multibyte characters
