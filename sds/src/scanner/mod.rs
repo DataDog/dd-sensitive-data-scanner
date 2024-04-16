@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use self::cache_pool::{CachePool, CachePoolGuard};
 use ahash::AHashSet;
-use regex_automata::Input;
+use regex_automata::{Input, Match};
 
 mod cache_pool;
 pub mod error;
@@ -358,12 +358,10 @@ fn get_string_regex_matches<E: Encoding>(
         let input = Input::new(content).range(start..);
         if let Some(regex_match) = rule.regex.search_with(cache, &input) {
             if is_false_positive_match(&regex_match, rule, content) {
-                if let Some((i, _)) = content[start..].char_indices().nth(1) {
-                    // Since this is a false positive, the match is ignored and regex matching is
-                    // restarted at the next character.
-                    start += i;
+                if let Some(next) = get_next_regex_start(content, &regex_match) {
+                    start = next;
                 } else {
-                    // There are no more chars left in the string to scan
+                    // There are no more chars to scan
                     return;
                 }
             } else {
@@ -387,6 +385,17 @@ fn get_string_regex_matches<E: Encoding>(
         } else {
             return;
         }
+    }
+}
+
+// Calculates the next starting position for a regex match if a the previous match is a false positive
+fn get_next_regex_start(content: &str, regex_match: &Match) -> Option<usize> {
+    // The next valid UTF8 char after the start of the regex match is used
+    if let Some((i, _)) = content[regex_match.start()..].char_indices().nth(1) {
+        Some(regex_match.start() + i)
+    } else {
+        // There are no more chars left in the string to scan
+        None
     }
 }
 
@@ -416,7 +425,7 @@ mod test {
     use crate::rule::{
         ProximityKeywordsConfig, RuleConfig, RuleConfigBuilder, SecondaryValidator::LuhnChecksum,
     };
-    use crate::scanner::{CreateScannerError, Scanner};
+    use crate::scanner::{get_next_regex_start, CreateScannerError, Scanner};
     use crate::validation::RegexValidationError;
     use crate::SecondaryValidator::ChineseIdChecksum;
     use crate::SecondaryValidator::GithubTokenChecksum;
@@ -424,6 +433,7 @@ mod test {
         simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch, Scope,
     };
     use crate::{Encoding, Utf8Encoding};
+    use regex_automata::Match;
     use std::collections::BTreeMap;
 
     #[test]
@@ -1202,5 +1212,12 @@ mod test {
         let matches = scanner.scan(&mut content);
         // This is mostly asserting that the scanner doesn't panic when encountering multibyte characters
         assert_eq!(matches.len(), 1);
+    }
+
+    #[test]
+    fn test_next_regex_start_after_false_positive() {
+        let content = "          testtest";
+        let regex_match = Match::must(0, 10..14);
+        assert_eq!(get_next_regex_start(content, &regex_match), Some(11));
     }
 }
