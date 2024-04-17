@@ -280,7 +280,7 @@ func TestScanStringEventMultipleMutations(t *testing.T) {
 	runTest(t, scanner, testData)
 }
 
-func TestSecondaryValidator(t *testing.T) {
+func TestProximityKeywords(t *testing.T) {
 	extraConfig := ExtraConfig{
 		ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil),
 	}
@@ -312,6 +312,60 @@ func TestSecondaryValidator(t *testing.T) {
 	}
 
 	runTest(t, scanner, testData)
+}
+
+func TestSecondaryValidator(t *testing.T) {
+	scannerWithoutChecksum, err := CreateScanner([]Rule{
+		NewRedactingRule("rule_card",
+			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
+			"[redacted]", ExtraConfig{}),
+	})
+	if err != nil {
+		t.Fatal("failed to create the scanner wo checksum:", err.Error())
+	}
+	defer scannerWithoutChecksum.Delete()
+	scannerWithChecksum, err := CreateScanner([]Rule{
+		NewRedactingRule("rule_card",
+			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
+			"[redacted]", ExtraConfig{SecondaryValidator: LuhnChecksum}),
+	})
+	if err != nil {
+		t.Fatal("failed to create the scanner with checksum:", err.Error())
+	}
+	defer scannerWithChecksum.Delete()
+
+	testData := map[string]testResult{
+		"4556997807150071 4111 1111 1111 1111": {
+			str: "[redacted] [redacted]",
+			rules: []RuleMatch{
+				{
+					RuleIdx:           0,
+					StartIndex:        0,
+					EndIndexExclusive: 10,
+					ShiftOffset:       -6,
+				}, {
+					RuleIdx:           0,
+					StartIndex:        11,
+					EndIndexExclusive: 21,
+					ShiftOffset:       -15,
+				},
+			},
+		},
+	}
+	runTest(t, scannerWithoutChecksum, testData)
+
+	testData = map[string]testResult{
+		"4556997807150071 4111 1111 1111 1111": {
+			str: "4556997807150071 [redacted]",
+			rules: []RuleMatch{{
+				RuleIdx:           0,
+				StartIndex:        17,
+				EndIndexExclusive: 27,
+				ShiftOffset:       -9,
+			}},
+		},
+	}
+	runTest(t, scannerWithChecksum, testData)
 }
 
 func TestPartialRedact(t *testing.T) {

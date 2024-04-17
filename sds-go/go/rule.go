@@ -33,7 +33,7 @@ type Rule struct {
 	Pattern            string                   `json:"pattern"`
 	MatchAction        MatchAction              `json:"match_action"`
 	ProximityKeywords  *ProximityKeywordsConfig `json:"proximity_keywords,omitempty"`
-	SecondaryValidator SecondaryValidator       `json:"secondary_validator,omitempty"`
+	SecondaryValidator SecondaryValidator       `json:"validator,omitempty"`
 }
 
 // ExtraConfig is used to provide more configuration while creating the rules.
@@ -73,7 +73,7 @@ type RuleMatch struct {
 	ReplacementType   MatchAction
 	StartIndex        uint32
 	EndIndexExclusive uint32
-	ShiftOffset       uint32
+	ShiftOffset       int32
 }
 
 // MatchAction is used to configure the rules.
@@ -95,7 +95,7 @@ func NewMatchingRule(id string, pattern string, extraConfig ExtraConfig) Rule {
 		MatchAction: MatchAction{
 			Type: MatchActionNone,
 		},
-		ProximityKeywords: extraConfig.ProximityKeywords,
+		ProximityKeywords:  extraConfig.ProximityKeywords,
 		SecondaryValidator: extraConfig.SecondaryValidator,
 	}
 }
@@ -109,7 +109,7 @@ func NewRedactingRule(id string, pattern string, redactionValue string, extraCon
 			Type:           MatchActionRedact,
 			RedactionValue: redactionValue,
 		},
-		ProximityKeywords: extraConfig.ProximityKeywords,
+		ProximityKeywords:  extraConfig.ProximityKeywords,
 		SecondaryValidator: extraConfig.SecondaryValidator,
 	}
 }
@@ -122,7 +122,7 @@ func NewHashRule(id string, pattern string, extraConfig ExtraConfig) Rule {
 		MatchAction: MatchAction{
 			Type: MatchActionHash,
 		},
-		ProximityKeywords: extraConfig.ProximityKeywords,
+		ProximityKeywords:  extraConfig.ProximityKeywords,
 		SecondaryValidator: extraConfig.SecondaryValidator,
 	}
 }
@@ -137,7 +137,7 @@ func NewPartialRedactRule(id string, pattern string, characterCount uint32, dire
 			CharacterCount: characterCount,
 			Direction:      direction,
 		},
-		ProximityKeywords: extraConfig.ProximityKeywords,
+		ProximityKeywords:  extraConfig.ProximityKeywords,
 		SecondaryValidator: extraConfig.SecondaryValidator,
 	}
 }
