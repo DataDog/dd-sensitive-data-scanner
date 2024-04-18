@@ -257,7 +257,7 @@ func decodeResponse(rawData []byte) ([]byte, []RuleMatch, error) {
 
 			startIndex := binary.BigEndian.Uint32(buf.Next(4))
 			endIndexExclusive := binary.BigEndian.Uint32(buf.Next(4))
-			shiftOffset := binary.BigEndian.Uint32(buf.Next(4))
+			shiftOffset := int32(binary.BigEndian.Uint32(buf.Next(4)))
 
 			ruleMatches = append(ruleMatches, RuleMatch{
 				RuleIdx:           ruleIdx,
