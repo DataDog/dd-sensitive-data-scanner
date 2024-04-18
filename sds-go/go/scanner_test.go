@@ -7,8 +7,9 @@ import (
 )
 
 type testResult struct {
-	str   string
-	rules []RuleMatch
+	mutated bool
+	str     string
+	rules   []RuleMatch
 }
 
 type mapTestResult struct {
@@ -188,12 +189,14 @@ func TestScanStringEvent(t *testing.T) {
 	testData := map[string]testResult{
 		// nothing 's matching
 		"this is a log to process": {
-			str:   "",
-			rules: []RuleMatch{},
+			mutated: false,
+			str:     "this is a log to process",
+			rules:   []RuleMatch{},
 		},
 		// 1 match rules
 		"this is a hello event": {
-			str: "", // no event returned because no redaction happened
+			mutated: false,
+			str:     "this is a hello event",
 			rules: []RuleMatch{{
 				RuleIdx:           0,
 				StartIndex:        10,
@@ -203,7 +206,8 @@ func TestScanStringEvent(t *testing.T) {
 		},
 		// 2 match rules matching 3 times (2 times first 1 time second)
 		"this is a hello event, even a hello world!": {
-			str: "", // no event returned because no redaction happened
+			mutated: false,
+			str:     "this is a hello event, even a hello world!",
 			rules: []RuleMatch{{
 				RuleIdx:           0,
 				StartIndex:        10,
@@ -223,7 +227,8 @@ func TestScanStringEvent(t *testing.T) {
 		},
 		// one match and one redacting rule
 		"this is a hello event, and containing a secret here!": {
-			str: "this is a hello event, and containing a [REDACTED] here!",
+			mutated: true,
+			str:     "this is a hello event, and containing a [REDACTED] here!",
 			rules: []RuleMatch{{
 				RuleIdx:           0,
 				StartIndex:        10,
@@ -258,11 +263,13 @@ func TestScanStringEventMultipleMutations(t *testing.T) {
 
 	testData := map[string]testResult{
 		"this is a log to process": {
-			str:   "",
-			rules: []RuleMatch{},
+			mutated: false,
+			str:     "this is a log to process",
+			rules:   []RuleMatch{},
 		},
 		"here there are two matches resulting to some redacting, here the secret word and here some 1234 random numbers": {
-			str: "here there are two matches resulting to some redacting, here the [REDACTED] word and here some [NREDAC] random numbers",
+			mutated: true,
+			str:     "here there are two matches resulting to some redacting, here the [REDACTED] word and here some [NREDAC] random numbers",
 			rules: []RuleMatch{{
 				RuleIdx:           1,
 				StartIndex:        65,
@@ -297,11 +304,13 @@ func TestProximityKeywords(t *testing.T) {
 
 	testData := map[string]testResult{
 		"this is a log to process, no match no partial redact nor anything": {
-			str:   "",
-			rules: []RuleMatch{},
+			mutated: false,
+			str:     "this is a log to process, no match no partial redact nor anything",
+			rules:   []RuleMatch{},
 		},
 		"here card 237339, this one should match, but this second one 382448 should not as it's not prefixed by card": {
-			str: "",
+			mutated: false,
+			str:     "here card 237339, this one should match, but this second one 382448 should not as it's not prefixed by card",
 			rules: []RuleMatch{{
 				RuleIdx:           0,
 				StartIndex:        10,
@@ -336,7 +345,8 @@ func TestSecondaryValidator(t *testing.T) {
 
 	testData := map[string]testResult{
 		"4556997807150071 4111 1111 1111 1111": {
-			str: "[redacted] [redacted]",
+			mutated: true,
+			str:     "[redacted] [redacted]",
 			rules: []RuleMatch{
 				{
 					RuleIdx:           0,
@@ -356,7 +366,8 @@ func TestSecondaryValidator(t *testing.T) {
 
 	testData = map[string]testResult{
 		"4556997807150071 4111 1111 1111 1111": {
-			str: "4556997807150071 [redacted]",
+			mutated: true,
+			str:     "4556997807150071 [redacted]",
 			rules: []RuleMatch{{
 				RuleIdx:           0,
 				StartIndex:        17,
@@ -384,11 +395,13 @@ func TestPartialRedact(t *testing.T) {
 
 	testData := map[string]testResult{
 		"this is a log to process, no match no partial redact nor anything": {
-			str:   "",
-			rules: []RuleMatch{},
+			mutated: false,
+			str:     "this is a log to process, no match no partial redact nor anything",
+			rules:   []RuleMatch{},
 		},
 		"here card 328339, this one should match, but this second one 382448 should not as it's not prefixed by card": {
-			str: "here card ****39, this one should match, but this second one 382448 should not as it's not prefixed by card",
+			mutated: true,
+			str:     "here card ****39, this one should match, but this second one 382448 should not as it's not prefixed by card",
 			rules: []RuleMatch{{
 				RuleIdx:           0,
 				StartIndex:        10,
@@ -404,7 +417,7 @@ func TestPartialRedact(t *testing.T) {
 func runTestMap(t *testing.T, scanner *Scanner, testData map[string]mapTestResult) {
 	for key, testResult := range testData {
 
-		_, rulesMatch, err := scanner.ScanEventsMap(testResult.event)
+		_, _, rulesMatch, err := scanner.ScanEventsMap(testResult.event)
 		if err != nil {
 			t.Fatal("failed to scan the event:", err.Error())
 		}
@@ -430,7 +443,7 @@ func runTestMap(t *testing.T, scanner *Scanner, testData map[string]mapTestResul
 
 func runTest(t *testing.T, scanner *Scanner, testData map[string]testResult) {
 	for event, expected := range testData {
-		rv, rulesMatch, err := scanner.Scan([]byte(event))
+		mutated, rv, rulesMatch, err := scanner.Scan([]byte(event))
 		if err != nil {
 			t.Fatal("failed to scan the event:", err.Error())
 		}
@@ -441,6 +454,10 @@ func runTest(t *testing.T, scanner *Scanner, testData map[string]testResult) {
 
 		if len(rulesMatch) != len(expected.rules) {
 			t.Fatalf("Failed to scan the event: not the good amount of rules returned for event '%s', expected '%d', received '%d')", event, len(expected.rules), len(rulesMatch))
+		}
+
+		if mutated != expected.mutated {
+			t.Fatalf("Inconsistent mutated state: expected '%v', received '%v'", expected.mutated, mutated)
 		}
 
 		sort.Slice(rulesMatch, func(i, j int) bool {

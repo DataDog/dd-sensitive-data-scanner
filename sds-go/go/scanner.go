@@ -87,7 +87,7 @@ func (s *Scanner) Delete() {
 	s.Rules = nil
 }
 
-func (s *Scanner) scanEncodedEvent(encodedEvent []byte) ([]byte, []RuleMatch, error) {
+func (s *Scanner) scanEncodedEvent(encodedEvent []byte) (bool, []byte, []RuleMatch, error) {
 	cdata := C.CBytes(encodedEvent)
 	defer C.free(cdata)
 
@@ -98,12 +98,12 @@ func (s *Scanner) scanEncodedEvent(encodedEvent []byte) ([]byte, []RuleMatch, er
 	rvdata := C.scan(C.long(s.Id), cdata, C.long(len(encodedEvent)), (*C.long)(unsafe.Pointer(&retsize)), (*C.long)(unsafe.Pointer(&retcap)), &errorString)
 	if errorString != nil {
 		defer C.free_string(errorString)
-		return nil, nil, fmt.Errorf("internal panic: %v", C.GoString(errorString))
+		return false, nil, nil, fmt.Errorf("internal panic: %v", C.GoString(errorString))
 	}
 
-	// nothing has matched, ignore the returned object
+	// nothing has matched, ignore the returned object, return the original event
 	if retsize <= 0 || retcap <= 0 {
-		return nil, []RuleMatch{}, nil
+		return false, nil, []RuleMatch{}, nil
 	}
 
 	// otherwise we received data initially owned by rust, once we've used it,
@@ -115,53 +115,64 @@ func (s *Scanner) scanEncodedEvent(encodedEvent []byte) ([]byte, []RuleMatch, er
 	// Meaning that the data in `rv` is a copy owned by Go of what's in rvdata.
 	rv := C.GoBytes(unsafe.Pointer(rvdata), C.int(retsize))
 
-	processed, ruleMatches, err := decodeResponse(rv)
+	mutated, processed, ruleMatches, err := decodeResponse(rv)
 	if err != nil {
-		return nil, nil, fmt.Errorf("scan: %v", err)
+		return false, nil, nil, fmt.Errorf("scan: %v", err)
 	}
 
-	return processed, ruleMatches, nil
+	return mutated, processed, ruleMatches, err
 }
 
 // Scan sends the string event to the SDS shared library for processing.
 // Returned values:
-//   - the processed log if any mutation happened
+//   - whether a mutation happened or not
+//   - the resulting log (possibly be unchanged)
 //   - rules matches if any rule has matched
 //   - a possible error
-func (s *Scanner) Scan(event []byte) ([]byte, []RuleMatch, error) {
+func (s *Scanner) Scan(event []byte) (bool, []byte, []RuleMatch, error) {
 	encodedEvent := make([]byte, 0)
 	encodedEvent, err := encodeStringEvent(event, encodedEvent)
 	if err != nil {
-		return nil, nil, err
+		return false, nil, nil, err
 	}
-	return s.scanEncodedEvent(encodedEvent)
+
+	mutated, processed, matches, err := s.scanEncodedEvent(encodedEvent)
+	rv := event
+	if mutated {
+		rv = processed
+	}
+	return mutated, rv, matches, err
 }
 
 // ScanEventsMap sends a map event to the SDS shared library for processing.
 // Returned values:
-//   - the processed log if any mutation happened
+//   - whether a mutation happened or not
+//   - the resulting log (possibly be unchanged)
 //   - rules matches if any rule has matched
 //   - a possible error
-func (s *Scanner) ScanEventsMap(event map[string]interface{}) ([]byte, []RuleMatch, error) {
+func (s *Scanner) ScanEventsMap(event map[string]interface{}) (bool, []byte, []RuleMatch, error) {
 	encodedEvent := make([]byte, 0)
 	encodedEvent, err := encodeMapEvent(event, encodedEvent)
 	if err != nil {
-		return nil, nil, err
+		return false, nil, nil, err
 	}
+
 	return s.scanEncodedEvent(encodedEvent)
 }
 
 // ScanEventsList sends a list of event to the SDS shared library for processing.
 // Returned values:
-//   - the processed log if any mutation happened
+//   - whether a mutation happened or not
+//   - the resulting log (possibly be unchanged)
 //   - rules matches if any rule has matched
 //   - a possible error
-func (s *Scanner) ScanEventsList(event []interface{}) ([]byte, []RuleMatch, error) {
+func (s *Scanner) ScanEventsList(event []interface{}) (bool, []byte, []RuleMatch, error) {
 	encodedEvent := make([]byte, 0)
 	encodedEvent, err := encodeListEvent(event, encodedEvent)
 	if err != nil {
-		return nil, nil, err
+		return false, nil, nil, err
 	}
+
 	return s.scanEncodedEvent(encodedEvent)
 }
 
@@ -223,25 +234,28 @@ func encodeListEvent(log []interface{}, result []byte) ([]byte, error) {
 // decodeResponse reads the binary response returned by the SDS shared library
 // on a `scan` call.
 // Returned values are:
+//   - either a mutation happened or not
 //   - the processed log if any mutation happened
 //   - rules matches if any rule has matched
 //   - a possible error
-func decodeResponse(rawData []byte) ([]byte, []RuleMatch, error) {
+func decodeResponse(rawData []byte) (bool, []byte, []RuleMatch, error) {
 	buf := bytes.NewBuffer(rawData)
 
+	var mutated bool
 	var processed []byte
 	var ruleMatches []RuleMatch
 
 	for buf.Len() > 0 {
 		typ, err := buf.ReadByte()
 		if err != nil {
-			return nil, nil, fmt.Errorf("decodeResponse: %v", err)
+			return false, nil, nil, fmt.Errorf("decodeResponse: %v", err)
 		}
 
 		switch typ {
 		case 4: // Mutation
+			mutated = true
 			if processed, err = decodeMutation(buf); err != nil {
-				return nil, nil, fmt.Errorf("decodeResponse: %v", err)
+				return false, nil, nil, fmt.Errorf("decodeResponse: %v", err)
 			}
 		case 5: // Match
 			// starts with a rule ID
@@ -267,11 +281,11 @@ func decodeResponse(rawData []byte) ([]byte, []RuleMatch, error) {
 				ShiftOffset:       shiftOffset,
 			})
 		default:
-			return nil, nil, fmt.Errorf("decodeResponse: can't decode response, unknown byte marker: %x", typ)
+			return false, nil, nil, fmt.Errorf("decodeResponse: can't decode response, unknown byte marker: %x", typ)
 		}
 	}
 
-	return processed, ruleMatches, nil
+	return mutated, processed, ruleMatches, nil
 }
 
 // decodeString using this format:
