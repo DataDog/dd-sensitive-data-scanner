@@ -130,7 +130,7 @@ fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
         );
 
         // Adding 1 char here to allow correct assertion checking on the last char. There will always be
-        // at least 1 more char available since empty matches aren't allowed
+        // at least 1 more char is always available since empty matches aren't allowed
         let prefix_end = next_char_index(content, match_start).unwrap_or(content.len());
 
         let stripped_prefix = content[prefix_start_info.start..prefix_end]
