@@ -1224,7 +1224,7 @@ mod test {
     #[test]
     fn test_change_my_name() {
         // A simple "credit-card rule is modified a bit to allow a multi-char character in the match
-        let rule_0 = RuleConfig::builder("test".to_owned())
+        let rule_0 = RuleConfig::builder("value".to_owned())
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
             })
@@ -1237,9 +1237,9 @@ mod test {
 
         let scanner = Scanner::new(&[rule_0]).unwrap();
 
-        // The first 4 numbers match as a credit-card, but fail the luhn checksum.
-        // The last 4 numbers (which overlap with the first match) pass the checksum.
-        let mut content = "x-test=test".to_string();
+        // "test" should NOT be detected as an excluded keyword because "-" is ignored, so the word
+        // boundary shouldn't match here
+        let mut content = "x-test=value".to_string();
 
         let matches = scanner.scan(&mut content);
         // This is mostly asserting that the scanner doesn't panic when encountering multibyte characters

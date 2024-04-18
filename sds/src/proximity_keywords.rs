@@ -6,11 +6,9 @@ use crate::rule::ProximityKeywordsConfig;
 use metrics::{counter, Counter};
 use regex_automata::{meta, Input};
 use regex_syntax::ast::{
-    Alternation, Assertion, AssertionKind, Ast, Class, ClassBracketed, ClassSet, ClassSetItem,
-    ClassSetUnion, Concat, Flag, Flags, FlagsItem, FlagsItemKind, Group, GroupKind, Literal,
-    LiteralKind, Position, Repetition, RepetitionKind, RepetitionOp, Span,
+    Alternation, Assertion, AssertionKind, Ast, Concat, Flag, Flags, FlagsItem, FlagsItemKind,
+    Group, GroupKind, Literal, LiteralKind, Position, Span,
 };
-use regex_syntax::Parser;
 
 const MAX_KEYWORD_COUNT: usize = 50;
 const MAX_LOOK_AHEAD_CHARACTER_COUNT: usize = 50;
@@ -123,57 +121,100 @@ impl CompiledProximityKeywords {
 fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
     content: &str,
     match_start: usize,
-    mut look_ahead_char_count: usize,
+    look_ahead_char_count: usize,
     regex: &ProximityKeywordsRegex<EXCLUDED_CHARS>,
 ) -> bool {
-    let prefix = &content[0..match_start];
-    println!("Prefix: {:?}", prefix);
-    println!("Exclude chars={}", EXCLUDED_CHARS);
+    if EXCLUDED_CHARS {
+        let prefix_start_info = get_prefix_start(
+            match_start,
+            // Adding 1 to the start to account for assertion checking
+            look_ahead_char_count + 1,
+            content,
+            EXCLUDED_KEYWORDS_REMOVED_CHARS,
+        );
 
-    let prefix_start = if EXCLUDED_CHARS {
-        // println!("Is excluding chars");
-        let mut prefix_start = match_start;
-        // "EXCLUDED_KEYWORDS_REMOVED_CHARS" don't count towards the "look_ahead_char_count"
-        let mut char_indices = prefix.char_indices();
+        // Adding 1 char here to allow correct assertion checking on the last char. There will always be
+        // at least 1 more char available since empty matches aren't allowed
+        let prefix_end = next_char_index(content, match_start).unwrap_or(content.len());
 
-        while look_ahead_char_count > 0 {
-            match char_indices.next_back() {
-                Some((i, c)) => {
-                    prefix_start = i;
-                    if !EXCLUDED_KEYWORDS_REMOVED_CHARS.contains(&c) {
-                        look_ahead_char_count -= 1;
-                    }
-                }
-                None => {
-                    prefix_start = 0;
-                    break;
-                }
-            }
-        }
-        prefix_start
+        let stripped_prefix = (&content[prefix_start_info.start..prefix_end])
+            .replace(EXCLUDED_KEYWORDS_REMOVED_CHARS, "");
+
+        println!("Search prefix: {}", stripped_prefix);
+
+        // Subtracting one to exclude the last char which was added only for boundary checking
+        let span_end = prev_char_index(&stripped_prefix, stripped_prefix.len()).unwrap_or(0);
+
+        let span_start = if prefix_start_info.num_chars == (look_ahead_char_count + 1) {
+            // an extra char was added for assertion checking, so it needs to be removed here
+            next_char_index(&stripped_prefix, 0).unwrap_or(stripped_prefix.len())
+        } else {
+            0
+        };
+
+        let input = Input::new(&stripped_prefix)
+            .earliest(true)
+            .span(span_start..span_end);
+        regex.regex.search_half(&input).is_some()
     } else {
         // just get the previous n chars (no chars are skipped)
-        prefix
-            .char_indices()
-            .nth_back(look_ahead_char_count - 1)
-            .map(|item| item.0)
-            .unwrap_or(0)
-    };
+        let prefix_start_info = get_prefix_start(match_start, look_ahead_char_count, content, &[]);
 
-    let prefix_end = match_start;
-    println!("Scanned Prefix: {:?}", &content[prefix_start..prefix_end]);
+        let prefix_end = match_start;
 
-    let input = Input::new(content)
-        .earliest(true)
-        .span(prefix_start..prefix_end);
-    let value = regex.regex.search_half(&input).is_some();
+        let input = Input::new(content)
+            .earliest(true)
+            .span(prefix_start_info.start..prefix_end);
+        regex.regex.search_half(&input).is_some()
+    }
+}
 
-    let input2 = Input::new(&content[prefix_start..prefix_end]).earliest(true);
-    let value2 = regex.regex.search_half(&input2).is_some();
+fn next_char_index(content: &str, start: usize) -> Option<usize> {
+    content[start..]
+        .char_indices()
+        .nth(1)
+        .map(|(i, _c)| start + i)
+}
 
-    println!("Is match: {:?}", value);
-    println!("Is match2: {:?}", value2);
-    value
+fn prev_char_index(content: &str, start: usize) -> Option<usize> {
+    content[..start].char_indices().next_back().map(|(i, _c)| i)
+}
+
+struct PrefixStart {
+    start: usize,
+    num_chars: usize,
+}
+
+fn get_prefix_start(
+    match_start: usize,
+    mut look_ahead_char_count: usize,
+    content: &str,
+    exclude_chars: &[char],
+) -> PrefixStart {
+    let original_look_ahead_char_count = look_ahead_char_count;
+    let prefix = &content[0..match_start];
+    let mut prefix_start = match_start;
+
+    let mut char_indices = prefix.char_indices();
+
+    while look_ahead_char_count > 0 {
+        match char_indices.next_back() {
+            Some((i, c)) => {
+                prefix_start = i;
+                if !exclude_chars.contains(&c) {
+                    look_ahead_char_count -= 1;
+                }
+            }
+            None => {
+                prefix_start = 0;
+                break;
+            }
+        }
+    }
+    PrefixStart {
+        start: prefix_start,
+        num_chars: original_look_ahead_char_count - look_ahead_char_count,
+    }
 }
 
 struct Metrics {
@@ -221,7 +262,7 @@ fn compile_keywords(
             if trimmed_keyword.is_empty() {
                 return Err(EmptyKeyword);
             }
-            Ok(calculate_keyword_pattern(&trimmed_keyword, remove_chars))
+            Ok(calculate_keyword_pattern(&trimmed_keyword))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -248,7 +289,7 @@ fn compile_keywords(
 }
 
 /// Transform a keyword in an AST, the keyword MUST NOT be empty
-fn calculate_keyword_pattern(keyword: &str, remove_chars: &[char]) -> Ast {
+fn calculate_keyword_pattern(keyword: &str) -> Ast {
     let mut keyword_pattern: Vec<Ast> = vec![];
     if keyword
         .chars()
@@ -256,16 +297,10 @@ fn calculate_keyword_pattern(keyword: &str, remove_chars: &[char]) -> Ast {
         .map(|char| char.is_ascii_alphabetic() || char.is_ascii_digit())
         .unwrap()
     {
-        keyword_pattern.push(word_boundary_start())
+        keyword_pattern.push(word_boundary())
     }
 
-    for (i, c) in keyword.chars().enumerate() {
-        if i != 0 {
-            if let Some(p) = allowed_chars_pattern(remove_chars) {
-                keyword_pattern.push(p);
-            };
-            // allow any number of the "remove_chars" between characters of the keyword
-        }
+    for c in keyword.chars() {
         keyword_pattern.push(Ast::Literal(literal_ast(c)))
     }
 
@@ -275,41 +310,12 @@ fn calculate_keyword_pattern(keyword: &str, remove_chars: &[char]) -> Ast {
         .map(|char| char.is_ascii_alphabetic() || char.is_ascii_digit())
         .unwrap()
     {
-        keyword_pattern.push(word_boundary_end())
+        keyword_pattern.push(word_boundary())
     }
     Ast::Concat(Concat {
         span: span(),
         asts: keyword_pattern,
     })
-}
-
-// This creates a pattern that allows any number of the following chars (including 0)
-fn allowed_chars_pattern(allowed_chars: &[char]) -> Option<Ast> {
-    if allowed_chars.is_empty() {
-        return None;
-    }
-
-    let char_literals = allowed_chars
-        .iter()
-        .map(|c| ClassSetItem::Literal(literal_ast(*c)))
-        .collect::<Vec<_>>();
-
-    Some(Ast::Repetition(Repetition {
-        span: span(),
-        op: RepetitionOp {
-            span: span(),
-            kind: RepetitionKind::ZeroOrMore,
-        },
-        greedy: true,
-        ast: Box::new(Ast::Class(Class::Bracketed(ClassBracketed {
-            span: span(),
-            negated: false,
-            kind: ClassSet::Item(ClassSetItem::Union(ClassSetUnion {
-                span: span(),
-                items: char_literals,
-            })),
-        }))),
-    }))
 }
 
 fn literal_ast(c: char) -> Literal {
@@ -328,17 +334,6 @@ fn literal_ast(c: char) -> Literal {
 // creates a unused span required for the RegexAst
 fn span() -> Span {
     Span::new(Position::new(0, 0, 0), Position::new(0, 0, 0))
-}
-
-fn word_boundary_start() -> Ast {
-    regex_syntax::ast::parse::Parser::new()
-        .parse("(^|[^a-zA-z0-9\\-_])[\\-_]*")
-        .unwrap()
-}
-fn word_boundary_end() -> Ast {
-    regex_syntax::ast::parse::Parser::new()
-        .parse("[\\-_]*($|[^a-zA-z0-9\\-_])")
-        .unwrap()
 }
 
 fn word_boundary() -> Ast {
@@ -763,6 +758,17 @@ mod test {
     }
 
     #[test]
+    fn test_excluded_keyword_stripped_chars_in_word_boundary() {
+        let keywords =
+            try_new_compiled_proximity_keyword(8, vec![], vec!["id".to_string()]).unwrap();
+
+        // The entire string is in the prefix, but "-" is stripped, so "userid" don't match "id" due to the word boundary
+        let is_false_positive = keywords.is_false_positive_match("user-id ab", 8);
+
+        assert_eq!(is_false_positive, false);
+    }
+
+    #[test]
     fn test_included_keywords_on_start_boundary_with_space_including_word_boundary() {
         let keywords =
             try_new_compiled_proximity_keyword(7, vec!["id".to_string()], vec![]).unwrap();
@@ -801,36 +807,27 @@ mod test {
     }
 
     #[test]
-    fn test_compile_keywords_with_removed_chars() {
-        let regex = compile_keywords(vec!["hello".to_string()], 5, &['-', '_'])
-            .unwrap()
-            .unwrap();
-        assert_eq!(regex.is_match("hello"), true);
-        assert_eq!(regex.is_match("he-l_lo"), true);
-    }
-
-    #[test]
-    fn test_allowed_chars_pattern() {
-        assert_eq!(
-            allowed_chars_pattern(&['a', 'b', 'c']).map(|p| p.to_string()),
-            Some("[abc]*".to_string())
-        );
-        assert_eq!(
-            allowed_chars_pattern(&['a']).map(|p| p.to_string()),
-            Some("[a]*".to_string())
-        );
-        assert_eq!(allowed_chars_pattern(&[]).map(|p| p.to_string()), None);
-    }
-
-    #[test]
     fn test_calculate_keyword_pattern() {
         assert_eq!(
-            calculate_keyword_pattern("test", &['-', '_']).to_string(),
-            "(?-u:\\b)t[\\-_]*e[\\-_]*s[\\-_]*t(?-u:\\b)".to_string()
-        );
-        assert_eq!(
-            calculate_keyword_pattern("test", &[]).to_string(),
+            calculate_keyword_pattern("test").to_string(),
             "(?-u:\\b)test(?-u:\\b)".to_string()
         );
+    }
+
+    #[test]
+    fn test_next_char() {
+        assert_eq!(next_char_index("", 0), None);
+        assert_eq!(next_char_index("a€b", 0), Some(1));
+        assert_eq!(next_char_index("a€b", 1), Some(4));
+        assert_eq!(next_char_index("a€b", 4), None);
+    }
+
+    #[test]
+    fn test_prev_char() {
+        assert_eq!(prev_char_index("a€b", 5), Some(4));
+        assert_eq!(prev_char_index("a€b", 4), Some(1));
+        assert_eq!(prev_char_index("a€b", 1), Some(0));
+        assert_eq!(prev_char_index("a€b", 0), None);
+        assert_eq!(prev_char_index("", 0), None);
     }
 }
