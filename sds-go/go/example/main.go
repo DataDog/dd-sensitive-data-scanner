@@ -24,35 +24,39 @@ func main() {
 	fmt.Println("Starting to process logs")
 	fmt.Println()
 
-	if redacted, ruleMatches, err := scanner.Scan([]byte("nothing to match")); err != nil {
+	if mutated, redacted, ruleMatches, err := scanner.Scan([]byte("nothing to match")); err != nil {
 		fmt.Println(err)
 	} else {
 		fmt.Printf("%+v\n", ruleMatches)
 		fmt.Println("no match, should return an empty set of rule and string:", string(redacted))
+		fmt.Println("mutated:", mutated)
 		fmt.Println()
 	}
 
-	if redacted, ruleMatches, err := scanner.Scan([]byte("hello WORLD, this log has one secret and contains all matches.")); err != nil {
+	if mutated, redacted, ruleMatches, err := scanner.Scan([]byte("hello WORLD, this log has one secret and contains all matches.")); err != nil {
 		fmt.Println(err)
 	} else {
 		fmt.Printf("%+v\n", ruleMatches)
 		fmt.Println("processed:", string(redacted))
+		fmt.Println("mutated:", mutated)
 		fmt.Println()
 	}
 
-	if redacted, ruleMatches, err := scanner.Scan([]byte("this one has only one secret.")); err != nil {
+	if mutated, redacted, ruleMatches, err := scanner.Scan([]byte("this one has only one secret.")); err != nil {
 		fmt.Println(err)
 	} else {
 		fmt.Printf("%+v\n", ruleMatches)
 		fmt.Println("processed:", string(redacted))
+		fmt.Println("mutated:", mutated)
 		fmt.Println()
 	}
 
-	if redacted, ruleMatches, err := scanner.Scan([]byte("this one has an apikey <--- this should be a hash.")); err != nil {
+	if mutated, redacted, ruleMatches, err := scanner.Scan([]byte("this one has an apikey <--- this should be a hash.")); err != nil {
 		fmt.Println(err)
 	} else {
 		fmt.Printf("%+v\n", ruleMatches)
 		fmt.Println("processed:", string(redacted))
+		fmt.Println("mutated:", mutated)
 		fmt.Println()
 	}
 
