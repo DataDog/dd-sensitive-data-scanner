@@ -417,25 +417,25 @@ func TestPartialRedact(t *testing.T) {
 func runTestMap(t *testing.T, scanner *Scanner, testData map[string]mapTestResult) {
 	for key, testResult := range testData {
 
-		_, _, rulesMatch, err := scanner.ScanEventsMap(testResult.event)
+		result, err := scanner.ScanEventsMap(testResult.event)
 		if err != nil {
 			t.Fatal("failed to scan the event:", err.Error())
 		}
 
-		if len(rulesMatch) != len(testResult.rules) {
-			t.Fatalf("Failed to scan the event: not the good amount of rules returned for event '%s', expected '%d', received '%d')", key, len(testResult.rules), len(rulesMatch))
+		if len(result.Matches) != len(testResult.rules) {
+			t.Fatalf("Failed to scan the event: not the good amount of rules returned for event '%s', expected '%d', received '%d')", key, len(testResult.rules), len(result.Matches))
 		}
 
-		sort.Slice(rulesMatch, func(i, j int) bool {
-			return sortRulesMatch(rulesMatch[i], rulesMatch[i])
+		sort.Slice(result.Matches, func(i, j int) bool {
+			return sortRulesMatch(result.Matches[i], result.Matches[i])
 		})
 		sort.Slice(testResult.rules, func(i, j int) bool {
 			return sortRulesMatch(testResult.rules[i], testResult.rules[i])
 		})
 
 		for i, expected := range testResult.rules {
-			if expected != rulesMatch[i] {
-				t.Fatalf("Failed to scan the event: unexpected rule match for event '%s': expected(%+v), received(%+v)", key, expected, rulesMatch[i])
+			if expected != result.Matches[i] {
+				t.Fatalf("Failed to scan the event: unexpected rule match for event '%s': expected(%+v), received(%+v)", key, expected, result.Matches[i])
 			}
 		}
 	}
@@ -443,33 +443,33 @@ func runTestMap(t *testing.T, scanner *Scanner, testData map[string]mapTestResul
 
 func runTest(t *testing.T, scanner *Scanner, testData map[string]testResult) {
 	for event, expected := range testData {
-		mutated, rv, rulesMatch, err := scanner.Scan([]byte(event))
+		result, err := scanner.Scan([]byte(event))
 		if err != nil {
 			t.Fatal("failed to scan the event:", err.Error())
 		}
 
-		if !bytes.Equal([]byte(expected.str), rv) {
-			t.Fatalf("Failed to scan the event '%s', expected '%s', received '%s')", event, expected.str, rv)
+		if !bytes.Equal([]byte(expected.str), result.Event) {
+			t.Fatalf("Failed to scan the event '%s', expected '%s', received '%s')", event, expected.str, result.Event)
 		}
 
-		if len(rulesMatch) != len(expected.rules) {
-			t.Fatalf("Failed to scan the event: not the good amount of rules returned for event '%s', expected '%d', received '%d')", event, len(expected.rules), len(rulesMatch))
+		if len(result.Matches) != len(expected.rules) {
+			t.Fatalf("Failed to scan the event: not the good amount of rules returned for event '%s', expected '%d', received '%d')", event, len(expected.rules), len(result.Matches))
 		}
 
-		if mutated != expected.mutated {
-			t.Fatalf("Inconsistent mutated state: expected '%v', received '%v'", expected.mutated, mutated)
+		if result.Mutated != expected.mutated {
+			t.Fatalf("Inconsistent mutated state: expected '%v', received '%v'", expected.mutated, result.Mutated)
 		}
 
-		sort.Slice(rulesMatch, func(i, j int) bool {
-			return sortRulesMatch(rulesMatch[i], rulesMatch[i])
+		sort.Slice(result.Matches, func(i, j int) bool {
+			return sortRulesMatch(result.Matches[i], result.Matches[i])
 		})
 		sort.Slice(expected.rules, func(i, j int) bool {
 			return sortRulesMatch(expected.rules[i], expected.rules[i])
 		})
 
 		for i, expected := range expected.rules {
-			if expected != rulesMatch[i] {
-				t.Fatalf("Failed to scan the event: unexpected rule match for event '%s': expected(%+v), received(%+v)", event, expected, rulesMatch[i])
+			if expected != result.Matches[i] {
+				t.Fatalf("Failed to scan the event: unexpected rule match for event '%s': expected(%+v), received(%+v)", event, expected, result.Matches[i])
 			}
 		}
 	}
