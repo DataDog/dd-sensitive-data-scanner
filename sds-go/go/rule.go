@@ -32,33 +32,34 @@ type Rule struct {
 	Id                 string                   `json:"id"`
 	Pattern            string                   `json:"pattern"`
 	MatchAction        MatchAction              `json:"match_action"`
-	ProximityKeywords  *proximityKeywordsConfig `json:"proximity_keywords,omitempty"`
-	SecondaryValidator *SecondaryValidator      `json:"secondary_validator,omitempty"`
+	ProximityKeywords  *ProximityKeywordsConfig `json:"proximity_keywords,omitempty"`
+	SecondaryValidator SecondaryValidator       `json:"validator,omitempty"`
 }
 
 // ExtraConfig is used to provide more configuration while creating the rules.
 type ExtraConfig struct {
-	ProximityKeywords *proximityKeywordsConfig
+	ProximityKeywords  *ProximityKeywordsConfig
+	SecondaryValidator SecondaryValidator
 }
 
 // CreateProximityKeywordsConfig creates a ProximityKeywordsConfig.
-func CreateProximityKeywordsConfig(lookAheadCharaceterCount uint32, includedKeywords []string, excludedKeywords []string) *proximityKeywordsConfig {
+func CreateProximityKeywordsConfig(lookAheadCharaceterCount uint32, includedKeywords []string, excludedKeywords []string) *ProximityKeywordsConfig {
 	if includedKeywords == nil {
 		includedKeywords = []string{}
 	}
 	if excludedKeywords == nil {
 		excludedKeywords = []string{}
 	}
-	return &proximityKeywordsConfig{
+	return &ProximityKeywordsConfig{
 		LookAheadCharacterCount: lookAheadCharaceterCount,
 		IncludedKeywords:        includedKeywords,
 		ExcludedKeywords:        excludedKeywords,
 	}
 }
 
-// proximityKeywordsConfig represents the proximity keyword matching
+// ProximityKeywordsConfig represents the proximity keyword matching
 // for the core library.
-type proximityKeywordsConfig struct {
+type ProximityKeywordsConfig struct {
 	LookAheadCharacterCount uint32   `json:"look_ahead_character_count"`
 	IncludedKeywords        []string `json:"included_keywords"`
 	ExcludedKeywords        []string `json:"excluded_keywords"`
@@ -72,7 +73,7 @@ type RuleMatch struct {
 	ReplacementType   MatchAction
 	StartIndex        uint32
 	EndIndexExclusive uint32
-	ShiftOffset       uint32
+	ShiftOffset       int32
 }
 
 // MatchAction is used to configure the rules.
@@ -94,7 +95,8 @@ func NewMatchingRule(id string, pattern string, extraConfig ExtraConfig) Rule {
 		MatchAction: MatchAction{
 			Type: MatchActionNone,
 		},
-		ProximityKeywords: extraConfig.ProximityKeywords,
+		ProximityKeywords:  extraConfig.ProximityKeywords,
+		SecondaryValidator: extraConfig.SecondaryValidator,
 	}
 }
 
@@ -107,7 +109,8 @@ func NewRedactingRule(id string, pattern string, redactionValue string, extraCon
 			Type:           MatchActionRedact,
 			RedactionValue: redactionValue,
 		},
-		ProximityKeywords: extraConfig.ProximityKeywords,
+		ProximityKeywords:  extraConfig.ProximityKeywords,
+		SecondaryValidator: extraConfig.SecondaryValidator,
 	}
 }
 
@@ -119,7 +122,8 @@ func NewHashRule(id string, pattern string, extraConfig ExtraConfig) Rule {
 		MatchAction: MatchAction{
 			Type: MatchActionHash,
 		},
-		ProximityKeywords: extraConfig.ProximityKeywords,
+		ProximityKeywords:  extraConfig.ProximityKeywords,
+		SecondaryValidator: extraConfig.SecondaryValidator,
 	}
 }
 
@@ -133,7 +137,8 @@ func NewPartialRedactRule(id string, pattern string, characterCount uint32, dire
 			CharacterCount: characterCount,
 			Direction:      direction,
 		},
-		ProximityKeywords: extraConfig.ProximityKeywords,
+		ProximityKeywords:  extraConfig.ProximityKeywords,
+		SecondaryValidator: extraConfig.SecondaryValidator,
 	}
 }
 
