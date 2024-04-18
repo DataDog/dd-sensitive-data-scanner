@@ -1223,7 +1223,6 @@ mod test {
 
     #[test]
     fn test_excluded_keyword_with_excluded_chars_in_content() {
-        // A simple "credit-card rule is modified a bit to allow a multi-char character in the match
         let rule_0 = RuleConfig::builder("value".to_owned())
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
@@ -1242,7 +1241,7 @@ mod test {
         let mut content = "x-test=value".to_string();
 
         let matches = scanner.scan(&mut content);
-        // This is mostly asserting that the scanner doesn't panic when encountering multibyte characters
+        // This should match because "test" is not found, so it's not a false-positive
         assert_eq!(matches.len(), 1);
     }
 }
