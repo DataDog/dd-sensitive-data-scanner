@@ -1222,7 +1222,7 @@ mod test {
     }
 
     #[test]
-    fn test_change_my_name() {
+    fn test_excluded_keyword_with_excluded_chars_in_content() {
         // A simple "credit-card rule is modified a bit to allow a multi-char character in the match
         let rule_0 = RuleConfig::builder("value".to_owned())
             .match_action(MatchAction::Redact {
