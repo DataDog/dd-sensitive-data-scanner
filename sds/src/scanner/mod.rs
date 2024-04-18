@@ -1220,4 +1220,28 @@ mod test {
         let regex_match = Match::must(0, 10..14);
         assert_eq!(get_next_regex_start(content, &regex_match), Some(11));
     }
+
+    #[test]
+    fn test_excluded_keyword_with_excluded_chars_in_content() {
+        let rule_0 = RuleConfig::builder("value".to_owned())
+            .match_action(MatchAction::Redact {
+                replacement: "[REDACTED]".to_string(),
+            })
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec![],
+                excluded_keywords: vec!["test".to_string()],
+            })
+            .build();
+
+        let scanner = Scanner::new(&[rule_0]).unwrap();
+
+        // "test" should NOT be detected as an excluded keyword because "-" is ignored, so the word
+        // boundary shouldn't match here
+        let mut content = "x-test=value".to_string();
+
+        let matches = scanner.scan(&mut content);
+        // This should match because "test" is not found, so it's not a false-positive
+        assert_eq!(matches.len(), 1);
+    }
 }
