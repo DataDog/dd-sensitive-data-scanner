@@ -34,10 +34,6 @@ struct ProximityKeywordsRegex<const EXCLUDED_CHARS: bool> {
 
 impl CompiledProximityKeywords {
     pub fn is_false_positive_match(&self, content: &str, match_start: usize) -> bool {
-        println!(
-            "Is false positive match: {:?} start={:?}",
-            content, match_start
-        );
         match (
             &self.included_keywords_pattern,
             &self.excluded_keywords_pattern,
@@ -140,12 +136,10 @@ fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
         let stripped_prefix = content[prefix_start_info.start..prefix_end]
             .replace(EXCLUDED_KEYWORDS_REMOVED_CHARS, "");
 
-        println!("Search prefix: {}", stripped_prefix);
-
         // Subtracting one to exclude the last char which was added only for boundary checking
         let span_end = prev_char_index(&stripped_prefix, stripped_prefix.len()).unwrap_or(0);
 
-        let span_start = if prefix_start_info.num_chars == (look_ahead_char_count + 1) {
+        let span_start = if prefix_start_info.used_all_chars {
             // an extra char was added for assertion checking, so it needs to be removed here
             next_char_index(&stripped_prefix, 0).unwrap_or(stripped_prefix.len())
         } else {
@@ -182,7 +176,8 @@ fn prev_char_index(content: &str, start: usize) -> Option<usize> {
 
 struct PrefixStart {
     start: usize,
-    num_chars: usize,
+    // A boolean indicating if all of the chars requested were available for the prefix
+    used_all_chars: bool,
 }
 
 fn get_prefix_start(
@@ -191,7 +186,6 @@ fn get_prefix_start(
     content: &str,
     exclude_chars: &[char],
 ) -> PrefixStart {
-    let original_look_ahead_char_count = look_ahead_char_count;
     let prefix = &content[0..match_start];
     let mut prefix_start = match_start;
 
@@ -213,7 +207,7 @@ fn get_prefix_start(
     }
     PrefixStart {
         start: prefix_start,
-        num_chars: original_look_ahead_char_count - look_ahead_char_count,
+        used_all_chars: look_ahead_char_count == 0,
     }
 }
 
@@ -271,8 +265,6 @@ fn compile_keywords(
         asts: keyword_patterns,
     })
     .to_string();
-
-    println!("Pattern: {}", pattern);
 
     Ok(Some(
         meta::Regex::builder()
