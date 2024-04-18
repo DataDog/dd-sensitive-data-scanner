@@ -137,7 +137,7 @@ fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
         // at least 1 more char available since empty matches aren't allowed
         let prefix_end = next_char_index(content, match_start).unwrap_or(content.len());
 
-        let stripped_prefix = (&content[prefix_start_info.start..prefix_end])
+        let stripped_prefix = content[prefix_start_info.start..prefix_end]
             .replace(EXCLUDED_KEYWORDS_REMOVED_CHARS, "");
 
         println!("Search prefix: {}", stripped_prefix);
