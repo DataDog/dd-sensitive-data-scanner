@@ -24,35 +24,39 @@ func main() {
 	fmt.Println("Starting to process logs")
 	fmt.Println()
 
-	if redacted, ruleMatches, err := scanner.Scan([]byte("nothing to match")); err != nil {
+	if result, err := scanner.Scan([]byte("nothing to match")); err != nil {
 		fmt.Println(err)
 	} else {
-		fmt.Printf("%+v\n", ruleMatches)
-		fmt.Println("no match, should return an empty set of rule and string:", string(redacted))
+		fmt.Printf("%+v\n", result.Matches)
+		fmt.Println("no match, should return an empty set of rule and string:", string(result.Event))
+		fmt.Println("mutated:", result.Mutated)
 		fmt.Println()
 	}
 
-	if redacted, ruleMatches, err := scanner.Scan([]byte("hello WORLD, this log has one secret and contains all matches.")); err != nil {
+	if result, err := scanner.Scan([]byte("hello WORLD, this log has one secret and contains all matches.")); err != nil {
 		fmt.Println(err)
 	} else {
-		fmt.Printf("%+v\n", ruleMatches)
-		fmt.Println("processed:", string(redacted))
+		fmt.Printf("%+v\n", result.Matches)
+		fmt.Println("processed:", string(result.Event))
+		fmt.Println("mutated:", result.Mutated)
 		fmt.Println()
 	}
 
-	if redacted, ruleMatches, err := scanner.Scan([]byte("this one has only one secret.")); err != nil {
+	if result, err := scanner.Scan([]byte("this one has only one secret.")); err != nil {
 		fmt.Println(err)
 	} else {
-		fmt.Printf("%+v\n", ruleMatches)
-		fmt.Println("processed:", string(redacted))
+		fmt.Printf("%+v\n", result.Matches)
+		fmt.Println("processed:", string(result.Event))
+		fmt.Println("mutated:", result.Mutated)
 		fmt.Println()
 	}
 
-	if redacted, ruleMatches, err := scanner.Scan([]byte("this one has an apikey <--- this should be a hash.")); err != nil {
+	if result, err := scanner.Scan([]byte("this one has an apikey <--- this should be a hash.")); err != nil {
 		fmt.Println(err)
 	} else {
-		fmt.Printf("%+v\n", ruleMatches)
-		fmt.Println("processed:", string(redacted))
+		fmt.Printf("%+v\n", result.Matches)
+		fmt.Println("processed:", string(result.Event))
+		fmt.Println("mutated:", result.Mutated)
 		fmt.Println()
 	}
 
