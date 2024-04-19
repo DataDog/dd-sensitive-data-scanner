@@ -31,15 +31,19 @@ type Scanner struct {
 	Rules []Rule
 }
 
-// ScanResult contains a scan result.
+// ScanResult contains a Scan result.
 type ScanResult struct {
 	// Event contains the event after the scan.
 	// If `Mutated` is true:
 	//   * it contains the processed event after redaction.
 	// If `Mutated` is false:
-	//   * on a `Scan` call: it contains the original event, unchanged.
-	//   * on a `ScanEventsList` or a `ScanEventsMap` call: undefined.
+	//   * it contains the original event, unchanged.
 	Event []byte
+
+	scanResult
+}
+
+type scanResult struct {
 	// Mutated indicates if the processed event has been
 	// mutated or not (e.g. redacted).
 	Mutated bool
