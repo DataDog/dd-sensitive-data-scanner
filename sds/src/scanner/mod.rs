@@ -19,8 +19,19 @@ use regex_automata::{Input, Match};
 mod cache_pool;
 pub mod error;
 
+pub trait CompiledRuleTrait<E: Encoding> {
+    fn get_match_action(&self) -> &MatchAction;
+    fn get_scope(&self) -> &Scope;
+    fn has_regex(&self) -> bool;
+    // fn get_string_matches(&self, content: &str) -> Vec<InternalRuleMatch<E>>;
+}
+
+pub trait RuleConfigTrait<E: Encoding> {
+    fn convert_to_compiled_rule(&self) -> Box<dyn CompiledRuleTrait<E>>;
+}
+
 /// This is the internal representation of a rule after it has been validated / compiled.
-pub struct CompiledRule {
+pub struct RegexCompiledRule {
     pub rule_index: usize,
     pub regex: MetaRegex,
     pub match_action: MatchAction,
@@ -29,65 +40,113 @@ pub struct CompiledRule {
     pub validator: Option<Arc<dyn Validator>>,
 }
 
+impl<E: Encoding> CompiledRuleTrait<E> for RegexCompiledRule {
+    fn get_match_action(&self) -> &MatchAction {
+        &self.match_action
+    }
+    fn get_scope(&self) -> &Scope {
+        &self.scope
+    }
+    fn has_regex(&self) -> bool {
+        true
+    }
+}
+
+impl<E: Encoding> RuleConfigTrait<E> for RuleConfig {
+    fn convert_to_compiled_rule(&self) -> Box<dyn CompiledRuleTrait<E>> {
+        let regex = validate_and_create_regex(&self.pattern).unwrap();
+        let rule_labels = NO_LABEL.clone_with_labels(self.labels.clone());
+
+        let compiled_keywords = self
+            .proximity_keywords
+            .clone()
+            .map_or(CompiledProximityKeywords::default(), |keywords| {
+                CompiledProximityKeywords::try_new(keywords, &rule_labels)
+            })
+            .unwrap();
+
+        Box::new(RegexCompiledRule {
+            rule_index: 0,
+            regex,
+            match_action: self.match_action.clone(),
+            scope: self.scope.clone(),
+            proximity_keywords: compiled_keywords,
+            validator: self
+                .validator
+                .clone()
+                .map(|x| Arc::new(x) as Arc<dyn Validator>),
+        })
+    }
+}
+
 pub struct Scanner {
-    rules: Arc<Vec<CompiledRule>>,
+    rules: Vec<Box<dyn CompiledRuleTrait>>,
     scoped_ruleset: ScopedRuleSet,
     cache_pool: CachePool,
 }
 
 impl Scanner {
-    pub fn new(rules: &[RuleConfig]) -> Result<Self, CreateScannerError> {
+    pub fn new(rules: Vec<Box<dyn RuleConfigTrait>>) -> Result<Self, CreateScannerError> {
         Scanner::new_with_labels(rules, NO_LABEL)
     }
 
     pub fn new_with_labels(
-        rules: &[RuleConfig],
+        rules: Vec<Box<dyn RuleConfigTrait>>,
         scanner_labels: Labels,
     ) -> Result<Self, CreateScannerError> {
         let compiled_rules = rules
             .iter()
             .enumerate()
             .map(|(rule_index, config)| {
+                let compiled_rule = config.convert_to_compiled_rule();
+                Ok(compiled_rule)
                 // This validates that the pattern is valid and normalizes behavior.
-                let regex = validate_and_create_regex(&config.pattern)?;
-                config.match_action.validate()?;
+                // let regex = validate_and_create_regex(&config.pattern)?;
+                // config.match_action.validate()?;
 
-                let rule_labels = scanner_labels.clone_with_labels(config.labels.clone());
+                // let rule_labels = scanner_labels.clone_with_labels(config.labels.clone());
 
-                let compiled_keywords = config
-                    .proximity_keywords
-                    .clone()
-                    .map_or(Ok(CompiledProximityKeywords::default()), |keywords| {
-                        CompiledProximityKeywords::try_new(keywords, &rule_labels)
-                    })?;
+                // let compiled_keywords = config
+                //     .proximity_keywords
+                //     .clone()
+                //     .map_or(Ok(CompiledProximityKeywords::default()), |keywords| {
+                //         CompiledProximityKeywords::try_new(keywords, &rule_labels)
+                //     })?;
 
-                Ok(CompiledRule {
-                    rule_index,
-                    regex,
-                    match_action: config.match_action.clone(),
-                    scope: config.scope.clone(),
-                    proximity_keywords: compiled_keywords,
-                    validator: config
-                        .validator
-                        .clone()
-                        .map(|x| Arc::new(x) as Arc<dyn Validator>),
-                })
+                // Ok(CompiledRule {
+                //     rule_index,
+                //     regex,
+                //     match_action: config.match_action.clone(),
+                //     scope: config.scope.clone(),
+                //     proximity_keywords: compiled_keywords,
+                //     validator: config
+                //         .validator
+                //         .clone()
+                //         .map(|x| Arc::new(x) as Arc<dyn Validator>),
+                // })
             })
-            .collect::<Result<Vec<CompiledRule>, CreateScannerError>>()?;
+            .collect::<Result<Vec<Box<dyn CompiledRuleTrait>>, CreateScannerError>>()?;
 
         let scoped_ruleset = ScopedRuleSet::new(
             &compiled_rules
                 .iter()
-                .map(|rule| rule.scope.clone())
+                .map(|rule| rule.get_scope().clone())
                 .collect::<Vec<_>>(),
         );
 
         let rules = Arc::new(compiled_rules);
+        let regex_rules = rules
+            .iter()
+            .filter(|rule| rule.has_regex())
+            .collect::<Vec<_>>();
 
         Ok(Self {
-            rules: rules.clone(),
+            rules: rules
+                .iter()
+                .map(|x: &Box<dyn CompiledRuleTrait>| x.clone_box())
+                .collect(),
+            cache_pool: CachePool::new(regex_rules),
             scoped_ruleset,
-            cache_pool: CachePool::new(rules),
         })
     }
 
@@ -127,9 +186,11 @@ impl Scanner {
 
                 self.sort_and_remove_overlapping_rules::<E::Encoding>(rule_matches);
 
-                let will_mutate = rule_matches
-                    .iter()
-                    .any(|rule_match| self.rules[rule_match.rule_index].match_action.is_mutating());
+                let will_mutate = rule_matches.iter().any(|rule_match| {
+                    self.rules[rule_match.rule_index]
+                        .get_match_action()
+                        .is_mutating()
+                });
 
                 self.apply_match_actions(content, path, rule_matches, &mut output_rule_matches);
 
@@ -181,7 +242,7 @@ impl Scanner {
             (<E>::get_index(&rule_match.custom_start, rule_match.utf8_start) as isize
                 + <E>::get_shift(custom_index_delta, *utf8_byte_delta)) as usize;
 
-        if rule.match_action.is_mutating() {
+        if rule.get_match_action().is_mutating() {
             let mutated_utf8_match_start =
                 (rule_match.utf8_start as isize + *utf8_byte_delta) as usize;
             let mutated_utf8_match_end = (rule_match.utf8_end as isize + *utf8_byte_delta) as usize;
@@ -192,7 +253,7 @@ impl Scanner {
 
             let matched_content = &content[mutated_utf8_match_start..mutated_utf8_match_end];
 
-            if let Some(replacement) = rule.match_action.get_replacement(matched_content) {
+            if let Some(replacement) = rule.get_match_action().get_replacement(matched_content) {
                 let before_replacement = &matched_content[replacement.start..replacement.end];
 
                 // update indices to match the new mutated content
@@ -217,7 +278,7 @@ impl Scanner {
         RuleMatch {
             rule_index: rule_match.rule_index,
             path,
-            replacement_type: rule.match_action.replacement_type(),
+            replacement_type: rule.get_match_action().replacement_type(),
             start_index: custom_start,
             end_index_exclusive: custom_end,
             shift_offset,
@@ -234,9 +295,9 @@ impl Scanner {
         rule_matches.sort_unstable_by(|a, b| {
             // Mutating rules are a higher priority (earlier in the list)
             let ord = self.rules[a.rule_index]
-                .match_action
+                .get_match_action()
                 .is_mutating()
-                .cmp(&self.rules[b.rule_index].match_action.is_mutating())
+                .cmp(&self.rules[b.rule_index].get_match_action().is_mutating())
                 .reverse();
 
             // Earlier start offset
@@ -255,7 +316,10 @@ impl Scanner {
         let mut retained_rules: Vec<InternalRuleMatch<E>> = vec![];
 
         'rule_matches: while let Some(rule_match) = rule_matches.pop() {
-            if self.rules[rule_match.rule_index].match_action.is_mutating() {
+            if self.rules[rule_match.rule_index]
+                .get_match_action()
+                .is_mutating()
+            {
                 // Mutating rules are kept only if they don't overlap with a previous rule.
                 if let Some(last) = retained_rules.last() {
                     if last.utf8_end > rule_match.utf8_start {
@@ -303,17 +367,19 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
         rule_visitor.visit_rule_indices(|rule_index| {
             let rule = &self.scanner.rules[rule_index];
-            let cache = &mut self.caches[rule_index];
+            if rule.has_regex() {
+                let cache = &mut self.caches[rule_index];
 
-            get_string_regex_matches(
-                content,
-                rule,
-                cache,
-                rule_index,
-                &mut path_rules_matches,
-                &exclusion_check,
-                self.excluded_matches,
-            );
+                get_string_regex_matches(
+                    content,
+                    rule,
+                    cache,
+                    rule_index,
+                    &mut path_rules_matches,
+                    &exclusion_check,
+                    self.excluded_matches,
+                );
+            }
         });
 
         // calculate_indices requires that matches are sorted by start index
@@ -346,7 +412,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
 fn get_string_regex_matches<E: Encoding>(
     content: &str,
-    rule: &CompiledRule,
+    rule: &RegexCompiledRule,
     cache: &mut regex_automata::meta::Cache,
     rule_index: usize,
     path_rules_matches: &mut Vec<InternalRuleMatch<E>>,
@@ -401,7 +467,7 @@ fn get_next_regex_start(content: &str, regex_match: &Match) -> Option<usize> {
 
 fn is_false_positive_match(
     regex_match: &regex_automata::Match,
-    rule: &CompiledRule,
+    rule: &RegexCompiledRule,
     content: &str,
 ) -> bool {
     if rule
