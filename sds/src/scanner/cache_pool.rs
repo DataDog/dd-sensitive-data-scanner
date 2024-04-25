@@ -5,7 +5,7 @@ use regex_automata::{
     util::pool::{Pool, PoolGuard},
 };
 
-use super::CompiledRule;
+use super::RegexCompiledRule;
 
 type CachePoolFn = Box<dyn Fn() -> Vec<Cache> + Send + Sync>;
 pub type CachePoolGuard<'a> = PoolGuard<'a, Vec<Cache>, CachePoolFn>;
@@ -18,7 +18,7 @@ pub struct CachePool {
 }
 
 impl CachePool {
-    pub fn new(rules: Arc<Vec<CompiledRule>>) -> Self {
+    pub fn new(rules: Arc<Vec<RegexCompiledRule>>) -> Self {
         Self {
             pool: Pool::new(Box::new(move || {
                 rules.iter().map(|rule| rule.regex.create_cache()).collect()
