@@ -19,11 +19,36 @@ use regex_automata::{Input, Match};
 mod cache_pool;
 pub mod error;
 
+pub struct StringMatch {
+    start: usize,
+    end: usize,
+}
+
+trait MatchEmitter {
+    fn emit(&mut self, string_match: StringMatch);
+}
+
+// This implements MatchEmitter for mutable closures (so you can use a closure instead of a custom
+// struct that implements MatchEmitter)
+impl<F> MatchEmitter for F
+where
+    F: FnMut(StringMatch),
+{
+    fn emit(&mut self, string_match: StringMatch) {
+        // This just calls the closure (itself)
+        (self)(string_match)
+    }
+}
+
 pub trait CompiledRuleTrait<E: Encoding> {
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
     fn has_regex(&self) -> bool;
-    // fn get_string_matches(&self, content: &str) -> Vec<InternalRuleMatch<E>>;
+
+    // simple, but a `Vec` needs allocated for each match (Empty Vecs don't allocate, so it's not terrible)
+    fn get_string_matches(&self, content: &str) -> Vec<StringMatch>;
+
+    fn get_string_matches2(&self, content: &str, match_emitter: &mut dyn MatchEmitter);
 }
 
 pub trait RuleConfigTrait<E: Encoding> {
@@ -367,18 +392,46 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
         rule_visitor.visit_rule_indices(|rule_index| {
             let rule = &self.scanner.rules[rule_index];
-            if rule.has_regex() {
-                let cache = &mut self.caches[rule_index];
+            // if rule.has_regex() {
+            //     let cache = &mut self.caches[rule_index];
+            //
+            //     get_string_regex_matches(
+            //         content,
+            //         rule,
+            //         cache,
+            //         rule_index,
+            //         &mut path_rules_matches,
+            //         &exclusion_check,
+            //         self.excluded_matches,
+            //     );
+            // }
 
-                get_string_regex_matches(
-                    content,
-                    rule,
-                    cache,
-                    rule_index,
-                    &mut path_rules_matches,
-                    &exclusion_check,
-                    self.excluded_matches,
-                );
+            // Method 1 - returning a list of "simple" matches, then converting it
+            {
+                for rule_match in rule.get_string_matches(content) {
+                    path_rules_matches.push(InternalRuleMatch {
+                        rule_index,
+                        utf8_start: rule_match.start,
+                        utf8_end: rule_match.end,
+                        custom_start: E::zero_index(),
+                        custom_end: E::zero_index(),
+                    });
+                }
+            }
+
+            // Method 2 - using an emitter (slightly better perf since a vec isn't allocated on matches)
+            {
+                // creating the emitter is basically free, it will get mostly optimized away
+                let mut emitter = |rule_match| {
+                    path_rules_matches.push(InternalRuleMatch {
+                        rule_index,
+                        utf8_start: rule_match.start,
+                        utf8_end: rule_match.end,
+                        custom_start: E::zero_index(),
+                        custom_end: E::zero_index(),
+                    });
+                };
+                rule.get_string_matches2(content, &mut emitter);
             }
         });
 
