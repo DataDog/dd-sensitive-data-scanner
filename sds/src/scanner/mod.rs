@@ -40,7 +40,7 @@ where
     }
 }
 
-pub trait CompiledRuleTrait {
+pub trait CompiledRuleTrait: Send + Sync {
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
     fn has_regex(&self) -> bool;
@@ -465,50 +465,6 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
     }
 }
 
-fn get_string_regex_matches<E: Encoding>(
-    content: &str,
-    rule: &RegexCompiledRule,
-    cache: &mut regex_automata::meta::Cache,
-    rule_index: usize,
-    path_rules_matches: &mut Vec<InternalRuleMatch<E>>,
-    exclusion_check: &ExclusionCheck<'_>,
-    excluded_matches: &mut AHashSet<String>,
-) {
-    let mut start = 0;
-    loop {
-        let input = Input::new(content).range(start..);
-        if let Some(regex_match) = rule.regex.search_with(cache, &input) {
-            if is_false_positive_match(&regex_match, rule, content) {
-                if let Some(next) = get_next_regex_start(content, &regex_match) {
-                    start = next;
-                } else {
-                    // There are no more chars to scan
-                    return;
-                }
-            } else {
-                if exclusion_check.is_excluded(rule_index) {
-                    // Matches from excluded paths are saved and used to treat additional equal matches as false positives
-                    excluded_matches.insert(content[regex_match.range()].to_string());
-                } else {
-                    path_rules_matches.push(InternalRuleMatch {
-                        rule_index,
-                        utf8_start: regex_match.start(),
-                        utf8_end: regex_match.end(),
-                        custom_start: E::zero_index(),
-                        custom_end: E::zero_index(),
-                    });
-                }
-
-                // The next match will start at the end of this match. This is fine because
-                // patterns that can match empty matches are rejected.
-                start = regex_match.end()
-            }
-        } else {
-            return;
-        }
-    }
-}
-
 // Calculates the next starting position for a regex match if a the previous match is a false positive
 fn get_next_regex_start(content: &str, regex_match: &Match) -> Option<usize> {
     // The next valid UTF8 char after the start of the regex match is used
@@ -556,6 +512,8 @@ mod test {
     use crate::{Encoding, Utf8Encoding};
     use regex_automata::Match;
     use std::collections::BTreeMap;
+
+    use super::RuleConfigTrait;
 
     #[test]
     fn simple_redaction() {
@@ -683,67 +641,82 @@ mod test {
     }
 
     #[test]
-    // fn test_indices() {
-    //     let detect_test_rule = Box::new(RuleConfig::builder("test".to_owned()).build());
-    //     let redact_test_rule = Box::new(
-    //         RuleConfigBuilder::from(&detect_test_rule)
-    //             .match_action(MatchAction::Redact {
-    //                 replacement: "[test]".to_string(),
-    //             })
-    //             .build(),
-    //     );
-    //     let redact_test_rule_2 = Box::new(
-    //         RuleConfig::builder("ab".to_owned())
-    //             .match_action(MatchAction::Redact {
-    //                 replacement: "[ab]".to_string(),
-    //             })
-    //             .build(),
-    //     );
+    fn test_indices() {
+        let detect_test_rule = Box::new(RuleConfig::builder("test".to_owned()).build());
+        let redact_test_rule = Box::new(
+            RuleConfigBuilder::from(&detect_test_rule)
+                .match_action(MatchAction::Redact {
+                    replacement: "[test]".to_string(),
+                })
+                .build(),
+        );
+        let redact_test_rule_2 = Box::new(
+            RuleConfig::builder("ab".to_owned())
+                .match_action(MatchAction::Redact {
+                    replacement: "[ab]".to_string(),
+                })
+                .build(),
+        );
 
-    //     let test_cases = [
-    //         (vec![detect_test_rule.clone()], "test1", vec![(0, 4, 0)]),
-    //         (vec![redact_test_rule.clone()], "test2", vec![(0, 6, 2)]),
-    //         (vec![redact_test_rule.clone()], "xtestx", vec![(1, 7, 2)]),
-    //         (
-    //             vec![redact_test_rule.clone()],
-    //             "xtestxtestx",
-    //             vec![(1, 7, 2), (8, 14, 4)],
-    //         ),
-    //         (
-    //             vec![redact_test_rule_2.clone()],
-    //             "xtestxabx",
-    //             vec![(6, 10, 2)],
-    //         ),
-    //         (
-    //             vec![redact_test_rule_2.clone(), redact_test_rule.clone()],
-    //             "xtestxabx",
-    //             vec![(1, 7, 2), (8, 12, 4)],
-    //         ),
-    //         (
-    //             vec![detect_test_rule.clone(), redact_test_rule_2.clone()],
-    //             "ab-test",
-    //             vec![(0, 4, 2), (5, 9, 2)],
-    //         ),
-    //     ];
+        let test_cases = [
+            (
+                vec![detect_test_rule.clone() as Box<dyn RuleConfigTrait>],
+                "test1",
+                vec![(0, 4, 0)],
+            ),
+            (
+                vec![redact_test_rule.clone() as Box<dyn RuleConfigTrait>],
+                "test2",
+                vec![(0, 6, 2)],
+            ),
+            (
+                vec![redact_test_rule.clone() as Box<dyn RuleConfigTrait>],
+                "xtestx",
+                vec![(1, 7, 2)],
+            ),
+            (
+                vec![redact_test_rule.clone() as Box<dyn RuleConfigTrait>],
+                "xtestxtestx",
+                vec![(1, 7, 2), (8, 14, 4)],
+            ),
+            (
+                vec![redact_test_rule_2.clone() as Box<dyn RuleConfigTrait>],
+                "xtestxabx",
+                vec![(6, 10, 2)],
+            ),
+            (
+                vec![
+                    redact_test_rule_2.clone() as Box<dyn RuleConfigTrait>,
+                    redact_test_rule.clone() as Box<dyn RuleConfigTrait>,
+                ],
+                "xtestxabx",
+                vec![(1, 7, 2), (8, 12, 4)],
+            ),
+            (
+                vec![detect_test_rule.clone(), redact_test_rule_2.clone()],
+                "ab-test",
+                vec![(0, 4, 2), (5, 9, 2)],
+            ),
+        ];
 
-    //     for (rule_config, input, expected_indices) in test_cases {
-    //         let scanner = Scanner::new(&rule_config).unwrap();
-    //         let mut input = input.to_string();
-    //         let matches = scanner.scan(&mut input);
+        for (rule_config, input, expected_indices) in test_cases {
+            let scanner = Scanner::new(&rule_config).unwrap();
+            let mut input = input.to_string();
+            let matches = scanner.scan(&mut input);
 
-    //         assert_eq!(matches.len(), expected_indices.len());
-    //         for (rule_match, expected_range) in matches.iter().zip(expected_indices) {
-    //             assert_eq!(
-    //                 (
-    //                     rule_match.start_index,
-    //                     rule_match.end_index_exclusive,
-    //                     rule_match.shift_offset
-    //                 ),
-    //                 expected_range
-    //             );
-    //         }
-    //     }
-    // }
+            assert_eq!(matches.len(), expected_indices.len());
+            for (rule_match, expected_range) in matches.iter().zip(expected_indices) {
+                assert_eq!(
+                    (
+                        rule_match.start_index,
+                        rule_match.end_index_exclusive,
+                        rule_match.shift_offset
+                    ),
+                    expected_range
+                );
+            }
+        }
+    }
     #[test]
     fn test_included_keywords() {
         let redact_test_rule = Box::new(
@@ -960,12 +933,13 @@ mod test {
     }
 
     #[test]
-    // fn assert_scanner_is_sync_send() {
-    //     // This ensures that the scanner is safe to use from multiple threads.
-    //     fn assert_send<T: Send + Sync>() {}
+    fn assert_scanner_is_sync_send() {
+        // This ensures that the scanner is safe to use from multiple threads.
+        fn assert_send<T: Send + Sync>() {}
 
-    //     assert_send::<Scanner>();
-    // }
+        assert_send::<Scanner>();
+    }
+
     #[test]
     fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
         let rule_0 = RuleConfig::builder("...".to_owned())

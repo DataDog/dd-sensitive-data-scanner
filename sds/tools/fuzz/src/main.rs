@@ -85,9 +85,11 @@ fn run_fuzz(pattern: &str, input: &str, mut rng: StdRng) {
         println!("Match action: {:?}", match_action);
     }
 
-    let scanner_result = Scanner::new(&[RuleConfig::builder(pattern.to_string())
-        .match_action(match_action)
-        .build()]);
+    let scanner_result = Scanner::new(&[Box::new(
+        RuleConfig::builder(pattern.to_string())
+            .match_action(match_action)
+            .build(),
+    )]);
 
     if let Ok(scanner) = scanner_result {
         let mut mutated_input = input.to_string();
