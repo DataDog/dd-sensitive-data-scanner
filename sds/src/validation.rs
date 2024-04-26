@@ -48,7 +48,7 @@ pub fn validate_and_create_regex(input: &str) -> Result<meta::Regex, RegexValida
         )
         .syntax(
             regex_automata::util::syntax::Config::default()
-                .dot_matches_new_line(true)
+                .dot_matches_new_line(false)
                 .unicode(true),
         )
         .build(&converted_pattern)
@@ -70,7 +70,7 @@ pub fn validate_and_create_regex(input: &str) -> Result<meta::Regex, RegexValida
 
 #[cfg(test)]
 mod test {
-    use crate::validation::{validate_regex, RegexValidationError};
+    use crate::validation::{validate_and_create_regex, validate_regex, RegexValidationError};
 
     #[test]
     fn pattern_matching_empty_string_is_invalid() {
@@ -103,5 +103,11 @@ mod test {
             validate_regex(&("(".repeat(1000) + "x" + &")".repeat(1000))),
             Err(RegexValidationError::ExceededDepthLimit)
         );
+    }
+
+    #[test]
+    fn dot_new_line() {
+        let regex = validate_and_create_regex(".").unwrap();
+        assert_eq!(regex.is_match("\n"), false);
     }
 }
