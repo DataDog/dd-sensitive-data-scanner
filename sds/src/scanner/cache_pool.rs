@@ -6,6 +6,7 @@ use regex_automata::{
 };
 
 use super::RegexCompiledRule;
+use crate::scanner::MetaRegex;
 
 type CachePoolFn = Box<dyn Fn() -> Vec<Cache> + Send + Sync>;
 pub type CachePoolGuard<'a> = PoolGuard<'a, Vec<Cache>, CachePoolFn>;
@@ -18,15 +19,33 @@ pub struct CachePool {
 }
 
 impl CachePool {
-    pub fn new(rules: Arc<Vec<RegexCompiledRule>>) -> Self {
+    pub fn new(regexes: Arc<Vec<MetaRegex>>) -> Self {
         Self {
             pool: Pool::new(Box::new(move || {
-                rules.iter().map(|rule| rule.regex.create_cache()).collect()
+                regexes.iter().map(|regex| regex.create_cache()).collect()
             })),
         }
     }
 
     pub fn get(&self) -> CachePoolGuard {
         self.pool.get()
+    }
+}
+
+pub struct CachePoolBuilder {
+    regexes: Vec<MetaRegex>,
+}
+
+impl CachePoolBuilder {
+    pub fn new() -> Self {
+        Self { regexes: vec![] }
+    }
+    pub fn push(&mut self, regex: MetaRegex) -> usize {
+        self.regexes.push(regex);
+        self.regexes.len() - 1
+    }
+
+    pub fn build(self) -> CachePool {
+        CachePool::new(Arc::new(self.regexes))
     }
 }
