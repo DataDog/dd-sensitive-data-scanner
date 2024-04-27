@@ -43,7 +43,6 @@ where
 pub trait CompiledRuleTrait: Send + Sync {
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
-    fn has_regex(&self) -> bool;
     fn get_string_matches(
         &self,
         content: &str,
@@ -71,9 +70,6 @@ impl CompiledRuleTrait for RegexCompiledRule {
     }
     fn get_scope(&self) -> &Scope {
         &self.scope
-    }
-    fn has_regex(&self) -> bool {
-        true
     }
     fn get_string_matches(
         &self,
@@ -492,6 +488,8 @@ fn is_false_positive_match(
 
 #[cfg(test)]
 mod test {
+    use super::cache_pool::{CachePoolBuilder, CachePoolGuard};
+    use super::{MatchEmitter, StringMatch};
     use crate::match_action::{MatchAction, MatchActionValidationError};
     use crate::observability::labels::Labels;
     use crate::rule::{
@@ -499,6 +497,7 @@ mod test {
         SecondaryValidator::LuhnChecksum,
     };
     use crate::scanner::{get_next_regex_start, CreateScannerError, Scanner};
+    use crate::scoped_ruleset::ExclusionCheck;
     use crate::validation::RegexValidationError;
     use crate::SecondaryValidator::ChineseIdChecksum;
     use crate::SecondaryValidator::GithubTokenChecksum;
@@ -506,10 +505,64 @@ mod test {
         simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch, Scope,
     };
     use crate::{Encoding, Utf8Encoding};
+    use ahash::AHashSet;
     use regex_automata::Match;
     use std::collections::BTreeMap;
 
+    use super::CompiledRuleTrait;
     use super::RuleConfigTrait;
+    pub struct DumbRuleConfig {}
+    pub struct DumbCompiledRule {
+        pub match_action: MatchAction,
+        pub scope: Scope,
+    }
+
+    impl CompiledRuleTrait for DumbCompiledRule {
+        fn get_match_action(&self) -> &MatchAction {
+            &self.match_action
+        }
+        fn get_scope(&self) -> &Scope {
+            &self.scope
+        }
+        fn get_string_matches(
+            &self,
+            content: &str,
+            caches: &mut CachePoolGuard<'_>,
+            exclusion_check: &ExclusionCheck<'_>,
+            excluded_matches: &mut AHashSet<String>,
+            match_emitter: &mut dyn MatchEmitter,
+        ) {
+            match_emitter.emit(StringMatch { start: 10, end: 16 });
+        }
+    }
+
+    impl RuleConfigTrait for DumbRuleConfig {
+        fn convert_to_compiled_rule(
+            &self,
+            _content: usize,
+            _: Labels,
+            _: &mut CachePoolBuilder,
+        ) -> Result<Box<dyn CompiledRuleTrait>, CreateScannerError> {
+            Ok(Box::new(DumbCompiledRule {
+                match_action: MatchAction::Redact {
+                    replacement: "[REDACTED]".to_string(),
+                },
+                scope: Scope::default(),
+            }))
+        }
+    }
+
+    #[test]
+    fn dumb_custom_rule() {
+        let scanner = Scanner::new(&[Box::new(DumbRuleConfig {})]).unwrap();
+
+        let mut input = "this is a secret with random data".to_owned();
+
+        let matched_rules = scanner.scan(&mut input);
+
+        assert_eq!(matched_rules.len(), 1);
+        assert_eq!(input, "this is a [REDACTED] with random data");
+    }
 
     #[test]
     fn simple_redaction() {
