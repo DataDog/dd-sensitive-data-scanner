@@ -20,13 +20,13 @@ pub extern "C" fn create_scanner(
 
         // parse the json
         let rules: Vec<Box<RuleConfig>> = serde_json::from_str(&val).unwrap();
-        let rulesWithBoxed: Vec<Box<dyn RuleConfigTrait>> = rules
+        let rules_boxed: Vec<Box<dyn RuleConfigTrait>> = rules
             .into_iter()
-            .map(|r| r as Box<dyn RuleConfig>)
+            .map(|r| r as Box<dyn RuleConfigTrait>)
             .collect();
 
         // create the scanner
-        let scanner = match Scanner::new(&rules) {
+        let scanner = match Scanner::new(&rules_boxed) {
             Ok(s) => s,
             Err(err) => match err.try_into() {
                 Ok(i) => return i,
