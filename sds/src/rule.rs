@@ -3,7 +3,19 @@ use serde::{Deserialize, Serialize};
 use crate::labels::{Labels, NO_LABEL};
 use crate::match_action::MatchAction;
 use crate::path::Path;
+use crate::scanner::cache_pool::CachePoolBuilder;
+use crate::scanner::error::CreateScannerError;
+use crate::scanner::CompiledRuleTrait;
 use serde_with::{serde_as, DefaultOnNull};
+
+pub trait RuleConfigTrait {
+    fn convert_to_compiled_rule(
+        &self,
+        rule_index: usize,
+        label: Labels,
+        cache_pool_builder: &mut CachePoolBuilder,
+    ) -> Result<Box<dyn CompiledRuleTrait>, CreateScannerError>;
+}
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

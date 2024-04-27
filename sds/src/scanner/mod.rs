@@ -3,7 +3,7 @@ use crate::event::Event;
 use crate::observability::labels::{Labels, NO_LABEL};
 
 use crate::proximity_keywords::CompiledProximityKeywords;
-use crate::rule::RuleConfig;
+use crate::rule::{RuleConfig, RuleConfigTrait};
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
@@ -16,7 +16,7 @@ use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 use ahash::AHashSet;
 use regex_automata::{Input, Match};
 
-mod cache_pool;
+pub(crate) mod cache_pool;
 pub mod error;
 
 pub struct StringMatch {
@@ -52,14 +52,6 @@ pub trait CompiledRuleTrait: Send + Sync {
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
     );
-}
-
-pub trait RuleConfigTrait {
-    fn convert_to_compiled_rule(
-        &self,
-        label: Labels,
-        cache_pool_builder: &mut CachePoolBuilder,
-    ) -> Result<Box<dyn CompiledRuleTrait>, CreateScannerError>;
 }
 
 /// This is the internal representation of a rule after it has been validated / compiled.
@@ -128,6 +120,7 @@ impl CompiledRuleTrait for RegexCompiledRule {
 impl RuleConfigTrait for RuleConfig {
     fn convert_to_compiled_rule(
         &self,
+        rule_index: usize,
         scanner_labels: Labels,
         cache_pool_builder: &mut CachePoolBuilder,
     ) -> Result<Box<dyn CompiledRuleTrait>, CreateScannerError> {
@@ -145,8 +138,8 @@ impl RuleConfigTrait for RuleConfig {
 
         let cache_index = cache_pool_builder.push(regex.clone());
         Ok(Box::new(RegexCompiledRule {
-            rule_index: 0,
-            regex,
+            rule_index: rule_index,
+            regex: regex,
             match_action: self.match_action.clone(),
             scope: self.scope.clone(),
             proximity_keywords: compiled_keywords,
@@ -179,8 +172,11 @@ impl Scanner {
             .iter()
             .enumerate()
             .map(|(rule_index, config)| {
-                let compiled_rule = config
-                    .convert_to_compiled_rule(scanner_labels.clone(), &mut cache_pool_builder);
+                let compiled_rule = config.convert_to_compiled_rule(
+                    rule_index,
+                    scanner_labels.clone(),
+                    &mut cache_pool_builder,
+                );
                 compiled_rule
             })
             .collect::<Result<Vec<Box<dyn CompiledRuleTrait>>, CreateScannerError>>()?;

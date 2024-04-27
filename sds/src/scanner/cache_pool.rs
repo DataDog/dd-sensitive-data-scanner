@@ -5,7 +5,6 @@ use regex_automata::{
     util::pool::{Pool, PoolGuard},
 };
 
-use super::RegexCompiledRule;
 use crate::scanner::MetaRegex;
 
 type CachePoolFn = Box<dyn Fn() -> Vec<Cache> + Send + Sync>;
