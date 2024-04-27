@@ -565,6 +565,31 @@ mod test {
     }
 
     #[test]
+    fn test_mixed_rules() {
+        let scanner = Scanner::new(&[
+            Box::new(DumbRuleConfig {}),
+            Box::new(
+                RegexRuleConfig::builder("secret".to_string())
+                    .match_action(MatchAction::Redact {
+                        replacement: "[SECRET]".to_string(),
+                    })
+                    .build(),
+            ),
+        ])
+        .unwrap();
+
+        let mut input = "this is a dumbss with random data and a secret".to_owned();
+
+        let matched_rules = scanner.scan(&mut input);
+
+        assert_eq!(matched_rules.len(), 2);
+        assert_eq!(
+            input,
+            "this is a [REDACTED] with random data and a [SECRET]"
+        );
+    }
+
+    #[test]
     fn simple_redaction() {
         let scanner = Scanner::new(&[Box::new(
             RegexRuleConfig::builder("secret".to_string())
