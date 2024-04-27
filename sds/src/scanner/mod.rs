@@ -3,7 +3,7 @@ use crate::event::Event;
 use crate::observability::labels::{Labels, NO_LABEL};
 
 use crate::proximity_keywords::CompiledProximityKeywords;
-use crate::rule::{RuleConfig, RuleConfigTrait};
+use crate::rule::{RegexRuleConfig, RuleConfigTrait};
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
@@ -117,7 +117,7 @@ impl CompiledRuleTrait for RegexCompiledRule {
     }
 }
 
-impl RuleConfigTrait for RuleConfig {
+impl RuleConfigTrait for RegexRuleConfig {
     fn convert_to_compiled_rule(
         &self,
         rule_index: usize,
@@ -138,8 +138,8 @@ impl RuleConfigTrait for RuleConfig {
 
         let cache_index = cache_pool_builder.push(regex.clone());
         Ok(Box::new(RegexCompiledRule {
-            rule_index: rule_index,
-            regex: regex,
+            rule_index,
+            regex,
             match_action: self.match_action.clone(),
             scope: self.scope.clone(),
             proximity_keywords: compiled_keywords,
@@ -172,12 +172,11 @@ impl Scanner {
             .iter()
             .enumerate()
             .map(|(rule_index, config)| {
-                let compiled_rule = config.convert_to_compiled_rule(
+                config.convert_to_compiled_rule(
                     rule_index,
                     scanner_labels.clone(),
                     &mut cache_pool_builder,
-                );
-                compiled_rule
+                )
             })
             .collect::<Result<Vec<Box<dyn CompiledRuleTrait>>, CreateScannerError>>()?;
 
@@ -496,7 +495,8 @@ mod test {
     use crate::match_action::{MatchAction, MatchActionValidationError};
     use crate::observability::labels::Labels;
     use crate::rule::{
-        ProximityKeywordsConfig, RuleConfig, RuleConfigBuilder, SecondaryValidator::LuhnChecksum,
+        ProximityKeywordsConfig, RegexRuleConfig, RuleConfigBuilder,
+        SecondaryValidator::LuhnChecksum,
     };
     use crate::scanner::{get_next_regex_start, CreateScannerError, Scanner};
     use crate::validation::RegexValidationError;
@@ -514,7 +514,7 @@ mod test {
     #[test]
     fn simple_redaction() {
         let scanner = Scanner::new(&[Box::new(
-            RuleConfig::builder("secret".to_string())
+            RegexRuleConfig::builder("secret".to_string())
                 .match_action(MatchAction::Redact {
                     replacement: "[REDACTED]".to_string(),
                 })
@@ -534,7 +534,7 @@ mod test {
     fn simple_redaction_with_additional_labels() {
         let scanner = Scanner::new_with_labels(
             &[Box::new(
-                RuleConfig::builder("secret".to_string())
+                RegexRuleConfig::builder("secret".to_string())
                     .match_action(MatchAction::Redact {
                         replacement: "[REDACTED]".to_string(),
                     })
@@ -555,7 +555,7 @@ mod test {
     #[test]
     fn should_fail_on_compilation_error() {
         let scanner_result =
-            Scanner::new(&[Box::new(RuleConfig::builder("\\u".to_owned()).build())]);
+            Scanner::new(&[Box::new(RegexRuleConfig::builder("\\u".to_owned()).build())]);
         assert!(scanner_result.is_err());
         assert_eq!(
             scanner_result.err().unwrap(),
@@ -566,7 +566,7 @@ mod test {
     #[test]
     fn should_validate_zero_char_count_partial_redact() {
         let scanner_result = Scanner::new(&[Box::new(
-            RuleConfig::builder("secret".to_owned())
+            RegexRuleConfig::builder("secret".to_owned())
                 .match_action(MatchAction::PartialRedact {
                     direction: PartialRedactDirection::LastCharacters,
                     character_count: 0,
@@ -586,7 +586,7 @@ mod test {
     #[test]
     fn multiple_replacements() {
         let scanner = Scanner::new(&[Box::new(
-            RuleConfig::builder("\\d".to_owned())
+            RegexRuleConfig::builder("\\d".to_owned())
                 .match_action(MatchAction::Redact {
                     replacement: "[REDACTED]".to_string(),
                 })
@@ -605,8 +605,8 @@ mod test {
     #[test]
     fn match_rule_index() {
         let scanner = Scanner::new(&[
-            Box::new(RuleConfig::builder("a".to_owned()).build()),
-            Box::new(RuleConfig::builder("b".to_owned()).build()),
+            Box::new(RegexRuleConfig::builder("a".to_owned()).build()),
+            Box::new(RegexRuleConfig::builder("b".to_owned()).build()),
         ])
         .unwrap();
 
@@ -638,7 +638,7 @@ mod test {
 
     #[test]
     fn test_indices() {
-        let detect_test_rule = Box::new(RuleConfig::builder("test".to_owned()).build());
+        let detect_test_rule = Box::new(RegexRuleConfig::builder("test".to_owned()).build());
         let redact_test_rule = Box::new(
             RuleConfigBuilder::from(&detect_test_rule)
                 .match_action(MatchAction::Redact {
@@ -647,7 +647,7 @@ mod test {
                 .build(),
         );
         let redact_test_rule_2 = Box::new(
-            RuleConfig::builder("ab".to_owned())
+            RegexRuleConfig::builder("ab".to_owned())
                 .match_action(MatchAction::Redact {
                     replacement: "[ab]".to_string(),
                 })
@@ -716,7 +716,7 @@ mod test {
     #[test]
     fn test_included_keywords() {
         let redact_test_rule = Box::new(
-            RuleConfig::builder("world".to_owned())
+            RegexRuleConfig::builder("world".to_owned())
                 .match_action(MatchAction::Redact {
                     replacement: "[REDACTED]".to_string(),
                 })
@@ -748,7 +748,7 @@ mod test {
     #[test]
     fn test_excluded_keywords() {
         let redact_test_rule = Box::new(
-            RuleConfig::builder("world".to_owned())
+            RegexRuleConfig::builder("world".to_owned())
                 .match_action(MatchAction::Redact {
                     replacement: "[REDACTED]".to_string(),
                 })
@@ -774,7 +774,7 @@ mod test {
 
     #[test]
     fn test_luhn_checksum() {
-        let rule = Box::new(RuleConfig::builder("\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b".to_string())
+        let rule = Box::new(RegexRuleConfig::builder("\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b".to_string())
             .match_action(MatchAction::Redact {
                 replacement: "[credit card]".to_string(),
             })
@@ -802,7 +802,7 @@ mod test {
     #[test]
     fn test_chinese_id_checksum() {
         let pattern = "\\b[1-9]\\d{5}(?:(?:19|20)\\d{2}(?:(?:0[1-9]|1[0-2])(?:0[1-9]|[1-2]\\d|3[0-1]))\\d{3}[0-9Xx]|\\d{7,18})\\b";
-        let rule = RuleConfig::builder(pattern.to_string())
+        let rule = RegexRuleConfig::builder(pattern.to_string())
             .match_action(MatchAction::Redact {
                 replacement: "[IDCARD]".to_string(),
             })
@@ -828,7 +828,7 @@ mod test {
     #[test]
     fn test_github_token_checksum() {
         let pattern = "\\bgh[opsu]_[0-9a-zA-Z]{36}\\b";
-        let rule = RuleConfig::builder(pattern.to_string())
+        let rule = RegexRuleConfig::builder(pattern.to_string())
             .match_action(MatchAction::Redact {
                 replacement: "[GITHUB]".to_string(),
             })
@@ -860,7 +860,7 @@ mod test {
         // This reproduces a bug where overlapping mutations weren't filtered out, resulting in invalid
         // UTF-8 indices being calculated which resulted in a panic if they were used.
 
-        let rule = RuleConfig::builder("hello".to_owned())
+        let rule = RegexRuleConfig::builder("hello".to_owned())
             .match_action(MatchAction::Redact {
                 replacement: "*".to_string(),
             })
@@ -877,7 +877,7 @@ mod test {
 
     #[test]
     fn test_multiple_partial_redactions() {
-        let rule = RuleConfig::builder("...".to_owned())
+        let rule = RegexRuleConfig::builder("...".to_owned())
             .match_action(MatchAction::PartialRedact {
                 direction: PartialRedactDirection::FirstCharacters,
                 character_count: 1,
@@ -938,11 +938,11 @@ mod test {
 
     #[test]
     fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
-        let rule_0 = RuleConfig::builder("...".to_owned())
+        let rule_0 = RegexRuleConfig::builder("...".to_owned())
             .match_action(MatchAction::None)
             .build();
 
-        let rule_1 = RuleConfig::builder("...".to_owned())
+        let rule_1 = RegexRuleConfig::builder("...".to_owned())
             .match_action(MatchAction::Redact {
                 replacement: "***".to_string(),
             })
@@ -997,11 +997,11 @@ mod test {
     fn test_overlapping_mutation_higher_priority() {
         // A mutating match is a higher priority even if it starts after a non-mutating match
 
-        let rule_0 = RuleConfig::builder("abc".to_owned())
+        let rule_0 = RegexRuleConfig::builder("abc".to_owned())
             .match_action(MatchAction::None)
             .build();
 
-        let rule_1 = RuleConfig::builder("bcd".to_owned())
+        let rule_1 = RegexRuleConfig::builder("bcd".to_owned())
             .match_action(MatchAction::Redact {
                 replacement: "***".to_string(),
             })
@@ -1032,11 +1032,11 @@ mod test {
     fn test_overlapping_start_offset() {
         // The match that starts first is used (if the mutation is the same)
 
-        let rule_0 = RuleConfig::builder("abc".to_owned())
+        let rule_0 = RegexRuleConfig::builder("abc".to_owned())
             .match_action(MatchAction::None)
             .build();
 
-        let rule_1 = RuleConfig::builder("bcd".to_owned())
+        let rule_1 = RegexRuleConfig::builder("bcd".to_owned())
             .match_action(MatchAction::None)
             .build();
 
@@ -1065,11 +1065,11 @@ mod test {
     fn test_overlapping_length() {
         // If 2 matches have the same mutation and same start, the longer one is taken
 
-        let rule_0 = RuleConfig::builder("abc".to_owned())
+        let rule_0 = RegexRuleConfig::builder("abc".to_owned())
             .match_action(MatchAction::None)
             .build();
 
-        let rule_1 = RuleConfig::builder("abcd".to_owned())
+        let rule_1 = RegexRuleConfig::builder("abcd".to_owned())
             .match_action(MatchAction::None)
             .build();
 
@@ -1098,11 +1098,11 @@ mod test {
     fn test_overlapping_rule_order() {
         // If 2 matches have the same mutation, same start, and the same length, the one with the lower rule index is used
 
-        let rule_0 = RuleConfig::builder("abc".to_owned())
+        let rule_0 = RegexRuleConfig::builder("abc".to_owned())
             .match_action(MatchAction::None)
             .build();
 
-        let rule_1 = RuleConfig::builder("abc".to_owned())
+        let rule_1 = RegexRuleConfig::builder("abc".to_owned())
             .match_action(MatchAction::None)
             .build();
 
@@ -1131,7 +1131,7 @@ mod test {
     fn should_skip_match_when_present_in_excluded_matches() {
         // If 2 matches have the same mutation and same start, the longer one is taken
 
-        let rule_0 = RuleConfig::builder("b.*".to_owned())
+        let rule_0 = RegexRuleConfig::builder("b.*".to_owned())
             .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
                 "test".into(),
             )])]))
@@ -1162,7 +1162,7 @@ mod test {
         // If a match in an excluded scope is a false-positive due to keyword proximity matching,
         // it is not saved in the excluded matches.
 
-        let rule_0 = RuleConfig::builder("b.*".to_owned())
+        let rule_0 = RegexRuleConfig::builder("b.*".to_owned())
             .proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 30,
                 included_keywords: vec!["secret".to_string()],
@@ -1252,8 +1252,8 @@ mod test {
         }
 
         // `rule_0` has a match after `rule_1` (out of order)
-        let rule_0 = RuleConfig::builder("efg".to_owned()).build();
-        let rule_1 = RuleConfig::builder("abc".to_owned()).build();
+        let rule_0 = RegexRuleConfig::builder("efg".to_owned()).build();
+        let rule_1 = RegexRuleConfig::builder("abc".to_owned()).build();
 
         let scanner = Scanner::new(&[Box::new(rule_0), Box::new(rule_1)]).unwrap();
 
@@ -1268,7 +1268,7 @@ mod test {
 
     #[test]
     fn test_hash_with_leading_zero() {
-        let rule_0 = RuleConfig::builder(".+".to_owned())
+        let rule_0 = RegexRuleConfig::builder(".+".to_owned())
             .match_action(MatchAction::Hash)
             .build();
 
@@ -1286,7 +1286,7 @@ mod test {
 
     #[test]
     fn test_hash_with_leading_zero_utf16() {
-        let rule_0 = RuleConfig::builder(".+".to_owned())
+        let rule_0 = RegexRuleConfig::builder(".+".to_owned())
             .match_action(MatchAction::Utf16Hash)
             .build();
 
@@ -1304,7 +1304,7 @@ mod test {
     #[test]
     fn test_internal_overlapping_matches() {
         // A simple "credit-card rule is modified a bit to allow a multi-char character in the match
-        let rule_0 = RuleConfig::builder("([\\d€]+){1}(,\\d+){3}".to_owned())
+        let rule_0 = RegexRuleConfig::builder("([\\d€]+){1}(,\\d+){3}".to_owned())
             .match_action(MatchAction::Redact {
                 replacement: "[credit card]".to_string(),
             })
@@ -1331,7 +1331,7 @@ mod test {
 
     #[test]
     fn test_excluded_keyword_with_excluded_chars_in_content() {
-        let rule_0 = RuleConfig::builder("value".to_owned())
+        let rule_0 = RegexRuleConfig::builder("value".to_owned())
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
             })

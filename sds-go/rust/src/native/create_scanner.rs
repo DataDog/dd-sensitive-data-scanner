@@ -1,7 +1,7 @@
 use std::ffi::{c_char, CStr, CString};
 use std::sync::Arc;
 
-use dd_sds::{RuleConfig, RuleConfigTrait, Scanner};
+use dd_sds::{RegexRuleConfig, RuleConfigTrait, Scanner};
 
 use super::convert_panic_to_error;
 
@@ -19,7 +19,7 @@ pub extern "C" fn create_scanner(
         let val = c_str.to_string_lossy();
 
         // parse the json
-        let rules: Vec<Box<RuleConfig>> = serde_json::from_str(&val).unwrap();
+        let rules: Vec<Box<RegexRuleConfig>> = serde_json::from_str(&val).unwrap();
         let rules_boxed: Vec<Box<dyn RuleConfigTrait>> = rules
             .into_iter()
             .map(|r| r as Box<dyn RuleConfigTrait>)

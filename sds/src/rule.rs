@@ -19,7 +19,7 @@ pub trait RuleConfigTrait {
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct RuleConfig {
+pub struct RegexRuleConfig {
     pub pattern: String,
     pub match_action: MatchAction,
     #[serde(default)]
@@ -31,7 +31,7 @@ pub struct RuleConfig {
     pub labels: Labels,
 }
 
-impl RuleConfig {
+impl RegexRuleConfig {
     // This method will help users to discover the builder
     pub fn builder(pattern: impl Into<String>) -> RuleConfigBuilder {
         RuleConfigBuilder {
@@ -152,7 +152,7 @@ impl RuleConfigBuilder {
         self
     }
 
-    pub fn from(rule: &RuleConfig) -> RuleConfigBuilder {
+    pub fn from(rule: &RegexRuleConfig) -> RuleConfigBuilder {
         RuleConfigBuilder {
             pattern: rule.pattern.clone(),
             match_action: rule.match_action.clone(),
@@ -163,8 +163,8 @@ impl RuleConfigBuilder {
         }
     }
 
-    pub fn build(self) -> RuleConfig {
-        RuleConfig {
+    pub fn build(self) -> RegexRuleConfig {
+        RegexRuleConfig {
             pattern: self.pattern,
             match_action: self.match_action,
             scope: self.scope,
@@ -178,11 +178,11 @@ impl RuleConfigBuilder {
 #[cfg(test)]
 mod test {
     use crate::labels::NO_LABEL;
-    use crate::{MatchAction, ProximityKeywordsConfig, RuleConfig, Scope};
+    use crate::{MatchAction, ProximityKeywordsConfig, RegexRuleConfig, Scope};
 
     #[test]
     fn should_override_pattern() {
-        let rule_config = RuleConfig::builder("123".to_string())
+        let rule_config = RegexRuleConfig::builder("123".to_string())
             .pattern("456".to_string())
             .build();
         assert_eq!(rule_config.pattern, "456");
@@ -190,10 +190,10 @@ mod test {
 
     #[test]
     fn should_have_default() {
-        let rule_config = RuleConfig::builder("123".to_string()).build();
+        let rule_config = RegexRuleConfig::builder("123".to_string()).build();
         assert_eq!(
             rule_config,
-            RuleConfig {
+            RegexRuleConfig {
                 pattern: "123".to_string(),
                 match_action: MatchAction::None,
                 scope: Scope::all(),

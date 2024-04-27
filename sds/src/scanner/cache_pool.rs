@@ -35,10 +35,17 @@ pub struct CachePoolBuilder {
     regexes: Vec<MetaRegex>,
 }
 
+impl Default for CachePoolBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CachePoolBuilder {
     pub fn new() -> Self {
         Self { regexes: vec![] }
     }
+
     pub fn push(&mut self, regex: MetaRegex) -> usize {
         self.regexes.push(regex);
         self.regexes.len() - 1
