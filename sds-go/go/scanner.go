@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"unsafe"
 )
 
@@ -110,7 +111,44 @@ func (s *Scanner) Delete() {
 	s.Rules = nil
 }
 
-func (s *Scanner) scanEncodedEvent(encodedEvent []byte) (ScanResult, error) {
+func (s *Scanner) scanEncodedMapEvent(encodedEvent []byte, event map[string]interface{}) (ScanResult, error) {
+	cdata := C.CBytes(encodedEvent)
+	defer C.free(cdata)
+
+	var retsize int64
+	var retcap int64
+	var errorString *C.char
+
+	rvdata := C.scan(C.long(s.Id), cdata, C.long(len(encodedEvent)), (*C.long)(unsafe.Pointer(&retsize)), (*C.long)(unsafe.Pointer(&retcap)), &errorString)
+	if errorString != nil {
+		defer C.free_string(errorString)
+		return ScanResult{}, fmt.Errorf("internal panic: %v", C.GoString(errorString))
+	}
+
+	// nothing has matched, ignore the returned object
+	if retsize <= 0 || retcap <= 0 {
+		return ScanResult{}, nil
+	}
+
+	// otherwise we received data initially owned by rust, once we've used it,
+	// use `free_vec` to let know rust it can drop this memory.
+	defer C.free_vec(rvdata, C.long(retsize), C.long(retcap))
+
+	// Note that in the Go 1.21 documentation, GoBytes is part of:
+	// > A few special functions convert between Go and C types by making copies of the data.
+	// Meaning that the data in `rv` is a copy owned by Go of what's in rvdata.
+	response := C.GoBytes(unsafe.Pointer(rvdata), C.int(retsize))
+
+	// prepare and return the result
+	result, err := decodeEventMapResponse(response, event)
+	if err != nil {
+		return ScanResult{}, fmt.Errorf("scan: %v", err)
+	}
+
+	return result, nil
+}
+
+func (s *Scanner) scanEncodedStringEvent(encodedEvent []byte) (ScanResult, error) {
 	cdata := C.CBytes(encodedEvent)
 	defer C.free(cdata)
 
@@ -158,7 +196,7 @@ func (s *Scanner) Scan(event []byte) (ScanResult, error) {
 	}
 
 	var result ScanResult
-	if result, err = s.scanEncodedEvent(encodedEvent); err != nil {
+	if result, err = s.scanEncodedStringEvent(encodedEvent); err != nil {
 		return ScanResult{}, err
 	}
 
@@ -178,18 +216,9 @@ func (s *Scanner) ScanEventsMap(event map[string]interface{}) (ScanResult, error
 		return ScanResult{}, err
 	}
 
-	return s.scanEncodedEvent(encodedEvent)
+	return s.scanEncodedMapEvent(encodedEvent, event)
 }
 
-// ScanEventsList sends a list of event to the SDS shared library for processing.
-func (s *Scanner) ScanEventsList(event []interface{}) (ScanResult, error) {
-	encodedEvent := make([]byte, 0)
-	encodedEvent, err := encodeListEvent(event, encodedEvent)
-	if err != nil {
-		return ScanResult{}, err
-	}
-	return s.scanEncodedEvent(encodedEvent)
-}
 
 // encodeStringEvent encodes teh given event to send it to the SDS shared library.
 func encodeStringEvent(log []byte, result []byte) ([]byte, error) {
@@ -243,6 +272,54 @@ func encodeListEvent(log []interface{}, result []byte) ([]byte, error) {
 		// pop index
 		result = append(result, 2) // pop  path index
 	}
+	return result, nil
+}
+
+func decodeEventMapResponse(rawData []byte, event map[string]interface{}) (ScanResult, error) {
+	buf := bytes.NewBuffer(rawData)
+
+	var result ScanResult
+
+	for buf.Len() > 0 {
+		typ, err := buf.ReadByte()
+		if err != nil {
+			return ScanResult{}, fmt.Errorf("decodeEventMapResponse: %v", err)
+		}
+
+		switch typ {
+		case 4: // Mutation
+			result.Mutated = true
+			if result.Event, err = applyStringMutationMap(buf, event); err != nil {
+				return ScanResult{}, fmt.Errorf("applyStringMutationMap: %v", err)
+			}
+		case 5: // Match
+			// starts with a rule ID
+			ruleIdx := binary.BigEndian.Uint32(buf.Next(4))
+
+			// then a path
+			path := decodeString(buf)
+
+			// then a replacement type
+			// TODO(remy): implement me
+			//replacementType := decodeString(buf)
+			decodeString(buf)
+
+			startIndex := binary.BigEndian.Uint32(buf.Next(4))
+			endIndexExclusive := binary.BigEndian.Uint32(buf.Next(4))
+			shiftOffset := int32(binary.BigEndian.Uint32(buf.Next(4)))
+
+			result.Matches = append(result.Matches, RuleMatch{
+				RuleIdx:           ruleIdx,
+				Path:              string(path),
+				StartIndex:        startIndex,
+				EndIndexExclusive: endIndexExclusive,
+				ShiftOffset:       shiftOffset,
+			})
+		default:
+			return ScanResult{}, fmt.Errorf("decodeEventMapResponse: can't decode response, unknown byte marker: %x", typ)
+		}
+	}
+
 	return result, nil
 }
 
@@ -306,6 +383,71 @@ func decodeString(buf *bytes.Buffer) []byte {
 	size := binary.BigEndian.Uint32(buf.Next(4))
 	rv := buf.Next(int(size))
 	return rv
+}
+
+func decodeInt(buf *bytes.Buffer) int {
+	return int(binary.BigEndian.Uint32(buf.Next(4)))
+}
+
+func applyStringMutationMap(buf *bytes.Buffer, event map[string]interface{}) ([]byte, error) {
+	tag, err := buf.ReadByte()
+	if err != nil {
+		return nil, fmt.Errorf("decodeMapMutation: %v", err)
+	}
+	if tag != 0 {
+		return nil, fmt.Errorf("decodeMapMutation: expected path field")
+	}
+	fieldName := decodeString(buf)
+
+	marker, err := buf.ReadByte()
+	if err != nil {
+		return nil, fmt.Errorf("decodeMapMutation: %v", err)
+	}
+	if marker == 3 {
+		// new string value
+		res := decodeString(buf)
+		// Update the event with the new value.
+		event[string(fieldName)] = string(res)
+		return res, nil
+	} else {
+		return applyStringMutation(buf, event[string(fieldName)])
+	}
+}
+
+func applyStringMutationList(buf *bytes.Buffer, event []interface{}) ([]byte, error) {
+	tag, err := buf.ReadByte()
+	if err != nil {
+		return nil, fmt.Errorf("decodeListMutation: %v", err)
+	}
+	if tag != 1 {
+		return nil, fmt.Errorf("decodeListMutation: expected path index")
+	}
+	indexInArray := decodeInt(buf)
+
+	marker, err := buf.ReadByte()
+	if err != nil {
+		return nil, fmt.Errorf("decodeListMutation: %v", err)
+	}
+
+	if marker == 3 {
+		// new string value
+		res := decodeString(buf)
+		// Update the event with the new value.
+		event[indexInArray] = string(res)
+		return res, nil
+	} else {
+		return applyStringMutation(buf, event[indexInArray])
+	}
+}
+
+func applyStringMutation(buf *bytes.Buffer, value interface{}) ([]byte, error) {
+	switch reflect.TypeOf(value).Kind() {
+	case reflect.Map:
+		return applyStringMutationMap(buf, value.(map[string]interface{}))
+	case reflect.Slice:
+		return applyStringMutationList(buf, value.([]interface{}))
+	}
+	return nil, fmt.Errorf("applyStringMutation: unknown type %T", value)
 }
 
 // decodeMutation returns the result of a mutation done by the SDS shared library.
