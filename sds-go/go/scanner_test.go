@@ -124,6 +124,29 @@ func TestScanMapEvent(t *testing.T) {
 				},
 			},
 		},
+		"this is a one match event within array of map and mutation": {
+			event: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"key1": "this is a secret event needing redaction",
+					},
+				},
+			},
+			rules: []RuleMatch{{
+				Path:              "content[0].key1",
+				RuleIdx:           2,
+				StartIndex:        10,
+				EndIndexExclusive: 10 + uint32(len("[REDACTED]")),
+				ShiftOffset:       4,
+			}},
+			expectedEvent: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"key1": "this is a [REDACTED] event needing redaction",
+					},
+				},
+			},
+		},
 		// nothing 's matching
 		"this is a log map to process": {
 			event: map[string]interface{}{
