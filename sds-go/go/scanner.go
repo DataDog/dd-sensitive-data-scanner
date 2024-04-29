@@ -34,13 +34,12 @@ type Scanner struct {
 
 // ScanResult contains a Scan result.
 type ScanResult struct {
-	// Event contains the event after the scan.
+	// String Event contains the event after the scan.
 	// If `Mutated` is true:
 	//   * it contains the processed event after redaction.
 	// If `Mutated` is false:
 	//   * it contains the original event, unchanged.
 	Event []byte
-
 	scanResult
 }
 
@@ -219,7 +218,6 @@ func (s *Scanner) ScanEventsMap(event map[string]interface{}) (ScanResult, error
 	return s.scanEncodedMapEvent(encodedEvent, event)
 }
 
-
 // encodeStringEvent encodes teh given event to send it to the SDS shared library.
 func encodeStringEvent(log []byte, result []byte) ([]byte, error) {
 	result = append(result, byte(3)) // string data
@@ -394,58 +392,59 @@ func applyStringMutationMap(buf *bytes.Buffer, event map[string]interface{}) ([]
 	if err != nil {
 		return nil, fmt.Errorf("decodeMapMutation: %v", err)
 	}
+	return applyStringMutationMapWithTag(buf, event, tag)
+}
+
+func applyStringMutationMapWithTag(buf *bytes.Buffer, event map[string]interface{}, tag byte) ([]byte, error) {
 	if tag != 0 {
 		return nil, fmt.Errorf("decodeMapMutation: expected path field")
 	}
 	fieldName := decodeString(buf)
 
-	marker, err := buf.ReadByte()
+	nextTag, err := buf.ReadByte()
 	if err != nil {
 		return nil, fmt.Errorf("decodeMapMutation: %v", err)
 	}
-	if marker == 3 {
+	if nextTag == 3 {
 		// new string value
 		res := decodeString(buf)
 		// Update the event with the new value.
 		event[string(fieldName)] = string(res)
 		return res, nil
 	} else {
-		return applyStringMutation(buf, event[string(fieldName)])
+		return applyStringMutation(buf, event[string(fieldName)], nextTag)
 	}
 }
 
-func applyStringMutationList(buf *bytes.Buffer, event []interface{}) ([]byte, error) {
-	tag, err := buf.ReadByte()
-	if err != nil {
-		return nil, fmt.Errorf("decodeListMutation: %v", err)
-	}
+func applyStringMutationListWithTag(buf *bytes.Buffer, event []interface{}, tag byte) ([]byte, error) {
 	if tag != 1 {
 		return nil, fmt.Errorf("decodeListMutation: expected path index")
 	}
 	indexInArray := decodeInt(buf)
 
-	marker, err := buf.ReadByte()
+	nextTag, err := buf.ReadByte()
 	if err != nil {
 		return nil, fmt.Errorf("decodeListMutation: %v", err)
 	}
 
-	if marker == 3 {
+	if nextTag == 3 {
 		// new string value
 		res := decodeString(buf)
 		// Update the event with the new value.
 		event[indexInArray] = string(res)
 		return res, nil
 	} else {
-		return applyStringMutation(buf, event[indexInArray])
+		// rewind 1 byte in buf as marker is used by applyStringMutation
+		return applyStringMutation(buf, event[indexInArray], nextTag)
 	}
 }
 
-func applyStringMutation(buf *bytes.Buffer, value interface{}) ([]byte, error) {
+func applyStringMutation(buf *bytes.Buffer, value interface{}, tag byte) ([]byte, error) {
 	switch reflect.TypeOf(value).Kind() {
 	case reflect.Map:
-		return applyStringMutationMap(buf, value.(map[string]interface{}))
+		return applyStringMutationMapWithTag(buf, value.(map[string]interface{}), tag)
 	case reflect.Slice:
-		return applyStringMutationList(buf, value.([]interface{}))
+		return applyStringMutationListWithTag(buf, value.([]interface{}), tag)
 	}
 	return nil, fmt.Errorf("applyStringMutation: unknown type %T", value)
 }

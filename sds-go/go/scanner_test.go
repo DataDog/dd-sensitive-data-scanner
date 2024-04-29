@@ -90,7 +90,6 @@ func TestScanMapEvent(t *testing.T) {
 	defer scanner.Delete()
 
 	testData := map[string]mapTestResult{
-		// 1 match rule with map and mutation
 		"this is a one match event with mutation": {
 			event: map[string]interface{}{
 				"content": "this is a secret event needing redaction",
@@ -104,6 +103,25 @@ func TestScanMapEvent(t *testing.T) {
 			}},
 			expectedEvent: map[string]interface{}{
 				"content": "this is a [REDACTED] event needing redaction",
+			},
+		},
+		"this is a one match event with array and mutation": {
+			event: map[string]interface{}{
+				"content": []interface{}{
+					"this is a secret event needing redaction",
+				},
+			},
+			rules: []RuleMatch{{
+				Path:              "content[0]",
+				RuleIdx:           2,
+				StartIndex:        10,
+				EndIndexExclusive: 10 + uint32(len("[REDACTED]")),
+				ShiftOffset:       4,
+			}},
+			expectedEvent: map[string]interface{}{
+				"content": []interface{}{
+					"this is a [REDACTED] event needing redaction",
+				},
 			},
 		},
 		// nothing 's matching
