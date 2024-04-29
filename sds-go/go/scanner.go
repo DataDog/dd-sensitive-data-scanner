@@ -176,7 +176,6 @@ func (s *Scanner) scanEncodedStringEvent(encodedEvent []byte) (ScanResult, error
 	response := C.GoBytes(unsafe.Pointer(rvdata), C.int(retsize))
 
 	// prepare and return the result
-
 	result, err := decodeResponse(response)
 
 	if err != nil {
