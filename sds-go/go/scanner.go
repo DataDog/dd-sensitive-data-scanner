@@ -208,6 +208,7 @@ func (s *Scanner) Scan(event []byte) (ScanResult, error) {
 }
 
 // ScanEventsMap sends a map event to the SDS shared library for processing.
+// In case of mutation, event is updated in place.
 func (s *Scanner) ScanEventsMap(event map[string]interface{}) (ScanResult, error) {
 	encodedEvent := make([]byte, 0)
 	encodedEvent, err := encodeMapEvent(event, encodedEvent)
