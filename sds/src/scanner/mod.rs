@@ -120,10 +120,8 @@ impl Scanner {
         for (path, rule_matches) in &mut rule_matches_list {
             // All rule matches in each inner list are for a single path, so they can be processed independently.
             event.visit_string_mut(path, |content| {
-                // filter out any matches where the content is included in `excluded_matches`.
-                rule_matches.retain(|rule_match| {
-                    !excluded_matches.contains(&content[rule_match.utf8_start..rule_match.utf8_end])
-                });
+                // Normally matches should be filtered out that match `excluded_matches` here, but it
+                // has temporarily moved for backwards compatibility
 
                 self.sort_and_remove_overlapping_rules::<E::Encoding>(rule_matches);
 
@@ -369,13 +367,18 @@ fn get_string_regex_matches<E: Encoding>(
                     // Matches from excluded paths are saved and used to treat additional equal matches as false positives
                     excluded_matches.insert(content[regex_match.range()].to_string());
                 } else {
-                    path_rules_matches.push(InternalRuleMatch {
-                        rule_index,
-                        utf8_start: regex_match.start(),
-                        utf8_end: regex_match.end(),
-                        custom_start: E::zero_index(),
-                        custom_end: E::zero_index(),
-                    });
+                    // If the matched content is in `excluded_matches` it should not count as a match.
+                    // This is temporary to maintain backwards compatibility, but this should eventually happen
+                    // after all scanning is done so `excluded_matches` is fully populated.
+                    if !excluded_matches.contains(&content[regex_match.range()]) {
+                        path_rules_matches.push(InternalRuleMatch {
+                            rule_index,
+                            utf8_start: regex_match.start(),
+                            utf8_end: regex_match.end(),
+                            custom_start: E::zero_index(),
+                            custom_end: E::zero_index(),
+                        });
+                    }
                 }
 
                 // The next match will start at the end of this match. This is fine because
@@ -1036,7 +1039,11 @@ mod test {
 
         let mut content = SimpleEvent::Map(BTreeMap::from([
             (
-                "message".to_string(),
+                "a-match".to_string(),
+                SimpleEvent::String("bcdef".to_string()),
+            ),
+            (
+                "z-match".to_string(),
                 SimpleEvent::String("abcdef".to_string()),
             ),
             ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
@@ -1044,9 +1051,9 @@ mod test {
 
         let matches = scanner.scan(&mut content);
 
-        // The match from the "test" field (which is excluded) is the same as the match from "message", so it is
-        // treated as a false positive.
-        assert_eq!(matches.len(), 0);
+        // Due to the ordering of the scan (alphabetical in this case), the match from "a-match" is not
+        // excluded yet, but "z-match" is, so only 1 match is found.
+        assert_eq!(matches.len(), 1);
     }
 
     #[test]
