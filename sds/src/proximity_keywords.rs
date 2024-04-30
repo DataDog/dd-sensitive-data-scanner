@@ -9,6 +9,7 @@ use regex_syntax::ast::{
     Alternation, Assertion, AssertionKind, Ast, Concat, Flag, Flags, FlagsItem, FlagsItemKind,
     Group, GroupKind, Literal, LiteralKind, Position, Span,
 };
+use thiserror::Error;
 
 const MAX_KEYWORD_COUNT: usize = 50;
 const MAX_LOOK_AHEAD_CHARACTER_COUNT: usize = 50;
@@ -249,7 +250,7 @@ fn compile_keywords(
         .into_iter()
         .map(|keyword| {
             if keyword.chars().count() > look_ahead_character_count {
-                return Err(KeywordTooLong);
+                return Err(KeywordTooLong(look_ahead_character_count));
             }
 
             let trimmed_keyword = keyword.trim().replace(remove_chars, "");
@@ -352,18 +353,21 @@ fn word_boundary() -> Ast {
     })
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Error)]
 pub enum ProximityKeywordsValidationError {
-    /// No more than [MAX_KEYWORD_COUNT] are allowed.
+    #[error("No more than {} keywords are allowed", MAX_KEYWORD_COUNT)]
     TooManyKeywords,
 
-    /// Trim empty keywords are not allowed.
+    #[error("Empty keywords are not allowed")]
     EmptyKeyword,
 
-    /// keywords cannot be longer than the look_ahead_character_count of the [ProximityKeywordsConfig].
-    KeywordTooLong,
+    #[error("Keywords cannot be longer than the look ahead character count ({0})")]
+    KeywordTooLong(usize),
 
-    /// Look ahead character count should be bigger than 0 and cannot be longer than [MAX_LOOK_AHEAD_CHARACTER_COUNT].
+    #[error(
+        "Look ahead character count should be bigger than 0 and cannot be longer than {}",
+        MAX_LOOK_AHEAD_CHARACTER_COUNT
+    )]
     InvalidLookAheadCharacterCount,
 }
 
@@ -696,7 +700,7 @@ mod test {
         let proximity_keywords =
             try_new_compiled_proximity_keyword(5, vec!["hello-".to_string()], vec![]);
         assert!(proximity_keywords.is_err());
-        assert_eq!(proximity_keywords.err().unwrap(), KeywordTooLong);
+        assert_eq!(proximity_keywords.err().unwrap(), KeywordTooLong(5));
 
         let proximity_keywords =
             try_new_compiled_proximity_keyword(5, vec![], vec!["hello".to_string()]);
@@ -705,7 +709,7 @@ mod test {
         let proximity_keywords =
             try_new_compiled_proximity_keyword(5, vec![], vec!["hello1".to_string()]);
         assert!(proximity_keywords.is_err());
-        assert_eq!(proximity_keywords.err().unwrap(), KeywordTooLong);
+        assert_eq!(proximity_keywords.err().unwrap(), KeywordTooLong(5));
     }
 
     #[test]

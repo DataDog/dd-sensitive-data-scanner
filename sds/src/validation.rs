@@ -1,19 +1,20 @@
 use crate::normalization::rust_regex_adapter::convert_to_rust_regex;
 use crate::parser::error::ParseError;
 use regex_automata::meta::{self};
+use thiserror::Error;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Error)]
 pub enum RegexValidationError {
-    /// Invalid regex syntax (no more info is available).
+    #[error("Invalid regex syntax")]
     InvalidSyntax,
 
-    /// The regex pattern was nested too deeply.
+    #[error("The regex pattern was nested too deeply")]
     ExceededDepthLimit,
 
-    /// The regex has exceeded the complexity limit (i.e. it might be too slow).
+    #[error("The regex has exceeded the complexity limit (i.e. it might be too slow)")]
     TooComplex,
 
-    /// Regex patterns are not allowed to match an empty string.
+    #[error("Regex patterns are not allowed to match an empty string")]
     MatchesEmptyString,
 }
 
