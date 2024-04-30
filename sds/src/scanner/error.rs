@@ -43,7 +43,7 @@ mod test {
     fn test_invalid_keywords() {
         test_error(
             CreateScannerError::InvalidKeywords(ProximityKeywordsValidationError::EmptyKeyword),
-            "Trim empty keywords are not allowed",
+            "Empty keywords are not allowed",
         );
 
         test_error(

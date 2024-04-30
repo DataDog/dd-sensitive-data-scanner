@@ -358,7 +358,7 @@ pub enum ProximityKeywordsValidationError {
     #[error("No more than {} keywords are allowed", MAX_KEYWORD_COUNT)]
     TooManyKeywords,
 
-    #[error("Trim empty keywords are not allowed")]
+    #[error("Empty keywords are not allowed")]
     EmptyKeyword,
 
     #[error("Keywords cannot be longer than the look ahead character count ({0})")]
