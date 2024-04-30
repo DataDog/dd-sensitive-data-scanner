@@ -35,6 +35,7 @@ type Scanner struct {
 // ScanResult contains a Scan result.
 type ScanResult struct {
 	// String Event contains the event after the scan.
+	// In case of map input it contains the mutated string.
 	// If `Mutated` is true:
 	//   * it contains the processed event after redaction.
 	// If `Mutated` is false:
