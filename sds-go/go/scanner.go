@@ -35,7 +35,7 @@ type Scanner struct {
 // ScanResult contains a Scan result.
 type ScanResult struct {
 	// String Event contains the event after the scan.
-	// In case of map input it contains the mutated string.
+	// In case of map input it contains the mutated string. (The input event is mutated in place)
 	// If `Mutated` is true:
 	//   * it contains the processed event after redaction.
 	// If `Mutated` is false:
@@ -267,12 +267,12 @@ func decodeMatchResponse(result *ScanResult, buf *bytes.Buffer) {
 	ruleIdx := binary.BigEndian.Uint32(buf.Next(4))
 
 	// then a path
-	path := decodeString(buf)
+	path := nextString(buf)
 
 	// then a replacement type
 	// TODO(remy): implement me
-	//replacementType := decodeString(buf)
-	decodeString(buf)
+	//replacementType := nextString(buf)
+	nextString(buf)
 
 	startIndex := binary.BigEndian.Uint32(buf.Next(4))
 	endIndexExclusive := binary.BigEndian.Uint32(buf.Next(4))
@@ -343,19 +343,19 @@ func decodeResponse(rawData []byte) (ScanResult, error) {
 	return result, nil
 }
 
-// decodeString using this format:
+// nextString using this format:
 // * 8 bytes: string size
 // * string size: the string
-// This method DO NOT copy data around but re-use the underlying sliceuffer instead.
+// This method DO NOT copy data around but re-use the underlying slicebuffer instead.
 // Best usage si to use it after a call to `GoBytes` which takes care of copying
 // the data in the Go world.
-func decodeString(buf *bytes.Buffer) []byte {
+func nextString(buf *bytes.Buffer) []byte {
 	size := binary.BigEndian.Uint32(buf.Next(4))
 	rv := buf.Next(int(size))
 	return rv
 }
 
-func decodeInt(buf *bytes.Buffer) int {
+func nextInt(buf *bytes.Buffer) int {
 	return int(binary.BigEndian.Uint32(buf.Next(4)))
 }
 
@@ -371,7 +371,7 @@ func applyStringMutationMapWithTag(buf *bytes.Buffer, event map[string]interface
 	if tag != 0 {
 		return nil, fmt.Errorf("decodeMapMutation: expected path field")
 	}
-	fieldName := decodeString(buf)
+	fieldName := nextString(buf)
 
 	nextTag, err := buf.ReadByte()
 	if err != nil {
@@ -379,7 +379,7 @@ func applyStringMutationMapWithTag(buf *bytes.Buffer, event map[string]interface
 	}
 	if nextTag == 3 {
 		// new string value
-		res := decodeString(buf)
+		res := nextString(buf)
 		// Update the event with the new value.
 		event[string(fieldName)] = string(res)
 		return res, nil
@@ -392,7 +392,7 @@ func applyStringMutationListWithTag(buf *bytes.Buffer, event []interface{}, tag 
 	if tag != 1 {
 		return nil, fmt.Errorf("decodeListMutation: expected path index")
 	}
-	indexInArray := decodeInt(buf)
+	indexInArray := nextInt(buf)
 
 	nextTag, err := buf.ReadByte()
 	if err != nil {
@@ -401,7 +401,7 @@ func applyStringMutationListWithTag(buf *bytes.Buffer, event []interface{}, tag 
 
 	if nextTag == 3 {
 		// new string value
-		res := decodeString(buf)
+		res := nextString(buf)
 		// Update the event with the new value.
 		event[indexInArray] = string(res)
 		return res, nil
@@ -442,7 +442,7 @@ func decodeMutation(buf *bytes.Buffer) ([]byte, error) {
 			// reading a field
 			// TODO(remy): not implemented: use the Path/Segments information
 			// and return it in the Go bindings Scan call.
-			decodeString(buf)
+			nextString(buf)
 		case 1:
 			// reading an index
 			// TODO(remy): not implemented: use the Path/Segments information
@@ -450,7 +450,7 @@ func decodeMutation(buf *bytes.Buffer) ([]byte, error) {
 			binary.BigEndian.Uint32(buf.Next(4))
 		case 3:
 			// reading content string
-			processed = decodeString(buf)
+			processed = nextString(buf)
 			done = true
 		}
 	}
