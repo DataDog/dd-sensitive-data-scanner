@@ -110,7 +110,7 @@ func (s *Scanner) Delete() {
 	s.Rules = nil
 }
 
-func (s *Scanner) scanEncodedMapEvent(encodedEvent []byte, event map[string]interface{}) (ScanResult, error) {
+func (s *Scanner) lowLevelScan(encodedEvent []byte) ([]byte, error) {
 	cdata := C.CBytes(encodedEvent)
 	defer C.free(cdata)
 
@@ -121,12 +121,12 @@ func (s *Scanner) scanEncodedMapEvent(encodedEvent []byte, event map[string]inte
 	rvdata := C.scan(C.long(s.Id), cdata, C.long(len(encodedEvent)), (*C.long)(unsafe.Pointer(&retsize)), (*C.long)(unsafe.Pointer(&retcap)), &errorString)
 	if errorString != nil {
 		defer C.free_string(errorString)
-		return ScanResult{}, fmt.Errorf("internal panic: %v", C.GoString(errorString))
+		return nil, fmt.Errorf("internal panic: %v", C.GoString(errorString))
 	}
 
 	// nothing has matched, ignore the returned object
 	if retsize <= 0 || retcap <= 0 {
-		return ScanResult{}, nil
+		return nil, nil
 	}
 
 	// otherwise we received data initially owned by rust, once we've used it,
@@ -137,6 +137,15 @@ func (s *Scanner) scanEncodedMapEvent(encodedEvent []byte, event map[string]inte
 	// > A few special functions convert between Go and C types by making copies of the data.
 	// Meaning that the data in `rv` is a copy owned by Go of what's in rvdata.
 	response := C.GoBytes(unsafe.Pointer(rvdata), C.int(retsize))
+
+	return response, nil
+}
+
+func (s *Scanner) scanEncodedMapEvent(encodedEvent []byte, event map[string]interface{}) (ScanResult, error) {
+	response, err := s.lowLevelScan(encodedEvent)
+	if err != nil {
+		return ScanResult{}, err
+	}
 
 	// prepare and return the result
 	result, err := decodeEventMapResponse(response, event)
@@ -148,32 +157,10 @@ func (s *Scanner) scanEncodedMapEvent(encodedEvent []byte, event map[string]inte
 }
 
 func (s *Scanner) scanEncodedStringEvent(encodedEvent []byte) (ScanResult, error) {
-	cdata := C.CBytes(encodedEvent)
-	defer C.free(cdata)
-
-	var retsize int64
-	var retcap int64
-	var errorString *C.char
-
-	rvdata := C.scan(C.long(s.Id), cdata, C.long(len(encodedEvent)), (*C.long)(unsafe.Pointer(&retsize)), (*C.long)(unsafe.Pointer(&retcap)), &errorString)
-	if errorString != nil {
-		defer C.free_string(errorString)
-		return ScanResult{}, fmt.Errorf("internal panic: %v", C.GoString(errorString))
+	response, err := s.lowLevelScan(encodedEvent)
+	if err != nil {
+		return ScanResult{}, err
 	}
-
-	// nothing has matched, ignore the returned object
-	if retsize <= 0 || retcap <= 0 {
-		return ScanResult{}, nil
-	}
-
-	// otherwise we received data initially owned by rust, once we've used it,
-	// use `free_vec` to let know rust it can drop this memory.
-	defer C.free_vec(rvdata, C.long(retsize), C.long(retcap))
-
-	// Note that in the Go 1.21 documentation, GoBytes is part of:
-	// > A few special functions convert between Go and C types by making copies of the data.
-	// Meaning that the data in `rv` is a copy owned by Go of what's in rvdata.
-	response := C.GoBytes(unsafe.Pointer(rvdata), C.int(retsize))
 
 	// prepare and return the result
 	result, err := decodeResponse(response)
@@ -273,6 +260,31 @@ func encodeListEvent(log []interface{}, result []byte) ([]byte, error) {
 	return result, nil
 }
 
+func decodeMatchResponse(result *ScanResult, buf *bytes.Buffer) {
+	// starts with a rule ID
+	ruleIdx := binary.BigEndian.Uint32(buf.Next(4))
+
+	// then a path
+	path := decodeString(buf)
+
+	// then a replacement type
+	// TODO(remy): implement me
+	//replacementType := decodeString(buf)
+	decodeString(buf)
+
+	startIndex := binary.BigEndian.Uint32(buf.Next(4))
+	endIndexExclusive := binary.BigEndian.Uint32(buf.Next(4))
+	shiftOffset := int32(binary.BigEndian.Uint32(buf.Next(4)))
+
+	result.Matches = append(result.Matches, RuleMatch{
+		RuleIdx:           ruleIdx,
+		Path:              string(path),
+		StartIndex:        startIndex,
+		EndIndexExclusive: endIndexExclusive,
+		ShiftOffset:       shiftOffset,
+	})
+}
+
 func decodeEventMapResponse(rawData []byte, event map[string]interface{}) (ScanResult, error) {
 	buf := bytes.NewBuffer(rawData)
 
@@ -291,28 +303,7 @@ func decodeEventMapResponse(rawData []byte, event map[string]interface{}) (ScanR
 				return ScanResult{}, fmt.Errorf("applyStringMutationMap: %v", err)
 			}
 		case 5: // Match
-			// starts with a rule ID
-			ruleIdx := binary.BigEndian.Uint32(buf.Next(4))
-
-			// then a path
-			path := decodeString(buf)
-
-			// then a replacement type
-			// TODO(remy): implement me
-			//replacementType := decodeString(buf)
-			decodeString(buf)
-
-			startIndex := binary.BigEndian.Uint32(buf.Next(4))
-			endIndexExclusive := binary.BigEndian.Uint32(buf.Next(4))
-			shiftOffset := int32(binary.BigEndian.Uint32(buf.Next(4)))
-
-			result.Matches = append(result.Matches, RuleMatch{
-				RuleIdx:           ruleIdx,
-				Path:              string(path),
-				StartIndex:        startIndex,
-				EndIndexExclusive: endIndexExclusive,
-				ShiftOffset:       shiftOffset,
-			})
+			decodeMatchResponse(&result, buf)
 		default:
 			return ScanResult{}, fmt.Errorf("decodeEventMapResponse: can't decode response, unknown byte marker: %x", typ)
 		}
@@ -341,28 +332,7 @@ func decodeResponse(rawData []byte) (ScanResult, error) {
 				return ScanResult{}, fmt.Errorf("decodeResponse: %v", err)
 			}
 		case 5: // Match
-			// starts with a rule ID
-			ruleIdx := binary.BigEndian.Uint32(buf.Next(4))
-
-			// then a path
-			path := decodeString(buf)
-
-			// then a replacement type
-			// TODO(remy): implement me
-			//replacementType := decodeString(buf)
-			decodeString(buf)
-
-			startIndex := binary.BigEndian.Uint32(buf.Next(4))
-			endIndexExclusive := binary.BigEndian.Uint32(buf.Next(4))
-			shiftOffset := int32(binary.BigEndian.Uint32(buf.Next(4)))
-
-			result.Matches = append(result.Matches, RuleMatch{
-				RuleIdx:           ruleIdx,
-				Path:              string(path),
-				StartIndex:        startIndex,
-				EndIndexExclusive: endIndexExclusive,
-				ShiftOffset:       shiftOffset,
-			})
+			decodeMatchResponse(&result, buf)
 		default:
 			return ScanResult{}, fmt.Errorf("decodeResponse: can't decode response, unknown byte marker: %x", typ)
 		}
