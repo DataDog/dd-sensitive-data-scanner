@@ -1044,7 +1044,7 @@ mod test {
             ),
             (
                 "z-match".to_string(),
-                SimpleEvent::String("abcdef".to_string()),
+                SimpleEvent::String("bcdef".to_string()),
             ),
             ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
         ]));
@@ -1054,6 +1054,10 @@ mod test {
         // Due to the ordering of the scan (alphabetical in this case), the match from "a-match" is not
         // excluded yet, but "z-match" is, so only 1 match is found.
         assert_eq!(matches.len(), 1);
+        assert_eq!(
+            matches[0].path,
+            Path::from(vec![PathSegment::Field("a-match".into())])
+        );
     }
 
     #[test]
