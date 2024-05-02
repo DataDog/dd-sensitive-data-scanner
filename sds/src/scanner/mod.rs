@@ -96,10 +96,15 @@ impl CompiledRuleTrait for RegexCompiledRule {
                         // Matches from excluded paths are saved and used to treat additional equal matches as false positives
                         excluded_matches.insert(content[regex_match.range()].to_string());
                     } else {
-                        match_emitter.emit(StringMatch {
-                            start: regex_match.start(),
-                            end: regex_match.end(),
-                        });
+                        // If the matched content is in `excluded_matches` it should not count as a match.
+                        // This is temporary to maintain backwards compatibility, but this should eventually happen
+                        // after all scanning is done so `excluded_matches` is fully populated.
+                        if !excluded_matches.contains(&content[regex_match.range()]) {
+                            match_emitter.emit(StringMatch {
+                                start: regex_match.start(),
+                                end: regex_match.end(),
+                            });
+                        }
                     }
 
                     // The next match will start at the end of this match. This is fine because
