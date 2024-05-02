@@ -22,7 +22,10 @@ pub use event::{Event, EventVisitor, VisitStringResult};
 pub use match_action::{MatchAction, PartialRedactDirection};
 pub use observability::labels;
 pub use path::{Path, PathSegment};
-pub use rule::{ProximityKeywordsConfig, RuleConfig, RuleConfigBuilder, Scope, SecondaryValidator};
+pub use rule::{
+    ProximityKeywordsConfig, RegexRuleConfig, RuleConfigBuilder, RuleConfigTrait, Scope,
+    SecondaryValidator,
+};
 pub use rule_match::{ReplacementType, RuleMatch};
 pub use scanner::{error::CreateScannerError, Scanner};
 pub use validation::{validate_regex, RegexValidationError};

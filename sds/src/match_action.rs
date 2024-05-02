@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::rule_match::ReplacementType;
 
@@ -35,9 +36,9 @@ pub enum PartialRedactDirection {
 
 const PARTIAL_REDACT_CHARACTER: char = '*';
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Error)]
 pub enum MatchActionValidationError {
-    // Partial redaction chars must be non-zero
+    #[error("Partial redaction chars must be non-zero")]
     PartialRedactionNumCharsZero,
 }
 

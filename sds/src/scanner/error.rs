@@ -1,4 +1,5 @@
 use std::convert::From;
+use thiserror::Error;
 
 use crate::{
     match_action::MatchActionValidationError, proximity_keywords::ProximityKeywordsValidationError,
@@ -15,30 +16,83 @@ impl From<CreateScannerError> for i64 {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Error)]
 pub enum CreateScannerError {
-    /// The regex is invalid (too long, too complex, etc.)
-    InvalidRegex(RegexValidationError),
+    //The regex is invalid (too long, too complex, etc.)
+    #[error(transparent)]
+    InvalidRegex(#[from] RegexValidationError),
     /// The included keywords config is invalid (empty keyword, too many keywords, etc.)
-    InvalidKeywords(ProximityKeywordsValidationError),
+    #[error(transparent)]
+    InvalidKeywords(#[from] ProximityKeywordsValidationError),
     /// Invalid configuration of a match action
-    InvalidMatchAction(MatchActionValidationError),
+    #[error(transparent)]
+    InvalidMatchAction(#[from] MatchActionValidationError),
 }
 
-impl From<RegexValidationError> for CreateScannerError {
-    fn from(err: RegexValidationError) -> Self {
-        CreateScannerError::InvalidRegex(err)
+#[cfg(test)]
+mod test {
+    use crate::match_action::MatchActionValidationError;
+    use crate::proximity_keywords::ProximityKeywordsValidationError;
+    use crate::{CreateScannerError, RegexValidationError};
+
+    fn test_error(error: CreateScannerError, expected_display: &str) {
+        assert_eq!(error.to_string(), expected_display)
     }
-}
 
-impl From<ProximityKeywordsValidationError> for CreateScannerError {
-    fn from(err: ProximityKeywordsValidationError) -> Self {
-        CreateScannerError::InvalidKeywords(err)
+    #[test]
+    fn test_invalid_keywords() {
+        test_error(
+            CreateScannerError::InvalidKeywords(ProximityKeywordsValidationError::EmptyKeyword),
+            "Empty keywords are not allowed",
+        );
+
+        test_error(
+            CreateScannerError::InvalidKeywords(ProximityKeywordsValidationError::TooManyKeywords),
+            "No more than 50 keywords are allowed",
+        );
+
+        test_error(
+            CreateScannerError::InvalidKeywords(ProximityKeywordsValidationError::KeywordTooLong(
+                10,
+            )),
+            "Keywords cannot be longer than the look ahead character count (10)",
+        );
+
+        test_error(
+            CreateScannerError::InvalidKeywords(
+                ProximityKeywordsValidationError::InvalidLookAheadCharacterCount,
+            ),
+            "Look ahead character count should be bigger than 0 and cannot be longer than 50",
+        )
     }
-}
 
-impl From<MatchActionValidationError> for CreateScannerError {
-    fn from(value: MatchActionValidationError) -> Self {
-        CreateScannerError::InvalidMatchAction(value)
+    #[test]
+    fn test_invalid_regex() {
+        test_error(
+            CreateScannerError::InvalidRegex(RegexValidationError::InvalidSyntax),
+            "Invalid regex syntax",
+        );
+        test_error(
+            CreateScannerError::InvalidRegex(RegexValidationError::ExceededDepthLimit),
+            "The regex pattern was nested too deeply",
+        );
+        test_error(
+            CreateScannerError::InvalidRegex(RegexValidationError::TooComplex),
+            "The regex has exceeded the complexity limit (i.e. it might be too slow)",
+        );
+        test_error(
+            CreateScannerError::InvalidRegex(RegexValidationError::MatchesEmptyString),
+            "Regex patterns are not allowed to match an empty string",
+        );
+    }
+
+    #[test]
+    fn test_match_action() {
+        test_error(
+            CreateScannerError::InvalidMatchAction(
+                MatchActionValidationError::PartialRedactionNumCharsZero,
+            ),
+            "Partial redaction chars must be non-zero",
+        );
     }
 }

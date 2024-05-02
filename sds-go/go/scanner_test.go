@@ -2,6 +2,7 @@ package sds
 
 import (
 	"bytes"
+	"reflect"
 	"sort"
 	"testing"
 )
@@ -13,8 +14,9 @@ type testResult struct {
 }
 
 type mapTestResult struct {
-	event map[string]interface{}
-	rules []RuleMatch
+	event         map[string]interface{}
+	rules         []RuleMatch
+	expectedEvent map[string]interface{}
 }
 
 func TestCreateScannerFailOnBadRegex(t *testing.T) {
@@ -88,6 +90,63 @@ func TestScanMapEvent(t *testing.T) {
 	defer scanner.Delete()
 
 	testData := map[string]mapTestResult{
+		"this is a one match event with mutation": {
+			event: map[string]interface{}{
+				"content": "this is a secret event needing redaction",
+			},
+			rules: []RuleMatch{{
+				Path:              "content",
+				RuleIdx:           2,
+				StartIndex:        10,
+				EndIndexExclusive: 10 + uint32(len("[REDACTED]")),
+				ShiftOffset:       4,
+			}},
+			expectedEvent: map[string]interface{}{
+				"content": "this is a [REDACTED] event needing redaction",
+			},
+		},
+		"this is a one match event with array and mutation": {
+			event: map[string]interface{}{
+				"content": []interface{}{
+					"this is a secret event needing redaction",
+				},
+			},
+			rules: []RuleMatch{{
+				Path:              "content[0]",
+				RuleIdx:           2,
+				StartIndex:        10,
+				EndIndexExclusive: 10 + uint32(len("[REDACTED]")),
+				ShiftOffset:       4,
+			}},
+			expectedEvent: map[string]interface{}{
+				"content": []interface{}{
+					"this is a [REDACTED] event needing redaction",
+				},
+			},
+		},
+		"this is a one match event within array of map and mutation": {
+			event: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"key1": "this is a secret event needing redaction",
+					},
+				},
+			},
+			rules: []RuleMatch{{
+				Path:              "content[0].key1",
+				RuleIdx:           2,
+				StartIndex:        10,
+				EndIndexExclusive: 10 + uint32(len("[REDACTED]")),
+				ShiftOffset:       4,
+			}},
+			expectedEvent: map[string]interface{}{
+				"content": []interface{}{
+					map[string]interface{}{
+						"key1": "this is a [REDACTED] event needing redaction",
+					},
+				},
+			},
+		},
 		// nothing 's matching
 		"this is a log map to process": {
 			event: map[string]interface{}{
@@ -167,7 +226,6 @@ func TestScanMapEvent(t *testing.T) {
 			}},
 		},
 	}
-
 	runTestMap(t, scanner, testData)
 }
 
@@ -424,6 +482,11 @@ func runTestMap(t *testing.T, scanner *Scanner, testData map[string]mapTestResul
 
 		if len(result.Matches) != len(testResult.rules) {
 			t.Fatalf("Failed to scan the event: not the good amount of rules returned for event '%s', expected '%d', received '%d')", key, len(testResult.rules), len(result.Matches))
+		}
+		if result.Mutated {
+			if !reflect.DeepEqual(testResult.expectedEvent, testResult.event) {
+				t.Fatalf("Failed to scan the event: unexpected mutated event for event '%s': expected(%+v), received(%+v)", key, testResult.event, testResult.expectedEvent)
+			}
 		}
 
 		sort.Slice(result.Matches, func(i, j int) bool {
