@@ -125,6 +125,21 @@ impl RuleConfigTrait for Box<dyn RuleConfigTrait> {
     }
 }
 
+impl<T> RuleConfigTrait for Box<T>
+where
+    T: RuleConfigTrait,
+{
+    fn convert_to_compiled_rule(
+        &self,
+        rule_index: usize,
+        scanner_labels: Labels,
+        cache_pool_builder: &mut CachePoolBuilder,
+    ) -> Result<Box<dyn CompiledRuleTrait>, CreateScannerError> {
+        self.as_ref()
+            .convert_to_compiled_rule(rule_index, scanner_labels, cache_pool_builder)
+    }
+}
+
 impl RuleConfigTrait for RegexRuleConfig {
     fn convert_to_compiled_rule(
         &self,
@@ -565,8 +580,7 @@ mod test {
 
     #[test]
     fn dumb_custom_rule() {
-        let scanner =
-            Scanner::new(&[Box::new(DumbRuleConfig {}) as Box<dyn RuleConfigTrait>]).unwrap();
+        let scanner = Scanner::new(&[Box::new(DumbRuleConfig {})]).unwrap();
 
         let mut input = "this is a secret with random data".to_owned();
 
@@ -579,7 +593,7 @@ mod test {
     #[test]
     fn test_mixed_rules() {
         let scanner = Scanner::new(&[
-            Box::new(DumbRuleConfig {}) as Box<dyn RuleConfigTrait>,
+            Box::new(DumbRuleConfig {}),
             Box::new(
                 RegexRuleConfig::builder("secret".to_string())
                     .match_action(MatchAction::Redact {
