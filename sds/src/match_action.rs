@@ -405,4 +405,17 @@ mod test {
             })
         );
     }
+
+    #[test]
+    fn test_farmhash_bugfix() {
+        // Testing the bugfix from https://github.com/seiflotfy/rust-farmhash/pull/16
+        assert_eq!(
+            MatchAction::Hash.get_replacement(&"x".repeat(128)),
+            Some(Replacement {
+                start: 0,
+                end: 128,
+                replacement: "5170af09fd870c17".into()
+            })
+        );
+    }
 }
