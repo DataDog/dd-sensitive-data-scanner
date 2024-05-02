@@ -19,14 +19,10 @@ pub extern "C" fn create_scanner(
         let val = c_str.to_string_lossy();
 
         // parse the json
-        let rules: Vec<Box<RegexRuleConfig>> = serde_json::from_str(&val).unwrap();
-        let rules_boxed: Vec<Box<dyn RuleConfigTrait>> = rules
-            .into_iter()
-            .map(|r| r as Box<dyn RuleConfigTrait>)
-            .collect();
+        let rules: Vec<RegexRuleConfig> = serde_json::from_str(&val).unwrap();
 
         // create the scanner
-        let scanner = match Scanner::new(&rules_boxed) {
+        let scanner = match Scanner::new(&rules) {
             Ok(s) => s,
             Err(err) => match err.try_into() {
                 Ok(i) => return i,
