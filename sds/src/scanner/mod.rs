@@ -580,7 +580,7 @@ mod test {
 
     #[test]
     fn dumb_custom_rule() {
-        let scanner = Scanner::new(&[Box::new(DumbRuleConfig {})]).unwrap();
+        let scanner = Scanner::new(&[DumbRuleConfig {}]).unwrap();
 
         let mut input = "this is a secret with random data".to_owned();
 
@@ -593,14 +593,14 @@ mod test {
     #[test]
     fn test_mixed_rules() {
         let scanner = Scanner::new(&[
-            Box::new(DumbRuleConfig {}),
+            Box::new(DumbRuleConfig {}) as Box<dyn RuleConfigTrait>,
             Box::new(
                 RegexRuleConfig::builder("secret".to_string())
                     .match_action(MatchAction::Redact {
                         replacement: "[SECRET]".to_string(),
                     })
                     .build(),
-            ),
+            ) as Box<dyn RuleConfigTrait>,
         ])
         .unwrap();
 
