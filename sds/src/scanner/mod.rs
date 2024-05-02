@@ -13,11 +13,13 @@ use regex_automata::meta::Regex as MetaRegex;
 use std::sync::Arc;
 
 use self::cache_pool::{CachePool, CachePoolGuard};
+use self::metrics::Metrics;
 use ahash::AHashSet;
 use regex_automata::{Input, Match};
 
 mod cache_pool;
 pub mod error;
+mod metrics;
 
 /// This is the internal representation of a rule after it has been validated / compiled.
 pub struct CompiledRule {
@@ -33,6 +35,7 @@ pub struct Scanner {
     rules: Arc<Vec<CompiledRule>>,
     scoped_ruleset: ScopedRuleSet,
     cache_pool: CachePool,
+    metrics: Metrics,
 }
 
 impl Scanner {
@@ -88,6 +91,7 @@ impl Scanner {
             rules: rules.clone(),
             scoped_ruleset,
             cache_pool: CachePool::new(rules),
+            metrics: Metrics::new(&scanner_labels),
         })
     }
 
@@ -122,7 +126,12 @@ impl Scanner {
             event.visit_string_mut(path, |content| {
                 // filter out any matches where the content is included in `excluded_matches`.
                 rule_matches.retain(|rule_match| {
-                    !excluded_matches.contains(&content[rule_match.utf8_start..rule_match.utf8_end])
+                    let should_retain = !excluded_matches
+                        .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
+                    if !should_retain {
+                        self.metrics.false_positive_excluded_attributes.increment(1);
+                    }
+                    should_retain
                 });
 
                 self.sort_and_remove_overlapping_rules::<E::Encoding>(rule_matches);
@@ -791,7 +800,7 @@ mod test {
                 replacement_type: crate::ReplacementType::PartialStart,
                 start_index: 0,
                 end_index_exclusive: 3,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
 
@@ -803,7 +812,7 @@ mod test {
                 replacement_type: crate::ReplacementType::PartialStart,
                 start_index: 3,
                 end_index_exclusive: 6,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
 
@@ -815,7 +824,7 @@ mod test {
                 replacement_type: crate::ReplacementType::PartialStart,
                 start_index: 6,
                 end_index_exclusive: 9,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
     }
@@ -856,7 +865,7 @@ mod test {
                 replacement_type: crate::ReplacementType::Placeholder,
                 start_index: 0,
                 end_index_exclusive: 3,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
 
@@ -868,7 +877,7 @@ mod test {
                 replacement_type: crate::ReplacementType::Placeholder,
                 start_index: 3,
                 end_index_exclusive: 6,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
 
@@ -880,7 +889,7 @@ mod test {
                 replacement_type: crate::ReplacementType::Placeholder,
                 start_index: 6,
                 end_index_exclusive: 9,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
     }
@@ -915,7 +924,7 @@ mod test {
                 replacement_type: crate::ReplacementType::Placeholder,
                 start_index: 1,
                 end_index_exclusive: 4,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
     }
@@ -948,7 +957,7 @@ mod test {
                 replacement_type: crate::ReplacementType::None,
                 start_index: 0,
                 end_index_exclusive: 3,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
     }
@@ -981,7 +990,7 @@ mod test {
                 replacement_type: crate::ReplacementType::None,
                 start_index: 0,
                 end_index_exclusive: 4,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
     }
@@ -1014,7 +1023,7 @@ mod test {
                 replacement_type: crate::ReplacementType::None,
                 start_index: 0,
                 end_index_exclusive: 3,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
     }
