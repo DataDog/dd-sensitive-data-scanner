@@ -42,3 +42,8 @@ hyperscan = { version = "0.3.2", features = ["static"] }
 [[bench]]
 name = "bench"
 harness = false
+
+
+[patch.crates-io]
+# https://github.com/seiflotfy/rust-farmhash/pull/16
+farmhash = { git = "https://github.com/fuchsnj/rust-farmhash", rev="82d80b689d65fbd378b13deff10cdd07794df64e"}
