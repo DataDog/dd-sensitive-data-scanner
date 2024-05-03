@@ -27,7 +27,9 @@ pub use rule::{
     SecondaryValidator,
 };
 pub use rule_match::{ReplacementType, RuleMatch};
-pub use scanner::{error::CreateScannerError, Scanner};
+pub use scanner::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
+pub use scanner::{error::CreateScannerError, CompiledRuleTrait, MatchEmitter, Scanner};
+pub use scoped_ruleset::ExclusionCheck;
 pub use validation::{validate_regex, RegexValidationError};
 
 #[cfg(feature = "bench")]
