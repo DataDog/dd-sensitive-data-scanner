@@ -127,7 +127,6 @@ fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
             // Adding 1 to the start to account for assertion checking
             look_ahead_char_count + 1,
             content,
-            EXCLUDED_KEYWORDS_REMOVED_CHARS,
         );
 
         // Adding 1 char here to allow correct assertion checking on the last char. There will always be
@@ -153,7 +152,7 @@ fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
         regex.regex.search_half(&input).is_some()
     } else {
         // just get the previous n chars (no chars are skipped)
-        let prefix_start_info = get_prefix_start(match_start, look_ahead_char_count, content, &[]);
+        let prefix_start_info = get_prefix_start(match_start, look_ahead_char_count, content);
 
         let prefix_end = match_start;
 
@@ -183,32 +182,21 @@ struct PrefixStart {
 
 fn get_prefix_start(
     match_start: usize,
-    mut look_ahead_char_count: usize,
+    look_ahead_char_count: usize,
     content: &str,
-    exclude_chars: &[char],
 ) -> PrefixStart {
     let prefix = &content[0..match_start];
-    let mut prefix_start = match_start;
-
     let mut char_indices = prefix.char_indices();
 
-    while look_ahead_char_count > 0 {
-        match char_indices.next_back() {
-            Some((i, c)) => {
-                prefix_start = i;
-                if !exclude_chars.contains(&c) {
-                    look_ahead_char_count -= 1;
-                }
-            }
-            None => {
-                prefix_start = 0;
-                break;
-            }
-        }
-    }
-    PrefixStart {
-        start: prefix_start,
-        used_all_chars: look_ahead_char_count == 0,
+    match char_indices.nth_back(look_ahead_char_count - 1) {
+        Some((i, _)) => PrefixStart {
+            start: i,
+            used_all_chars: true,
+        },
+        None => PrefixStart {
+            start: 0,
+            used_all_chars: false,
+        },
     }
 }
 
@@ -743,14 +731,14 @@ mod test {
     }
 
     #[test]
-    fn test_excluded_keyword_strip_chars_dont_count_towards_look_ahead_count() {
+    fn test_excluded_keyword_strip_chars_do_count_towards_look_ahead_count() {
         let keywords =
             try_new_compiled_proximity_keyword(5, vec![], vec!["id".to_string()]).unwrap();
 
         // "id" only fits in the match prefix (5 chars) if the "-" char isn't counted towards the 5 chars
         let is_false_positive = keywords.is_false_positive_match("users i-d   ab", 12);
 
-        assert_eq!(is_false_positive, true);
+        assert_eq!(is_false_positive, false);
     }
 
     #[test]
