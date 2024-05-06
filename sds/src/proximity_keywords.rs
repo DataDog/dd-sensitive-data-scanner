@@ -182,12 +182,10 @@ struct PrefixStart {
 
 fn get_prefix_start(
     match_start: usize,
-    mut look_ahead_char_count: usize,
+    look_ahead_char_count: usize,
     content: &str,
 ) -> PrefixStart {
     let prefix = &content[0..match_start];
-    let mut prefix_start = match_start;
-
     let mut char_indices = prefix.char_indices();
 
     match char_indices.nth_back(look_ahead_char_count - 1) {
