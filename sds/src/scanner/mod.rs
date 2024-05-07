@@ -29,13 +29,13 @@ pub struct CompiledRule {
     pub scope: Scope,
     pub proximity_keywords: CompiledProximityKeywords,
     pub validator: Option<Arc<dyn Validator>>,
+    metrics: Metrics,
 }
 
 pub struct Scanner {
     rules: Arc<Vec<CompiledRule>>,
     scoped_ruleset: ScopedRuleSet,
     cache_pool: CachePool,
-    metrics: Metrics,
 }
 
 impl Scanner {
@@ -74,6 +74,7 @@ impl Scanner {
                         .validator
                         .clone()
                         .map(|x| Arc::new(x) as Arc<dyn Validator>),
+                    metrics: Metrics::new(&rule_labels),
                 })
             })
             .collect::<Result<Vec<CompiledRule>, CreateScannerError>>()?;
@@ -91,7 +92,6 @@ impl Scanner {
             rules: rules.clone(),
             scoped_ruleset,
             cache_pool: CachePool::new(rules),
-            metrics: Metrics::new(&scanner_labels),
         })
     }
 
@@ -129,7 +129,10 @@ impl Scanner {
                     let should_retain = !excluded_matches
                         .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
                     if !should_retain {
-                        self.metrics.false_positive_excluded_attributes.increment(1);
+                        self.rules[rule_match.rule_index]
+                            .metrics
+                            .false_positive_excluded_attributes
+                            .increment(1);
                     }
                     should_retain
                 });
