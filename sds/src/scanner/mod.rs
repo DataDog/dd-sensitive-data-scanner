@@ -1213,43 +1213,32 @@ mod test {
 
     #[test]
     fn should_skip_match_when_present_in_excluded_matches() {
-        use metrics::{Key, KeyName, SharedString};
-        use metrics_util::debugging::DebugValue;
-        use metrics_util::CompositeKey;
-        use metrics_util::MetricKind::Counter;
+        // If 2 matches have the same mutation and same start, the longer one is taken
 
-        let recorder = DebuggingRecorder::new();
-        let snapshotter = recorder.snapshotter();
+        let rule_0 = RegexRuleConfig::builder("b.*".to_owned())
+            .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
+                "test".into(),
+            )])]))
+            .match_action(MatchAction::Redact {
+                replacement: "[scrub]".to_string(),
+            })
+            .build();
 
-        let matches = metrics::with_local_recorder(&recorder, || {
-            // If 2 matches have the same mutation and same start, the longer one is taken
+        let scanner = Scanner::new(&[rule_0]).unwrap();
 
-            let rule_0 = RegexRuleConfig::builder("b.*".to_owned())
-                .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
-                    "test".into(),
-                )])]))
-                .match_action(MatchAction::Redact {
-                    replacement: "[scrub]".to_string(),
-                })
-                .build();
+        let mut content = SimpleEvent::Map(BTreeMap::from([
+            (
+                "a-match".to_string(),
+                SimpleEvent::String("bcdef".to_string()),
+            ),
+            (
+                "z-match".to_string(),
+                SimpleEvent::String("bcdef".to_string()),
+            ),
+            ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
+        ]));
 
-            let scanner = Scanner::new(&[rule_0]).unwrap();
-            let mut content = SimpleEvent::Map(BTreeMap::from([
-                (
-                    "a-match".to_string(),
-                    SimpleEvent::String("bcdef".to_string()),
-                ),
-                (
-                    "z-match".to_string(),
-                    SimpleEvent::String("bcdef".to_string()),
-                ),
-                ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
-            ]));
-
-            let mut matches: Vec<RuleMatch>;
-            matches = scanner.scan(&mut content);
-            return matches;
-        });
+        let matches = scanner.scan(&mut content);
 
         // Due to the ordering of the scan (alphabetical in this case), the match from "a-match" is not
         // excluded yet, but "z-match" is, so only 1 match is found.
@@ -1257,27 +1246,6 @@ mod test {
         assert_eq!(
             matches[0].path,
             Path::from(vec![PathSegment::Field("a-match".into())])
-        );
-
-        let snapshot = snapshotter.snapshot().into_vec();
-        assert_eq!(snapshot.len(), 3);
-
-        let metric_name = "false_positive.multipass.excluded_match";
-        let metric_pos = snapshot
-            .iter()
-            .position(|(key, _, _, _)| {
-                key == &CompositeKey::new(Counter, Key::from_name(metric_name))
-            })
-            .expect("metric was not found");
-
-        assert_eq!(
-            snapshot[metric_pos],
-            (
-                (CompositeKey::new(Counter, Key::from_name(metric_name))),
-                None,
-                None,
-                DebugValue::Counter(1)
-            )
         );
     }
 
@@ -1475,5 +1443,146 @@ mod test {
         let matches = scanner.scan(&mut content);
         // This should match because "test" is not found, so it's not a false-positive
         assert_eq!(matches.len(), 1);
+    }
+
+    mod metrics_test {
+        use metrics_util::debugging::DebuggingRecorder;
+
+        use metrics::{Key, Label, SharedString};
+        use metrics_util::debugging::DebugValue;
+        use metrics_util::CompositeKey;
+        use metrics_util::MetricKind::Counter;
+
+        use crate::labels::Labels;
+        use crate::match_action::MatchAction;
+        use crate::scanner::Scanner;
+        use crate::{
+            simple_event::SimpleEvent, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
+            RuleMatch, Scope,
+        };
+        use std::collections::BTreeMap;
+
+        #[test]
+        fn should_submit_excluded_match_metric() {
+            let recorder = DebuggingRecorder::new();
+            let snapshotter = recorder.snapshotter();
+
+            metrics::with_local_recorder(&recorder, || {
+                let rule_0 = RegexRuleConfig::builder("bcdef".to_owned())
+                    .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
+                        "test".into(),
+                    )])]))
+                    .match_action(MatchAction::None)
+                    .build();
+
+                let scanner = Scanner::new(&[rule_0]).unwrap();
+                let mut content = SimpleEvent::Map(BTreeMap::from([
+                    // z-match is considered as a false positive here
+                    (
+                        "z-match".to_string(),
+                        SimpleEvent::String("bcdef".to_string()),
+                    ),
+                    ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
+                ]));
+
+                let mut matches: Vec<RuleMatch>;
+                matches = scanner.scan(&mut content);
+            });
+
+            let snapshot = snapshotter.snapshot().into_hashmap();
+
+            let metric_name = "false_positive.multipass.excluded_match";
+            let metric_value = snapshot
+                .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
+                .expect("metric not found");
+
+            assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+        }
+
+        #[test]
+        fn should_submit_excluded_keywords_metric() {
+            let recorder = DebuggingRecorder::new();
+            let snapshotter = recorder.snapshotter();
+
+            metrics::with_local_recorder(&recorder, || {
+                let redact_test_rule = RegexRuleConfig::builder("world".to_owned())
+                    .match_action(MatchAction::Redact {
+                        replacement: "[REDACTED]".to_string(),
+                    })
+                    .proximity_keywords(ProximityKeywordsConfig {
+                        look_ahead_character_count: 30,
+                        included_keywords: vec![],
+                        excluded_keywords: vec!["hello".to_string()],
+                    })
+                    .build();
+
+                let scanner = Scanner::new(&[redact_test_rule]).unwrap();
+                let mut content = SimpleEvent::Map(BTreeMap::from([(
+                    "test".to_string(),
+                    SimpleEvent::String("hello world".to_string()),
+                )]));
+
+                let mut matches: Vec<RuleMatch>;
+                matches = scanner.scan(&mut content);
+            });
+
+            let snapshot = snapshotter.snapshot().into_hashmap();
+
+            let metric_name = "false_positive.proximity_keywords";
+
+            let labels = vec![Label::new("type", "excluded_keywords")];
+
+            let metric_value = snapshot
+                .get(&CompositeKey::new(
+                    Counter,
+                    Key::from_parts(metric_name, labels),
+                ))
+                .expect("metric not found");
+
+            assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+        }
+
+        #[test]
+        fn should_submit_included_keywords_metric() {
+            let recorder = DebuggingRecorder::new();
+            let snapshotter = recorder.snapshotter();
+
+            metrics::with_local_recorder(&recorder, || {
+                let redact_test_rule = RegexRuleConfig::builder("world".to_owned())
+                    .match_action(MatchAction::Redact {
+                        replacement: "[REDACTED]".to_string(),
+                    })
+                    .proximity_keywords(ProximityKeywordsConfig {
+                        look_ahead_character_count: 30,
+                        included_keywords: vec!["aws".to_owned()],
+                        excluded_keywords: vec![],
+                    })
+                    .build();
+
+                let scanner = Scanner::new(&[redact_test_rule]).unwrap();
+                let mut content = SimpleEvent::Map(BTreeMap::from([(
+                    "test".to_string(),
+                    SimpleEvent::String("hello world".to_string()),
+                )]));
+
+                let mut matches: Vec<RuleMatch>;
+                matches = scanner.scan(&mut content);
+            });
+
+            let snapshot = snapshotter.snapshot().into_hashmap();
+
+            let metric_name = "false_positive.proximity_keywords";
+
+            let labels = vec![Label::new("type", "included_keywords")];
+
+            let metric_value = snapshot
+                .get(&CompositeKey::new(
+                    Counter,
+                    Key::from_parts(metric_name, labels),
+                ))
+                .expect("metric not found");
+
+            assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+        }
     }
 }
