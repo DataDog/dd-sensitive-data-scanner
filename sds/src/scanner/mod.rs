@@ -544,6 +544,8 @@ mod test {
     use regex_automata::Match;
     use std::collections::BTreeMap;
 
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
     use super::CompiledRuleTrait;
     use super::RuleConfigTrait;
 
@@ -1211,32 +1213,43 @@ mod test {
 
     #[test]
     fn should_skip_match_when_present_in_excluded_matches() {
-        // If 2 matches have the same mutation and same start, the longer one is taken
+        use metrics::{Key, KeyName, SharedString};
+        use metrics_util::debugging::DebugValue;
+        use metrics_util::CompositeKey;
+        use metrics_util::MetricKind::Counter;
 
-        let rule_0 = RegexRuleConfig::builder("b.*".to_owned())
-            .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
-                "test".into(),
-            )])]))
-            .match_action(MatchAction::Redact {
-                replacement: "[scrub]".to_string(),
-            })
-            .build();
+        let recorder = DebuggingRecorder::new();
+        let snapshotter = recorder.snapshotter();
 
-        let scanner = Scanner::new(&[rule_0]).unwrap();
+        let matches = metrics::with_local_recorder(&recorder, || {
+            // If 2 matches have the same mutation and same start, the longer one is taken
 
-        let mut content = SimpleEvent::Map(BTreeMap::from([
-            (
-                "a-match".to_string(),
-                SimpleEvent::String("bcdef".to_string()),
-            ),
-            (
-                "z-match".to_string(),
-                SimpleEvent::String("bcdef".to_string()),
-            ),
-            ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
-        ]));
+            let rule_0 = RegexRuleConfig::builder("b.*".to_owned())
+                .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
+                    "test".into(),
+                )])]))
+                .match_action(MatchAction::Redact {
+                    replacement: "[scrub]".to_string(),
+                })
+                .build();
 
-        let matches = scanner.scan(&mut content);
+            let scanner = Scanner::new(&[rule_0]).unwrap();
+            let mut content = SimpleEvent::Map(BTreeMap::from([
+                (
+                    "a-match".to_string(),
+                    SimpleEvent::String("bcdef".to_string()),
+                ),
+                (
+                    "z-match".to_string(),
+                    SimpleEvent::String("bcdef".to_string()),
+                ),
+                ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
+            ]));
+
+            let mut matches: Vec<RuleMatch>;
+            matches = scanner.scan(&mut content);
+            return matches;
+        });
 
         // Due to the ordering of the scan (alphabetical in this case), the match from "a-match" is not
         // excluded yet, but "z-match" is, so only 1 match is found.
@@ -1244,6 +1257,27 @@ mod test {
         assert_eq!(
             matches[0].path,
             Path::from(vec![PathSegment::Field("a-match".into())])
+        );
+
+        let snapshot = snapshotter.snapshot().into_vec();
+        assert_eq!(snapshot.len(), 3);
+
+        let metric_name = "false_positive.multipass.excluded_match";
+        let metric_pos = snapshot
+            .iter()
+            .position(|(key, _, _, _)| {
+                key == &CompositeKey::new(Counter, Key::from_name(metric_name))
+            })
+            .expect("metric was not found");
+
+        assert_eq!(
+            snapshot[metric_pos],
+            (
+                (CompositeKey::new(Counter, Key::from_name(metric_name))),
+                None,
+                None,
+                DebugValue::Counter(1)
+            )
         );
     }
 
