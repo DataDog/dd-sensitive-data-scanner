@@ -1,3 +1,7 @@
+// This blocks accidental use of `println`. If one is actually needed, you can
+// override with `#[allow(clippy::print_stdout)]`.
+#![deny(clippy::print_stdout)]
+
 mod encoding;
 mod event;
 mod match_action;
@@ -22,9 +26,14 @@ pub use event::{Event, EventVisitor, VisitStringResult};
 pub use match_action::{MatchAction, PartialRedactDirection};
 pub use observability::labels;
 pub use path::{Path, PathSegment};
-pub use rule::{ProximityKeywordsConfig, RuleConfig, RuleConfigBuilder, Scope, SecondaryValidator};
+pub use rule::{
+    ProximityKeywordsConfig, RegexRuleConfig, RuleConfigBuilder, RuleConfigTrait, Scope,
+    SecondaryValidator,
+};
 pub use rule_match::{ReplacementType, RuleMatch};
-pub use scanner::{error::CreateScannerError, Scanner};
+pub use scanner::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
+pub use scanner::{error::CreateScannerError, CompiledRuleTrait, MatchEmitter, Scanner};
+pub use scoped_ruleset::ExclusionCheck;
 pub use validation::{validate_regex, RegexValidationError};
 
 #[cfg(feature = "bench")]

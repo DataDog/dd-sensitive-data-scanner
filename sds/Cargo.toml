@@ -23,7 +23,7 @@ regex-automata = "0.4.4"
 regex-syntax = "0.7.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_with = "3.6.1"
-thiserror = "1.0.59"
+thiserror = "1.0.58"
 metrics = "=0.22.1"
 crc32fast = "1.4.0"
 base62 = "2.0.2"
@@ -42,3 +42,8 @@ hyperscan = { version = "0.3.2", features = ["static"] }
 [[bench]]
 name = "bench"
 harness = false
+
+
+[patch.crates-io]
+# https://github.com/seiflotfy/rust-farmhash/pull/16
+farmhash = { git = "https://github.com/fuchsnj/rust-farmhash", rev="82d80b689d65fbd378b13deff10cdd07794df64e"}
