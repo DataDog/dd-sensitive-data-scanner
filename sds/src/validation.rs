@@ -1,6 +1,4 @@
-use crate::normalization::rust_regex_adapter::{
-    convert_to_rust_regex, LOWER_BOUND_QUANTIFIER_LIMIT,
-};
+use crate::normalization::rust_regex_adapter::{convert_to_rust_regex, QUANTIFIER_LIMIT};
 use crate::parser::error::ParseError;
 use regex_automata::meta::{self};
 use thiserror::Error;
@@ -19,11 +17,8 @@ pub enum RegexValidationError {
     #[error("Regex patterns are not allowed to match an empty string")]
     MatchesEmptyString,
 
-    #[error(
-        "Regex lower bound quantifier is too high. Max is {}",
-        LOWER_BOUND_QUANTIFIER_LIMIT
-    )]
-    ExceededLowerBoundQuantifierLimit,
+    #[error("Regex quantifier is too high. Max is {}", QUANTIFIER_LIMIT)]
+    ExceededQuantifierLimit,
 }
 
 impl From<ParseError> for RegexValidationError {
@@ -31,9 +26,7 @@ impl From<ParseError> for RegexValidationError {
         match err {
             ParseError::InvalidSyntax => Self::InvalidSyntax,
             ParseError::ExceededDepthLimit => Self::ExceededDepthLimit,
-            ParseError::ExceededLowerBoundQuantifierLimit => {
-                Self::ExceededLowerBoundQuantifierLimit
-            }
+            ParseError::ExceededQuantifierLimit => Self::ExceededQuantifierLimit,
         }
     }
 }
@@ -113,15 +106,15 @@ mod test {
     fn high_repetition_pattern_is_rejected() {
         assert_eq!(
             validate_regex(".{10000}"),
-            Err(RegexValidationError::ExceededLowerBoundQuantifierLimit)
+            Err(RegexValidationError::ExceededQuantifierLimit)
         );
     }
 
     #[test]
-    fn highly_nested_pattern_is_rejected() {
+    fn test_invalid_range_quantifiers() {
         assert_eq!(
-            validate_regex(&("(".repeat(1000) + "x" + &")".repeat(1000))),
-            Err(RegexValidationError::ExceededDepthLimit)
+            validate_regex(".{100,1}"),
+            Err(RegexValidationError::InvalidSyntax)
         );
     }
 

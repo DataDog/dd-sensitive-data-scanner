@@ -7,7 +7,7 @@ use nom::error::{Error, ErrorKind};
 pub enum ParseError {
     InvalidSyntax,
     ExceededDepthLimit,
-    ExceededLowerBoundQuantifierLimit,
+    ExceededQuantifierLimit,
 }
 
 impl<'a> nom::error::ParseError<Input<'a>> for ParseError {

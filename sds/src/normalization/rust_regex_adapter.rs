@@ -25,7 +25,7 @@ use regex_syntax::ast::{
 use std::rc::Rc;
 
 const ASCII_WHITESPACE_CHARS: &[char] = &['\x0D', '\x0A', '\x09', '\x0C', '\x0B', '\x20'];
-pub const LOWER_BOUND_QUANTIFIER_LIMIT: u32 = 3000;
+pub const QUANTIFIER_LIMIT: u32 = 3000;
 /// This takes an SDS style regex pattern and converts it to a pattern
 /// compatible with the Rust `regex` crate.
 ///
@@ -97,20 +97,20 @@ fn convert_ast(sds_ast: &SdsAst) -> Result<RegexAst, ParseError> {
                 kind: match repetition.quantifier.kind {
                     SdsQuantifierKind::ZeroOrMore => RegexRepetitionKind::ZeroOrMore,
                     SdsQuantifierKind::RangeExact(exact) => {
-                        if exact > LOWER_BOUND_QUANTIFIER_LIMIT {
-                            return Err(ParseError::ExceededLowerBoundQuantifierLimit);
+                        if exact > QUANTIFIER_LIMIT {
+                            return Err(ParseError::ExceededQuantifierLimit);
                         }
                         RegexRepetitionKind::Range(RepetitionRange::Exactly(exact))
                     }
                     SdsQuantifierKind::RangeMinMax(min, max) => {
-                        if min > LOWER_BOUND_QUANTIFIER_LIMIT {
-                            return Err(ParseError::ExceededLowerBoundQuantifierLimit);
+                        if min > QUANTIFIER_LIMIT || max > QUANTIFIER_LIMIT {
+                            return Err(ParseError::ExceededQuantifierLimit);
                         }
                         RegexRepetitionKind::Range(RepetitionRange::Bounded(min, max))
                     }
                     SdsQuantifierKind::RangeMin(min) => {
-                        if min > LOWER_BOUND_QUANTIFIER_LIMIT {
-                            return Err(ParseError::ExceededLowerBoundQuantifierLimit);
+                        if min > QUANTIFIER_LIMIT {
+                            return Err(ParseError::ExceededQuantifierLimit);
                         }
                         RegexRepetitionKind::Range(RepetitionRange::AtLeast(min))
                     }
@@ -690,9 +690,7 @@ fn convert_flag(flag: &SdsFlag) -> RegexFlag {
 
 #[cfg(test)]
 mod test {
-    use crate::normalization::rust_regex_adapter::{
-        convert_to_rust_regex, LOWER_BOUND_QUANTIFIER_LIMIT,
-    };
+    use crate::normalization::rust_regex_adapter::{convert_to_rust_regex, QUANTIFIER_LIMIT};
     use crate::parser::error::ParseError;
     use crate::parser::unicode_property_names::UNICODE_PROPERTY_NAMES;
     use regex::Regex;
@@ -865,33 +863,33 @@ mod test {
     #[test]
     fn test_validation() {
         // exact repetition
-        assert!(convert_to_rust_regex(&format!("x{{{}}}", LOWER_BOUND_QUANTIFIER_LIMIT)).is_ok());
+        assert!(convert_to_rust_regex(&format!("x{{{}}}", QUANTIFIER_LIMIT)).is_ok());
         assert_eq!(
-            convert_to_rust_regex(&format!("x{{{}}}", LOWER_BOUND_QUANTIFIER_LIMIT + 1)),
-            Err(ParseError::ExceededLowerBoundQuantifierLimit)
+            convert_to_rust_regex(&format!("x{{{}}}", QUANTIFIER_LIMIT + 1)),
+            Err(ParseError::ExceededQuantifierLimit)
         );
 
-        // range repetition
+        // range repetition (only the max needs to be tested since it must be larger than the min)
         assert!(convert_to_rust_regex(&format!(
             "x{{{},{}}}",
-            LOWER_BOUND_QUANTIFIER_LIMIT,
-            LOWER_BOUND_QUANTIFIER_LIMIT + 1
+            QUANTIFIER_LIMIT - 1,
+            QUANTIFIER_LIMIT
         ))
         .is_ok());
         assert_eq!(
             convert_to_rust_regex(&format!(
                 "x{{{},{}}}",
-                LOWER_BOUND_QUANTIFIER_LIMIT + 1,
-                LOWER_BOUND_QUANTIFIER_LIMIT + 2
+                QUANTIFIER_LIMIT,
+                QUANTIFIER_LIMIT + 1
             )),
-            Err(ParseError::ExceededLowerBoundQuantifierLimit)
+            Err(ParseError::ExceededQuantifierLimit)
         );
 
         // min range repetition
-        assert!(convert_to_rust_regex(&format!("x{{{},}}", LOWER_BOUND_QUANTIFIER_LIMIT)).is_ok());
+        assert!(convert_to_rust_regex(&format!("x{{{},}}", QUANTIFIER_LIMIT)).is_ok());
         assert_eq!(
-            convert_to_rust_regex(&format!("x{{{},}}", LOWER_BOUND_QUANTIFIER_LIMIT + 1)),
-            Err(ParseError::ExceededLowerBoundQuantifierLimit)
+            convert_to_rust_regex(&format!("x{{{},}}", QUANTIFIER_LIMIT + 1)),
+            Err(ParseError::ExceededQuantifierLimit)
         );
     }
 }
