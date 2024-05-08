@@ -74,11 +74,11 @@ mod test {
         );
         test_error(
             CreateScannerError::InvalidRegex(RegexValidationError::ExceededDepthLimit),
-            "The regex pattern was nested too deeply",
+            "The regex pattern is nested too deeply",
         );
         test_error(
             CreateScannerError::InvalidRegex(RegexValidationError::TooComplex),
-            "The regex has exceeded the complexity limit (i.e. it might be too slow)",
+            "The regex has exceeded the complexity limit (try simplifying the regex)",
         );
         test_error(
             CreateScannerError::InvalidRegex(RegexValidationError::MatchesEmptyString),

@@ -24,11 +24,8 @@ use regex_syntax::ast::{
 };
 use std::rc::Rc;
 
-// TODO: do something to prevent stack overflow from deep recursion. Either convert logic to iterative
-//       or find a way to limit the recursion depth.
-
 const ASCII_WHITESPACE_CHARS: &[char] = &['\x0D', '\x0A', '\x09', '\x0C', '\x0B', '\x20'];
-
+pub const LOWER_BOUND_QUANTIFIER_LIMIT: u32 = 3000;
 /// This takes an SDS style regex pattern and converts it to a pattern
 /// compatible with the Rust `regex` crate.
 ///
@@ -41,19 +38,19 @@ const ASCII_WHITESPACE_CHARS: &[char] = &['\x0D', '\x0A', '\x09', '\x0C', '\x0B'
 /// to feed directly into a regex engine, and not intended for human readability.
 pub fn convert_to_rust_regex(pattern: &str) -> Result<String, ParseError> {
     let sds_ast = parse_regex_pattern(pattern)?;
-    let regex_ast = convert_ast(&sds_ast);
+    let regex_ast = convert_ast(&sds_ast)?;
     Ok(regex_ast.to_string())
 }
 
 // This is private since only ASTs generated from the parser are supported.
 // (Manually crafted ASTs may cause issues).
-fn convert_ast(sds_ast: &SdsAst) -> RegexAst {
-    match sds_ast {
+fn convert_ast(sds_ast: &SdsAst) -> Result<RegexAst, ParseError> {
+    Ok(match sds_ast {
         SdsAst::Empty => RegexAst::Empty(span()),
         SdsAst::Literal(c) => RegexAst::Literal(convert_literal(*c, LiteralKind::Normal)),
         SdsAst::Concat(list) => RegexAst::Concat(RegexConcat {
             span: span(),
-            asts: list.iter().map(convert_ast).collect(),
+            asts: list.iter().map(convert_ast).collect::<Result<_, _>>()?,
         }),
         SdsAst::Group(group) => {
             match group.as_ref() {
@@ -62,13 +59,13 @@ fn convert_ast(sds_ast: &SdsAst) -> RegexAst {
                         span: span(),
                         // The group index is not used for conversion, so a dummy "0" is provided
                         kind: RegexGroupKind::CaptureIndex(0),
-                        ast: Box::new(convert_ast(&capturing_group.inner)),
+                        ast: Box::new(convert_ast(&capturing_group.inner)?),
                     })
                 }
                 SdsGroup::NonCapturing(non_capturing) => RegexAst::Group(RegexGroup {
                     span: span(),
                     kind: RegexGroupKind::NonCapturing(convert_flags(&non_capturing.flags)),
-                    ast: Box::new(convert_ast(&non_capturing.inner)),
+                    ast: Box::new(convert_ast(&non_capturing.inner)?),
                 }),
                 SdsGroup::NamedCapturing(named_capturing) => RegexAst::Group(RegexGroup {
                     span: span(),
@@ -81,13 +78,13 @@ fn convert_ast(sds_ast: &SdsAst) -> RegexAst {
                             index: 0,
                         },
                     },
-                    ast: Box::new(convert_ast(&named_capturing.inner)),
+                    ast: Box::new(convert_ast(&named_capturing.inner)?),
                 }),
             }
         }
         SdsAst::Alternation(list) => RegexAst::Alternation(RegexAlternation {
             span: span(),
-            asts: list.iter().map(convert_ast).collect(),
+            asts: list.iter().map(convert_ast).collect::<Result<_, _>>()?,
         }),
         SdsAst::Flags(flags) => RegexAst::Flags(RegexSetFlags {
             span: span(),
@@ -100,12 +97,21 @@ fn convert_ast(sds_ast: &SdsAst) -> RegexAst {
                 kind: match repetition.quantifier.kind {
                     SdsQuantifierKind::ZeroOrMore => RegexRepetitionKind::ZeroOrMore,
                     SdsQuantifierKind::RangeExact(exact) => {
+                        if exact > LOWER_BOUND_QUANTIFIER_LIMIT {
+                            return Err(ParseError::ExceededLowerBoundQuantifierLimit);
+                        }
                         RegexRepetitionKind::Range(RepetitionRange::Exactly(exact))
                     }
                     SdsQuantifierKind::RangeMinMax(min, max) => {
+                        if min > LOWER_BOUND_QUANTIFIER_LIMIT {
+                            return Err(ParseError::ExceededLowerBoundQuantifierLimit);
+                        }
                         RegexRepetitionKind::Range(RepetitionRange::Bounded(min, max))
                     }
                     SdsQuantifierKind::RangeMin(min) => {
+                        if min > LOWER_BOUND_QUANTIFIER_LIMIT {
+                            return Err(ParseError::ExceededLowerBoundQuantifierLimit);
+                        }
                         RegexRepetitionKind::Range(RepetitionRange::AtLeast(min))
                     }
                     SdsQuantifierKind::ZeroOrOne => RegexRepetitionKind::ZeroOrOne,
@@ -113,7 +119,7 @@ fn convert_ast(sds_ast: &SdsAst) -> RegexAst {
                 },
             },
             greedy: !repetition.quantifier.lazy,
-            ast: Box::new(convert_ast(&repetition.inner)),
+            ast: Box::new(convert_ast(&repetition.inner)?),
         }),
         SdsAst::Assertion(assertion_type) => match assertion_type {
             SdsAssertionType::WordBoundary => {
@@ -216,7 +222,7 @@ fn convert_ast(sds_ast: &SdsAst) -> RegexAst {
                         })),
                     }),
                     SdsAst::Assertion(SdsAssertionType::EndText),
-                ]))
+                ]))?
             }
         },
         SdsAst::CharacterClass(class) => match class {
@@ -252,7 +258,7 @@ fn convert_ast(sds_ast: &SdsAst) -> RegexAst {
                 RegexAst::Class(RegexClass::Bracketed(vertical_whitespace(true)))
             }
         },
-    }
+    })
 }
 
 fn horizontal_whitespace(negated: bool) -> RegexClassBracketed {
@@ -684,7 +690,10 @@ fn convert_flag(flag: &SdsFlag) -> RegexFlag {
 
 #[cfg(test)]
 mod test {
-    use crate::normalization::rust_regex_adapter::convert_to_rust_regex;
+    use crate::normalization::rust_regex_adapter::{
+        convert_to_rust_regex, LOWER_BOUND_QUANTIFIER_LIMIT,
+    };
+    use crate::parser::error::ParseError;
     use crate::parser::unicode_property_names::UNICODE_PROPERTY_NAMES;
     use regex::Regex;
     use std::panic::catch_unwind;
@@ -851,6 +860,39 @@ mod test {
             // ensure it's actually a valid regex
             Regex::new(&actual_output).unwrap();
         }
+    }
+
+    #[test]
+    fn test_validation() {
+        // exact repetition
+        assert!(convert_to_rust_regex(&format!("x{{{}}}", LOWER_BOUND_QUANTIFIER_LIMIT)).is_ok());
+        assert_eq!(
+            convert_to_rust_regex(&format!("x{{{}}}", LOWER_BOUND_QUANTIFIER_LIMIT + 1)),
+            Err(ParseError::ExceededLowerBoundQuantifierLimit)
+        );
+
+        // range repetition
+        assert!(convert_to_rust_regex(&format!(
+            "x{{{},{}}}",
+            LOWER_BOUND_QUANTIFIER_LIMIT,
+            LOWER_BOUND_QUANTIFIER_LIMIT + 1
+        ))
+        .is_ok());
+        assert_eq!(
+            convert_to_rust_regex(&format!(
+                "x{{{},{}}}",
+                LOWER_BOUND_QUANTIFIER_LIMIT + 1,
+                LOWER_BOUND_QUANTIFIER_LIMIT + 2
+            )),
+            Err(ParseError::ExceededLowerBoundQuantifierLimit)
+        );
+
+        // min range repetition
+        assert!(convert_to_rust_regex(&format!("x{{{},}}", LOWER_BOUND_QUANTIFIER_LIMIT)).is_ok());
+        assert_eq!(
+            convert_to_rust_regex(&format!("x{{{},}}", LOWER_BOUND_QUANTIFIER_LIMIT + 1)),
+            Err(ParseError::ExceededLowerBoundQuantifierLimit)
+        );
     }
 }
 
