@@ -13,11 +13,13 @@ use regex_automata::meta::Regex as MetaRegex;
 use std::sync::Arc;
 
 use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
+use self::metrics::Metrics;
 use ahash::AHashSet;
 use regex_automata::{Input, Match};
 
 pub(crate) mod cache_pool;
 pub mod error;
+mod metrics;
 
 pub struct StringMatch {
     start: usize,
@@ -62,6 +64,7 @@ pub struct RegexCompiledRule {
     pub proximity_keywords: CompiledProximityKeywords,
     pub validator: Option<Arc<dyn Validator>>,
     pub rule_cache_index: usize,
+    metrics: Metrics,
 }
 
 impl CompiledRuleTrait for RegexCompiledRule {
@@ -104,6 +107,8 @@ impl CompiledRuleTrait for RegexCompiledRule {
                                 start: regex_match.start(),
                                 end: regex_match.end(),
                             });
+                        } else {
+                            self.metrics.false_positive_excluded_attributes.increment(1)
                         }
                     }
 
@@ -176,6 +181,7 @@ impl RuleConfigTrait for RegexRuleConfig {
                 .clone()
                 .map(|x| Arc::new(x) as Arc<dyn Validator>),
             rule_cache_index: cache_index,
+            metrics: Metrics::new(&rule_labels),
         }))
     }
 }
@@ -538,9 +544,13 @@ mod test {
     use regex_automata::Match;
     use std::collections::BTreeMap;
 
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
     use super::CompiledRuleTrait;
     use super::RuleConfigTrait;
+
     pub struct DumbRuleConfig {}
+
     pub struct DumbCompiledRule {
         pub match_action: MatchAction,
         pub scope: Scope,
@@ -973,7 +983,7 @@ mod test {
                 replacement_type: crate::ReplacementType::PartialStart,
                 start_index: 0,
                 end_index_exclusive: 3,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
 
@@ -985,7 +995,7 @@ mod test {
                 replacement_type: crate::ReplacementType::PartialStart,
                 start_index: 3,
                 end_index_exclusive: 6,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
 
@@ -997,7 +1007,7 @@ mod test {
                 replacement_type: crate::ReplacementType::PartialStart,
                 start_index: 6,
                 end_index_exclusive: 9,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
     }
@@ -1038,7 +1048,7 @@ mod test {
                 replacement_type: crate::ReplacementType::Placeholder,
                 start_index: 0,
                 end_index_exclusive: 3,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
 
@@ -1050,7 +1060,7 @@ mod test {
                 replacement_type: crate::ReplacementType::Placeholder,
                 start_index: 3,
                 end_index_exclusive: 6,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
 
@@ -1062,7 +1072,7 @@ mod test {
                 replacement_type: crate::ReplacementType::Placeholder,
                 start_index: 6,
                 end_index_exclusive: 9,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
     }
@@ -1097,7 +1107,7 @@ mod test {
                 replacement_type: crate::ReplacementType::Placeholder,
                 start_index: 1,
                 end_index_exclusive: 4,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
     }
@@ -1130,7 +1140,7 @@ mod test {
                 replacement_type: crate::ReplacementType::None,
                 start_index: 0,
                 end_index_exclusive: 3,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
     }
@@ -1163,7 +1173,7 @@ mod test {
                 replacement_type: crate::ReplacementType::None,
                 start_index: 0,
                 end_index_exclusive: 4,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
     }
@@ -1196,7 +1206,7 @@ mod test {
                 replacement_type: crate::ReplacementType::None,
                 start_index: 0,
                 end_index_exclusive: 3,
-                shift_offset: 0
+                shift_offset: 0,
             }
         );
     }
@@ -1433,5 +1443,146 @@ mod test {
         let matches = scanner.scan(&mut content);
         // This should match because "test" is not found, so it's not a false-positive
         assert_eq!(matches.len(), 1);
+    }
+
+    mod metrics_test {
+        use metrics_util::debugging::DebuggingRecorder;
+
+        use metrics::{Key, Label, SharedString};
+        use metrics_util::debugging::DebugValue;
+        use metrics_util::CompositeKey;
+        use metrics_util::MetricKind::Counter;
+
+        use crate::labels::Labels;
+        use crate::match_action::MatchAction;
+        use crate::scanner::Scanner;
+        use crate::{
+            simple_event::SimpleEvent, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
+            RuleMatch, Scope,
+        };
+        use std::collections::BTreeMap;
+
+        #[test]
+        fn should_submit_excluded_match_metric() {
+            let recorder = DebuggingRecorder::new();
+            let snapshotter = recorder.snapshotter();
+
+            metrics::with_local_recorder(&recorder, || {
+                let rule_0 = RegexRuleConfig::builder("bcdef".to_owned())
+                    .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
+                        "test".into(),
+                    )])]))
+                    .match_action(MatchAction::None)
+                    .build();
+
+                let scanner = Scanner::new(&[rule_0]).unwrap();
+                let mut content = SimpleEvent::Map(BTreeMap::from([
+                    // z-match is considered as a false positive here
+                    (
+                        "z-match".to_string(),
+                        SimpleEvent::String("bcdef".to_string()),
+                    ),
+                    ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
+                ]));
+
+                let mut matches: Vec<RuleMatch>;
+                matches = scanner.scan(&mut content);
+            });
+
+            let snapshot = snapshotter.snapshot().into_hashmap();
+
+            let metric_name = "false_positive.multipass.excluded_match";
+            let metric_value = snapshot
+                .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
+                .expect("metric not found");
+
+            assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+        }
+
+        #[test]
+        fn should_submit_excluded_keywords_metric() {
+            let recorder = DebuggingRecorder::new();
+            let snapshotter = recorder.snapshotter();
+
+            metrics::with_local_recorder(&recorder, || {
+                let redact_test_rule = RegexRuleConfig::builder("world".to_owned())
+                    .match_action(MatchAction::Redact {
+                        replacement: "[REDACTED]".to_string(),
+                    })
+                    .proximity_keywords(ProximityKeywordsConfig {
+                        look_ahead_character_count: 30,
+                        included_keywords: vec![],
+                        excluded_keywords: vec!["hello".to_string()],
+                    })
+                    .build();
+
+                let scanner = Scanner::new(&[redact_test_rule]).unwrap();
+                let mut content = SimpleEvent::Map(BTreeMap::from([(
+                    "test".to_string(),
+                    SimpleEvent::String("hello world".to_string()),
+                )]));
+
+                let mut matches: Vec<RuleMatch>;
+                matches = scanner.scan(&mut content);
+            });
+
+            let snapshot = snapshotter.snapshot().into_hashmap();
+
+            let metric_name = "false_positive.proximity_keywords";
+
+            let labels = vec![Label::new("type", "excluded_keywords")];
+
+            let metric_value = snapshot
+                .get(&CompositeKey::new(
+                    Counter,
+                    Key::from_parts(metric_name, labels),
+                ))
+                .expect("metric not found");
+
+            assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+        }
+
+        #[test]
+        fn should_submit_included_keywords_metric() {
+            let recorder = DebuggingRecorder::new();
+            let snapshotter = recorder.snapshotter();
+
+            metrics::with_local_recorder(&recorder, || {
+                let redact_test_rule = RegexRuleConfig::builder("world".to_owned())
+                    .match_action(MatchAction::Redact {
+                        replacement: "[REDACTED]".to_string(),
+                    })
+                    .proximity_keywords(ProximityKeywordsConfig {
+                        look_ahead_character_count: 30,
+                        included_keywords: vec!["aws".to_owned()],
+                        excluded_keywords: vec![],
+                    })
+                    .build();
+
+                let scanner = Scanner::new(&[redact_test_rule]).unwrap();
+                let mut content = SimpleEvent::Map(BTreeMap::from([(
+                    "test".to_string(),
+                    SimpleEvent::String("hello world".to_string()),
+                )]));
+
+                let mut matches: Vec<RuleMatch>;
+                matches = scanner.scan(&mut content);
+            });
+
+            let snapshot = snapshotter.snapshot().into_hashmap();
+
+            let metric_name = "false_positive.proximity_keywords";
+
+            let labels = vec![Label::new("type", "included_keywords")];
+
+            let metric_value = snapshot
+                .get(&CompositeKey::new(
+                    Counter,
+                    Key::from_parts(metric_name, labels),
+                ))
+                .expect("metric not found");
+
+            assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+        }
     }
 }
