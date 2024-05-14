@@ -22,8 +22,8 @@ pub mod error;
 mod metrics;
 
 pub struct StringMatch {
-    start: usize,
-    end: usize,
+    pub start: usize,
+    pub end: usize,
 }
 
 pub trait MatchEmitter {
