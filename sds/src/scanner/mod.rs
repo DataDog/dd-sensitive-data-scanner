@@ -1,6 +1,6 @@
 use crate::encoding::Encoding;
 use crate::event::Event;
-use crate::observability::labels::{Labels, NO_LABEL};
+use crate::observability::labels::Labels;
 
 use crate::proximity_keywords::CompiledProximityKeywords;
 use crate::rule::{RegexRuleConfig, RuleConfigTrait};
@@ -194,8 +194,9 @@ pub struct Scanner {
 
 impl Scanner {
     pub fn new<C: RuleConfigTrait>(rules: &[C]) -> Result<Self, CreateScannerError> {
-        Scanner::new_with_labels(rules, NO_LABEL)
+        Scanner::new_with_labels(rules, Labels::empty())
     }
+
     pub fn new_with_labels<C: RuleConfigTrait>(
         rules: &[C],
         scanner_labels: Labels,
@@ -543,8 +544,6 @@ mod test {
     use ahash::AHashSet;
     use regex_automata::Match;
     use std::collections::BTreeMap;
-
-    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 
     use super::CompiledRuleTrait;
     use super::RuleConfigTrait;
@@ -1448,12 +1447,11 @@ mod test {
     mod metrics_test {
         use metrics_util::debugging::DebuggingRecorder;
 
-        use metrics::{Key, Label, SharedString};
+        use metrics::{Key, Label};
         use metrics_util::debugging::DebugValue;
         use metrics_util::CompositeKey;
         use metrics_util::MetricKind::Counter;
 
-        use crate::labels::Labels;
         use crate::match_action::MatchAction;
         use crate::scanner::Scanner;
         use crate::{
@@ -1522,8 +1520,7 @@ mod test {
                     SimpleEvent::String("hello world".to_string()),
                 )]));
 
-                let mut matches: Vec<RuleMatch>;
-                matches = scanner.scan(&mut content);
+                scanner.scan(&mut content);
             });
 
             let snapshot = snapshotter.snapshot().into_hashmap();
@@ -1565,8 +1562,7 @@ mod test {
                     SimpleEvent::String("hello world".to_string()),
                 )]));
 
-                let mut matches: Vec<RuleMatch>;
-                matches = scanner.scan(&mut content);
+                scanner.scan(&mut content);
             });
 
             let snapshot = snapshotter.snapshot().into_hashmap();

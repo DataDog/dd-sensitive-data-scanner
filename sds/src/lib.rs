@@ -15,6 +15,7 @@ mod rule_match;
 mod scanner;
 mod scoped_ruleset;
 mod secondary_validation;
+mod standard_scanners;
 mod validation;
 
 #[cfg(any(test, feature = "bench"))]
@@ -24,7 +25,7 @@ mod simple_event;
 pub use encoding::{EncodeIndices, Encoding, Utf8Encoding};
 pub use event::{Event, EventVisitor, VisitStringResult};
 pub use match_action::{MatchAction, PartialRedactDirection};
-pub use observability::labels;
+pub use observability::labels::Labels;
 pub use path::{Path, PathSegment};
 pub use rule::{
     ProximityKeywordsConfig, RegexRuleConfig, RuleConfigBuilder, RuleConfigTrait, Scope,
@@ -38,7 +39,7 @@ pub use validation::{validate_regex, RegexValidationError};
 
 #[cfg(feature = "bench")]
 pub use crate::{
-    scoped_ruleset::{ContentVisitor, ExclusionCheck, RuleIndexVisitor, ScopedRuleSet},
+    scoped_ruleset::{ContentVisitor, RuleIndexVisitor, ScopedRuleSet},
     secondary_validation::{LuhnChecksum, Validator},
     simple_event::SimpleEvent,
 };

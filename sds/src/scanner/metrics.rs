@@ -1,4 +1,4 @@
-use crate::labels::Labels;
+use crate::Labels;
 use metrics::{counter, Counter};
 
 pub struct Metrics {

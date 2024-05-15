@@ -1,0 +1,15 @@
+id: "bhfh3o786gy"
+name: "Test"
+description: |
+  Matches on the phrase "test". This is intended to be used for testing purposes, and
+  an example of the standard scanner format.
+  
+  Examples of matches:
+  - `test`
+priority: 3
+pattern: "\\btest\\b"
+tags:
+  - "sensitive_data_category:test"
+  - "sensitive_data:test"
+labels:
+  - "compliance:test"

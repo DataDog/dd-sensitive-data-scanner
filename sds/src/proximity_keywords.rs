@@ -1,8 +1,8 @@
-use crate::labels::{Labels, NO_LABEL};
 use crate::proximity_keywords::ProximityKeywordsValidationError::{
     EmptyKeyword, InvalidLookAheadCharacterCount, KeywordTooLong, TooManyKeywords,
 };
 use crate::rule::ProximityKeywordsConfig;
+use crate::Labels;
 use metrics::{counter, Counter};
 use regex_automata::{meta, Input};
 use regex_syntax::ast::{
@@ -222,7 +222,7 @@ impl Metrics {
 
 impl Default for Metrics {
     fn default() -> Self {
-        Metrics::new(&NO_LABEL)
+        Metrics::new(&Labels::empty())
     }
 }
 
@@ -374,7 +374,7 @@ mod test {
                 included_keywords,
                 excluded_keywords,
             },
-            &NO_LABEL,
+            &Labels::empty(),
         )
     }
 
