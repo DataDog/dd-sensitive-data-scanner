@@ -33,7 +33,9 @@ pub use rule::{
 };
 pub use rule_match::{ReplacementType, RuleMatch};
 pub use scanner::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
-pub use scanner::{error::CreateScannerError, CompiledRuleTrait, MatchEmitter, Scanner};
+pub use scanner::{
+    error::CreateScannerError, CompiledRuleTrait, MatchEmitter, Scanner, StringMatch,
+};
 pub use scoped_ruleset::ExclusionCheck;
 pub use validation::{validate_regex, RegexValidationError};
 

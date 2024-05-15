@@ -1,4 +1,4 @@
-use crate::normalization::rust_regex_adapter::convert_to_rust_regex;
+use crate::normalization::rust_regex_adapter::{convert_to_rust_regex, QUANTIFIER_LIMIT};
 use crate::parser::error::ParseError;
 use regex_automata::meta::{self};
 use thiserror::Error;
@@ -8,14 +8,17 @@ pub enum RegexValidationError {
     #[error("Invalid regex syntax")]
     InvalidSyntax,
 
-    #[error("The regex pattern was nested too deeply")]
+    #[error("The regex pattern is nested too deeply")]
     ExceededDepthLimit,
 
-    #[error("The regex has exceeded the complexity limit (i.e. it might be too slow)")]
+    #[error("The regex has exceeded the complexity limit (try simplifying the regex)")]
     TooComplex,
 
     #[error("Regex patterns are not allowed to match an empty string")]
     MatchesEmptyString,
+
+    #[error("Regex quantifier is too high. Max is {}", QUANTIFIER_LIMIT)]
+    ExceededQuantifierLimit,
 }
 
 impl From<ParseError> for RegexValidationError {
@@ -23,6 +26,7 @@ impl From<ParseError> for RegexValidationError {
         match err {
             ParseError::InvalidSyntax => Self::InvalidSyntax,
             ParseError::ExceededDepthLimit => Self::ExceededDepthLimit,
+            ParseError::ExceededQuantifierLimit => Self::ExceededQuantifierLimit,
         }
     }
 }
@@ -93,16 +97,24 @@ mod test {
     #[test]
     fn too_complex_pattern_is_rejected() {
         assert_eq!(
-            validate_regex(".{10000}"),
+            validate_regex(".{1000}{1000}"),
             Err(RegexValidationError::TooComplex)
         );
     }
 
     #[test]
-    fn highly_nested_pattern_is_rejected() {
+    fn high_repetition_pattern_is_rejected() {
         assert_eq!(
-            validate_regex(&("(".repeat(1000) + "x" + &")".repeat(1000))),
-            Err(RegexValidationError::ExceededDepthLimit)
+            validate_regex(".{10000}"),
+            Err(RegexValidationError::ExceededQuantifierLimit)
+        );
+    }
+
+    #[test]
+    fn test_invalid_range_quantifiers() {
+        assert_eq!(
+            validate_regex(".{100,1}"),
+            Err(RegexValidationError::InvalidSyntax)
         );
     }
 
