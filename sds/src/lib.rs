@@ -15,7 +15,7 @@ mod rule_match;
 mod scanner;
 mod scoped_ruleset;
 mod secondary_validation;
-mod standard_scanners;
+mod standard_rules;
 mod validation;
 
 #[cfg(any(test, feature = "bench"))]
@@ -37,6 +37,10 @@ pub use scanner::{
     error::CreateScannerError, CompiledRuleTrait, MatchEmitter, Scanner, StringMatch,
 };
 pub use scoped_ruleset::ExclusionCheck;
+pub use standard_rules::{
+    get_simple_standard_rule_configs, parse_standard_rules, test_framework as standard_rule_test,
+    StandardRule,
+};
 pub use validation::{validate_regex, RegexValidationError};
 
 #[cfg(feature = "bench")]

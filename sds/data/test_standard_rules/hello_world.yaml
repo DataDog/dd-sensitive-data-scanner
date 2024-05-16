@@ -15,3 +15,10 @@ tags:
   - "sensitive_data:test"
 labels:
   - "compliance:test"
+tests:
+  - description: "Simple test"
+    input: "hello world"
+    output: "hello [REDACTED]"
+  - description: "Invalid test - expected to fail"
+    input: "hello world"
+    output: "hello world"
