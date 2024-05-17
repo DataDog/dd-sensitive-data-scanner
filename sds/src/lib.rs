@@ -38,8 +38,8 @@ pub use scanner::{
 };
 pub use scoped_ruleset::ExclusionCheck;
 pub use standard_rules::{
-    get_simple_standard_rule_configs, parse_standard_rules, test_framework as standard_rule_test,
-    StandardRule,
+    get_simple_standard_rule_configs, parse_standard_rules, serialize_standard_rules_list,
+    test_framework as standard_rule_test, StandardRule,
 };
 pub use validation::{validate_regex, RegexValidationError};
 

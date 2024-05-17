@@ -3,7 +3,7 @@ use crate::{ProximityKeywordsConfig, RuleConfigTrait, SecondaryValidator};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Write};
 use std::path::Path;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -48,6 +48,10 @@ pub fn parse_standard_rules<P: AsRef<Path>>(
     Ok(rules)
 }
 
+pub fn serialize_standard_rules_list(rules: &[StandardRule], out: &mut impl Write) {
+    serde_yaml::to_writer(out, rules).unwrap();
+}
+
 /// This is just a helper method to convert standard rules into configuration to make
 /// creating a scanner easier. If you want to customize match_action, scope, or anything else
 /// per rule, the config should be created manually.
@@ -79,11 +83,7 @@ fn get_proximity_keywords(
     included_keywords: &[String],
     count: Option<usize>,
 ) -> Option<ProximityKeywordsConfig> {
-    let count = if let Some(count) = count {
-        count
-    } else {
-        return None;
-    };
+    let count = count?;
 
     if included_keywords.is_empty() {
         return None;
