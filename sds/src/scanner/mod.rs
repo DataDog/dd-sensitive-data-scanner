@@ -544,8 +544,6 @@ mod test {
     use regex_automata::Match;
     use std::collections::BTreeMap;
 
-    
-
     use super::CompiledRuleTrait;
     use super::RuleConfigTrait;
 
@@ -1448,18 +1446,16 @@ mod test {
     mod metrics_test {
         use metrics_util::debugging::DebuggingRecorder;
 
-        use metrics::{Key, Label};
-        use metrics_util::debugging::DebugValue;
-        use metrics_util::CompositeKey;
-        use metrics_util::MetricKind::Counter;
-
-        
         use crate::match_action::MatchAction;
         use crate::scanner::Scanner;
         use crate::{
             simple_event::SimpleEvent, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
             RuleMatch, Scope,
         };
+        use metrics::{Key, Label};
+        use metrics_util::debugging::DebugValue;
+        use metrics_util::CompositeKey;
+        use metrics_util::MetricKind::Counter;
         use std::collections::BTreeMap;
 
         #[test]
