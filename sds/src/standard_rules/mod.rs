@@ -3,7 +3,7 @@ use crate::{ProximityKeywordsConfig, RuleConfigTrait, SecondaryValidator};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::fs::File;
-use std::io::{BufReader, Write};
+use std::io::BufReader;
 use std::path::Path;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -48,8 +48,8 @@ pub fn parse_standard_rules<P: AsRef<Path>>(
     Ok(rules)
 }
 
-pub fn serialize_standard_rules_list(rules: &[StandardRule], out: &mut impl Write) {
-    serde_yaml::to_writer(out, rules).unwrap();
+pub fn serialize_standard_rules_list(rules: &[StandardRule]) -> String {
+    serde_yaml::to_string(rules).unwrap()
 }
 
 /// This is just a helper method to convert standard rules into configuration to make
