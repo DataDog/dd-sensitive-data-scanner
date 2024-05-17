@@ -544,8 +544,6 @@ mod test {
     use regex_automata::Match;
     use std::collections::BTreeMap;
 
-    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
-
     use super::CompiledRuleTrait;
     use super::RuleConfigTrait;
 
@@ -565,10 +563,10 @@ mod test {
         }
         fn get_string_matches(
             &self,
-            content: &str,
-            caches: &mut CachePoolGuard<'_>,
-            exclusion_check: &ExclusionCheck<'_>,
-            excluded_matches: &mut AHashSet<String>,
+            _content: &str,
+            _caches: &mut CachePoolGuard<'_>,
+            _exclusion_check: &ExclusionCheck<'_>,
+            _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
         ) {
             match_emitter.emit(StringMatch { start: 10, end: 16 });
@@ -1448,18 +1446,16 @@ mod test {
     mod metrics_test {
         use metrics_util::debugging::DebuggingRecorder;
 
-        use metrics::{Key, Label, SharedString};
-        use metrics_util::debugging::DebugValue;
-        use metrics_util::CompositeKey;
-        use metrics_util::MetricKind::Counter;
-
-        use crate::labels::Labels;
         use crate::match_action::MatchAction;
         use crate::scanner::Scanner;
         use crate::{
             simple_event::SimpleEvent, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
             RuleMatch, Scope,
         };
+        use metrics::{Key, Label};
+        use metrics_util::debugging::DebugValue;
+        use metrics_util::CompositeKey;
+        use metrics_util::MetricKind::Counter;
         use std::collections::BTreeMap;
 
         #[test]
@@ -1485,7 +1481,7 @@ mod test {
                     ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
                 ]));
 
-                let mut matches: Vec<RuleMatch>;
+                let matches: Vec<RuleMatch>;
                 matches = scanner.scan(&mut content);
             });
 
@@ -1522,7 +1518,7 @@ mod test {
                     SimpleEvent::String("hello world".to_string()),
                 )]));
 
-                let mut matches: Vec<RuleMatch>;
+                let matches: Vec<RuleMatch>;
                 matches = scanner.scan(&mut content);
             });
 
@@ -1565,7 +1561,7 @@ mod test {
                     SimpleEvent::String("hello world".to_string()),
                 )]));
 
-                let mut matches: Vec<RuleMatch>;
+                let matches: Vec<RuleMatch>;
                 matches = scanner.scan(&mut content);
             });
 
