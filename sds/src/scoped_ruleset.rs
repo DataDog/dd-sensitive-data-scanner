@@ -55,6 +55,10 @@ pub struct ExclusionCheck<'a> {
     tree_nodes: &'a [&'a RuleTree],
 }
 impl<'a> ExclusionCheck<'a> {
+    // Used by other modules to create an empty exclusion check
+    pub fn new_empty() -> Self {
+        Self { tree_nodes: &[] }
+    }
     pub fn is_excluded(&self, rule_index: usize) -> bool {
         for include_node in self.tree_nodes {
             for change in &include_node.rule_changes {
