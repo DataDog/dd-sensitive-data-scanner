@@ -213,7 +213,6 @@ pub fn visit_files<P: AsRef<Path>>(
     directory: P,
     visitor: &mut impl FnMut(BufReader<File>) -> Result<(), Box<dyn std::error::Error>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // let mut rules = vec![];
     for entry in fs::read_dir(directory)? {
         let entry = entry?;
         if entry.path().is_dir() {
