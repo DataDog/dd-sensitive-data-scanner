@@ -3,9 +3,9 @@ use criterion::{criterion_group, criterion_main};
 mod scope_benchmark {
     use core::num;
     use criterion::Criterion;
-    use sds::{
+    use dd_sds::SimpleEvent;
+    use dd_sds::{
         ContentVisitor, ExclusionCheck, Path, PathSegment, RuleIndexVisitor, Scope, ScopedRuleSet,
-        SimpleEvent,
     };
     use std::collections::BTreeMap;
 
@@ -77,7 +77,7 @@ mod scope_benchmark {
 
 mod luhn_checksum_benchmark {
     use criterion::{black_box, BenchmarkId, Criterion};
-    use sds::{LuhnChecksum, Validator};
+    use dd_sds::{LuhnChecksum, Validator};
 
     pub fn criterion_benchmark(c: &mut Criterion) {
         let credit_cards = vec![
