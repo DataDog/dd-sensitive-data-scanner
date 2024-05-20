@@ -19,6 +19,9 @@ pub struct StandardRule {
     #[serde(default)]
     pub validators: Vec<StandardRuleValidator>,
 
+    #[serde(default)]
+    pub experimental: bool,
+
     /// Priority is not currently used by this library, but the data is available.
     pub priority: u32,
 
@@ -34,6 +37,8 @@ pub struct StandardRule {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum StandardRuleValidator {
     LuhnChecksum,
+    ChineseId,
+    GithubTokenChecksum,
 }
 
 pub fn parse_standard_rules<P: AsRef<Path>>(
@@ -103,6 +108,8 @@ fn get_secondary_validator(validators: &[StandardRuleValidator]) -> Option<Secon
 
     validators.first().map(|validator| match validator {
         StandardRuleValidator::LuhnChecksum => SecondaryValidator::LuhnChecksum,
+        StandardRuleValidator::ChineseId => SecondaryValidator::ChineseIdChecksum,
+        StandardRuleValidator::GithubTokenChecksum => SecondaryValidator::GithubTokenChecksum,
     })
 }
 
