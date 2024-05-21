@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use crate::labels::{Labels, NO_LABEL};
 use crate::match_action::MatchAction;
 use crate::path::Path;
 use crate::scanner::cache_pool::CachePoolBuilder;
 use crate::scanner::error::CreateScannerError;
 use crate::scanner::CompiledRuleTrait;
+use crate::Labels;
 use serde_with::{serde_as, DefaultOnNull};
 
 pub trait RuleConfigTrait {
@@ -40,7 +40,7 @@ impl RegexRuleConfig {
             scope: Scope::all(),
             proximity_keywords: None,
             validator: None,
-            labels: NO_LABEL,
+            labels: Labels::empty(),
         }
     }
 }
@@ -177,8 +177,7 @@ impl RuleConfigBuilder {
 
 #[cfg(test)]
 mod test {
-    use crate::labels::NO_LABEL;
-    use crate::{MatchAction, ProximityKeywordsConfig, RegexRuleConfig, Scope};
+    use crate::{Labels, MatchAction, ProximityKeywordsConfig, RegexRuleConfig, Scope};
 
     #[test]
     fn should_override_pattern() {
@@ -199,7 +198,7 @@ mod test {
                 scope: Scope::all(),
                 proximity_keywords: None,
                 validator: None,
-                labels: NO_LABEL,
+                labels: Labels::empty(),
             }
         );
     }
