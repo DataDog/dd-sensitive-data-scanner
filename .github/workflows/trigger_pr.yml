@@ -1,0 +1,32 @@
+name: Create a PR in sds repo to bump the version
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.TRIGGER_APP_ID }}
+          private-key: ${{ secrets.TRIGGER_GITHUB_APP_PRIVATE_KEY }}
+          owner: DataDog
+          repositories: "sds-shared-library"
+      - name: Trigger Workflow in Another Repository
+        run: |
+          # Set the required variables
+          repo_owner="DataDog" 
+          repo_name="sds-shared-library"  
+          event_type="create_pr" 
+          # Trigger the workflow
+          curl -L \
+              -X POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ steps.generate-token.outputs.token }}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              https://api.github.com/repos/$repo_owner/$repo_name/dispatches \
+              -d "{\"event_type\": \"$event_type\", \"client_payload\": {\"commit_hash\": \"$GITHUB_SHA\"}}"
