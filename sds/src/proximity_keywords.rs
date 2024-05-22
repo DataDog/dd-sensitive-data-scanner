@@ -30,7 +30,7 @@ pub struct CompiledProximityKeywords {
 const EXCLUDED_KEYWORDS_REMOVED_CHARS: &[char] = &['-', '_'];
 
 struct ProximityKeywordsRegex<const EXCLUDED_CHARS: bool> {
-    regex: meta::Regex,
+    content_regex: meta::Regex,
 }
 
 impl CompiledProximityKeywords {
@@ -94,14 +94,14 @@ impl CompiledProximityKeywords {
             config.look_ahead_character_count,
             &[],
         )?
-        .map(|regex| ProximityKeywordsRegex { regex });
+            .map(|regex| ProximityKeywordsRegex { content_regex: regex });
 
         let excluded_pattern = compile_keywords(
             config.excluded_keywords,
             config.look_ahead_character_count,
             EXCLUDED_KEYWORDS_REMOVED_CHARS,
         )?
-        .map(|regex| ProximityKeywordsRegex { regex });
+            .map(|regex| ProximityKeywordsRegex { content_regex: regex });
 
         Ok(CompiledProximityKeywords {
             look_ahead_character_count: config.look_ahead_character_count,
@@ -149,7 +149,7 @@ fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
         let input = Input::new(&stripped_prefix)
             .earliest(true)
             .span(span_start..span_end);
-        regex.regex.search_half(&input).is_some()
+        regex.content_regex.search_half(&input).is_some()
     } else {
         // just get the previous n chars (no chars are skipped)
         let prefix_start_info = get_prefix_start(match_start, look_ahead_char_count, content);
@@ -159,7 +159,7 @@ fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
         let input = Input::new(content)
             .earliest(true)
             .span(prefix_start_info.start..prefix_end);
-        regex.regex.search_half(&input).is_some()
+        regex.content_regex.search_half(&input).is_some()
     }
 }
 
@@ -226,6 +226,16 @@ impl Default for Metrics {
     }
 }
 
+fn compile_keywords_pattern(keyword_patterns: Vec<Ast>) -> String {
+    let pattern = Ast::Alternation(Alternation {
+        span: span(),
+        asts: keyword_patterns,
+    })
+        .to_string();
+
+    pattern
+}
+
 fn compile_keywords_to_ast(
     keywords: &[String],
     look_ahead_character_count: usize,
@@ -246,19 +256,11 @@ fn compile_keywords_to_ast(
             if trimmed_keyword.is_empty() {
                 return Err(EmptyKeyword);
             }
-            Ok(calculate_keyword_pattern(&trimmed_keyword))
+            Ok(calculate_keyword_content_pattern(&trimmed_keyword))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(Some(keyword_patterns))
-}
-
-fn compile_keywords_pattern(keyword_patterns: Vec<Ast>) -> String {
-    Ast::Alternation(Alternation {
-        span: span(),
-        asts: keyword_patterns,
-    })
-    .to_string()
 }
 
 fn compile_keywords(
@@ -288,7 +290,7 @@ fn compile_keywords(
 }
 
 /// Transform a keyword in an AST, the keyword MUST NOT be empty
-fn calculate_keyword_pattern(keyword: &str) -> Ast {
+fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
     let mut keyword_pattern: Vec<Ast> = vec![];
     if keyword
         .chars()
@@ -371,8 +373,8 @@ pub enum ProximityKeywordsValidationError {
     KeywordTooLong(usize),
 
     #[error(
-        "Look ahead character count should be bigger than 0 and cannot be longer than {}",
-        MAX_LOOK_AHEAD_CHARACTER_COUNT
+    "Look ahead character count should be bigger than 0 and cannot be longer than {}",
+    MAX_LOOK_AHEAD_CHARACTER_COUNT
     )]
     InvalidLookAheadCharacterCount,
 }
@@ -437,7 +439,7 @@ mod test {
             vec!["hey".to_string()],
             vec!["hello".to_string()],
         )
-        .unwrap();
+            .unwrap();
 
         // only the included keyword is present
         assert!(!proximity_keywords.is_false_positive_match("hey world", 6));
@@ -456,7 +458,7 @@ mod test {
             vec!["hello".to_string(), "coty".to_string()],
             vec![],
         )
-        .unwrap();
+            .unwrap();
 
         assert!(!proximity_keywords.is_false_positive_match("hello world", 6));
         assert!(!proximity_keywords.is_false_positive_match("hey coty, hello world", 16));
@@ -468,7 +470,7 @@ mod test {
             vec![],
             vec!["hello".to_string(), "coty".to_string()],
         )
-        .unwrap();
+            .unwrap();
 
         assert!(proximity_keywords.is_false_positive_match("hello world", 6));
         assert!(proximity_keywords.is_false_positive_match("hey coty, hello world", 16));
@@ -825,7 +827,7 @@ mod test {
     #[test]
     fn test_calculate_keyword_pattern() {
         assert_eq!(
-            calculate_keyword_pattern("test").to_string(),
+            calculate_keyword_content_pattern("test").to_string(),
             "(?-u:\\b)test(?-u:\\b)".to_string()
         );
     }
