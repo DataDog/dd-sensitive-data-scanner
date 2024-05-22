@@ -226,18 +226,8 @@ impl Default for Metrics {
     }
 }
 
-fn compile_keywords_pattern(keyword_patterns: Vec<Ast>) -> String {
-    let pattern = Ast::Alternation(Alternation {
-        span: span(),
-        asts: keyword_patterns,
-    })
-    .to_string();
-
-    pattern
-}
-
 fn compile_keywords_to_ast(
-    keywords: &Vec<String>,
+    keywords: &[String],
     look_ahead_character_count: usize,
     remove_chars: &[char],
 ) -> Result<Option<Vec<Ast>>, ProximityKeywordsValidationError> {
@@ -246,7 +236,7 @@ fn compile_keywords_to_ast(
     }
 
     let keyword_patterns = keywords
-        .into_iter()
+        .iter()
         .map(|keyword| {
             if keyword.chars().count() > look_ahead_character_count {
                 return Err(KeywordTooLong(look_ahead_character_count));
@@ -261,6 +251,14 @@ fn compile_keywords_to_ast(
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(Some(keyword_patterns))
+}
+
+fn compile_keywords_pattern(keyword_patterns: Vec<Ast>) -> String {
+    Ast::Alternation(Alternation {
+        span: span(),
+        asts: keyword_patterns,
+    })
+    .to_string()
 }
 
 fn compile_keywords(
