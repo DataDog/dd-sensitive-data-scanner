@@ -10,6 +10,7 @@ members = ["tools/fuzz"]
 
 [features]
 default = []
+
 # Depreacted - Support hash from UTF-16 encoded bytes for backward compatibility. Users should use instead standalone hash match action
 utf16_hash_match_action = []
 bench = []
@@ -28,6 +29,9 @@ metrics = "=0.22.1"
 metrics-util = "0.16.3"
 crc32fast = "1.4.0"
 base62 = "2.0.2"
+
+# This is deprecated and may switch to `serde_yml` in the future. Waiting for it to mature a bit first.
+serde_yaml = "0.9.34"
 
 [dev-dependencies]
 rand = "0.8.5"

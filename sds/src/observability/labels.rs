@@ -9,8 +9,6 @@ use serde::{Deserialize, Serialize, Serializer};
 #[derive(Clone, Debug, PartialEq)]
 pub struct Labels(Vec<Label>);
 
-pub const NO_LABEL: Labels = Labels(vec![]);
-
 impl Labels {
     /// Clone the actual [Labels] with additional key-value labels
     pub fn clone_with_labels(&self, additional_labels: Labels) -> Labels {
@@ -28,8 +26,8 @@ impl Labels {
         Labels(labels.iter().map(Label::from).collect())
     }
 
-    pub fn empty() -> Self {
-        NO_LABEL
+    pub const fn empty() -> Self {
+        Labels(vec![])
     }
 }
 
@@ -130,12 +128,14 @@ mod test {
         assert!(label_list.contains(&Label::new("key_4", "value_4")));
     }
 
-    use crate::labels::NO_LABEL;
     use serde_test::{assert_de_tokens_error, assert_tokens, Token};
 
     #[test]
     fn test_deserialization_empty() {
-        assert_tokens(&NO_LABEL, &[Token::Seq { len: Some(0) }, Token::SeqEnd]);
+        assert_tokens(
+            &Labels::empty(),
+            &[Token::Seq { len: Some(0) }, Token::SeqEnd],
+        );
     }
 
     #[test]
