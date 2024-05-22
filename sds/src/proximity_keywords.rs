@@ -226,16 +226,17 @@ impl Default for Metrics {
     }
 }
 
-fn compile_keywords(
-    keywords: Vec<String>,
+fn compile_keywords_to_ast(
+    keywords: &[String],
     look_ahead_character_count: usize,
     remove_chars: &[char],
-) -> Result<Option<meta::Regex>, ProximityKeywordsValidationError> {
+) -> Result<Option<Vec<Ast>>, ProximityKeywordsValidationError> {
     if keywords.is_empty() {
         return Ok(None);
     }
-    let keyword_patterns: Vec<Ast> = keywords
-        .into_iter()
+
+    let keyword_patterns = keywords
+        .iter()
         .map(|keyword| {
             if keyword.chars().count() > look_ahead_character_count {
                 return Err(KeywordTooLong(look_ahead_character_count));
@@ -249,11 +250,28 @@ fn compile_keywords(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let pattern = Ast::Alternation(Alternation {
+    Ok(Some(keyword_patterns))
+}
+
+fn compile_keywords_pattern(keyword_patterns: Vec<Ast>) -> String {
+    Ast::Alternation(Alternation {
         span: span(),
         asts: keyword_patterns,
     })
-    .to_string();
+    .to_string()
+}
+
+fn compile_keywords(
+    keywords: Vec<String>,
+    look_ahead_character_count: usize,
+    remove_chars: &[char],
+) -> Result<Option<meta::Regex>, ProximityKeywordsValidationError> {
+    let pattern = match compile_keywords_to_ast(&keywords, look_ahead_character_count, remove_chars)
+    {
+        Ok(Some(keyword_patterns)) => compile_keywords_pattern(keyword_patterns),
+        Ok(None) => return Ok(None),
+        Err(e) => return Err(e),
+    };
 
     Ok(Some(
         meta::Regex::builder()
@@ -788,6 +806,20 @@ mod test {
             .unwrap();
         assert_eq!(regex.is_match("hello"), true);
         assert_eq!(regex.is_match("he-l_lo"), false);
+    }
+
+    #[test]
+    fn test_compile_multi_keywords() {
+        let pattern = match compile_keywords_to_ast(
+            &&vec!["hello".to_string(), "world*".to_string()],
+            10,
+            &[],
+        ) {
+            Ok(Some(keyword_patterns)) => compile_keywords_pattern(keyword_patterns),
+            _ => "".to_string(),
+        };
+
+        assert_eq!(pattern, "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*")
     }
 
     #[test]
