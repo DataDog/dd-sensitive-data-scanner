@@ -3,6 +3,8 @@ use std::fmt::{Debug, Display, Formatter};
 
 use serde::{Deserialize, Serialize};
 
+const UNIFIED_LINK_CHAR: &str = ".";
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Path<'a> {
     pub segments: Vec<PathSegment<'a>>,
@@ -51,7 +53,7 @@ impl<'a> Path<'a> {
         true
     }
 
-    pub fn to_string(&self) -> String {
+    pub fn absolute_path(&self) -> String {
         self.segments
             .iter()
             .filter_map(|segment| match segment {
@@ -59,7 +61,7 @@ impl<'a> Path<'a> {
                 _ => None,
             })
             .collect::<Vec<String>>()
-            .join(".")
+            .join(UNIFIED_LINK_CHAR)
     }
 }
 

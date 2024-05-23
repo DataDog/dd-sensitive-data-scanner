@@ -33,8 +33,8 @@ pub trait MatchEmitter {
 // This implements MatchEmitter for mutable closures (so you can use a closure instead of a custom
 // struct that implements MatchEmitter)
 impl<F> MatchEmitter for F
-where
-    F: FnMut(StringMatch),
+    where
+        F: FnMut(StringMatch),
 {
     fn emit(&mut self, string_match: StringMatch) {
         // This just calls the closure (itself)
@@ -48,6 +48,7 @@ pub trait CompiledRuleTrait: Send + Sync {
     fn get_string_matches(
         &self,
         content: &str,
+        path: &str,
         caches: &mut CachePoolGuard<'_>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -77,6 +78,7 @@ impl CompiledRuleTrait for RegexCompiledRule {
     fn get_string_matches(
         &self,
         content: &str,
+        path: &str,
         caches: &mut CachePoolGuard<'_>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -87,7 +89,7 @@ impl CompiledRuleTrait for RegexCompiledRule {
             let input = Input::new(content).range(start..);
             let cache = &mut caches[self.rule_cache_index];
             if let Some(regex_match) = self.regex.search_with(cache, &input) {
-                if is_false_positive_match(&regex_match, self, content) {
+                if is_false_positive_match(&regex_match, self, content, path) {
                     if let Some(next) = get_next_regex_start(content, &regex_match) {
                         start = next;
                     } else {
@@ -136,8 +138,8 @@ impl RuleConfigTrait for Box<dyn RuleConfigTrait> {
 }
 
 impl<T> RuleConfigTrait for Box<T>
-where
-    T: RuleConfigTrait,
+    where
+        T: RuleConfigTrait,
 {
     fn convert_to_compiled_rule(
         &self,
@@ -454,8 +456,10 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                         custom_end: E::zero_index(),
                     });
                 };
+
                 rule.get_string_matches(
                     content,
+                    &path.absolute_path(),
                     &mut self.caches,
                     &exclusion_check,
                     self.excluded_matches,
@@ -507,10 +511,11 @@ fn is_false_positive_match(
     regex_match: &regex_automata::Match,
     rule: &RegexCompiledRule,
     content: &str,
+    path: &str,
 ) -> bool {
     if rule
         .proximity_keywords
-        .is_false_positive_match(content, regex_match.start())
+        .is_false_positive_match(content, path, regex_match.start())
     {
         return true;
     }
@@ -565,6 +570,7 @@ mod test {
         fn get_string_matches(
             &self,
             _content: &str,
+            _path: &str,
             _caches: &mut CachePoolGuard<'_>,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
@@ -614,7 +620,7 @@ mod test {
                     .build(),
             ) as Box<dyn RuleConfigTrait>,
         ])
-        .unwrap();
+            .unwrap();
 
         let mut input = "this is a dumbss with random data and a secret".to_owned();
 
@@ -634,7 +640,7 @@ mod test {
                 replacement: "[REDACTED]".to_string(),
             })
             .build()])
-        .unwrap();
+            .unwrap();
 
         let mut input = "text with secret".to_owned();
 
@@ -654,7 +660,7 @@ mod test {
                 .build()],
             Labels::new(&[("key".to_string(), "value".to_string())]),
         )
-        .unwrap();
+            .unwrap();
 
         let mut input = "text with secret".to_owned();
 
@@ -699,7 +705,7 @@ mod test {
                 replacement: "[REDACTED]".to_string(),
             })
             .build()])
-        .unwrap();
+            .unwrap();
 
         let mut content = "testing 1 2 3".to_string();
 
@@ -715,7 +721,7 @@ mod test {
             RegexRuleConfig::builder("a".to_owned()).build(),
             RegexRuleConfig::builder("b".to_owned()).build(),
         ])
-        .unwrap();
+            .unwrap();
 
         let mut content = "a b".to_string();
 
@@ -803,7 +809,7 @@ mod test {
     }
 
     #[test]
-    fn test_included_keywords() {
+    fn test_included_keywords_match_content() {
         let redact_test_rule = RegexRuleConfig::builder("world".to_owned())
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
@@ -830,6 +836,55 @@ mod test {
         let matches = scanner.scan(&mut content);
         assert_eq!(content, "world hello [REDACTED]");
         assert_eq!(matches.len(), 1);
+    }
+
+    #[test]
+    fn test_included_keywords_match_path() {
+        let redact_test_rule = RegexRuleConfig::builder("world".to_owned())
+            .match_action(MatchAction::Redact {
+                replacement: "[REDACTED]".to_string(),
+            })
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["awsAccess".to_string(), "access/key".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build();
+
+        let scanner = Scanner::new(&[redact_test_rule]).unwrap();
+
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
+            "aws".to_string(),
+            SimpleEvent::Map(BTreeMap::from([(
+                "access".to_string(),
+                SimpleEvent::String("hello world".to_string()),
+            )])),
+        )]));
+
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 1);
+
+        content = SimpleEvent::Map(BTreeMap::from([(
+            "access".to_string(),
+            SimpleEvent::Map(BTreeMap::from([(
+                "KEY".to_string(),
+                SimpleEvent::String("hello world".to_string()),
+            )])),
+        )]));
+
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 1);
+
+        content = SimpleEvent::Map(BTreeMap::from([(
+            "aws".to_string(),
+            SimpleEvent::Map(BTreeMap::from([(
+                "KEY".to_string(),
+                SimpleEvent::String("hello world".to_string()),
+            )])),
+        )]));
+
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 0);
     }
 
     #[test]
@@ -1321,7 +1376,7 @@ mod test {
 
             fn calculate_indices<'a>(
                 _content: &str,
-                match_visitor: impl Iterator<Item = crate::EncodeIndices<'a, Self>>,
+                match_visitor: impl Iterator<Item=crate::EncodeIndices<'a, Self>>,
             ) {
                 let mut prev_start = 0;
                 for indices in match_visitor {
