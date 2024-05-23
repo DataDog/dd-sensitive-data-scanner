@@ -102,20 +102,20 @@ impl CompiledProximityKeywords {
             config.look_ahead_character_count,
             &[],
         )?
-            .map(|(content_regex, path_regex)| ProximityKeywordsRegex {
-                content_regex,
-                path_regex,
-            });
+        .map(|(content_regex, path_regex)| ProximityKeywordsRegex {
+            content_regex,
+            path_regex,
+        });
 
         let excluded_patterns = compile_keywords(
             config.excluded_keywords,
             config.look_ahead_character_count,
             EXCLUDED_KEYWORDS_REMOVED_CHARS,
         )?
-            .map(|(content_regex, path_regex)| ProximityKeywordsRegex {
-                content_regex,
-                path_regex,
-            });
+        .map(|(content_regex, path_regex)| ProximityKeywordsRegex {
+            content_regex,
+            path_regex,
+        });
 
         Ok(CompiledProximityKeywords {
             look_ahead_character_count: config.look_ahead_character_count,
@@ -243,15 +243,21 @@ impl Default for Metrics {
 fn compile_keywords_pattern(keyword_patterns: Vec<(Ast, Ast)>) -> (String, String) {
     let content_pattern = Ast::Alternation(Alternation {
         span: span(),
-        asts: keyword_patterns.iter().map(|&(content_ast, _)| { content_ast }).collect(),
+        asts: keyword_patterns
+            .iter()
+            .map(|(content_ast, _)| content_ast.clone())
+            .collect(),
     })
-        .to_string();
+    .to_string();
 
     let path_pattern = Ast::Alternation(Alternation {
         span: span(),
-        asts: keyword_patterns.iter().map(|&(_, path_ast)| { path_ast }).collect(),
+        asts: keyword_patterns
+            .iter()
+            .map(|(_, path_ast)| path_ast.clone())
+            .collect(),
     })
-        .to_string();
+    .to_string();
 
     (content_pattern, path_pattern)
 }
@@ -276,7 +282,10 @@ fn compile_keywords_to_ast(
             if trimmed_keyword.is_empty() {
                 return Err(EmptyKeyword);
             }
-            Ok((calculate_keyword_content_pattern(&trimmed_keyword), calculate_keyword_path_pattern(&trimmed_keyword)))
+            Ok((
+                calculate_keyword_content_pattern(&trimmed_keyword),
+                calculate_keyword_path_pattern(&trimmed_keyword),
+            ))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -288,28 +297,27 @@ fn compile_keywords(
     look_ahead_character_count: usize,
     remove_chars: &[char],
 ) -> Result<Option<(meta::Regex, meta::Regex)>, ProximityKeywordsValidationError> {
-    let (content_pattern, path_pattern) = match compile_keywords_to_ast(&keywords, look_ahead_character_count, remove_chars)
-    {
-        Ok(Some(keyword_patterns)) => compile_keywords_pattern(keyword_patterns),
-        Ok(None) => return Ok(None),
-        Err(e) => return Err(e),
-    };
+    let (content_pattern, path_pattern) =
+        match compile_keywords_to_ast(&keywords, look_ahead_character_count, remove_chars) {
+            Ok(Some(keyword_patterns)) => compile_keywords_pattern(keyword_patterns),
+            Ok(None) => return Ok(None),
+            Err(e) => return Err(e),
+        };
 
-    let regex_builder = meta::Regex::builder().configure(
-        meta::Config::new()
-            .nfa_size_limit(None)
-            // This is the default that `Regex` uses
-            .hybrid_cache_capacity(2 * (1 << 20)),
-    ).syntax(regex_automata::util::syntax::Config::default().case_insensitive(true));
-
-
-    Ok(Some(
-        (regex_builder.build(&content_pattern)
-             .unwrap(),
-         regex_builder.build(&path_pattern)
-             .unwrap(),
+    let mut builder = meta::Regex::builder();
+    let regex_builder = builder
+        .configure(
+            meta::Config::new()
+                .nfa_size_limit(None)
+                // This is the default that `Regex` uses
+                .hybrid_cache_capacity(2 * (1 << 20)),
         )
-    ))
+        .syntax(regex_automata::util::syntax::Config::default().case_insensitive(true));
+
+    Ok(Some((
+        regex_builder.build(&content_pattern).unwrap(),
+        regex_builder.build(&path_pattern).unwrap(),
+    )))
 }
 
 fn should_push_word_boundary(keyword: &str, is_end: bool) -> bool {
@@ -346,13 +354,14 @@ fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
 /// Transform a keyword in an AST for the path pattern, the keyword MUST NOT be empty
 fn calculate_keyword_path_pattern(keyword: &str) -> Ast {
     let mut keyword_pattern: Vec<Ast> = vec![];
-    if should_push_word_boundary(keyword, false) {
-        keyword_pattern.push(word_boundary())
-    }
 
     let mut needs_separation = false;
     for c in keyword.chars() {
-        if c.is_ascii_lowercase() {
+        let is_link_symbol = MULTI_WORD_KEYWORDS_LINK_CHARS.contains(&c);
+        // A regular character is a lowercase character, or a character that is not uppercase nor a link symbol
+        let is_regular_char = c.is_ascii_lowercase() || !(c.is_ascii_uppercase() || is_link_symbol);
+
+        if is_regular_char {
             keyword_pattern.push(Ast::Literal(literal_ast(c)));
             needs_separation = true;
             continue;
@@ -367,15 +376,12 @@ fn calculate_keyword_path_pattern(keyword: &str) -> Ast {
             needs_separation = false;
         }
 
-        if MULTI_WORD_KEYWORDS_LINK_CHARS.contains(&c) {
+        if is_link_symbol {
             keyword_pattern.push(Ast::Literal(literal_ast(UNIFIED_LINK_CHAR)));
             needs_separation = false;
         }
     }
 
-    if should_push_word_boundary(keyword, true) {
-        keyword_pattern.push(word_boundary())
-    }
     Ast::Concat(Concat {
         span: span(),
         asts: keyword_pattern,
@@ -436,8 +442,8 @@ pub enum ProximityKeywordsValidationError {
     KeywordTooLong(usize),
 
     #[error(
-    "Look ahead character count should be bigger than 0 and cannot be longer than {}",
-    MAX_LOOK_AHEAD_CHARACTER_COUNT
+        "Look ahead character count should be bigger than 0 and cannot be longer than {}",
+        MAX_LOOK_AHEAD_CHARACTER_COUNT
     )]
     InvalidLookAheadCharacterCount,
 }
@@ -502,7 +508,7 @@ mod test {
             vec!["hey".to_string()],
             vec!["hello".to_string()],
         )
-            .unwrap();
+        .unwrap();
 
         // only the included keyword is present
         assert!(!proximity_keywords.is_false_positive_match("hey world", 6));
@@ -521,7 +527,7 @@ mod test {
             vec!["hello".to_string(), "coty".to_string()],
             vec![],
         )
-            .unwrap();
+        .unwrap();
 
         assert!(!proximity_keywords.is_false_positive_match("hello world", 6));
         assert!(!proximity_keywords.is_false_positive_match("hey coty, hello world", 16));
@@ -533,7 +539,7 @@ mod test {
             vec![],
             vec!["hello".to_string(), "coty".to_string()],
         )
-            .unwrap();
+        .unwrap();
 
         assert!(proximity_keywords.is_false_positive_match("hello world", 6));
         assert!(proximity_keywords.is_false_positive_match("hey coty, hello world", 16));
@@ -866,25 +872,43 @@ mod test {
 
     #[test]
     fn test_compile_keywords() {
-        let regex = compile_keywords(vec!["hello".to_string()], 5, &[])
-            .unwrap()
-            .unwrap();
-        assert_eq!(regex.is_match("hello"), true);
-        assert_eq!(regex.is_match("he-l_lo"), false);
+        let (content_regex, path_regex) =
+            compile_keywords(vec!["hello".to_string(), "awsAccess".to_string()], 20, &[])
+                .unwrap()
+                .unwrap();
+        assert_eq!(content_regex.is_match("hello"), true);
+        assert_eq!(content_regex.is_match("he-l_lo"), false);
+        assert_eq!(
+            content_regex.search(&Input::new("I want to say hello to my dear friend")),
+            Some(regex_automata::Match::must(0, 14..19))
+        );
+
+        assert_eq!(path_regex.is_match("awsAccess"), false);
+        assert_eq!(path_regex.is_match("aws_access"), true);
+        assert_eq!(
+            path_regex.search(&Input::new("my_path_to_hello_aws")),
+            Some(regex_automata::Match::must(0, 11..16))
+        );
     }
 
     #[test]
-    fn test_compile_multi_keywords() {
-        let pattern = match compile_keywords_to_ast(
-            &&vec!["hello".to_string(), "world*".to_string()],
+    fn test_compile_keywords_pattern() {
+        let (content_pattern, path_pattern) = match compile_keywords_to_ast(
+            &&vec![
+                "hello".to_string(),
+                "world*".to_string(),
+                "_aws".to_string(),
+                "aws-access".to_string(),
+            ],
             10,
             &[],
         ) {
             Ok(Some(keyword_patterns)) => compile_keywords_pattern(keyword_patterns),
-            _ => "".to_string(),
+            _ => ("".to_string(), "".to_string()),
         };
 
-        assert_eq!(pattern, "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*")
+        assert_eq!(content_pattern, "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*|_aws(?-u:\\b)|(?-u:\\b)aws\\-access(?-u:\\b)");
+        assert_eq!(path_pattern, "hello|world\\*|_aws|aws_access");
     }
 
     #[test]
@@ -907,7 +931,7 @@ mod test {
     fn test_calculate_path_pattern_on_simple_keyword() {
         assert_eq!(
             calculate_keyword_path_pattern("test").to_string(),
-            "(?-u:\\b)test(?-u:\\b)".to_string()
+            "test".to_string()
         )
     }
 
@@ -915,22 +939,22 @@ mod test {
     fn test_calculate_path_pattern_on_multi_word_keyword() {
         assert_eq!(
             calculate_keyword_path_pattern("test hello world").to_string(),
-            "(?-u:\\b)test_hello_world(?-u:\\b)".to_string()
+            "test_hello_world".to_string()
         );
 
         assert_eq!(
             calculate_keyword_path_pattern("test helloWorld").to_string(),
-            "(?-u:\\b)test_hello_world(?-u:\\b)".to_string()
+            "test_hello_world".to_string()
         );
 
         assert_eq!(
             calculate_keyword_path_pattern("awsAccess-key-id").to_string(),
-            "(?-u:\\b)aws_access_key_id(?-u:\\b)".to_string()
+            "aws_access_key_id".to_string()
         );
 
         assert_eq!(
             calculate_keyword_path_pattern("AWS_KEY_ID").to_string(),
-            "(?-u:\\b)aws_key_id(?-u:\\b)".to_string()
+            "aws_key_id".to_string()
         );
 
         assert_eq!(
@@ -940,17 +964,17 @@ mod test {
 
         assert_eq!(
             calculate_keyword_path_pattern("AwsAccessKeyID").to_string(),
-            "(?-u:\\b)aws_access_key_id(?-u:\\b)".to_string()
+            "aws_access_key_id".to_string()
         );
 
         assert_eq!(
             calculate_keyword_path_pattern("AWSACCESSKEYID").to_string(),
-            "(?-u:\\b)awsaccesskeyid(?-u:\\b)".to_string()
+            "awsaccesskeyid".to_string()
         );
 
         assert_eq!(
             calculate_keyword_path_pattern("testThis-with_different/separators").to_string(),
-            "(?-u:\\b)test_this_with_different_separators(?-u:\\b)".to_string()
+            "test_this_with_different_separators".to_string()
         );
     }
 
