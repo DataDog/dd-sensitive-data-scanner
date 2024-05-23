@@ -1,6 +1,6 @@
 use crate::normalization::rust_regex_adapter::{convert_to_rust_regex, QUANTIFIER_LIMIT};
 use crate::parser::error::ParseError;
-use regex_automata::meta::{self, Regex};
+use regex_automata::meta::{self};
 use thiserror::Error;
 
 #[derive(Debug, PartialEq, Eq, Error)]
@@ -88,7 +88,7 @@ fn build_regex(
     converted_pattern: &str,
     complexity_limit: usize,
 ) -> Result<meta::Regex, RegexValidationError> {
-    Ok(meta::Builder::new()
+    meta::Builder::new()
         .configure(
             meta::Config::new()
                 .nfa_size_limit(Some(complexity_limit))
@@ -100,7 +100,7 @@ fn build_regex(
                 .dot_matches_new_line(false)
                 .unicode(true),
         )
-        .build(&converted_pattern)
+        .build(converted_pattern)
         .map_err(|regex_err| {
             if regex_err.size_limit().is_some() {
                 RegexValidationError::TooComplex
@@ -108,7 +108,7 @@ fn build_regex(
                 // Internally the `regex` crate does this conversion, so we do it too
                 RegexValidationError::InvalidSyntax
             }
-        })?)
+        })
 }
 
 #[cfg(test)]
