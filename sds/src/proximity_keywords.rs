@@ -34,7 +34,7 @@ const EXCLUDED_KEYWORDS_REMOVED_CHARS: &[char] = &['-', '_'];
 /// Example: '.' in "my.path" is considered to be a link character.
 const MULTI_WORD_KEYWORDS_LINK_CHARS: &[char] = &['-', '_', '.', ' ', '/'];
 
-const UNIFIED_LINK_CHAR: char = '_';
+const UNIFIED_LINK_CHAR: char = '.';
 
 struct ProximityKeywordsRegex<const EXCLUDED_CHARS: bool> {
     content_regex: meta::Regex,
@@ -356,31 +356,77 @@ fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
 fn calculate_keyword_path_pattern(keyword: &str) -> Ast {
     let mut keyword_pattern: Vec<Ast> = vec![];
 
-    let mut needs_separation = false;
-    for c in keyword.chars() {
+    if should_push_word_boundary(keyword, false) {
+        keyword_pattern.push(word_boundary())
+    }
+
+    #[derive(Clone, Copy)]
+    enum CharType {
+        Regular,
+        Uppercase,
+        Separator,
+    }
+
+    let mut previous_char: Option<CharType> = None;
+    for (i, c) in keyword.chars().enumerate() {
         let is_link_symbol = MULTI_WORD_KEYWORDS_LINK_CHARS.contains(&c);
-        // A regular character is a lowercase character, or a character that is not uppercase nor a link symbol
-        let is_regular_char = c.is_ascii_lowercase() || !(c.is_ascii_uppercase() || is_link_symbol);
+        let is_uppercase_char = c.is_ascii_uppercase();
 
-        if is_regular_char {
-            keyword_pattern.push(Ast::Literal(literal_ast(c)));
-            needs_separation = true;
-            continue;
-        }
+        let current_char = if is_link_symbol {
+            CharType::Separator
+        } else if is_uppercase_char {
+            CharType::Uppercase
+        } else {
+            CharType::Regular
+        };
 
-        if c.is_ascii_uppercase() {
-            // Camelcase is considered to be a separation
-            if needs_separation {
+        let next_char = if i == keyword.len() - 1 {
+            None
+        } else {
+            Some(CharType::Regular)
+        };
+
+        let push_character = |pattern: &mut Vec<Ast>| {
+            pattern.push(Ast::Literal(literal_ast(c.to_ascii_lowercase())));
+        };
+
+        match (previous_char, current_char, next_char) {
+            // First character is simply pushed
+            (None, _, _) => {
+                push_character(&mut keyword_pattern);
+            }
+            // Regular character is simply pushed
+            (_, CharType::Regular, _) => {
+                push_character(&mut keyword_pattern);
+            }
+            // Character coming after a separator is pushed
+            (Some(CharType::Separator), _, _) => {
+                push_character(&mut keyword_pattern);
+            }
+            // Uppercase after an uppercase is pushed
+            (Some(CharType::Uppercase), CharType::Uppercase, _) => {
+                push_character(&mut keyword_pattern);
+            }
+            // CamelCase: push a link character and push the current character
+            (Some(CharType::Regular), CharType::Uppercase, _) => {
+                keyword_pattern.push(Ast::Literal(literal_ast(UNIFIED_LINK_CHAR)));
+                push_character(&mut keyword_pattern);
+            }
+            // Regular separation in the keyword: push a link character only
+            (Some(_), CharType::Separator, Some(_)) => {
                 keyword_pattern.push(Ast::Literal(literal_ast(UNIFIED_LINK_CHAR)));
             }
-            keyword_pattern.push(Ast::Literal(literal_ast(c.to_ascii_lowercase())));
-            needs_separation = false;
+            // Separation at the end of the keyword: push the current character
+            (Some(_), CharType::Separator, None) => {
+                push_character(&mut keyword_pattern);
+            }
         }
 
-        if is_link_symbol {
-            keyword_pattern.push(Ast::Literal(literal_ast(UNIFIED_LINK_CHAR)));
-            needs_separation = false;
-        }
+        previous_char = Some(current_char);
+    }
+
+    if should_push_word_boundary(keyword, true) {
+        keyword_pattern.push(word_boundary())
     }
 
     Ast::Concat(Concat {
@@ -885,10 +931,10 @@ mod test {
         );
 
         assert_eq!(path_regex.is_match("awsAccess"), false);
-        assert_eq!(path_regex.is_match("aws_access"), true);
+        assert_eq!(path_regex.is_match("aws.access"), true);
         assert_eq!(
-            path_regex.search(&Input::new("my_path_to_hello_aws")),
-            Some(regex_automata::Match::must(0, 11..16))
+            path_regex.search(&Input::new("my.path.to.aws.access")),
+            Some(regex_automata::Match::must(0, 11..21))
         );
     }
 
@@ -909,7 +955,7 @@ mod test {
         };
 
         assert_eq!(content_pattern, "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*|_aws(?-u:\\b)|(?-u:\\b)aws\\-access(?-u:\\b)");
-        assert_eq!(path_pattern, "hello|world\\*|_aws|aws_access");
+        assert_eq!(path_pattern, "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*|_aws(?-u:\\b)|(?-u:\\b)aws\\.access(?-u:\\b)");
     }
 
     #[test]
@@ -932,7 +978,7 @@ mod test {
     fn test_calculate_path_pattern_on_simple_keyword() {
         assert_eq!(
             calculate_keyword_path_pattern("test").to_string(),
-            "test".to_string()
+            "(?-u:\\b)test(?-u:\\b)".to_string()
         )
     }
 
@@ -940,42 +986,52 @@ mod test {
     fn test_calculate_path_pattern_on_multi_word_keyword() {
         assert_eq!(
             calculate_keyword_path_pattern("test hello world").to_string(),
-            "test_hello_world".to_string()
+            "(?-u:\\b)test\\.hello\\.world(?-u:\\b)".to_string()
         );
 
         assert_eq!(
             calculate_keyword_path_pattern("test helloWorld").to_string(),
-            "test_hello_world".to_string()
+            "(?-u:\\b)test\\.hello\\.world(?-u:\\b)".to_string()
         );
 
         assert_eq!(
             calculate_keyword_path_pattern("awsAccess-key-id").to_string(),
-            "aws_access_key_id".to_string()
+            "(?-u:\\b)aws\\.access\\.key\\.id(?-u:\\b)".to_string()
         );
 
         assert_eq!(
             calculate_keyword_path_pattern("AWS_KEY_ID").to_string(),
-            "aws_key_id".to_string()
+            "(?-u:\\b)aws\\.key\\.id(?-u:\\b)".to_string()
         );
 
         assert_eq!(
             calculate_keyword_path_pattern("_AWS_KEY_ID_").to_string(),
-            "_aws_key_id_".to_string()
+            "_aws\\.key\\.id_".to_string()
         );
 
         assert_eq!(
             calculate_keyword_path_pattern("AwsAccessKeyID").to_string(),
-            "aws_access_key_id".to_string()
+            "(?-u:\\b)aws\\.access\\.key\\.id(?-u:\\b)".to_string()
         );
 
         assert_eq!(
             calculate_keyword_path_pattern("AWSACCESSKEYID").to_string(),
-            "awsaccesskeyid".to_string()
+            "(?-u:\\b)awsaccesskeyid(?-u:\\b)".to_string()
+        );
+
+        assert_eq!(
+            calculate_keyword_path_pattern("aLotOfCamelCaSe").to_string(),
+            "(?-u:\\b)a\\.lot\\.of\\.camel\\.ca\\.se(?-u:\\b)".to_string()
         );
 
         assert_eq!(
             calculate_keyword_path_pattern("testThis-with_different/separators").to_string(),
-            "test_this_with_different_separators".to_string()
+            "(?-u:\\b)test\\.this\\.with\\.different\\.separators(?-u:\\b)".to_string()
+        );
+
+        assert_eq!(
+            calculate_keyword_path_pattern("edge--case_/a. bit...annoying").to_string(),
+            "(?-u:\\b)edge\\.\\-case\\./a\\. bit\\.\\.\\.annoying(?-u:\\b)".to_string()
         );
     }
 
