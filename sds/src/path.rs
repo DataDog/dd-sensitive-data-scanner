@@ -50,6 +50,17 @@ impl<'a> Path<'a> {
         }
         true
     }
+
+    pub fn to_string(&self) -> String {
+        self.segments
+            .iter()
+            .filter_map(|segment| match segment {
+                PathSegment::Field(field) => Some(field.to_string().to_ascii_lowercase()),
+                _ => None,
+            })
+            .collect::<Vec<String>>()
+            .join(".")
+    }
 }
 
 impl<'a> PathSegment<'a> {
@@ -121,5 +132,17 @@ mod test {
         assert!(foo.starts_with(&foo));
         assert!(!foo.starts_with(&array_foo));
         assert!(!array_foo.starts_with(&foo));
+    }
+
+    #[test]
+    fn test_to_string() {
+        assert_eq!(
+            Path::from(vec!["hello".into(), 0.into(), "world".into()]).to_string(),
+            "hello.world"
+        );
+        assert_eq!(
+            Path::from(vec!["hello".into(), 1.into(), "CHICKEN".into(), 2.into()]).to_string(),
+            "hello.chicken"
+        );
     }
 }
