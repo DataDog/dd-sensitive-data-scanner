@@ -48,18 +48,20 @@ impl CompiledProximityKeywords {
             &self.excluded_keywords_pattern,
         ) {
             (Some(included_keywords), _) => {
-                let is_false_positive_from_content = !contains_keyword_match(
+                let is_valid_from_path = contains_keyword_in_path(path, included_keywords);
+
+                if is_valid_from_path {
+                    return false;
+                }
+
+                let is_valid_from_content = contains_keyword_match(
                     content,
                     match_start,
                     self.look_ahead_character_count,
                     included_keywords,
                 );
 
-                let is_false_positive_from_path =
-                    !contains_keyword_in_path(path, included_keywords);
-
-                let is_false_positive =
-                    is_false_positive_from_content && is_false_positive_from_path;
+                let is_false_positive = !(is_valid_from_path || is_valid_from_content);
 
                 if is_false_positive {
                     self.metrics.false_positive_included_keywords.increment(1);
