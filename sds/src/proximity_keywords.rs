@@ -38,6 +38,7 @@ const UNIFIED_LINK_CHAR: char = '_';
 
 struct ProximityKeywordsRegex<const EXCLUDED_CHARS: bool> {
     content_regex: meta::Regex,
+    #[allow(dead_code)]
     path_regex: meta::Regex,
 }
 
@@ -326,9 +327,9 @@ fn should_push_word_boundary(keyword: &str, is_end: bool) -> bool {
     } else {
         keyword.chars().next()
     };
-    return next_char
+    next_char
         .map(|char| char.is_ascii_alphabetic() || char.is_ascii_digit())
-        .unwrap();
+        .unwrap()
 }
 
 /// Transform a keyword in an AST, the keyword MUST NOT be empty
