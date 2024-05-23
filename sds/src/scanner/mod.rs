@@ -33,8 +33,8 @@ pub trait MatchEmitter {
 // This implements MatchEmitter for mutable closures (so you can use a closure instead of a custom
 // struct that implements MatchEmitter)
 impl<F> MatchEmitter for F
-    where
-        F: FnMut(StringMatch),
+where
+    F: FnMut(StringMatch),
 {
     fn emit(&mut self, string_match: StringMatch) {
         // This just calls the closure (itself)
@@ -138,8 +138,8 @@ impl RuleConfigTrait for Box<dyn RuleConfigTrait> {
 }
 
 impl<T> RuleConfigTrait for Box<T>
-    where
-        T: RuleConfigTrait,
+where
+    T: RuleConfigTrait,
 {
     fn convert_to_compiled_rule(
         &self,
@@ -620,7 +620,7 @@ mod test {
                     .build(),
             ) as Box<dyn RuleConfigTrait>,
         ])
-            .unwrap();
+        .unwrap();
 
         let mut input = "this is a dumbss with random data and a secret".to_owned();
 
@@ -640,7 +640,7 @@ mod test {
                 replacement: "[REDACTED]".to_string(),
             })
             .build()])
-            .unwrap();
+        .unwrap();
 
         let mut input = "text with secret".to_owned();
 
@@ -660,7 +660,7 @@ mod test {
                 .build()],
             Labels::new(&[("key".to_string(), "value".to_string())]),
         )
-            .unwrap();
+        .unwrap();
 
         let mut input = "text with secret".to_owned();
 
@@ -705,7 +705,7 @@ mod test {
                 replacement: "[REDACTED]".to_string(),
             })
             .build()])
-            .unwrap();
+        .unwrap();
 
         let mut content = "testing 1 2 3".to_string();
 
@@ -721,7 +721,7 @@ mod test {
             RegexRuleConfig::builder("a".to_owned()).build(),
             RegexRuleConfig::builder("b".to_owned()).build(),
         ])
-            .unwrap();
+        .unwrap();
 
         let mut content = "a b".to_string();
 
@@ -877,14 +877,54 @@ mod test {
 
         content = SimpleEvent::Map(BTreeMap::from([(
             "aws".to_string(),
-            SimpleEvent::Map(BTreeMap::from([(
-                "KEY".to_string(),
-                SimpleEvent::String("hello world".to_string()),
-            )])),
+            SimpleEvent::List(vec![
+                SimpleEvent::Map(BTreeMap::from([(
+                    "key".to_string(),
+                    SimpleEvent::String("hello world".to_string()),
+                )])),
+                SimpleEvent::Map(BTreeMap::from([(
+                    "access".to_string(),
+                    SimpleEvent::String("hello".to_string()),
+                )])),
+            ]),
         )]));
 
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 0);
+
+        content = SimpleEvent::Map(BTreeMap::from([(
+            "aws%access".to_string(),
+            SimpleEvent::String("hello".to_string()),
+        )]));
+
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 0);
+
+        content = SimpleEvent::Map(BTreeMap::from([(
+            "aws".to_string(),
+            SimpleEvent::List(vec![
+                SimpleEvent::Map(BTreeMap::from([(
+                    "key".to_string(),
+                    SimpleEvent::String("hello world".to_string()),
+                )])),
+                SimpleEvent::Map(BTreeMap::from([
+                    (
+                        "access".to_string(),
+                        SimpleEvent::Map(BTreeMap::from([(
+                            "random_key".to_string(),
+                            SimpleEvent::String("hello world".to_string()),
+                        )])),
+                    ),
+                    (
+                        "another_key".to_string(),
+                        SimpleEvent::String("hello world".to_string()),
+                    ),
+                ])),
+            ]),
+        )]));
+
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 1);
     }
 
     #[test]
@@ -1376,7 +1416,7 @@ mod test {
 
             fn calculate_indices<'a>(
                 _content: &str,
-                match_visitor: impl Iterator<Item=crate::EncodeIndices<'a, Self>>,
+                match_visitor: impl Iterator<Item = crate::EncodeIndices<'a, Self>>,
             ) {
                 let mut prev_start = 0;
                 for indices in match_visitor {
