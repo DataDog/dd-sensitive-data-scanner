@@ -1,9 +1,8 @@
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
+use crate::proximity_keywords::{MULTI_WORD_KEYWORDS_LINK_CHARS, UNIFIED_LINK_CHAR};
 use serde::{Deserialize, Serialize};
-
-const UNIFIED_LINK_CHAR: &str = ".";
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Path<'a> {
@@ -61,7 +60,15 @@ impl<'a> Path<'a> {
                 _ => None,
             })
             .collect::<Vec<String>>()
-            .join(UNIFIED_LINK_CHAR)
+            .join(UNIFIED_LINK_CHAR.to_string().as_str())
+            .chars()
+            .map(|c| {
+                if MULTI_WORD_KEYWORDS_LINK_CHARS.contains(&c) {
+                    return UNIFIED_LINK_CHAR;
+                }
+                c
+            })
+            .collect()
     }
 }
 
@@ -137,14 +144,24 @@ mod test {
     }
 
     #[test]
-    fn test_to_string() {
+    fn test_absolute_path() {
         assert_eq!(
-            Path::from(vec!["hello".into(), 0.into(), "world".into()]).to_string(),
+            Path::from(vec!["hello".into(), 0.into(), "world".into()]).absolute_path(),
             "hello.world"
         );
         assert_eq!(
-            Path::from(vec!["hello".into(), 1.into(), "CHICKEN".into(), 2.into()]).to_string(),
+            Path::from(vec!["hello".into(), 1.into(), "CHICKEN".into(), 2.into()]).absolute_path(),
             "hello.chicken"
+        );
+        assert_eq!(
+            Path::from(vec![
+                "hello_world-of".into(),
+                1.into(),
+                "CHICKEN".into(),
+                2.into(),
+            ])
+            .absolute_path(),
+            "hello.world.of.chicken"
         );
     }
 }

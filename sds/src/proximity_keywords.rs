@@ -32,9 +32,9 @@ const EXCLUDED_KEYWORDS_REMOVED_CHARS: &[char] = &['-', '_'];
 /// Characters that are considered to be links between keyword words.
 /// Example: '-' in "aws-access" is considered to be a link character.
 /// Example: '.' in "my.path" is considered to be a link character.
-const MULTI_WORD_KEYWORDS_LINK_CHARS: &[char] = &['-', '_', '.', ' ', '/'];
+pub const MULTI_WORD_KEYWORDS_LINK_CHARS: &[char] = &['-', '_', '.', ' ', '/'];
 
-const UNIFIED_LINK_CHAR: char = '.';
+pub const UNIFIED_LINK_CHAR: char = '.';
 
 struct ProximityKeywordsRegex<const EXCLUDED_CHARS: bool> {
     content_regex: meta::Regex,
