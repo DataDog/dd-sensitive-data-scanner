@@ -932,6 +932,7 @@ mod test {
 
         assert_eq!(path_regex.is_match("awsAccess"), false);
         assert_eq!(path_regex.is_match("aws.access"), true);
+        assert_eq!(path_regex.is_match("aws.accessible"), false);
         assert_eq!(
             path_regex.search(&Input::new("my.path.to.aws.access")),
             Some(regex_automata::Match::must(0, 11..21))
