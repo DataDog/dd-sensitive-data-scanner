@@ -41,7 +41,9 @@ pub use standard_rules::{
     get_simple_standard_rule_configs, parse_standard_rules, serialize_standard_rules_list,
     test_framework as standard_rule_test, StandardRule,
 };
-pub use validation::{validate_regex, RegexValidationError};
+pub use validation::{
+    get_regex_complexity_estimate_very_slow, validate_regex, RegexValidationError,
+};
 
 #[cfg(feature = "bench")]
 pub use crate::{
