@@ -241,33 +241,11 @@ impl Default for Metrics {
     }
 }
 
-fn compile_keywords_pattern(keyword_patterns: Vec<(Ast, Ast)>) -> (String, String) {
-    let content_pattern = Ast::Alternation(Alternation {
-        span: span(),
-        asts: keyword_patterns
-            .iter()
-            .map(|(content_ast, _)| content_ast.clone())
-            .collect(),
-    })
-    .to_string();
-
-    let path_pattern = Ast::Alternation(Alternation {
-        span: span(),
-        asts: keyword_patterns
-            .iter()
-            .map(|(_, path_ast)| path_ast.clone())
-            .collect(),
-    })
-    .to_string();
-
-    (content_pattern, path_pattern)
-}
-
 fn compile_keywords_to_ast(
     keywords: &[String],
     look_ahead_character_count: usize,
     remove_chars: &[char],
-) -> Result<Option<Vec<(Ast, Ast)>>, ProximityKeywordsValidationError> {
+) -> Result<Option<(Ast, Ast)>, ProximityKeywordsValidationError> {
     if keywords.is_empty() {
         return Ok(None);
     }
@@ -290,7 +268,23 @@ fn compile_keywords_to_ast(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(Some(keyword_patterns))
+    let content_pattern = Ast::Alternation(Alternation {
+        span: span(),
+        asts: keyword_patterns
+            .iter()
+            .map(|(content_ast, _)| content_ast.clone())
+            .collect(),
+    });
+
+    let path_pattern = Ast::Alternation(Alternation {
+        span: span(),
+        asts: keyword_patterns
+            .iter()
+            .map(|(_, path_ast)| path_ast.clone())
+            .collect(),
+    });
+
+    Ok(Some((content_pattern, path_pattern)))
 }
 
 fn compile_keywords(
@@ -300,7 +294,7 @@ fn compile_keywords(
 ) -> Result<Option<(meta::Regex, meta::Regex)>, ProximityKeywordsValidationError> {
     let (content_pattern, path_pattern) =
         match compile_keywords_to_ast(&keywords, look_ahead_character_count, remove_chars) {
-            Ok(Some(keyword_patterns)) => compile_keywords_pattern(keyword_patterns),
+            Ok(Some((content_ast, path_ast))) => (content_ast.to_string(), path_ast.to_string()),
             Ok(None) => return Ok(None),
             Err(e) => return Err(e),
         };
@@ -951,7 +945,7 @@ mod test {
             10,
             &[],
         ) {
-            Ok(Some(keyword_patterns)) => compile_keywords_pattern(keyword_patterns),
+            Ok(Some((content_ast, path_ast))) => (content_ast.to_string(), path_ast.to_string()),
             _ => ("".to_string(), "".to_string()),
         };
 
