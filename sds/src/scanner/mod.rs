@@ -1481,8 +1481,7 @@ mod test {
                     ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
                 ]));
 
-                let matches: Vec<RuleMatch>;
-                matches = scanner.scan(&mut content);
+                scanner.scan(&mut content);
             });
 
             let snapshot = snapshotter.snapshot().into_hashmap();
