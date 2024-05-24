@@ -52,7 +52,7 @@ impl<'a> Path<'a> {
         true
     }
 
-    pub fn absolute_path(&self) -> String {
+    pub fn sanitize(&self) -> String {
         self.segments
             .iter()
             .filter_map(|segment| match segment {
@@ -146,11 +146,11 @@ mod test {
     #[test]
     fn test_absolute_path() {
         assert_eq!(
-            Path::from(vec!["hello".into(), 0.into(), "world".into()]).absolute_path(),
+            Path::from(vec!["hello".into(), 0.into(), "world".into()]).sanitize(),
             "hello.world"
         );
         assert_eq!(
-            Path::from(vec!["hello".into(), 1.into(), "CHICKEN".into(), 2.into()]).absolute_path(),
+            Path::from(vec!["hello".into(), 1.into(), "CHICKEN".into(), 2.into()]).sanitize(),
             "hello.chicken"
         );
         assert_eq!(
@@ -160,7 +160,7 @@ mod test {
                 "CHICKEN".into(),
                 2.into(),
             ])
-            .absolute_path(),
+            .sanitize(),
             "hello.world.of.chicken"
         );
     }

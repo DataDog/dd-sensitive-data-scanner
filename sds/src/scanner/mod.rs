@@ -459,7 +459,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
                 rule.get_string_matches(
                     content,
-                    &path.absolute_path(),
+                    &path.sanitize(),
                     &mut self.caches,
                     &exclusion_check,
                     self.excluded_matches,
