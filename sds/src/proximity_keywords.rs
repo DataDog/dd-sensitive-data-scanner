@@ -315,21 +315,14 @@ fn compile_keywords(
     )))
 }
 
-fn should_push_word_boundary(keyword: &str, is_end: bool) -> bool {
-    let next_char = if is_end {
-        keyword.chars().next_back()
-    } else {
-        keyword.chars().next()
-    };
-    next_char
-        .map(|char| char.is_ascii_alphabetic() || char.is_ascii_digit())
-        .unwrap()
+fn should_push_word_boundary(c: char) -> bool {
+    c.is_ascii_alphabetic() || c.is_ascii_digit()
 }
 
 /// Transform a keyword in an AST, the keyword MUST NOT be empty
 fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
     let mut keyword_pattern: Vec<Ast> = vec![];
-    if should_push_word_boundary(keyword, false) {
+    if should_push_word_boundary(keyword.chars().next().unwrap()) {
         keyword_pattern.push(word_boundary())
     }
 
@@ -337,7 +330,7 @@ fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
         keyword_pattern.push(Ast::Literal(literal_ast(c)))
     }
 
-    if should_push_word_boundary(keyword, true) {
+    if should_push_word_boundary(keyword.chars().next_back().unwrap()) {
         keyword_pattern.push(word_boundary())
     }
     Ast::Concat(Concat {
@@ -421,7 +414,7 @@ where
 fn calculate_keyword_path_pattern(keyword: &str) -> Ast {
     let mut keyword_pattern: Vec<Ast> = vec![];
 
-    if should_push_word_boundary(keyword, false) {
+    if should_push_word_boundary(keyword.chars().next().unwrap()) {
         keyword_pattern.push(word_boundary())
     }
 
@@ -431,7 +424,7 @@ fn calculate_keyword_path_pattern(keyword: &str) -> Ast {
         keyword_pattern.push(Ast::Literal(literal_ast(c.to_ascii_lowercase())));
     });
 
-    if should_push_word_boundary(keyword, true) {
+    if should_push_word_boundary(keyword.chars().next_back().unwrap()) {
         keyword_pattern.push(word_boundary())
     }
 
