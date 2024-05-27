@@ -370,7 +370,7 @@ fn get_char_type(c: &char) -> CharType {
     }
 }
 
-fn standardize_path_chars<F>(chars: Vec<char>, mut push_character: F)
+pub fn standardize_path_chars<F>(chars: Vec<char>, mut push_character: F)
 where
     F: FnMut(&char),
 {

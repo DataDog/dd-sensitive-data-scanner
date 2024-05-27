@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
-use crate::proximity_keywords::{MULTI_WORD_KEYWORDS_LINK_CHARS, UNIFIED_LINK_CHAR};
+use crate::proximity_keywords::{standardize_path_chars, UNIFIED_LINK_CHAR};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -56,19 +56,17 @@ impl<'a> Path<'a> {
         self.segments
             .iter()
             .filter_map(|segment| match segment {
-                PathSegment::Field(field) => Some(field.to_string().to_ascii_lowercase()),
+                PathSegment::Field(field) => {
+                    let mut sanitized_segment: Vec<char> = vec![];
+                    standardize_path_chars(field.chars().collect(), |c| {
+                        sanitized_segment.push(c.to_ascii_lowercase());
+                    });
+                    return Some(sanitized_segment.iter().collect());
+                }
                 _ => None,
             })
             .collect::<Vec<String>>()
             .join(UNIFIED_LINK_CHAR.to_string().as_str())
-            .chars()
-            .map(|c| {
-                if MULTI_WORD_KEYWORDS_LINK_CHARS.contains(&c) {
-                    return UNIFIED_LINK_CHAR;
-                }
-                c
-            })
-            .collect()
     }
 }
 
@@ -144,7 +142,7 @@ mod test {
     }
 
     #[test]
-    fn test_absolute_path() {
+    fn test_sanitize_path() {
         assert_eq!(
             Path::from(vec!["hello".into(), 0.into(), "world".into()]).sanitize(),
             "hello.world"
@@ -162,6 +160,11 @@ mod test {
             ])
             .sanitize(),
             "hello.world.of.chicken"
+        );
+
+        assert_eq!(
+            Path::from(vec!["hello_world-of-".into(), "/chickens_/".into()]).sanitize(),
+            "hello.world.of-./chickens./"
         );
     }
 }
