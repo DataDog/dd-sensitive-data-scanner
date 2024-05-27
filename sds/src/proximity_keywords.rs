@@ -346,6 +346,77 @@ fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
     })
 }
 
+#[derive(Clone, Copy)]
+enum CharType {
+    Regular,
+    Uppercase,
+    Separator,
+}
+
+fn get_chars_type(prev: &char, current: &char, next: &char) -> (CharType, CharType, CharType) {
+    let get_single_char_type = |c: &char| -> CharType {
+        let is_link_symbol = MULTI_WORD_KEYWORDS_LINK_CHARS.contains(&c);
+        let is_uppercase_char = c.is_ascii_uppercase();
+
+        if is_link_symbol {
+            CharType::Separator
+        } else if is_uppercase_char {
+            CharType::Uppercase
+        } else {
+            CharType::Regular
+        }
+    };
+
+    (
+        get_single_char_type(prev),
+        get_single_char_type(current),
+        get_single_char_type(next),
+    )
+}
+
+fn standardize_path_chars<F>(chars: Vec<char>, mut push_character: F) -> ()
+where
+    F: FnMut(&char),
+{
+    let kw_length = chars.len();
+
+    if kw_length >= 1 {
+        push_character(&chars[0])
+    }
+
+    for (i, chars) in chars.windows(3).enumerate() {
+        let current = &chars[1];
+        let (prev_char, current_char, next_char) = get_chars_type(&chars[0], &chars[1], &chars[2]);
+        match (prev_char, current_char, next_char) {
+            // Regular character is simply pushed
+            (_, CharType::Regular, _) => {
+                push_character(current);
+            }
+            // Character coming after a separator is pushed
+            (CharType::Separator, _, _) => {
+                push_character(current);
+            }
+            // Uppercase after an uppercase is pushed
+            (CharType::Uppercase, CharType::Uppercase, _) => {
+                push_character(current);
+            }
+            // CamelCase: push a link character and push the current character
+            (CharType::Regular, CharType::Uppercase, _) => {
+                push_character(&UNIFIED_LINK_CHAR);
+                push_character(current);
+            }
+            // Regular separation in the keyword: push a link character only
+            (_, CharType::Separator, _) => {
+                push_character(&UNIFIED_LINK_CHAR);
+            }
+        }
+    }
+
+    if kw_length >= 2 {
+        push_character(&chars[kw_length - 1])
+    }
+}
+
 /// Transform a keyword in an AST for the path pattern, the keyword MUST NOT be empty
 fn calculate_keyword_path_pattern(keyword: &str) -> Ast {
     let mut keyword_pattern: Vec<Ast> = vec![];
@@ -354,70 +425,11 @@ fn calculate_keyword_path_pattern(keyword: &str) -> Ast {
         keyword_pattern.push(word_boundary())
     }
 
-    #[derive(Clone, Copy)]
-    enum CharType {
-        Regular,
-        Uppercase,
-        Separator,
-    }
+    let char_list: Vec<char> = keyword.chars().collect();
 
-    let mut previous_char: Option<CharType> = None;
-    for (i, c) in keyword.chars().enumerate() {
-        let is_link_symbol = MULTI_WORD_KEYWORDS_LINK_CHARS.contains(&c);
-        let is_uppercase_char = c.is_ascii_uppercase();
-
-        let current_char = if is_link_symbol {
-            CharType::Separator
-        } else if is_uppercase_char {
-            CharType::Uppercase
-        } else {
-            CharType::Regular
-        };
-
-        let next_char = if i == keyword.len() - 1 {
-            None
-        } else {
-            Some(CharType::Regular)
-        };
-
-        let push_character = |pattern: &mut Vec<Ast>| {
-            pattern.push(Ast::Literal(literal_ast(c.to_ascii_lowercase())));
-        };
-
-        match (previous_char, current_char, next_char) {
-            // First character is simply pushed
-            (None, _, _) => {
-                push_character(&mut keyword_pattern);
-            }
-            // Regular character is simply pushed
-            (_, CharType::Regular, _) => {
-                push_character(&mut keyword_pattern);
-            }
-            // Character coming after a separator is pushed
-            (Some(CharType::Separator), _, _) => {
-                push_character(&mut keyword_pattern);
-            }
-            // Uppercase after an uppercase is pushed
-            (Some(CharType::Uppercase), CharType::Uppercase, _) => {
-                push_character(&mut keyword_pattern);
-            }
-            // CamelCase: push a link character and push the current character
-            (Some(CharType::Regular), CharType::Uppercase, _) => {
-                keyword_pattern.push(Ast::Literal(literal_ast(UNIFIED_LINK_CHAR)));
-                push_character(&mut keyword_pattern);
-            }
-            // Regular separation in the keyword: push a link character only
-            (Some(_), CharType::Separator, Some(_)) => {
-                keyword_pattern.push(Ast::Literal(literal_ast(UNIFIED_LINK_CHAR)));
-            }
-            // Separation at the end of the keyword: push the current character
-            (Some(_), CharType::Separator, None) => {
-                push_character(&mut keyword_pattern);
-            }
-        }
-
-        previous_char = Some(current_char);
-    }
+    standardize_path_chars(char_list, |c| {
+        keyword_pattern.push(Ast::Literal(literal_ast(c.to_ascii_lowercase())));
+    });
 
     if should_push_word_boundary(keyword, true) {
         keyword_pattern.push(word_boundary())
@@ -1027,6 +1039,11 @@ mod test {
         assert_eq!(
             calculate_keyword_path_pattern("edge--case_/a. bit...annoying").to_string(),
             "(?-u:\\b)edge\\.\\-case\\./a\\. bit\\.\\.\\.annoying(?-u:\\b)".to_string()
+        );
+
+        assert_eq!(
+            calculate_keyword_path_pattern("lots--of___symbol/s").to_string(),
+            "(?-u:\\b)lots\\.\\-of\\.__symbol\\.s(?-u:\\b)".to_string()
         );
     }
 
