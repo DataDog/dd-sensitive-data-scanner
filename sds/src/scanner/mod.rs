@@ -466,9 +466,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     });
                 };
 
-                let mut should_keywords_match_event_paths =
-                    self.scanner.feature_set.should_keywords_match_event_paths;
-                let sanitized_path = if should_keywords_match_event_paths {
+                let sanitized_path = if self.scanner.feature_set.should_keywords_match_event_paths {
                     path.sanitize()
                 } else {
                     "".to_string()
