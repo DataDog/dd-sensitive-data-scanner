@@ -188,20 +188,26 @@ impl RuleConfigTrait for RegexRuleConfig {
     }
 }
 
+struct ScannerFeatures {
+    should_keywords_match_event_paths: bool,
+}
+
 pub struct Scanner {
     rules: Vec<Box<dyn CompiledRuleTrait>>,
     scoped_ruleset: ScopedRuleSet,
     cache_pool: CachePool,
+    feature_set: ScannerFeatures,
 }
 
 impl Scanner {
     pub fn new<C: RuleConfigTrait>(rules: &[C]) -> Result<Self, CreateScannerError> {
-        Scanner::new_with_labels(rules, Labels::empty())
+        Scanner::new_with_labels(rules, Labels::empty(), true)
     }
 
     pub fn new_with_labels<C: RuleConfigTrait>(
         rules: &[C],
         scanner_labels: Labels,
+        should_keywords_match_event_paths: bool,
     ) -> Result<Self, CreateScannerError> {
         let mut cache_pool_builder = CachePoolBuilder::new();
         let compiled_rules = rules
@@ -227,6 +233,9 @@ impl Scanner {
             rules: compiled_rules,
             scoped_ruleset,
             cache_pool: cache_pool_builder.build(),
+            feature_set: ScannerFeatures {
+                should_keywords_match_event_paths,
+            },
         })
     }
 
@@ -457,9 +466,17 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     });
                 };
 
+                let mut should_keywords_match_event_paths =
+                    self.scanner.feature_set.should_keywords_match_event_paths;
+                let sanitized_path = if should_keywords_match_event_paths {
+                    path.sanitize()
+                } else {
+                    "".to_string()
+                }; // keywords will never match path = ""
+
                 rule.get_string_matches(
                     content,
-                    &path.sanitize(),
+                    &sanitized_path,
                     &mut self.caches,
                     &exclusion_check,
                     self.excluded_matches,
@@ -659,6 +676,7 @@ mod test {
                 })
                 .build()],
             Labels::new(&[("key".to_string(), "value".to_string())]),
+            true,
         )
         .unwrap();
 
