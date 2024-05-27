@@ -355,7 +355,7 @@ enum CharType {
 
 fn get_chars_type(prev: &char, current: &char, next: &char) -> (CharType, CharType, CharType) {
     let get_single_char_type = |c: &char| -> CharType {
-        let is_link_symbol = MULTI_WORD_KEYWORDS_LINK_CHARS.contains(&c);
+        let is_link_symbol = MULTI_WORD_KEYWORDS_LINK_CHARS.contains(c);
         let is_uppercase_char = c.is_ascii_uppercase();
 
         if is_link_symbol {
@@ -374,7 +374,7 @@ fn get_chars_type(prev: &char, current: &char, next: &char) -> (CharType, CharTy
     )
 }
 
-fn standardize_path_chars<F>(chars: Vec<char>, mut push_character: F) -> ()
+fn standardize_path_chars<F>(chars: Vec<char>, mut push_character: F)
 where
     F: FnMut(&char),
 {
@@ -384,7 +384,7 @@ where
         push_character(&chars[0])
     }
 
-    for (i, chars) in chars.windows(3).enumerate() {
+    for chars in chars.windows(3) {
         let current = &chars[1];
         let (prev_char, current_char, next_char) = get_chars_type(&chars[0], &chars[1], &chars[2]);
         match (prev_char, current_char, next_char) {
