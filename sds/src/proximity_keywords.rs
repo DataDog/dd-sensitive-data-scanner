@@ -346,25 +346,17 @@ enum CharType {
     Separator,
 }
 
-fn get_chars_type(prev: &char, current: &char, next: &char) -> (CharType, CharType, CharType) {
-    let get_single_char_type = |c: &char| -> CharType {
-        let is_link_symbol = MULTI_WORD_KEYWORDS_LINK_CHARS.contains(c);
-        let is_uppercase_char = c.is_ascii_uppercase();
+fn get_char_type(c: &char) -> CharType {
+    let is_link_symbol = MULTI_WORD_KEYWORDS_LINK_CHARS.contains(c);
+    let is_uppercase_char = c.is_ascii_uppercase();
 
-        if is_link_symbol {
-            CharType::Separator
-        } else if is_uppercase_char {
-            CharType::Uppercase
-        } else {
-            CharType::Regular
-        }
-    };
-
-    (
-        get_single_char_type(prev),
-        get_single_char_type(current),
-        get_single_char_type(next),
-    )
+    if is_link_symbol {
+        CharType::Separator
+    } else if is_uppercase_char {
+        CharType::Uppercase
+    } else {
+        CharType::Regular
+    }
 }
 
 fn standardize_path_chars<F>(chars: Vec<char>, mut push_character: F)
@@ -373,40 +365,46 @@ where
 {
     let kw_length = chars.len();
 
-    if kw_length >= 1 {
-        push_character(&chars[0])
+    if chars.is_empty() {
+        return;
     }
 
-    for chars in chars.windows(3) {
+    push_character(&chars[0]);
+
+    for (i, chars) in chars.windows(2).enumerate() {
         let current = &chars[1];
-        let (prev_char, current_char, next_char) = get_chars_type(&chars[0], &chars[1], &chars[2]);
-        match (prev_char, current_char, next_char) {
+        let prev_char = get_char_type(&chars[0]);
+        let current_char = get_char_type(current);
+
+        let is_last_char = i == kw_length - 2;
+
+        match (is_last_char, prev_char, current_char) {
+            // The last character is simply pushed
+            (true, _, _) => {
+                push_character(current);
+            }
             // Regular character is simply pushed
-            (_, CharType::Regular, _) => {
+            (_, _, CharType::Regular) => {
                 push_character(current);
             }
             // Character coming after a separator is pushed
-            (CharType::Separator, _, _) => {
+            (_, CharType::Separator, _) => {
                 push_character(current);
             }
             // Uppercase after an uppercase is pushed
-            (CharType::Uppercase, CharType::Uppercase, _) => {
+            (_, CharType::Uppercase, CharType::Uppercase) => {
                 push_character(current);
             }
-            // CamelCase: push a link character and push the current character
-            (CharType::Regular, CharType::Uppercase, _) => {
+            (_, CharType::Regular, CharType::Uppercase) => {
                 push_character(&UNIFIED_LINK_CHAR);
+                // CamelCase: push a link character and push the current character
                 push_character(current);
             }
             // Regular separation in the keyword: push a link character only
-            (_, CharType::Separator, _) => {
+            (_, _, CharType::Separator) => {
                 push_character(&UNIFIED_LINK_CHAR);
             }
         }
-    }
-
-    if kw_length >= 2 {
-        push_character(&chars[kw_length - 1])
     }
 }
 
