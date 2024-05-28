@@ -250,7 +250,7 @@ fn compile_keywords_to_ast(
         return Ok(None);
     }
 
-    let keyword_patterns = keywords
+    let (content_patterns, path_patterns) = keywords
         .iter()
         .map(|keyword| {
             if keyword.chars().count() > look_ahead_character_count {
@@ -266,22 +266,19 @@ fn compile_keywords_to_ast(
                 calculate_keyword_path_pattern(&trimmed_keyword),
             ))
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
+        .cloned()
+        .unzip();
 
     let content_pattern = Ast::Alternation(Alternation {
         span: span(),
-        asts: keyword_patterns
-            .iter()
-            .map(|(content_ast, _)| content_ast.clone())
-            .collect(),
+        asts: content_patterns,
     });
 
     let path_pattern = Ast::Alternation(Alternation {
         span: span(),
-        asts: keyword_patterns
-            .iter()
-            .map(|(_, path_ast)| path_ast.clone())
-            .collect(),
+        asts: path_patterns,
     });
 
     Ok(Some((content_pattern, path_pattern)))
