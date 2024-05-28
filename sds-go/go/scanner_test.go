@@ -548,6 +548,9 @@ func sortRulesMatch(left, right RuleMatch) bool {
 	if left.EndIndexExclusive > right.EndIndexExclusive {
 		return true
 	}
-	// TODO(remy): path, replacement type
+	if left.Path > right.Path {
+		return true
+	}
+	// TODO(remy): replacement type
 	return false
 }

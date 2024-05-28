@@ -270,7 +270,7 @@ func decodeMatchResponse(result *ScanResult, buf *bytes.Buffer) {
 	path := nextString(buf)
 
 	// then a replacement type
-	// TODO(remy): implement me
+	// TODO(https://datadoghq.atlassian.net/browse/SDS-301): implement replacement type
 	//replacementType := nextString(buf)
 	nextString(buf)
 
