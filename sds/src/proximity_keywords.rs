@@ -55,14 +55,14 @@ impl CompiledProximityKeywords {
             (Some(included_keywords), _) => {
                 if let Some(sanitized_path) = sanitized_path {
                     let is_valid_from_path =
-                        contains_keyword_in_path(sanitized_path, included_keywords);
+                        self.contains_keyword_in_path(sanitized_path, included_keywords);
 
                     if is_valid_from_path {
                         return false;
                     }
                 }
 
-                let is_false_positive_from_content = !contains_keyword_match(
+                let is_false_positive_from_content = !self.contains_keyword_match(
                     content,
                     match_start,
                     self.look_ahead_character_count,
@@ -75,7 +75,7 @@ impl CompiledProximityKeywords {
                 is_false_positive_from_content
             }
             (None, Some(excluded_keywords)) => {
-                let is_false_positive = contains_keyword_match(
+                let is_false_positive = self.contains_keyword_match(
                     content,
                     match_start,
                     self.look_ahead_character_count,
@@ -139,62 +139,63 @@ impl CompiledProximityKeywords {
             metrics: Metrics::new(labels),
         })
     }
-}
 
-fn contains_keyword_in_path(path: &str, regex: &ProximityKeywordsRegex<false>) -> bool {
-    let input = Input::new(path).earliest(true);
+    fn contains_keyword_in_path(&self, path: &str, regex: &ProximityKeywordsRegex<false>) -> bool {
+        let input = Input::new(path).earliest(true);
 
-    regex.path_regex.search_half(&input).is_some()
-}
+        regex.path_regex.search_half(&input).is_some()
+    }
 
-/// Returns the match context which is what is searched for keywords
-/// and the range where matches are searched for. The range is needed since the context is
-/// expanded to ensure regex assertions (e.g. word boundaries) work correctly.
-fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
-    content: &str,
-    match_start: usize,
-    look_ahead_char_count: usize,
-    regex: &ProximityKeywordsRegex<EXCLUDED_CHARS>,
-) -> bool {
-    if EXCLUDED_CHARS {
-        let prefix_start_info = get_prefix_start(
-            match_start,
-            // Adding 1 to the start to account for assertion checking
-            look_ahead_char_count + 1,
-            content,
-        );
+    /// Returns the match context which is what is searched for keywords
+    /// and the range where matches are searched for. The range is needed since the context is
+    /// expanded to ensure regex assertions (e.g. word boundaries) work correctly.
+    fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
+        &self,
+        content: &str,
+        match_start: usize,
+        look_ahead_char_count: usize,
+        regex: &ProximityKeywordsRegex<EXCLUDED_CHARS>,
+    ) -> bool {
+        if EXCLUDED_CHARS {
+            let prefix_start_info = get_prefix_start(
+                match_start,
+                // Adding 1 to the start to account for assertion checking
+                look_ahead_char_count + 1,
+                content,
+            );
 
-        // Adding 1 char here to allow correct assertion checking on the last char. There will always be
-        // at least 1 more char is always available since empty matches aren't allowed
-        let prefix_end = next_char_index(content, match_start).unwrap_or(content.len());
+            // Adding 1 char here to allow correct assertion checking on the last char. There will always be
+            // at least 1 more char is always available since empty matches aren't allowed
+            let prefix_end = next_char_index(content, match_start).unwrap_or(content.len());
 
-        let stripped_prefix = content[prefix_start_info.start..prefix_end]
-            .replace(EXCLUDED_KEYWORDS_REMOVED_CHARS, "");
+            let stripped_prefix = content[prefix_start_info.start..prefix_end]
+                .replace(EXCLUDED_KEYWORDS_REMOVED_CHARS, "");
 
-        // Subtracting one to exclude the last char which was added only for boundary checking
-        let span_end = prev_char_index(&stripped_prefix, stripped_prefix.len()).unwrap_or(0);
+            // Subtracting one to exclude the last char which was added only for boundary checking
+            let span_end = prev_char_index(&stripped_prefix, stripped_prefix.len()).unwrap_or(0);
 
-        let span_start = if prefix_start_info.used_all_chars {
-            // an extra char was added for assertion checking, so it needs to be removed here
-            next_char_index(&stripped_prefix, 0).unwrap_or(stripped_prefix.len())
+            let span_start = if prefix_start_info.used_all_chars {
+                // an extra char was added for assertion checking, so it needs to be removed here
+                next_char_index(&stripped_prefix, 0).unwrap_or(stripped_prefix.len())
+            } else {
+                0
+            };
+
+            let input = Input::new(&stripped_prefix)
+                .earliest(true)
+                .span(span_start..span_end);
+            regex.content_regex.search_half(&input).is_some()
         } else {
-            0
-        };
+            // just get the previous n chars (no chars are skipped)
+            let prefix_start_info = get_prefix_start(match_start, look_ahead_char_count, content);
 
-        let input = Input::new(&stripped_prefix)
-            .earliest(true)
-            .span(span_start..span_end);
-        regex.content_regex.search_half(&input).is_some()
-    } else {
-        // just get the previous n chars (no chars are skipped)
-        let prefix_start_info = get_prefix_start(match_start, look_ahead_char_count, content);
+            let prefix_end = match_start;
 
-        let prefix_end = match_start;
-
-        let input = Input::new(content)
-            .earliest(true)
-            .span(prefix_start_info.start..prefix_end);
-        regex.content_regex.search_half(&input).is_some()
+            let input = Input::new(content)
+                .earliest(true)
+                .span(prefix_start_info.start..prefix_end);
+            regex.content_regex.search_half(&input).is_some()
+        }
     }
 }
 
