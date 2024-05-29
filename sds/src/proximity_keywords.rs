@@ -370,6 +370,8 @@ fn get_char_type(c: &char) -> CharType {
     }
 }
 
+/// Function that standardizes a list of characters, by pushing characters one by one in a standard way.
+/// Takes a closure that will be called when a character is to be pushed
 pub fn standardize_path_chars<F>(chars: Vec<char>, mut push_character: F)
 where
     F: FnMut(&char),
