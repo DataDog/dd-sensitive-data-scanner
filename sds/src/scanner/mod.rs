@@ -87,18 +87,16 @@ impl CompiledRuleTrait for RegexCompiledRule {
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
     ) {
-        let sanitized_path = if should_keywords_match_event_paths {
-            Some(path.sanitize())
-        } else {
-            None
-        };
-
         let mut start = 0;
+        let mut sanitized_path = None;
         loop {
             let input = Input::new(content).range(start..);
             let cache = &mut caches[self.rule_cache_index];
             if let Some(regex_match) = self.regex.search_with(cache, &input) {
-                if is_false_positive_match(&regex_match, self, content, sanitized_path.as_deref()) {
+                if should_keywords_match_event_paths && sanitized_path.is_none() {
+                    sanitized_path = Some(path.sanitize());
+                }
+                if is_false_positive_match(&regex_match, self, content, sanitized_path.clone()) {
                     if let Some(next) = get_next_regex_start(content, &regex_match) {
                         start = next;
                     } else {
@@ -531,7 +529,7 @@ fn is_false_positive_match(
     regex_match: &regex_automata::Match,
     rule: &RegexCompiledRule,
     content: &str,
-    sanitized_path: Option<&str>,
+    sanitized_path: Option<String>,
 ) -> bool {
     if rule
         .proximity_keywords

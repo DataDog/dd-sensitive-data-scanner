@@ -45,7 +45,7 @@ impl CompiledProximityKeywords {
     pub fn is_false_positive_match(
         &self,
         content: &str,
-        sanitized_path: Option<&str>,
+        sanitized_path: Option<String>,
         match_start: usize,
     ) -> bool {
         match (
@@ -55,7 +55,7 @@ impl CompiledProximityKeywords {
             (Some(included_keywords), _) => {
                 if let Some(sanitized_path) = sanitized_path {
                     let is_valid_from_path =
-                        self.contains_keyword_in_path(sanitized_path, included_keywords);
+                        self.contains_keyword_in_path(&sanitized_path, included_keywords);
 
                     if is_valid_from_path {
                         return false;
@@ -566,29 +566,37 @@ mod test {
 
         // Should match
         assert_eq!(
-            proximity_keywords.is_false_positive_match("", Some("aws.access.key.id"), 0),
+            proximity_keywords.is_false_positive_match(
+                "",
+                Some("aws.access.key.id".to_string()),
+                0
+            ),
             false
         );
         assert_eq!(
-            proximity_keywords.is_false_positive_match("", Some("aws.access.key"), 0),
+            proximity_keywords.is_false_positive_match("", Some("aws.access.key".to_string()), 0),
             false
         );
         assert_eq!(
-            proximity_keywords.is_false_positive_match("", Some("aws.access.keys"), 0),
+            proximity_keywords.is_false_positive_match("", Some("aws.access.keys".to_string()), 0),
             false
         );
         assert_eq!(
-            proximity_keywords.is_false_positive_match("", Some("aws.access%key"), 0),
-            false
-        );
-        assert_eq!(
-            proximity_keywords.is_false_positive_match("", Some("aws.access.key.identity"), 0),
+            proximity_keywords.is_false_positive_match("", Some("aws.access%key".to_string()), 0),
             false
         );
         assert_eq!(
             proximity_keywords.is_false_positive_match(
                 "",
-                Some("access.key.aws.another.long.keyword"),
+                Some("aws.access.key.identity".to_string()),
+                0
+            ),
+            false
+        );
+        assert_eq!(
+            proximity_keywords.is_false_positive_match(
+                "",
+                Some("access.key.aws.another.long.keyword".to_string()),
                 0,
             ),
             false
@@ -596,27 +604,27 @@ mod test {
 
         // Should not match
         assert_eq!(
-            proximity_keywords.is_false_positive_match("", Some("aws.key"), 0),
+            proximity_keywords.is_false_positive_match("", Some("aws.key".to_string()), 0),
             true
         );
         assert_eq!(
-            proximity_keywords.is_false_positive_match("", Some("key"), 0),
+            proximity_keywords.is_false_positive_match("", Some("key".to_string()), 0),
             true
         );
         assert_eq!(
-            proximity_keywords.is_false_positive_match("", Some("aws.app.key"), 0),
+            proximity_keywords.is_false_positive_match("", Some("aws.app.key".to_string()), 0),
             true
         );
         assert_eq!(
-            proximity_keywords.is_false_positive_match("", Some("aws.accessible"), 0),
+            proximity_keywords.is_false_positive_match("", Some("aws.accessible".to_string()), 0),
             true
         );
         assert_eq!(
-            proximity_keywords.is_false_positive_match("", Some("access#key"), 0),
+            proximity_keywords.is_false_positive_match("", Some("access#key".to_string()), 0),
             true
         );
         assert_eq!(
-            proximity_keywords.is_false_positive_match("", Some("key.access.aws"), 0),
+            proximity_keywords.is_false_positive_match("", Some("key.access.aws".to_string()), 0),
             true
         );
     }
