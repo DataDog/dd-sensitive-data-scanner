@@ -1,12 +1,42 @@
 use std::borrow::Cow;
+use std::cell::Cell;
+use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 use crate::proximity_keywords::{standardize_path_chars, UNIFIED_LINK_CHAR};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Serialize, Deserialize)]
 pub struct Path<'a> {
+    sanitized_path: Cell<Option<String>>,
     pub segments: Vec<PathSegment<'a>>,
+}
+
+impl<'a> Hash for Path<'a> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.segments.hash(state)
+    }
+}
+
+impl<'a> PartialEq<Self> for Path<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.segments.eq(&other.segments)
+    }
+}
+
+impl<'a> Eq for Path<'a> {}
+
+impl<'a> PartialOrd<Self> for Path<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.segments.cmp(&other.segments))
+    }
+}
+
+impl<'a> Ord for Path<'a> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.segments.cmp(&other.segments)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -19,12 +49,13 @@ pub enum PathSegment<'a> {
 impl<'a> Path<'a> {
     /// An empty path - pointing to the root.
     pub fn root() -> Self {
-        Self { segments: vec![] }
+        Self { sanitized_path: Cell::new(None), segments: vec![] }
     }
 
     /// Converts and path segment references into Owned strings so the lifetime can be static.
     pub fn into_static(&self) -> Path<'static> {
         Path {
+            sanitized_path: self.sanitized_path.clone(),
             segments: self.segments.iter().map(PathSegment::into_static).collect(),
         }
     }
@@ -52,7 +83,7 @@ impl<'a> Path<'a> {
         true
     }
 
-    pub fn sanitize(&self) -> String {
+    fn compute_sanitized_path(&self) -> String {
         self.segments
             .iter()
             .filter_map(|segment| match segment {
@@ -67,6 +98,20 @@ impl<'a> Path<'a> {
             })
             .collect::<Vec<String>>()
             .join(UNIFIED_LINK_CHAR.to_string().as_str())
+    }
+
+    pub fn get_sanitized_path(&self) -> &str {
+        let sanitized_path = match self.sanitized_path.get() {
+            Some(path) => path,
+            None => {
+                let path = self.compute_sanitized_path();
+                self.sanitized_path.set(Some(path.clone()));
+
+                path
+            }
+        };
+
+        return &sanitized_path;
     }
 }
 
@@ -108,7 +153,7 @@ impl<'a> Display for Path<'a> {
 
 impl<'a> From<Vec<PathSegment<'a>>> for Path<'a> {
     fn from(segments: Vec<PathSegment<'a>>) -> Self {
-        Self { segments }
+        Self { sanitized_path: Cell::new(None), segments }
     }
 }
 
@@ -158,7 +203,7 @@ mod test {
                 "CHICKEN".into(),
                 2.into(),
             ])
-            .sanitize(),
+                .sanitize(),
             "hello.world.of.chicken"
         );
 
