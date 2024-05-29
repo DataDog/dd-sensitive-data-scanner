@@ -48,11 +48,12 @@ pub trait CompiledRuleTrait: Send + Sync {
     fn get_string_matches(
         &self,
         content: &str,
-        path: Option<&str>,
+        path: &Path,
         caches: &mut CachePoolGuard<'_>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
+        should_keywords_match_event_paths: bool,
     );
 }
 
@@ -78,18 +79,25 @@ impl CompiledRuleTrait for RegexCompiledRule {
     fn get_string_matches(
         &self,
         content: &str,
-        path: Option<&str>,
+        path: &Path,
         caches: &mut CachePoolGuard<'_>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
+        should_keywords_match_event_paths: bool,
     ) {
+        let sanitized_path = if should_keywords_match_event_paths {
+            Some(path.sanitize())
+        } else {
+            None
+        };
+
         let mut start = 0;
         loop {
             let input = Input::new(content).range(start..);
             let cache = &mut caches[self.rule_cache_index];
             if let Some(regex_match) = self.regex.search_with(cache, &input) {
-                if is_false_positive_match(&regex_match, self, content, path) {
+                if is_false_positive_match(&regex_match, self, content, sanitized_path.as_deref()) {
                     if let Some(next) = get_next_regex_start(content, &regex_match) {
                         start = next;
                     } else {
@@ -200,14 +208,11 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn new<C: RuleConfigTrait>(rules: &[C]) -> Result<Self, CreateScannerError> {
-        Scanner::new_with_labels(
-            rules,
-            Labels::empty(),
-            ScannerFeatures {
-                should_keywords_match_event_paths: true,
-            },
-        )
+    pub fn new<C: RuleConfigTrait>(
+        rules: &[C],
+        scanner_features: ScannerFeatures,
+    ) -> Result<Self, CreateScannerError> {
+        Scanner::new_with_labels(rules, Labels::empty(), scanner_features)
     }
 
     pub fn new_with_labels<C: RuleConfigTrait>(
@@ -470,19 +475,14 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     });
                 };
 
-                let sanitized_path = if self.scanner.feature_set.should_keywords_match_event_paths {
-                    Some(path.sanitize())
-                } else {
-                    None
-                }; // if the path is None, we won't match keywords against the path
-
                 rule.get_string_matches(
                     content,
-                    sanitized_path.as_deref(),
+                    path,
                     &mut self.caches,
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
+                    self.scanner.feature_set.should_keywords_match_event_paths,
                 );
             }
         });
@@ -530,15 +530,13 @@ fn is_false_positive_match(
     regex_match: &regex_automata::Match,
     rule: &RegexCompiledRule,
     content: &str,
-    path: Option<&str>,
+    sanitized_path: Option<&str>,
 ) -> bool {
-    if let Some(path) = path {
-        if rule
-            .proximity_keywords
-            .is_false_positive_match(content, path, regex_match.start())
-        {
-            return true;
-        }
+    if rule
+        .proximity_keywords
+        .is_false_positive_match(content, sanitized_path, regex_match.start())
+    {
+        return true;
     }
     if let Some(validator) = rule.validator.as_ref() {
         if !validator.is_valid_match(&content[regex_match.range()]) {
@@ -591,11 +589,12 @@ mod test {
         fn get_string_matches(
             &self,
             _content: &str,
-            _path: Option<&str>,
+            _path: &Path,
             _caches: &mut CachePoolGuard<'_>,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
+            should_keywords_match_event_paths: bool,
         ) {
             match_emitter.emit(StringMatch { start: 10, end: 16 });
         }
@@ -619,7 +618,13 @@ mod test {
 
     #[test]
     fn dumb_custom_rule() {
-        let scanner = Scanner::new(&[DumbRuleConfig {}]).unwrap();
+        let scanner = Scanner::new(
+            &[DumbRuleConfig {}],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
 
         let mut input = "this is a secret with random data".to_owned();
 
@@ -631,16 +636,21 @@ mod test {
 
     #[test]
     fn test_mixed_rules() {
-        let scanner = Scanner::new(&[
-            Box::new(DumbRuleConfig {}) as Box<dyn RuleConfigTrait>,
-            Box::new(
-                RegexRuleConfig::builder("secret".to_string())
-                    .match_action(MatchAction::Redact {
-                        replacement: "[SECRET]".to_string(),
-                    })
-                    .build(),
-            ) as Box<dyn RuleConfigTrait>,
-        ])
+        let scanner = Scanner::new(
+            &[
+                Box::new(DumbRuleConfig {}) as Box<dyn RuleConfigTrait>,
+                Box::new(
+                    RegexRuleConfig::builder("secret".to_string())
+                        .match_action(MatchAction::Redact {
+                            replacement: "[SECRET]".to_string(),
+                        })
+                        .build(),
+                ) as Box<dyn RuleConfigTrait>,
+            ],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
         .unwrap();
 
         let mut input = "this is a dumbss with random data and a secret".to_owned();
@@ -656,11 +666,16 @@ mod test {
 
     #[test]
     fn simple_redaction() {
-        let scanner = Scanner::new(&[RegexRuleConfig::builder("secret".to_string())
-            .match_action(MatchAction::Redact {
-                replacement: "[REDACTED]".to_string(),
-            })
-            .build()])
+        let scanner = Scanner::new(
+            &[RegexRuleConfig::builder("secret".to_string())
+                .match_action(MatchAction::Redact {
+                    replacement: "[REDACTED]".to_string(),
+                })
+                .build()],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
         .unwrap();
 
         let mut input = "text with secret".to_owned();
@@ -696,7 +711,12 @@ mod test {
 
     #[test]
     fn should_fail_on_compilation_error() {
-        let scanner_result = Scanner::new(&[RegexRuleConfig::builder("\\u".to_owned()).build()]);
+        let scanner_result = Scanner::new(
+            &[RegexRuleConfig::builder("\\u".to_owned()).build()],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        );
         assert!(scanner_result.is_err());
         assert_eq!(
             scanner_result.err().unwrap(),
@@ -706,12 +726,17 @@ mod test {
 
     #[test]
     fn should_validate_zero_char_count_partial_redact() {
-        let scanner_result = Scanner::new(&[RegexRuleConfig::builder("secret".to_owned())
-            .match_action(MatchAction::PartialRedact {
-                direction: PartialRedactDirection::LastCharacters,
-                character_count: 0,
-            })
-            .build()]);
+        let scanner_result = Scanner::new(
+            &[RegexRuleConfig::builder("secret".to_owned())
+                .match_action(MatchAction::PartialRedact {
+                    direction: PartialRedactDirection::LastCharacters,
+                    character_count: 0,
+                })
+                .build()],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        );
 
         assert!(scanner_result.is_err());
         assert_eq!(
@@ -724,11 +749,16 @@ mod test {
 
     #[test]
     fn multiple_replacements() {
-        let scanner = Scanner::new(&[RegexRuleConfig::builder("\\d".to_owned())
-            .match_action(MatchAction::Redact {
-                replacement: "[REDACTED]".to_string(),
-            })
-            .build()])
+        let scanner = Scanner::new(
+            &[RegexRuleConfig::builder("\\d".to_owned())
+                .match_action(MatchAction::Redact {
+                    replacement: "[REDACTED]".to_string(),
+                })
+                .build()],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
         .unwrap();
 
         let mut content = "testing 1 2 3".to_string();
@@ -741,10 +771,15 @@ mod test {
 
     #[test]
     fn match_rule_index() {
-        let scanner = Scanner::new(&[
-            RegexRuleConfig::builder("a".to_owned()).build(),
-            RegexRuleConfig::builder("b".to_owned()).build(),
-        ])
+        let scanner = Scanner::new(
+            &[
+                RegexRuleConfig::builder("a".to_owned()).build(),
+                RegexRuleConfig::builder("b".to_owned()).build(),
+            ],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
         .unwrap();
 
         let mut content = "a b".to_string();
@@ -814,7 +849,13 @@ mod test {
         ];
 
         for (rule_config, input, expected_indices) in test_cases {
-            let scanner = Scanner::new(rule_config.leak()).unwrap();
+            let scanner = Scanner::new(
+                rule_config.leak(),
+                ScannerFeatures {
+                    should_keywords_match_event_paths: true,
+                },
+            )
+            .unwrap();
             let mut input = input.to_string();
             let matches = scanner.scan(&mut input);
 
@@ -845,7 +886,13 @@ mod test {
             })
             .build();
 
-        let scanner = Scanner::new(&[redact_test_rule]).unwrap();
+        let scanner = Scanner::new(
+            &[redact_test_rule],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content = "hello world".to_string();
         let matches = scanner.scan(&mut content);
         assert_eq!(content, "hello [REDACTED]");
@@ -862,8 +909,7 @@ mod test {
         assert_eq!(matches.len(), 1);
     }
 
-    #[test]
-    fn test_included_keywords_match_path() {
+    fn build_test_scanner(should_keywords_match_event_paths: bool) -> Scanner {
         let redact_test_rule = RegexRuleConfig::builder("world".to_owned())
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
@@ -875,7 +921,34 @@ mod test {
             })
             .build();
 
-        let scanner = Scanner::new(&[redact_test_rule]).unwrap();
+        return Scanner::new(
+            &[redact_test_rule],
+            ScannerFeatures {
+                should_keywords_match_event_paths,
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_included_keywords_match_path_feature_disabled() {
+        let scanner = build_test_scanner(false);
+
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
+            "aws".to_string(),
+            SimpleEvent::Map(BTreeMap::from([(
+                "access".to_string(),
+                SimpleEvent::String("hello world".to_string()),
+            )])),
+        )]));
+
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 0);
+    }
+
+    #[test]
+    fn test_included_keywords_match_path() {
+        let scanner = build_test_scanner(true);
 
         let mut content = SimpleEvent::Map(BTreeMap::from([(
             "aws".to_string(),
@@ -887,8 +960,13 @@ mod test {
 
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
+    }
 
-        content = SimpleEvent::Map(BTreeMap::from([(
+    #[test]
+    fn test_included_keywords_match_path_case_insensitive() {
+        let scanner = build_test_scanner(true);
+
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
             "access".to_string(),
             SimpleEvent::Map(BTreeMap::from([(
                 "KEY".to_string(),
@@ -898,8 +976,13 @@ mod test {
 
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
+    }
 
-        content = SimpleEvent::Map(BTreeMap::from([(
+    #[test]
+    fn test_included_keywords_path_not_matching() {
+        let scanner = build_test_scanner(true);
+
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
             "aws".to_string(),
             SimpleEvent::List(vec![
                 SimpleEvent::Map(BTreeMap::from([(
@@ -915,16 +998,24 @@ mod test {
 
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 0);
+    }
 
-        content = SimpleEvent::Map(BTreeMap::from([(
+    fn test_included_keywords_path_with_uncaught_separator_symbol() {
+        let scanner = build_test_scanner(true);
+
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
             "aws%access".to_string(),
             SimpleEvent::String("hello".to_string()),
         )]));
 
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 0);
+    }
 
-        content = SimpleEvent::Map(BTreeMap::from([(
+    fn test_included_keywords_path_deep() {
+        let scanner = build_test_scanner(true);
+
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
             "aws".to_string(),
             SimpleEvent::List(vec![
                 SimpleEvent::Map(BTreeMap::from([(
@@ -964,7 +1055,13 @@ mod test {
             })
             .build();
 
-        let scanner = Scanner::new(&[redact_test_rule]).unwrap();
+        let scanner = Scanner::new(
+            &[redact_test_rule],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content = "hello world".to_string();
         let matches = scanner.scan(&mut content);
         assert_eq!(content, "hello world");
@@ -988,13 +1085,25 @@ mod test {
             .validator(LuhnChecksum)
             .build();
 
-        let scanner = Scanner::new(&[rule]).unwrap();
+        let scanner = Scanner::new(
+            &[rule],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content = "4556997807150071 4111 1111 1111 1111".to_string();
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 2);
         assert_eq!(content, "[credit card] [credit card]");
 
-        let scanner = Scanner::new(&[rule_with_checksum]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_with_checksum],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content = "4556997807150071 4111 1111 1111 1111".to_string();
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
@@ -1014,13 +1123,25 @@ mod test {
             .validator(ChineseIdChecksum)
             .build();
 
-        let scanner = Scanner::new(&[rule]).unwrap();
+        let scanner = Scanner::new(
+            &[rule],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content = "513231200012121657 513231200012121651".to_string();
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 2);
         assert_eq!(content, "[IDCARD] [IDCARD]");
 
-        let scanner = Scanner::new(&[rule_with_checksum]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_with_checksum],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content = "513231200012121657 513231200012121651".to_string();
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
@@ -1040,7 +1161,13 @@ mod test {
             .validator(GithubTokenChecksum)
             .build();
 
-        let scanner = Scanner::new(&[rule]).unwrap();
+        let scanner = Scanner::new(
+            &[rule],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content =
             "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 ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5"
                 .to_string();
@@ -1048,7 +1175,13 @@ mod test {
         assert_eq!(matches.len(), 2);
         assert_eq!(content, "[GITHUB] [GITHUB]");
 
-        let scanner = Scanner::new(&[rule_with_checksum]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_with_checksum],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content =
             "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 ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5"
                 .to_string();
@@ -1068,7 +1201,13 @@ mod test {
             })
             .build();
 
-        let scanner = Scanner::new(&[rule.clone(), rule]).unwrap();
+        let scanner = Scanner::new(
+            &[rule.clone(), rule],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content = "hello world".to_string();
         let matches = scanner.scan(&mut content);
         assert_eq!(content, "* world");
@@ -1086,7 +1225,13 @@ mod test {
             })
             .build();
 
-        let scanner = Scanner::new(&[rule.clone(), rule]).unwrap();
+        let scanner = Scanner::new(
+            &[rule.clone(), rule],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content = "hello world".to_string();
         let matches = scanner.scan(&mut content);
 
@@ -1150,7 +1295,13 @@ mod test {
             })
             .build();
 
-        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_0, rule_1],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content = "hello world".to_string();
         let mut matches = scanner.scan(&mut content);
         matches.sort();
@@ -1209,7 +1360,13 @@ mod test {
             })
             .build();
 
-        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_0, rule_1],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content = "abcdef".to_string();
         let mut matches = scanner.scan(&mut content);
         matches.sort();
@@ -1242,7 +1399,13 @@ mod test {
             .match_action(MatchAction::None)
             .build();
 
-        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_0, rule_1],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content = "abcdef".to_string();
         let mut matches = scanner.scan(&mut content);
         matches.sort();
@@ -1275,7 +1438,13 @@ mod test {
             .match_action(MatchAction::None)
             .build();
 
-        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_0, rule_1],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content = "abcdef".to_string();
         let mut matches = scanner.scan(&mut content);
         matches.sort();
@@ -1308,7 +1477,13 @@ mod test {
             .match_action(MatchAction::None)
             .build();
 
-        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_0, rule_1],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
         let mut content = "abcdef".to_string();
         let mut matches = scanner.scan(&mut content);
         matches.sort();
@@ -1342,7 +1517,13 @@ mod test {
             })
             .build();
 
-        let scanner = Scanner::new(&[rule_0]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_0],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
 
         let mut content = SimpleEvent::Map(BTreeMap::from([
             (
@@ -1386,7 +1567,13 @@ mod test {
             })
             .build();
 
-        let scanner = Scanner::new(&[rule_0]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_0],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
 
         let mut content = SimpleEvent::Map(BTreeMap::from([
             (
@@ -1465,7 +1652,13 @@ mod test {
         let rule_0 = RegexRuleConfig::builder("efg".to_owned()).build();
         let rule_1 = RegexRuleConfig::builder("abc".to_owned()).build();
 
-        let scanner = Scanner::new(&[rule_0, rule_1]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_0, rule_1],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
 
         let mut content = OrderAssertEvent(SimpleEvent::Map(BTreeMap::from([(
             "message".to_string(),
@@ -1482,7 +1675,13 @@ mod test {
             .match_action(MatchAction::Hash)
             .build();
 
-        let scanner = Scanner::new(&[rule_0]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_0],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
 
         let mut content =
             SimpleEvent::String("rand string that has a leading zero after hashing: y".to_string());
@@ -1500,7 +1699,13 @@ mod test {
             .match_action(MatchAction::Utf16Hash)
             .build();
 
-        let scanner = Scanner::new(&[rule_0]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_0],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
 
         let mut content = "rand string that has a leading zero after hashing: S".to_string();
 
@@ -1521,7 +1726,13 @@ mod test {
             .validator(LuhnChecksum)
             .build();
 
-        let scanner = Scanner::new(&[rule_0]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_0],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
 
         // The first 4 numbers match as a credit-card, but fail the luhn checksum.
         // The last 4 numbers (which overlap with the first match) pass the checksum.
@@ -1552,7 +1763,13 @@ mod test {
             })
             .build();
 
-        let scanner = Scanner::new(&[rule_0]).unwrap();
+        let scanner = Scanner::new(
+            &[rule_0],
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
+        .unwrap();
 
         // "test" should NOT be detected as an excluded keyword because "-" is ignored, so the word
         // boundary shouldn't match here
@@ -1568,7 +1785,7 @@ mod test {
         use crate::scanner::Scanner;
         use crate::{
             simple_event::SimpleEvent, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
-            RuleMatch, Scope,
+            RuleMatch, ScannerFeatures, Scope,
         };
         use metrics::{Key, Label};
         use metrics_util::debugging::DebugValue;
@@ -1590,7 +1807,13 @@ mod test {
                     .match_action(MatchAction::None)
                     .build();
 
-                let scanner = Scanner::new(&[rule_0]).unwrap();
+                let scanner = Scanner::new(
+                    &[rule_0],
+                    ScannerFeatures {
+                        should_keywords_match_event_paths: true,
+                    },
+                )
+                .unwrap();
                 let mut content = SimpleEvent::Map(BTreeMap::from([
                     // z-match is considered as a false positive here
                     (
@@ -1630,7 +1853,13 @@ mod test {
                     })
                     .build();
 
-                let scanner = Scanner::new(&[redact_test_rule]).unwrap();
+                let scanner = Scanner::new(
+                    &[redact_test_rule],
+                    ScannerFeatures {
+                        should_keywords_match_event_paths: true,
+                    },
+                )
+                .unwrap();
                 let mut content = SimpleEvent::Map(BTreeMap::from([(
                     "test".to_string(),
                     SimpleEvent::String("hello world".to_string()),
@@ -1671,7 +1900,13 @@ mod test {
                     })
                     .build();
 
-                let scanner = Scanner::new(&[redact_test_rule]).unwrap();
+                let scanner = Scanner::new(
+                    &[redact_test_rule],
+                    ScannerFeatures {
+                        should_keywords_match_event_paths: true,
+                    },
+                )
+                .unwrap();
                 let mut content = SimpleEvent::Map(BTreeMap::from([(
                     "test".to_string(),
                     SimpleEvent::String("hello world".to_string()),
