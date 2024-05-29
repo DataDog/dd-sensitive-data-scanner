@@ -48,7 +48,7 @@ pub trait CompiledRuleTrait: Send + Sync {
     fn get_string_matches(
         &self,
         content: &str,
-        path: &str,
+        path: Option<&str>,
         caches: &mut CachePoolGuard<'_>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -78,7 +78,7 @@ impl CompiledRuleTrait for RegexCompiledRule {
     fn get_string_matches(
         &self,
         content: &str,
-        path: &str,
+        path: Option<&str>,
         caches: &mut CachePoolGuard<'_>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -467,14 +467,14 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 };
 
                 let sanitized_path = if self.scanner.feature_set.should_keywords_match_event_paths {
-                    path.sanitize()
+                    Some(path.sanitize())
                 } else {
-                    "".to_string()
-                }; // keywords will never match path = ""
+                    None
+                }; // if the path is None, we won't match keywords against the path
 
                 rule.get_string_matches(
                     content,
-                    &sanitized_path,
+                    sanitized_path.as_deref(),
                     &mut self.caches,
                     &exclusion_check,
                     self.excluded_matches,
@@ -526,13 +526,15 @@ fn is_false_positive_match(
     regex_match: &regex_automata::Match,
     rule: &RegexCompiledRule,
     content: &str,
-    path: &str,
+    path: Option<&str>,
 ) -> bool {
-    if rule
-        .proximity_keywords
-        .is_false_positive_match(content, path, regex_match.start())
-    {
-        return true;
+    if let Some(path) = path {
+        if rule
+            .proximity_keywords
+            .is_false_positive_match(content, path, regex_match.start())
+        {
+            return true;
+        }
     }
     if let Some(validator) = rule.validator.as_ref() {
         if !validator.is_valid_match(&content[regex_match.range()]) {
@@ -585,7 +587,7 @@ mod test {
         fn get_string_matches(
             &self,
             _content: &str,
-            _path: &str,
+            _path: Option<&str>,
             _caches: &mut CachePoolGuard<'_>,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
