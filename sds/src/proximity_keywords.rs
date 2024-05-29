@@ -29,8 +29,17 @@ pub struct CompiledProximityKeywords {
 /// If this list contains more than a couple chars, some optimizations may be needed below
 const EXCLUDED_KEYWORDS_REMOVED_CHARS: &[char] = &['-', '_'];
 
+/// Characters that are considered to be links between keyword words.
+/// Example: '-' in "aws-access" is considered to be a link character.
+/// Example: '.' in "my.path" is considered to be a link character.
+const MULTI_WORD_KEYWORDS_LINK_CHARS: &[char] = &['-', '_', '.', ' ', '/'];
+
+const UNIFIED_LINK_CHAR: char = '.';
+
 struct ProximityKeywordsRegex<const EXCLUDED_CHARS: bool> {
-    regex: meta::Regex,
+    content_regex: meta::Regex,
+    #[allow(dead_code)]
+    path_regex: meta::Regex,
 }
 
 impl CompiledProximityKeywords {
@@ -89,24 +98,30 @@ impl CompiledProximityKeywords {
         }
 
         // No error is expected during pattern compilation because the regex is build internally in this method
-        let included_pattern = compile_keywords(
+        let included_patterns = compile_keywords(
             config.included_keywords,
             config.look_ahead_character_count,
             &[],
         )?
-        .map(|regex| ProximityKeywordsRegex { regex });
+        .map(|(content_regex, path_regex)| ProximityKeywordsRegex {
+            content_regex,
+            path_regex,
+        });
 
-        let excluded_pattern = compile_keywords(
+        let excluded_patterns = compile_keywords(
             config.excluded_keywords,
             config.look_ahead_character_count,
             EXCLUDED_KEYWORDS_REMOVED_CHARS,
         )?
-        .map(|regex| ProximityKeywordsRegex { regex });
+        .map(|(content_regex, path_regex)| ProximityKeywordsRegex {
+            content_regex,
+            path_regex,
+        });
 
         Ok(CompiledProximityKeywords {
             look_ahead_character_count: config.look_ahead_character_count,
-            included_keywords_pattern: included_pattern,
-            excluded_keywords_pattern: excluded_pattern,
+            included_keywords_pattern: included_patterns,
+            excluded_keywords_pattern: excluded_patterns,
             metrics: Metrics::new(labels),
         })
     }
@@ -149,7 +164,7 @@ fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
         let input = Input::new(&stripped_prefix)
             .earliest(true)
             .span(span_start..span_end);
-        regex.regex.search_half(&input).is_some()
+        regex.content_regex.search_half(&input).is_some()
     } else {
         // just get the previous n chars (no chars are skipped)
         let prefix_start_info = get_prefix_start(match_start, look_ahead_char_count, content);
@@ -159,7 +174,7 @@ fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
         let input = Input::new(content)
             .earliest(true)
             .span(prefix_start_info.start..prefix_end);
-        regex.regex.search_half(&input).is_some()
+        regex.content_regex.search_half(&input).is_some()
     }
 }
 
@@ -230,12 +245,12 @@ fn compile_keywords_to_ast(
     keywords: &[String],
     look_ahead_character_count: usize,
     remove_chars: &[char],
-) -> Result<Option<Vec<Ast>>, ProximityKeywordsValidationError> {
+) -> Result<Option<(Ast, Ast)>, ProximityKeywordsValidationError> {
     if keywords.is_empty() {
         return Ok(None);
     }
 
-    let keyword_patterns = keywords
+    let (content_patterns, path_patterns) = keywords
         .iter()
         .map(|keyword| {
             if keyword.chars().count() > look_ahead_character_count {
@@ -246,56 +261,65 @@ fn compile_keywords_to_ast(
             if trimmed_keyword.is_empty() {
                 return Err(EmptyKeyword);
             }
-            Ok(calculate_keyword_pattern(&trimmed_keyword))
+            Ok((
+                calculate_keyword_content_pattern(&trimmed_keyword),
+                calculate_keyword_path_pattern(&trimmed_keyword),
+            ))
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
+        .cloned()
+        .unzip();
 
-    Ok(Some(keyword_patterns))
-}
-
-fn compile_keywords_pattern(keyword_patterns: Vec<Ast>) -> String {
-    Ast::Alternation(Alternation {
+    let content_pattern = Ast::Alternation(Alternation {
         span: span(),
-        asts: keyword_patterns,
-    })
-    .to_string()
+        asts: content_patterns,
+    });
+
+    let path_pattern = Ast::Alternation(Alternation {
+        span: span(),
+        asts: path_patterns,
+    });
+
+    Ok(Some((content_pattern, path_pattern)))
 }
 
 fn compile_keywords(
     keywords: Vec<String>,
     look_ahead_character_count: usize,
     remove_chars: &[char],
-) -> Result<Option<meta::Regex>, ProximityKeywordsValidationError> {
-    let pattern = match compile_keywords_to_ast(&keywords, look_ahead_character_count, remove_chars)
-    {
-        Ok(Some(keyword_patterns)) => compile_keywords_pattern(keyword_patterns),
-        Ok(None) => return Ok(None),
-        Err(e) => return Err(e),
-    };
+) -> Result<Option<(meta::Regex, meta::Regex)>, ProximityKeywordsValidationError> {
+    let (content_pattern, path_pattern) =
+        match compile_keywords_to_ast(&keywords, look_ahead_character_count, remove_chars) {
+            Ok(Some((content_ast, path_ast))) => (content_ast.to_string(), path_ast.to_string()),
+            Ok(None) => return Ok(None),
+            Err(e) => return Err(e),
+        };
 
-    Ok(Some(
-        meta::Regex::builder()
-            .configure(
-                meta::Config::new()
-                    .nfa_size_limit(None)
-                    // This is the default that `Regex` uses
-                    .hybrid_cache_capacity(2 * (1 << 20)),
-            )
-            .syntax(regex_automata::util::syntax::Config::default().case_insensitive(true))
-            .build(&pattern)
-            .unwrap(),
-    ))
+    let mut builder = meta::Regex::builder();
+    let regex_builder = builder
+        .configure(
+            meta::Config::new()
+                .nfa_size_limit(None)
+                // This is the default that `Regex` uses
+                .hybrid_cache_capacity(2 * (1 << 20)),
+        )
+        .syntax(regex_automata::util::syntax::Config::default().case_insensitive(true));
+
+    Ok(Some((
+        regex_builder.build(&content_pattern).unwrap(),
+        regex_builder.build(&path_pattern).unwrap(),
+    )))
+}
+
+fn should_push_word_boundary(c: char) -> bool {
+    c.is_ascii_alphabetic() || c.is_ascii_digit()
 }
 
 /// Transform a keyword in an AST, the keyword MUST NOT be empty
-fn calculate_keyword_pattern(keyword: &str) -> Ast {
+fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
     let mut keyword_pattern: Vec<Ast> = vec![];
-    if keyword
-        .chars()
-        .next()
-        .map(|char| char.is_ascii_alphabetic() || char.is_ascii_digit())
-        .unwrap()
-    {
+    if should_push_word_boundary(keyword.chars().next().unwrap()) {
         keyword_pattern.push(word_boundary())
     }
 
@@ -303,14 +327,102 @@ fn calculate_keyword_pattern(keyword: &str) -> Ast {
         keyword_pattern.push(Ast::Literal(literal_ast(c)))
     }
 
-    if keyword
-        .chars()
-        .next_back()
-        .map(|char| char.is_ascii_alphabetic() || char.is_ascii_digit())
-        .unwrap()
-    {
+    if should_push_word_boundary(keyword.chars().next_back().unwrap()) {
         keyword_pattern.push(word_boundary())
     }
+    Ast::Concat(Concat {
+        span: span(),
+        asts: keyword_pattern,
+    })
+}
+
+#[derive(Clone, Copy)]
+enum CharType {
+    Regular,
+    Uppercase,
+    Separator,
+}
+
+fn get_char_type(c: &char) -> CharType {
+    let is_link_symbol = MULTI_WORD_KEYWORDS_LINK_CHARS.contains(c);
+    let is_uppercase_char = c.is_ascii_uppercase();
+
+    if is_link_symbol {
+        CharType::Separator
+    } else if is_uppercase_char {
+        CharType::Uppercase
+    } else {
+        CharType::Regular
+    }
+}
+
+fn standardize_path_chars<F>(chars: Vec<char>, mut push_character: F)
+where
+    F: FnMut(&char),
+{
+    let kw_length = chars.len();
+
+    if chars.is_empty() {
+        return;
+    }
+
+    push_character(&chars[0]);
+
+    for (i, chars) in chars.windows(2).enumerate() {
+        let current = &chars[1];
+        let prev_char = get_char_type(&chars[0]);
+        let current_char = get_char_type(current);
+
+        let is_last_char = i == kw_length - 2;
+
+        match (is_last_char, prev_char, current_char) {
+            // The last character is simply pushed
+            (true, _, _) => {
+                push_character(current);
+            }
+            // Regular character is simply pushed
+            (_, _, CharType::Regular) => {
+                push_character(current);
+            }
+            // Character coming after a separator is pushed
+            (_, CharType::Separator, _) => {
+                push_character(current);
+            }
+            // Uppercase after an uppercase is pushed
+            (_, CharType::Uppercase, CharType::Uppercase) => {
+                push_character(current);
+            }
+            (_, CharType::Regular, CharType::Uppercase) => {
+                push_character(&UNIFIED_LINK_CHAR);
+                // CamelCase: push a link character and push the current character
+                push_character(current);
+            }
+            // Regular separation in the keyword: push a link character only
+            (_, _, CharType::Separator) => {
+                push_character(&UNIFIED_LINK_CHAR);
+            }
+        }
+    }
+}
+
+/// Transform a keyword in an AST for the path pattern, the keyword MUST NOT be empty
+fn calculate_keyword_path_pattern(keyword: &str) -> Ast {
+    let mut keyword_pattern: Vec<Ast> = vec![];
+
+    if should_push_word_boundary(keyword.chars().next().unwrap()) {
+        keyword_pattern.push(word_boundary())
+    }
+
+    let char_list: Vec<char> = keyword.chars().collect();
+
+    standardize_path_chars(char_list, |c| {
+        keyword_pattern.push(Ast::Literal(literal_ast(c.to_ascii_lowercase())));
+    });
+
+    if should_push_word_boundary(keyword.chars().next_back().unwrap()) {
+        keyword_pattern.push(word_boundary())
+    }
+
     Ast::Concat(Concat {
         span: span(),
         asts: keyword_pattern,
@@ -801,32 +913,125 @@ mod test {
 
     #[test]
     fn test_compile_keywords() {
-        let regex = compile_keywords(vec!["hello".to_string()], 5, &[])
-            .unwrap()
-            .unwrap();
-        assert_eq!(regex.is_match("hello"), true);
-        assert_eq!(regex.is_match("he-l_lo"), false);
+        let (content_regex, path_regex) =
+            compile_keywords(vec!["hello".to_string(), "awsAccess".to_string()], 20, &[])
+                .unwrap()
+                .unwrap();
+        assert_eq!(content_regex.is_match("hello"), true);
+        assert_eq!(content_regex.is_match("he-l_lo"), false);
+        assert_eq!(
+            content_regex.search(&Input::new("I want to say hello to my dear friend")),
+            Some(regex_automata::Match::must(0, 14..19))
+        );
+
+        assert_eq!(path_regex.is_match("awsAccess"), false);
+        assert_eq!(path_regex.is_match("aws.access"), true);
+        assert_eq!(path_regex.is_match("aws.accessible"), false);
+        assert_eq!(
+            path_regex.search(&Input::new("my.path.to.aws.access")),
+            Some(regex_automata::Match::must(0, 11..21))
+        );
     }
 
     #[test]
-    fn test_compile_multi_keywords() {
-        let pattern = match compile_keywords_to_ast(
-            &&vec!["hello".to_string(), "world*".to_string()],
+    fn test_compile_keywords_pattern() {
+        let (content_pattern, path_pattern) = match compile_keywords_to_ast(
+            &&vec![
+                "hello".to_string(),
+                "world*".to_string(),
+                "_aws".to_string(),
+                "aws-access".to_string(),
+            ],
             10,
             &[],
         ) {
-            Ok(Some(keyword_patterns)) => compile_keywords_pattern(keyword_patterns),
-            _ => "".to_string(),
+            Ok(Some((content_ast, path_ast))) => (content_ast.to_string(), path_ast.to_string()),
+            _ => ("".to_string(), "".to_string()),
         };
 
-        assert_eq!(pattern, "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*")
+        assert_eq!(content_pattern, "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*|_aws(?-u:\\b)|(?-u:\\b)aws\\-access(?-u:\\b)");
+        assert_eq!(path_pattern, "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*|_aws(?-u:\\b)|(?-u:\\b)aws\\.access(?-u:\\b)");
     }
 
     #[test]
     fn test_calculate_keyword_pattern() {
         assert_eq!(
-            calculate_keyword_pattern("test").to_string(),
+            calculate_keyword_content_pattern("test").to_string(),
             "(?-u:\\b)test(?-u:\\b)".to_string()
+        );
+    }
+
+    #[test]
+    fn test_calculate_multi_word_keyword_pattern() {
+        assert_eq!(
+            calculate_keyword_content_pattern("multi word-KEYWORD").to_string(),
+            "(?-u:\\b)multi word\\-KEYWORD(?-u:\\b)"
+        )
+    }
+
+    #[test]
+    fn test_calculate_path_pattern_on_simple_keyword() {
+        assert_eq!(
+            calculate_keyword_path_pattern("test").to_string(),
+            "(?-u:\\b)test(?-u:\\b)".to_string()
+        )
+    }
+
+    #[test]
+    fn test_calculate_path_pattern_on_multi_word_keyword() {
+        assert_eq!(
+            calculate_keyword_path_pattern("test hello world").to_string(),
+            "(?-u:\\b)test\\.hello\\.world(?-u:\\b)".to_string()
+        );
+
+        assert_eq!(
+            calculate_keyword_path_pattern("test helloWorld").to_string(),
+            "(?-u:\\b)test\\.hello\\.world(?-u:\\b)".to_string()
+        );
+
+        assert_eq!(
+            calculate_keyword_path_pattern("awsAccess-key-id").to_string(),
+            "(?-u:\\b)aws\\.access\\.key\\.id(?-u:\\b)".to_string()
+        );
+
+        assert_eq!(
+            calculate_keyword_path_pattern("AWS_KEY_ID").to_string(),
+            "(?-u:\\b)aws\\.key\\.id(?-u:\\b)".to_string()
+        );
+
+        assert_eq!(
+            calculate_keyword_path_pattern("_AWS_KEY_ID_").to_string(),
+            "_aws\\.key\\.id_".to_string()
+        );
+
+        assert_eq!(
+            calculate_keyword_path_pattern("AwsAccessKeyID").to_string(),
+            "(?-u:\\b)aws\\.access\\.key\\.id(?-u:\\b)".to_string()
+        );
+
+        assert_eq!(
+            calculate_keyword_path_pattern("AWSACCESSKEYID").to_string(),
+            "(?-u:\\b)awsaccesskeyid(?-u:\\b)".to_string()
+        );
+
+        assert_eq!(
+            calculate_keyword_path_pattern("aLotOfCamelCaSe").to_string(),
+            "(?-u:\\b)a\\.lot\\.of\\.camel\\.ca\\.se(?-u:\\b)".to_string()
+        );
+
+        assert_eq!(
+            calculate_keyword_path_pattern("testThis-with_different/separators").to_string(),
+            "(?-u:\\b)test\\.this\\.with\\.different\\.separators(?-u:\\b)".to_string()
+        );
+
+        assert_eq!(
+            calculate_keyword_path_pattern("edge--case_/a. bit...annoying").to_string(),
+            "(?-u:\\b)edge\\.\\-case\\./a\\. bit\\.\\.\\.annoying(?-u:\\b)".to_string()
+        );
+
+        assert_eq!(
+            calculate_keyword_path_pattern("lots--of___symbol/s").to_string(),
+            "(?-u:\\b)lots\\.\\-of\\.__symbol\\.s(?-u:\\b)".to_string()
         );
     }
 
