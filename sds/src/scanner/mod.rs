@@ -45,6 +45,7 @@ where
 pub trait CompiledRuleTrait: Send + Sync {
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
+    #[allow(clippy::too_many_arguments)]
     fn get_string_matches(
         &self,
         content: &str,
@@ -197,7 +198,7 @@ impl RuleConfigTrait for RegexRuleConfig {
 }
 
 pub struct ScannerFeatures {
-    should_keywords_match_event_paths: bool,
+    pub should_keywords_match_event_paths: bool,
 }
 
 pub struct Scanner {
