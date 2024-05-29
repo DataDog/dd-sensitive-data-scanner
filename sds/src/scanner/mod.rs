@@ -201,13 +201,19 @@ pub struct Scanner {
 
 impl Scanner {
     pub fn new<C: RuleConfigTrait>(rules: &[C]) -> Result<Self, CreateScannerError> {
-        Scanner::new_with_labels(rules, Labels::empty(), true)
+        Scanner::new_with_labels(
+            rules,
+            Labels::empty(),
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
+        )
     }
 
     pub fn new_with_labels<C: RuleConfigTrait>(
         rules: &[C],
         scanner_labels: Labels,
-        should_keywords_match_event_paths: bool,
+        feature_set: ScannerFeatures,
     ) -> Result<Self, CreateScannerError> {
         let mut cache_pool_builder = CachePoolBuilder::new();
         let compiled_rules = rules
@@ -233,9 +239,7 @@ impl Scanner {
             rules: compiled_rules,
             scoped_ruleset,
             cache_pool: cache_pool_builder.build(),
-            feature_set: ScannerFeatures {
-                should_keywords_match_event_paths,
-            },
+            feature_set,
         })
     }
 
@@ -547,7 +551,7 @@ fn is_false_positive_match(
 #[cfg(test)]
 mod test {
     use super::cache_pool::{CachePoolBuilder, CachePoolGuard};
-    use super::{MatchEmitter, StringMatch};
+    use super::{MatchEmitter, ScannerFeatures, StringMatch};
     use crate::match_action::{MatchAction, MatchActionValidationError};
     use crate::observability::labels::Labels;
     use crate::rule::{
@@ -676,7 +680,9 @@ mod test {
                 })
                 .build()],
             Labels::new(&[("key".to_string(), "value".to_string())]),
-            true,
+            ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            },
         )
         .unwrap();
 
