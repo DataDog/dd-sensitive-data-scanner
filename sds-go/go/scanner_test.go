@@ -548,6 +548,9 @@ func sortRulesMatch(left, right RuleMatch) bool {
 	if left.EndIndexExclusive > right.EndIndexExclusive {
 		return true
 	}
-	// TODO(remy): path, replacement type
+	if left.Path > right.Path {
+		return true
+	}
+	// TODO(https://datadoghq.atlassian.net/browse/SDS-301): implement replacement type
 	return false
 }
