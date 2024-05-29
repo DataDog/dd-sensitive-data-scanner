@@ -551,6 +551,6 @@ func sortRulesMatch(left, right RuleMatch) bool {
 	if left.Path > right.Path {
 		return true
 	}
-	// TODO(remy): replacement type
+	// TODO(https://datadoghq.atlassian.net/browse/SDS-301): implement replacement type
 	return false
 }
