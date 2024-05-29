@@ -188,7 +188,7 @@ impl RuleConfigTrait for RegexRuleConfig {
     }
 }
 
-struct ScannerFeatures {
+pub struct ScannerFeatures {
     should_keywords_match_event_paths: bool,
 }
 
