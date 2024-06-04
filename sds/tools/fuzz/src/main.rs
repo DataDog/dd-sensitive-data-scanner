@@ -3,7 +3,7 @@
 
 use afl::fuzz;
 use dd_sds::{
-    MatchAction, PartialRedactDirection, RegexRuleConfig, Scanner, ScannerFeatures, Scope,
+    MatchAction, PartialRedactDirection, RegexRuleConfig, ScannerBuilder, ScannerFeatures, Scope,
 };
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
@@ -87,14 +87,13 @@ fn run_fuzz(pattern: &str, input: &str, mut rng: StdRng) {
         println!("Match action: {:?}", match_action);
     }
 
-    let scanner_result = Scanner::new(
-        &[RegexRuleConfig::builder(pattern.to_string())
-            .match_action(match_action)
-            .build()],
-        ScannerFeatures {
-            should_keywords_match_event_paths: true,
-        },
-    );
+    let scanner_result = ScannerBuilder::new(&[RegexRuleConfig::builder(pattern.to_string())
+        .match_action(match_action)
+        .build()])
+    .scanner_features(ScannerFeatures {
+        should_keywords_match_event_paths: true,
+    })
+    .build();
 
     if let Ok(scanner) = scanner_result {
         let mut mutated_input = input.to_string();
