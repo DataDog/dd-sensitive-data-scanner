@@ -54,20 +54,16 @@ impl<'a> Path<'a> {
 
     pub fn sanitize(&self) -> String {
         let mut sanitized_path = "".to_string();
-        self.segments
-            .iter()
-            .enumerate()
-            .for_each(|(i, segment)| match segment {
-                PathSegment::Field(field) => {
-                    if i != 0 {
-                        sanitized_path.push(UNIFIED_LINK_CHAR);
-                    }
-                    standardize_path_chars(field.chars().collect(), |c| {
-                        sanitized_path.push(c.to_ascii_lowercase());
-                    });
+        self.segments.iter().enumerate().for_each(|(i, segment)| {
+            if let PathSegment::Field(field) = segment {
+                if i != 0 {
+                    sanitized_path.push(UNIFIED_LINK_CHAR);
                 }
-                _ => (),
-            });
+                standardize_path_chars(field.chars().collect(), |c| {
+                    sanitized_path.push(c.to_ascii_lowercase());
+                });
+            }
+        });
 
         sanitized_path
     }
