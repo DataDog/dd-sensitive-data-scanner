@@ -53,20 +53,23 @@ impl<'a> Path<'a> {
     }
 
     pub fn sanitize(&self) -> String {
+        let mut sanitized_path = "".to_string();
         self.segments
             .iter()
-            .filter_map(|segment| match segment {
+            .enumerate()
+            .for_each(|(i, segment)| match segment {
                 PathSegment::Field(field) => {
-                    let mut sanitized_segment: Vec<char> = vec![];
+                    if i != 0 {
+                        sanitized_path.push(UNIFIED_LINK_CHAR);
+                    }
                     standardize_path_chars(field.chars().collect(), |c| {
-                        sanitized_segment.push(c.to_ascii_lowercase());
+                        sanitized_path.push(c.to_ascii_lowercase());
                     });
-                    return Some(sanitized_segment.iter().collect());
                 }
-                _ => None,
-            })
-            .collect::<Vec<String>>()
-            .join(UNIFIED_LINK_CHAR.to_string().as_str())
+                _ => (),
+            });
+
+        sanitized_path
     }
 }
 
