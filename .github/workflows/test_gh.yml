@@ -8,6 +8,7 @@ on:
 jobs:
   trigger:
     runs-on: ubuntu-latest
+    environment: protected
     steps:
       - name: Extract PR information from github
         id: extract-pr-info
@@ -27,13 +28,6 @@ jobs:
           echo $author
           echo "PR_URL=$pr_url" >> "$GITHUB_OUTPUT"
           echo "COMMIT_AUTHOR=$author" >> "$GITHUB_OUTPUT"
-      - name: echo secrets
-        run: |
-          echo ${{ secrets.TR_TEST_VAR }}
-          NEWTESTSTRING=${${{ secrets.TRIGGER_GITHUB_APP_PRIVATE_KEY }}:0:5}
-          APPID=${${{ vars.TRIGGER_APP_ID }}:0:5}
-          echo App ID is $APPID
-          echo Secret is ${{ secrets.TRIGGER_GITHUB_APP_PRIVATE_KEY }}
       - name: Generate a token for the trigger 2
         id: generate-token
         uses: actions/create-github-app-token@v1
@@ -42,3 +36,9 @@ jobs:
           private-key: ${{ secrets.TRIGGER_GITHUB_APP_PRIVATE_KEY }}
           owner: DataDog
           repositories: "sds-shared-library"
+      - name: Use output
+        id: use-output
+        run: |
+          echo "Using output"
+          echo "PR_URL=$PR_URL"
+          echo "COMMIT_AUTHOR=$COMMIT_AUTHOR"
