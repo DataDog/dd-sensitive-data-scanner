@@ -16,6 +16,7 @@ use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 use self::metrics::Metrics;
 use ahash::AHashSet;
 use regex_automata::{Input, Match};
+use serde::{Deserialize, Serialize};
 
 pub(crate) mod cache_pool;
 pub mod error;
@@ -195,7 +196,7 @@ impl RuleConfigTrait for RegexRuleConfig {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ScannerFeatures {
     pub should_keywords_match_event_paths: bool,
 }
@@ -1784,6 +1785,7 @@ mod test {
         use metrics_util::debugging::DebuggingRecorder;
         use metrics_util::CompositeKey;
         use metrics_util::MetricKind::Counter;
+        use serde_test::{assert_tokens, Token};
         use std::collections::BTreeMap;
 
         #[test]
@@ -1917,6 +1919,25 @@ mod test {
                 .expect("metric not found");
 
             assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+        }
+
+        #[test]
+        fn test_serde() {
+            let scanner_features = ScannerFeatures {
+                should_keywords_match_event_paths: true,
+            };
+            assert_tokens(
+                &scanner_features,
+                &[
+                    Token::Struct {
+                        name: "ScannerFeatures",
+                        len: 1,
+                    },
+                    Token::String("should_keywords_match_event_paths"),
+                    Token::Bool(true),
+                    Token::StructEnd,
+                ],
+            )
         }
     }
 }
