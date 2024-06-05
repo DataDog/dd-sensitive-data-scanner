@@ -59,7 +59,7 @@ impl<'a> Path<'a> {
                 if i != 0 {
                     sanitized_path.push(UNIFIED_LINK_CHAR);
                 }
-                standardize_path_chars(field.chars().collect(), |c| {
+                standardize_path_chars(field, |c| {
                     sanitized_path.push(c.to_ascii_lowercase());
                 });
             }

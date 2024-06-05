@@ -379,21 +379,21 @@ fn get_char_type(c: &char) -> CharType {
 
 /// Function that standardizes a list of characters, by pushing characters one by one in a standard way.
 /// Takes a closure that will be called when a character is to be pushed
-pub fn standardize_path_chars<F>(chars: Vec<char>, mut push_character: F)
+pub fn standardize_path_chars<F>(chars: &str, mut push_character: F)
 where
     F: FnMut(&char),
 {
     let kw_length = chars.len();
 
-    if chars.is_empty() {
+    if let Some(c) = chars.chars().next() {
+        push_character(&c);
+    } else {
         return;
     }
 
-    push_character(&chars[0]);
-
-    for (i, chars) in chars.windows(2).enumerate() {
-        let current = &chars[1];
-        let prev_char = get_char_type(&chars[0]);
+    for (i, chars) in chars.as_bytes().windows(2).enumerate() {
+        let current = &(chars[1] as char);
+        let prev_char = get_char_type(&(chars[0] as char));
         let current_char = get_char_type(current);
 
         let is_last_char = i == kw_length - 2;
@@ -436,9 +436,7 @@ fn calculate_keyword_path_pattern(keyword: &str) -> Ast {
         keyword_pattern.push(word_boundary())
     }
 
-    let char_list: Vec<char> = keyword.chars().collect();
-
-    standardize_path_chars(char_list, |c| {
+    standardize_path_chars(keyword, |c| {
         keyword_pattern.push(Ast::Literal(literal_ast(c.to_ascii_lowercase())));
     });
 
@@ -569,7 +567,7 @@ mod test {
             proximity_keywords.is_false_positive_match(
                 "",
                 Some("aws.access.key.id".to_string()),
-                0
+                0,
             ),
             false
         );
@@ -589,7 +587,7 @@ mod test {
             proximity_keywords.is_false_positive_match(
                 "",
                 Some("aws.access.key.identity".to_string()),
-                0
+                0,
             ),
             false
         );
