@@ -40,5 +40,5 @@ jobs:
         id: use-output
         run: |
           echo "Using output"
-          echo "PR_URL=$PR_URL"
+          echo ${{steps.extract-pr-info.outputs.pr_url}}
           echo "COMMIT_AUTHOR=$COMMIT_AUTHOR"
