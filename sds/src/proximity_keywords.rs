@@ -32,36 +32,50 @@ const EXCLUDED_KEYWORDS_REMOVED_CHARS: &[char] = &['-', '_'];
 /// Characters that are considered to be links between keyword words.
 /// Example: '-' in "aws-access" is considered to be a link character.
 /// Example: '.' in "my.path" is considered to be a link character.
-const MULTI_WORD_KEYWORDS_LINK_CHARS: &[char] = &['-', '_', '.', ' ', '/'];
+pub const MULTI_WORD_KEYWORDS_LINK_CHARS: &[char] = &['-', '_', '.', ' ', '/'];
 
-const UNIFIED_LINK_CHAR: char = '.';
+pub const UNIFIED_LINK_CHAR: char = '.';
 
 struct ProximityKeywordsRegex<const EXCLUDED_CHARS: bool> {
     content_regex: meta::Regex,
-    #[allow(dead_code)]
     path_regex: meta::Regex,
 }
 
 impl CompiledProximityKeywords {
-    pub fn is_false_positive_match(&self, content: &str, match_start: usize) -> bool {
+    pub fn is_false_positive_match(
+        &self,
+        content: &str,
+        sanitized_path: Option<String>,
+        match_start: usize,
+    ) -> bool {
         match (
             &self.included_keywords_pattern,
             &self.excluded_keywords_pattern,
         ) {
             (Some(included_keywords), _) => {
-                let is_false_positive = !contains_keyword_match(
+                if let Some(sanitized_path) = sanitized_path {
+                    let is_valid_from_path =
+                        self.contains_keyword_in_path(&sanitized_path, included_keywords);
+
+                    if is_valid_from_path {
+                        return false;
+                    }
+                }
+
+                let is_false_positive_from_content = !self.contains_keyword_match(
                     content,
                     match_start,
                     self.look_ahead_character_count,
                     included_keywords,
                 );
-                if is_false_positive {
+
+                if is_false_positive_from_content {
                     self.metrics.false_positive_included_keywords.increment(1);
                 }
-                is_false_positive
+                is_false_positive_from_content
             }
             (None, Some(excluded_keywords)) => {
-                let is_false_positive = contains_keyword_match(
+                let is_false_positive = self.contains_keyword_match(
                     content,
                     match_start,
                     self.look_ahead_character_count,
@@ -125,56 +139,63 @@ impl CompiledProximityKeywords {
             metrics: Metrics::new(labels),
         })
     }
-}
 
-/// Returns the match context which is what is searched for keywords
-/// and the range where matches are searched for. The range is needed since the context is
-/// expanded to ensure regex assertions (e.g. word boundaries) work correctly.
-fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
-    content: &str,
-    match_start: usize,
-    look_ahead_char_count: usize,
-    regex: &ProximityKeywordsRegex<EXCLUDED_CHARS>,
-) -> bool {
-    if EXCLUDED_CHARS {
-        let prefix_start_info = get_prefix_start(
-            match_start,
-            // Adding 1 to the start to account for assertion checking
-            look_ahead_char_count + 1,
-            content,
-        );
+    fn contains_keyword_in_path(&self, path: &str, regex: &ProximityKeywordsRegex<false>) -> bool {
+        let input = Input::new(path).earliest(true);
 
-        // Adding 1 char here to allow correct assertion checking on the last char. There will always be
-        // at least 1 more char is always available since empty matches aren't allowed
-        let prefix_end = next_char_index(content, match_start).unwrap_or(content.len());
+        regex.path_regex.search_half(&input).is_some()
+    }
 
-        let stripped_prefix = content[prefix_start_info.start..prefix_end]
-            .replace(EXCLUDED_KEYWORDS_REMOVED_CHARS, "");
+    /// Returns the match context which is what is searched for keywords
+    /// and the range where matches are searched for. The range is needed since the context is
+    /// expanded to ensure regex assertions (e.g. word boundaries) work correctly.
+    fn contains_keyword_match<const EXCLUDED_CHARS: bool>(
+        &self,
+        content: &str,
+        match_start: usize,
+        look_ahead_char_count: usize,
+        regex: &ProximityKeywordsRegex<EXCLUDED_CHARS>,
+    ) -> bool {
+        if EXCLUDED_CHARS {
+            let prefix_start_info = get_prefix_start(
+                match_start,
+                // Adding 1 to the start to account for assertion checking
+                look_ahead_char_count + 1,
+                content,
+            );
 
-        // Subtracting one to exclude the last char which was added only for boundary checking
-        let span_end = prev_char_index(&stripped_prefix, stripped_prefix.len()).unwrap_or(0);
+            // Adding 1 char here to allow correct assertion checking on the last char. There will always be
+            // at least 1 more char is always available since empty matches aren't allowed
+            let prefix_end = next_char_index(content, match_start).unwrap_or(content.len());
 
-        let span_start = if prefix_start_info.used_all_chars {
-            // an extra char was added for assertion checking, so it needs to be removed here
-            next_char_index(&stripped_prefix, 0).unwrap_or(stripped_prefix.len())
+            let stripped_prefix = content[prefix_start_info.start..prefix_end]
+                .replace(EXCLUDED_KEYWORDS_REMOVED_CHARS, "");
+
+            // Subtracting one to exclude the last char which was added only for boundary checking
+            let span_end = prev_char_index(&stripped_prefix, stripped_prefix.len()).unwrap_or(0);
+
+            let span_start = if prefix_start_info.used_all_chars {
+                // an extra char was added for assertion checking, so it needs to be removed here
+                next_char_index(&stripped_prefix, 0).unwrap_or(stripped_prefix.len())
+            } else {
+                0
+            };
+
+            let input = Input::new(&stripped_prefix)
+                .earliest(true)
+                .span(span_start..span_end);
+            regex.content_regex.search_half(&input).is_some()
         } else {
-            0
-        };
+            // just get the previous n chars (no chars are skipped)
+            let prefix_start_info = get_prefix_start(match_start, look_ahead_char_count, content);
 
-        let input = Input::new(&stripped_prefix)
-            .earliest(true)
-            .span(span_start..span_end);
-        regex.content_regex.search_half(&input).is_some()
-    } else {
-        // just get the previous n chars (no chars are skipped)
-        let prefix_start_info = get_prefix_start(match_start, look_ahead_char_count, content);
+            let prefix_end = match_start;
 
-        let prefix_end = match_start;
-
-        let input = Input::new(content)
-            .earliest(true)
-            .span(prefix_start_info.start..prefix_end);
-        regex.content_regex.search_half(&input).is_some()
+            let input = Input::new(content)
+                .earliest(true)
+                .span(prefix_start_info.start..prefix_end);
+            regex.content_regex.search_half(&input).is_some()
+        }
     }
 }
 
@@ -356,21 +377,23 @@ fn get_char_type(c: &char) -> CharType {
     }
 }
 
-fn standardize_path_chars<F>(chars: Vec<char>, mut push_character: F)
+/// Function that standardizes a list of characters, by pushing characters one by one in a standard way.
+/// Takes a closure that will be called when a character is to be pushed
+pub fn standardize_path_chars<F>(chars: &str, mut push_character: F)
 where
     F: FnMut(&char),
 {
     let kw_length = chars.len();
 
-    if chars.is_empty() {
+    if let Some(c) = chars.chars().next() {
+        push_character(&c);
+    } else {
         return;
     }
 
-    push_character(&chars[0]);
-
-    for (i, chars) in chars.windows(2).enumerate() {
-        let current = &chars[1];
-        let prev_char = get_char_type(&chars[0]);
+    for (i, chars) in chars.as_bytes().windows(2).enumerate() {
+        let current = &(chars[1] as char);
+        let prev_char = get_char_type(&(chars[0] as char));
         let current_char = get_char_type(current);
 
         let is_last_char = i == kw_length - 2;
@@ -413,9 +436,7 @@ fn calculate_keyword_path_pattern(keyword: &str) -> Ast {
         keyword_pattern.push(word_boundary())
     }
 
-    let char_list: Vec<char> = keyword.chars().collect();
-
-    standardize_path_chars(char_list, |c| {
+    standardize_path_chars(keyword, |c| {
         keyword_pattern.push(Ast::Literal(literal_ast(c.to_ascii_lowercase())));
     });
 
@@ -511,21 +532,99 @@ mod test {
     #[test]
     fn test_empty_keyword() {
         let proximity_keywords = try_new_compiled_proximity_keyword(30, vec![], vec![]).unwrap();
-        assert!(!proximity_keywords.is_false_positive_match("hello world", 6));
+        assert!(!proximity_keywords.is_false_positive_match("hello world", None, 6));
     }
 
     #[test]
-    fn test_included_keyword() {
+    fn test_included_keyword_content() {
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec!["hello".to_string()], vec![]).unwrap();
 
-        assert!(!proximity_keywords.is_false_positive_match("hello world", 6));
-        assert!(!proximity_keywords.is_false_positive_match("hey, hello world", 11));
+        assert!(!proximity_keywords.is_false_positive_match("hello world", None, 6));
+        assert!(!proximity_keywords.is_false_positive_match("hey, hello world", None, 11));
 
-        assert!(proximity_keywords.is_false_positive_match("world ", 5));
-        assert!(proximity_keywords.is_false_positive_match("world", 0));
+        assert!(proximity_keywords.is_false_positive_match("world ", None, 5));
+        assert!(proximity_keywords.is_false_positive_match("world", None, 0));
 
-        assert!(proximity_keywords.is_false_positive_match("hello world", 3));
+        assert!(proximity_keywords.is_false_positive_match("hello world", None, 3));
+    }
+
+    #[test]
+    fn test_included_keyword_path() {
+        let proximity_keywords = try_new_compiled_proximity_keyword(
+            30,
+            vec![
+                "aws_access_key_id".to_string(),
+                "aws-access".to_string(),
+                "accessKey".to_string(),
+            ],
+            vec![],
+        )
+        .unwrap();
+
+        // Should match
+        assert_eq!(
+            proximity_keywords.is_false_positive_match(
+                "",
+                Some("aws.access.key.id".to_string()),
+                0,
+            ),
+            false
+        );
+        assert_eq!(
+            proximity_keywords.is_false_positive_match("", Some("aws.access.key".to_string()), 0),
+            false
+        );
+        assert_eq!(
+            proximity_keywords.is_false_positive_match("", Some("aws.access.keys".to_string()), 0),
+            false
+        );
+        assert_eq!(
+            proximity_keywords.is_false_positive_match("", Some("aws.access%key".to_string()), 0),
+            false
+        );
+        assert_eq!(
+            proximity_keywords.is_false_positive_match(
+                "",
+                Some("aws.access.key.identity".to_string()),
+                0,
+            ),
+            false
+        );
+        assert_eq!(
+            proximity_keywords.is_false_positive_match(
+                "",
+                Some("access.key.aws.another.long.keyword".to_string()),
+                0,
+            ),
+            false
+        );
+
+        // Should not match
+        assert_eq!(
+            proximity_keywords.is_false_positive_match("", Some("aws.key".to_string()), 0),
+            true
+        );
+        assert_eq!(
+            proximity_keywords.is_false_positive_match("", Some("key".to_string()), 0),
+            true
+        );
+        assert_eq!(
+            proximity_keywords.is_false_positive_match("", Some("aws.app.key".to_string()), 0),
+            true
+        );
+        assert_eq!(
+            proximity_keywords.is_false_positive_match("", Some("aws.accessible".to_string()), 0),
+            true
+        );
+        assert_eq!(
+            proximity_keywords.is_false_positive_match("", Some("access#key".to_string()), 0),
+            true
+        );
+        assert_eq!(
+            proximity_keywords.is_false_positive_match("", Some("key.access.aws".to_string()), 0),
+            true
+        );
     }
 
     #[test]
@@ -533,13 +632,13 @@ mod test {
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec![], vec!["hello".to_string()]).unwrap();
 
-        assert!(proximity_keywords.is_false_positive_match("hello world", 6));
-        assert!(proximity_keywords.is_false_positive_match("hey, hello world", 11));
+        assert!(proximity_keywords.is_false_positive_match("hello world", None, 6));
+        assert!(proximity_keywords.is_false_positive_match("hey, hello world", None, 11));
 
-        assert!(!proximity_keywords.is_false_positive_match("world ", 5));
-        assert!(!proximity_keywords.is_false_positive_match("world", 0));
+        assert!(!proximity_keywords.is_false_positive_match("world ", None, 5));
+        assert!(!proximity_keywords.is_false_positive_match("world", None, 0));
 
-        assert!(!proximity_keywords.is_false_positive_match("hello world", 3));
+        assert!(!proximity_keywords.is_false_positive_match("hello world", None, 3));
     }
 
     #[test]
@@ -552,13 +651,13 @@ mod test {
         .unwrap();
 
         // only the included keyword is present
-        assert!(!proximity_keywords.is_false_positive_match("hey world", 6));
+        assert!(!proximity_keywords.is_false_positive_match("hey world", None, 6));
         // only the excluded keyword is present
-        assert!(proximity_keywords.is_false_positive_match("hello world", 6));
+        assert!(proximity_keywords.is_false_positive_match("hello world", None, 6));
         // no keyword is present
-        assert!(proximity_keywords.is_false_positive_match("world", 5));
+        assert!(proximity_keywords.is_false_positive_match("world", None, 5));
         // included and excluded keywords are present
-        assert!(!proximity_keywords.is_false_positive_match("hey, hello world", 11));
+        assert!(!proximity_keywords.is_false_positive_match("hey, hello world", None, 11));
     }
 
     #[test]
@@ -570,10 +669,10 @@ mod test {
         )
         .unwrap();
 
-        assert!(!proximity_keywords.is_false_positive_match("hello world", 6));
-        assert!(!proximity_keywords.is_false_positive_match("hey coty, hello world", 16));
+        assert!(!proximity_keywords.is_false_positive_match("hello world", None, 6));
+        assert!(!proximity_keywords.is_false_positive_match("hey coty, hello world", None, 16));
 
-        assert!(proximity_keywords.is_false_positive_match("hey hey hey world", 12));
+        assert!(proximity_keywords.is_false_positive_match("hey hey hey world", None, 12));
 
         let proximity_keywords = try_new_compiled_proximity_keyword(
             30,
@@ -582,10 +681,10 @@ mod test {
         )
         .unwrap();
 
-        assert!(proximity_keywords.is_false_positive_match("hello world", 6));
-        assert!(proximity_keywords.is_false_positive_match("hey coty, hello world", 16));
+        assert!(proximity_keywords.is_false_positive_match("hello world", None, 6));
+        assert!(proximity_keywords.is_false_positive_match("hey coty, hello world", None, 16));
 
-        assert!(!proximity_keywords.is_false_positive_match("hey hey hey world", 12));
+        assert!(!proximity_keywords.is_false_positive_match("hey hey hey world", None, 12));
     }
 
     #[test]
@@ -593,14 +692,14 @@ mod test {
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec!["he.*o".to_string()], vec![]).unwrap();
 
-        assert!(proximity_keywords.is_false_positive_match("hello world", 6));
-        assert!(!proximity_keywords.is_false_positive_match("he.*o world", 6));
+        assert!(proximity_keywords.is_false_positive_match("hello world", None, 6));
+        assert!(!proximity_keywords.is_false_positive_match("he.*o world", None, 6));
 
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec![], vec!["he.*o".to_string()]).unwrap();
 
-        assert!(!proximity_keywords.is_false_positive_match("hello world", 6));
-        assert!(proximity_keywords.is_false_positive_match("he.*o world", 6));
+        assert!(!proximity_keywords.is_false_positive_match("hello world", None, 6));
+        assert!(proximity_keywords.is_false_positive_match("he.*o world", None, 6));
     }
 
     #[test]
@@ -608,106 +707,106 @@ mod test {
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec!["hello".to_string()], vec![]).unwrap();
 
-        assert!(!proximity_keywords.is_false_positive_match("hello world", 6));
-        assert!(!proximity_keywords.is_false_positive_match("HELLO world", 6));
+        assert!(!proximity_keywords.is_false_positive_match("hello world", None, 6));
+        assert!(!proximity_keywords.is_false_positive_match("HELLO world", None, 6));
 
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec![], vec!["hello".to_string()]).unwrap();
 
-        assert!(proximity_keywords.is_false_positive_match("hello world", 6));
-        assert!(proximity_keywords.is_false_positive_match("HELLO world", 6));
+        assert!(proximity_keywords.is_false_positive_match("hello world", None, 6));
+        assert!(proximity_keywords.is_false_positive_match("HELLO world", None, 6));
     }
 
     #[test]
     fn included_keyword_should_have_word_boundaries() {
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec!["host".to_string()], vec![]).unwrap();
-        assert!(!proximity_keywords.is_false_positive_match("host ping", 5));
-        assert!(proximity_keywords.is_false_positive_match("localhost ping", 10));
-        assert!(proximity_keywords.is_false_positive_match("hostlocal ping", 10));
+        assert!(!proximity_keywords.is_false_positive_match("host ping", None, 5));
+        assert!(proximity_keywords.is_false_positive_match("localhost ping", None, 10));
+        assert!(proximity_keywords.is_false_positive_match("hostlocal ping", None, 10));
 
         // word boundaries are is added at the beginning (resp. end) only if the first (resp. last) character is a letter or a digit
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec!["-host".to_string()], vec![]).unwrap();
-        assert!(!proximity_keywords.is_false_positive_match("-host- ping", 6));
-        assert!(!proximity_keywords.is_false_positive_match("local-host ping", 11));
-        assert!(proximity_keywords.is_false_positive_match("-hostlocal ping", 11));
+        assert!(!proximity_keywords.is_false_positive_match("-host- ping", None, 6));
+        assert!(!proximity_keywords.is_false_positive_match("local-host ping", None, 11));
+        assert!(proximity_keywords.is_false_positive_match("-hostlocal ping", None, 11));
 
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec!["ৎhost".to_string()], vec![]).unwrap();
-        assert!(!proximity_keywords.is_false_positive_match("ৎhost ping", 7));
-        assert!(!proximity_keywords.is_false_positive_match("localৎhost ping", 12));
+        assert!(!proximity_keywords.is_false_positive_match("ৎhost ping", None, 7));
+        assert!(!proximity_keywords.is_false_positive_match("localৎhost ping", None, 12));
     }
 
     #[test]
     fn excluded_keyword_should_have_word_boundaries() {
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec![], vec!["host".to_string()]).unwrap();
-        assert!(proximity_keywords.is_false_positive_match("host ping", 5));
-        assert!(!proximity_keywords.is_false_positive_match("localhost ping", 10));
-        assert!(!proximity_keywords.is_false_positive_match("hostlocal ping", 10));
+        assert!(proximity_keywords.is_false_positive_match("host ping", None, 5));
+        assert!(!proximity_keywords.is_false_positive_match("localhost ping", None, 10));
+        assert!(!proximity_keywords.is_false_positive_match("hostlocal ping", None, 10));
 
         // word boundaries are is added at the beginning (resp. end) only if the first (resp. last) character is a letter or a digit
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec![], vec!["!host".to_string()]).unwrap();
-        assert!(proximity_keywords.is_false_positive_match("!host- ping", 6));
-        assert!(proximity_keywords.is_false_positive_match("local!host ping", 11));
-        assert!(!proximity_keywords.is_false_positive_match("!hostlocal ping", 11));
+        assert!(proximity_keywords.is_false_positive_match("!host- ping", None, 6));
+        assert!(proximity_keywords.is_false_positive_match("local!host ping", None, 11));
+        assert!(!proximity_keywords.is_false_positive_match("!hostlocal ping", None, 11));
 
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec![], vec!["ৎhost".to_string()]).unwrap();
-        assert!(proximity_keywords.is_false_positive_match("ৎhost ping", 7));
-        assert!(proximity_keywords.is_false_positive_match("localৎhost ping", 12));
+        assert!(proximity_keywords.is_false_positive_match("ৎhost ping", None, 7));
+        assert!(proximity_keywords.is_false_positive_match("localৎhost ping", None, 12));
     }
 
     #[test]
     fn should_remove_excluded_keywords_removed_chars_in_excluded_keywords_and_prefix() {
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec![], vec!["span-id".to_string()]).unwrap();
-        assert!(proximity_keywords.is_false_positive_match("span-id ping", 8));
-        assert!(proximity_keywords.is_false_positive_match("spanid ping", 7));
-        assert!(proximity_keywords.is_false_positive_match("span_id ping", 8));
-        assert!(!proximity_keywords.is_false_positive_match("span id ping", 8));
+        assert!(proximity_keywords.is_false_positive_match("span-id ping", None, 8));
+        assert!(proximity_keywords.is_false_positive_match("spanid ping", None, 7));
+        assert!(proximity_keywords.is_false_positive_match("span_id ping", None, 8));
+        assert!(!proximity_keywords.is_false_positive_match("span id ping", None, 8));
 
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec![], vec!["span_id".to_string()]).unwrap();
-        assert!(proximity_keywords.is_false_positive_match("span-id ping", 8));
-        assert!(proximity_keywords.is_false_positive_match("spanid ping", 7));
-        assert!(proximity_keywords.is_false_positive_match("span_id ping", 8));
-        assert!(!proximity_keywords.is_false_positive_match("span id ping", 8));
+        assert!(proximity_keywords.is_false_positive_match("span-id ping", None, 8));
+        assert!(proximity_keywords.is_false_positive_match("spanid ping", None, 7));
+        assert!(proximity_keywords.is_false_positive_match("span_id ping", None, 8));
+        assert!(!proximity_keywords.is_false_positive_match("span id ping", None, 8));
 
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec![], vec!["spanid".to_string()]).unwrap();
-        assert!(proximity_keywords.is_false_positive_match("span-id ping", 8));
-        assert!(proximity_keywords.is_false_positive_match("spanid ping", 7));
-        assert!(proximity_keywords.is_false_positive_match("span_id ping", 8));
-        assert!(!proximity_keywords.is_false_positive_match("span id ping", 8));
+        assert!(proximity_keywords.is_false_positive_match("span-id ping", None, 8));
+        assert!(proximity_keywords.is_false_positive_match("spanid ping", None, 7));
+        assert!(proximity_keywords.is_false_positive_match("span_id ping", None, 8));
+        assert!(!proximity_keywords.is_false_positive_match("span id ping", None, 8));
 
         // nothing is changed on included keywords
         let proximity_keywords =
             try_new_compiled_proximity_keyword(30, vec!["span-id".to_string()], vec![]).unwrap();
-        assert!(!proximity_keywords.is_false_positive_match("span-id ping", 8));
-        assert!(proximity_keywords.is_false_positive_match("spanid ping", 7));
-        assert!(proximity_keywords.is_false_positive_match("span_id ping", 8));
+        assert!(!proximity_keywords.is_false_positive_match("span-id ping", None, 8));
+        assert!(proximity_keywords.is_false_positive_match("spanid ping", None, 7));
+        assert!(proximity_keywords.is_false_positive_match("span_id ping", None, 8));
     }
 
     #[test]
     fn should_look_ahead_too_far() {
         let proximity_keywords =
             try_new_compiled_proximity_keyword(10, vec!["host".to_string()], vec![]).unwrap();
-        assert!(proximity_keywords.is_false_positive_match("host 56789012345", 15));
-        assert!(!proximity_keywords.is_false_positive_match("host 56789012345", 10));
+        assert!(proximity_keywords.is_false_positive_match("host 56789012345", None, 15));
+        assert!(!proximity_keywords.is_false_positive_match("host 56789012345", None, 10));
         // prefix `ost 567890` does not contains host
-        assert!(proximity_keywords.is_false_positive_match("host 56789012345", 11));
-        assert!(!proximity_keywords.is_false_positive_match(" host 6789012345", 11));
+        assert!(proximity_keywords.is_false_positive_match("host 56789012345", None, 11));
+        assert!(!proximity_keywords.is_false_positive_match(" host 6789012345", None, 11));
 
         let proximity_keywords =
             try_new_compiled_proximity_keyword(10, vec![], vec!["host".to_string()]).unwrap();
-        assert!(!proximity_keywords.is_false_positive_match("host 56789012345", 15));
-        assert!(proximity_keywords.is_false_positive_match("host 56789012345", 10));
+        assert!(!proximity_keywords.is_false_positive_match("host 56789012345", None, 15));
+        assert!(proximity_keywords.is_false_positive_match("host 56789012345", None, 10));
         // prefix `ost 567890` does not contains host
-        assert!(!proximity_keywords.is_false_positive_match("host 56789012345", 11));
-        assert!(proximity_keywords.is_false_positive_match(" host 6789012345", 11));
+        assert!(!proximity_keywords.is_false_positive_match("host 56789012345", None, 11));
+        assert!(proximity_keywords.is_false_positive_match(" host 6789012345", None, 11));
     }
 
     #[test]
@@ -835,7 +934,7 @@ mod test {
         let keywords =
             try_new_compiled_proximity_keyword(5, vec!["id".to_string()], vec![]).unwrap();
 
-        let is_false_positive = keywords.is_false_positive_match("invalid   abc", 10);
+        let is_false_positive = keywords.is_false_positive_match("invalid   abc", None, 10);
 
         assert_eq!(is_false_positive, true);
     }
@@ -845,7 +944,7 @@ mod test {
         let keywords =
             try_new_compiled_proximity_keyword(5, vec!["id".to_string()], vec![]).unwrap();
 
-        let is_false_positive = keywords.is_false_positive_match("foo idabc", 6);
+        let is_false_positive = keywords.is_false_positive_match("foo idabc", None, 6);
 
         assert_eq!(is_false_positive, true);
     }
@@ -855,7 +954,7 @@ mod test {
         let keywords =
             try_new_compiled_proximity_keyword(5, vec!["id".to_string()], vec![]).unwrap();
 
-        let is_false_positive = keywords.is_false_positive_match("users id   ab", 11);
+        let is_false_positive = keywords.is_false_positive_match("users id   ab", None, 11);
 
         assert_eq!(is_false_positive, false);
     }
@@ -866,7 +965,7 @@ mod test {
             try_new_compiled_proximity_keyword(5, vec![], vec!["id".to_string()]).unwrap();
 
         // "id" only fits in the match prefix (5 chars) if the "-" char isn't counted towards the 5 chars
-        let is_false_positive = keywords.is_false_positive_match("users i-d   ab", 12);
+        let is_false_positive = keywords.is_false_positive_match("users i-d   ab", None, 12);
 
         assert_eq!(is_false_positive, false);
     }
@@ -877,7 +976,7 @@ mod test {
             try_new_compiled_proximity_keyword(8, vec![], vec!["id".to_string()]).unwrap();
 
         // The entire string is in the prefix, but "-" is stripped, so "userid" don't match "id" due to the word boundary
-        let is_false_positive = keywords.is_false_positive_match("user-id ab", 8);
+        let is_false_positive = keywords.is_false_positive_match("user-id ab", None, 8);
 
         assert_eq!(is_false_positive, false);
     }
@@ -887,7 +986,7 @@ mod test {
         let keywords =
             try_new_compiled_proximity_keyword(7, vec!["id".to_string()], vec![]).unwrap();
 
-        let is_false_positive = keywords.is_false_positive_match("users id   ab", 11);
+        let is_false_positive = keywords.is_false_positive_match("users id   ab", None, 11);
 
         assert_eq!(is_false_positive, false);
     }
@@ -897,7 +996,7 @@ mod test {
         let keywords =
             try_new_compiled_proximity_keyword(5, vec![], vec!["id".to_string()]).unwrap();
 
-        let is_false_positive = keywords.is_false_positive_match("invalid   abc", 10);
+        let is_false_positive = keywords.is_false_positive_match("invalid   abc", None, 10);
 
         assert_eq!(is_false_positive, false);
     }
@@ -907,7 +1006,7 @@ mod test {
         let keywords =
             try_new_compiled_proximity_keyword(5, vec![], vec!["id".to_string()]).unwrap();
 
-        let is_false_positive = keywords.is_false_positive_match("foo idabc", 6);
+        let is_false_positive = keywords.is_false_positive_match("foo idabc", None, 6);
         assert_eq!(is_false_positive, false);
     }
 

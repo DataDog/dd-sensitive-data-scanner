@@ -22,6 +22,6 @@ pub fn convert_panic_to_error<R>(f: impl FnOnce() -> R + UnwindSafe) -> Result<R
             };
 
             Err(Error { message })
-        },
+        }
     }
 }

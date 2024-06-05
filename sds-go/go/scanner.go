@@ -72,7 +72,7 @@ func CreateScanner(rules []Rule) (*Scanner, error) {
 
 	var errorString *C.char
 
-	id := C.create_scanner(cdata, &errorString)
+	id := C.create_scanner(cdata, &errorString, C.bool(false) /* should_keywords_match_event_paths */)
 
 	if id < 0 {
 		switch id {

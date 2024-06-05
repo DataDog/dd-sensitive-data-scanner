@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
+use crate::proximity_keywords::{standardize_path_chars, UNIFIED_LINK_CHAR};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -49,6 +50,22 @@ impl<'a> Path<'a> {
             }
         }
         true
+    }
+
+    pub fn sanitize(&self) -> String {
+        let mut sanitized_path = "".to_string();
+        self.segments.iter().enumerate().for_each(|(i, segment)| {
+            if let PathSegment::Field(field) = segment {
+                if i != 0 {
+                    sanitized_path.push(UNIFIED_LINK_CHAR);
+                }
+                standardize_path_chars(field, |c| {
+                    sanitized_path.push(c.to_ascii_lowercase());
+                });
+            }
+        });
+
+        sanitized_path
     }
 }
 
@@ -121,5 +138,32 @@ mod test {
         assert!(foo.starts_with(&foo));
         assert!(!foo.starts_with(&array_foo));
         assert!(!array_foo.starts_with(&foo));
+    }
+
+    #[test]
+    fn test_sanitize_path() {
+        assert_eq!(
+            Path::from(vec!["hello".into(), 0.into(), "world".into()]).sanitize(),
+            "hello.world"
+        );
+        assert_eq!(
+            Path::from(vec!["hello".into(), 1.into(), "CHICKEN".into(), 2.into()]).sanitize(),
+            "hello.chicken"
+        );
+        assert_eq!(
+            Path::from(vec![
+                "hello_world-of".into(),
+                1.into(),
+                "CHICKEN".into(),
+                2.into(),
+            ])
+            .sanitize(),
+            "hello.world.of.chicken"
+        );
+
+        assert_eq!(
+            Path::from(vec!["hello_world-of-".into(), "/chickens_/".into()]).sanitize(),
+            "hello.world.of-./chickens./"
+        );
     }
 }
