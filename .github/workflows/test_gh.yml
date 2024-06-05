@@ -9,7 +9,7 @@ jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate a token
+      - name: Generate a token for the trigger
         id: generate-token
         uses: actions/create-github-app-token@v1
         with:
