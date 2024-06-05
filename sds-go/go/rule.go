@@ -68,8 +68,8 @@ type ProximityKeywordsConfig struct {
 // RuleMatch stores the matches reported by the core library.
 type RuleMatch struct {
 	RuleIdx uint32
-	// TODO(remy): not implemented yet.
-	Path              string
+	Path    string
+	// TODO(https://datadoghq.atlassian.net/browse/SDS-301): implement replacement type
 	ReplacementType   MatchAction
 	StartIndex        uint32
 	EndIndexExclusive uint32
