@@ -1,0 +1,19 @@
+name: Test GH Suite
+
+on:
+  pull_request:
+  merge_group:
+    types: [checks_requested]
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.TRIGGER_APP_ID }}
+          private-key: ${{ secrets.TRIGGER_GITHUB_APP_PRIVATE_KEY }}
+          owner: DataDog
+          repositories: "sds-shared-library,dd-sensitive-data-scanner"
