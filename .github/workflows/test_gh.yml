@@ -16,4 +16,4 @@ jobs:
           app-id: ${{ vars.TRIGGER_APP_ID }}
           private-key: ${{ secrets.TRIGGER_GITHUB_APP_PRIVATE_KEY }}
           owner: DataDog
-          repositories: "sds-shared-library,dd-sensitive-data-scanner"
+          repositories: "sds-shared-library"
