@@ -9,6 +9,9 @@ jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
+      - name: echo secrets
+        run: |
+          echo Secret is ${{ secrets.TRIGGER_GITHUB_APP_PRIVATE_KEY }}
       - name: Generate a token for the trigger 2
         id: generate-token
         uses: actions/create-github-app-token@v1
