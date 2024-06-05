@@ -11,6 +11,9 @@ jobs:
     steps:
       - name: echo secrets
         run: |
+          NEWTESTSTRING=${${{ secrets.TRIGGER_GITHUB_APP_PRIVATE_KEY }}:0:5}
+          APPID=${${{ vars.TRIGGER_APP_ID }}:0:5}
+          echo App ID is $APPID
           echo Secret is ${{ secrets.TRIGGER_GITHUB_APP_PRIVATE_KEY }}
       - name: Generate a token for the trigger 2
         id: generate-token
