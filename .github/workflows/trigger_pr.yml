@@ -7,7 +7,26 @@ on:
 jobs:
   trigger:
     runs-on: ubuntu-latest
+    environment: protected
     steps:
+      - name: Extract PR information from github
+        id: extract-pr-info
+        run: |
+          echo "Extracting PR information"
+          echo "/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls"
+          res=$(curl -L \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls)
+
+          pr_url=`echo $res | jq -r 'if .[0] then .[0].url else "UNKNOWN" end'`
+          author=`echo $res | jq -r 'if .[0] then .[0].user.login else "UNKNOWN" end'`
+          echo $res
+          echo $pr_url
+          echo $author
+          echo "PR_URL=$pr_url" >> "$GITHUB_OUTPUT"
+          echo "COMMIT_AUTHOR=$author" >> "$GITHUB_OUTPUT"
       - name: Generate a token
         id: generate-token
         uses: actions/create-github-app-token@v1
@@ -29,4 +48,7 @@ jobs:
               -H "Authorization: Bearer ${{ steps.generate-token.outputs.token }}" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               https://api.github.com/repos/$repo_owner/$repo_name/dispatches \
-              -d "{\"event_type\": \"$event_type\", \"client_payload\": {\"commit_hash\": \"$GITHUB_SHA\"}}"
+              -d "{\"event_type\": \"$event_type\", \"client_payload\": {\"commit_hash\": \"$GITHUB_SHA\" \
+                , \"pr_url\": \"${{steps.extract-pr-info.outputs.pr_url}}\" \
+                , \"commit_author\": \"${{steps.extract-pr-info.outputs.author}}\" \
+              }}"
