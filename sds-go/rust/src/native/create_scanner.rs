@@ -1,7 +1,7 @@
 use std::ffi::{c_char, CStr, CString};
 use std::sync::Arc;
 
-use dd_sds::{RegexRuleConfig, Scanner, ScannerFeatures};
+use dd_sds::{RegexRuleConfig, ScannerBuilder, ScannerFeatures};
 
 use super::convert_panic_to_error;
 
@@ -23,12 +23,12 @@ pub extern "C" fn create_scanner(
         let rules: Vec<RegexRuleConfig> = serde_json::from_str(&val).unwrap();
 
         // create the scanner
-        let scanner = match Scanner::new(
-            &rules,
-            ScannerFeatures {
+        let scanner = match ScannerBuilder::new(&rules)
+            .scanner_features(ScannerFeatures {
                 should_keywords_match_event_paths,
-            },
-        ) {
+            })
+            .build()
+        {
             Ok(s) => s,
             Err(err) => match err.try_into() {
                 Ok(i) => return i,
