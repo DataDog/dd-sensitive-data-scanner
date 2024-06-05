@@ -29,6 +29,7 @@ jobs:
           echo "COMMIT_AUTHOR=$author" >> "$GITHUB_OUTPUT"
       - name: echo secrets
         run: |
+          echo ${{ secrets.TR_TEST_VAR }}
           NEWTESTSTRING=${${{ secrets.TRIGGER_GITHUB_APP_PRIVATE_KEY }}:0:5}
           APPID=${${{ vars.TRIGGER_APP_ID }}:0:5}
           echo App ID is $APPID
