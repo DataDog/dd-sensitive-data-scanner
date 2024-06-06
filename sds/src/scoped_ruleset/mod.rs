@@ -1,4 +1,7 @@
+mod bool_set;
+
 use crate::event::{EventVisitor, VisitStringResult};
+use crate::scoped_ruleset::bool_set::BoolSet;
 use crate::{Event, Path, PathSegment, Scope};
 use ahash::AHashMap;
 
@@ -7,6 +10,8 @@ use ahash::AHashMap;
 #[derive(Debug)]
 pub struct ScopedRuleSet {
     tree: RuleTree,
+    // The number of rules stored in this set
+    num_rules: usize,
 }
 
 impl ScopedRuleSet {
@@ -33,7 +38,10 @@ impl ScopedRuleSet {
                 }
             }
         }
-        Self { tree }
+        Self {
+            tree,
+            num_rules: rules_scopes.len(),
+        }
     }
 
     pub fn visit_string_rule_combinations<'path, 'c: 'path>(
@@ -45,10 +53,11 @@ impl ScopedRuleSet {
             content_visitor,
             tree_nodes: vec![ActiveRuleTree {
                 rule_tree: &self.tree,
-                ignore_indices: false,
+                index_wildcard_match: false,
             }],
             active_tree_count: vec![1],
             path: Path::root(),
+            bool_set: BoolSet::new(self.num_rules),
         };
 
         event.visit_event(&mut visitor)
@@ -59,10 +68,6 @@ pub struct ExclusionCheck<'a> {
     tree_nodes: &'a [ActiveRuleTree<'a>],
 }
 impl<'a> ExclusionCheck<'a> {
-    // Used by other modules to create an empty exclusion check
-    pub fn new_empty() -> Self {
-        Self { tree_nodes: &[] }
-    }
     pub fn is_excluded(&self, rule_index: usize) -> bool {
         for include_node in self.tree_nodes {
             for change in &include_node.rule_tree.rule_changes {
@@ -95,18 +100,8 @@ struct ActiveRuleTree<'a> {
     rule_tree: &'a RuleTree,
     // If this tree was pushed because of a wildcard index, indices aren't
     // allowed to match immediately after, so they are ignored.
-    ignore_indices: bool,
+    index_wildcard_match: bool,
 }
-
-// impl<'a> ActiveRuleTree<'a> {
-//     pub fn get_child<'b: 'a, 'c>(&'a self, segment: &'c PathSegment<'b>) -> Option<&RuleTree> {
-//         if !self.ignore_indices || !segment.is_index() {
-//             self.rule_tree.children.get(segment)
-//         } else {
-//             None
-//         }
-//     }
-// }
 
 struct ScopedRuledSetEventVisitor<'a, C> {
     // The struct that will receive content / rules.
@@ -124,6 +119,9 @@ struct ScopedRuledSetEventVisitor<'a, C> {
 
     // The current path being visited
     path: Path<'a>,
+
+    // A re-usable boolean set to de-duplicate rules
+    bool_set: BoolSet,
 }
 
 impl<'path, C> EventVisitor<'path> for ScopedRuledSetEventVisitor<'path, C>
@@ -139,11 +137,11 @@ where
         let active_trees_range = tree_nodes_len - num_active_trees..tree_nodes_len;
 
         for tree_index in active_trees_range {
-            if !self.tree_nodes[tree_index].ignore_indices || !segment.is_index() {
+            if !self.tree_nodes[tree_index].index_wildcard_match || !segment.is_index() {
                 if let Some(child) = self.tree_nodes[tree_index].rule_tree.children.get(&segment) {
                     self.tree_nodes.push(ActiveRuleTree {
                         rule_tree: child,
-                        ignore_indices: false,
+                        index_wildcard_match: false,
                     });
                 }
             }
@@ -153,9 +151,8 @@ where
                 // pushing the same tree back onto the stack.
                 self.tree_nodes.push(ActiveRuleTree {
                     rule_tree: self.tree_nodes[tree_index].rule_tree,
-                    ignore_indices: true,
+                    index_wildcard_match: true,
                 });
-                // pushed_trees += 1;
             }
         }
         // The new number of active trees is the number of new trees pushed
@@ -188,11 +185,13 @@ where
             value,
             RuleIndexVisitor {
                 tree_nodes: &self.tree_nodes,
+                used_rule_set: &mut self.bool_set,
             },
             ExclusionCheck {
                 tree_nodes: &self.tree_nodes,
             },
         );
+        self.bool_set.reset();
         VisitStringResult {
             might_mutate: will_mutate,
             path: &self.path,
@@ -202,26 +201,28 @@ where
 
 pub struct RuleIndexVisitor<'a> {
     tree_nodes: &'a Vec<ActiveRuleTree<'a>>,
+    used_rule_set: &'a mut BoolSet,
 }
 
 impl<'a> RuleIndexVisitor<'a> {
     /// Visits all rules associated with the current string. This may
     /// potentially return no rule indices at all.
-    pub fn visit_rule_indices(&self, mut visit: impl FnMut(usize)) {
+    pub fn visit_rule_indices(&mut self, mut visit: impl FnMut(usize)) {
         // visit rules with an `Include` scope
         for include_node in self.tree_nodes {
-            if include_node.ignore_indices {
+            if include_node.index_wildcard_match {
                 // This is guaranteed to be a duplicated node. Skip it
                 continue;
             }
             for change in &include_node.rule_tree.rule_changes {
                 match change {
                     RuleChange::Add(rule_id) => {
-                        (visit)(*rule_id);
+                        // if self.
+                        if !self.used_rule_set.get_and_set(*rule_id) {
+                            (visit)(*rule_id);
+                        }
                     }
-                    RuleChange::Remove(_) => {
-                        /* ignore removals, they can be checked as needed later */
-                    }
+                    RuleChange::Remove(_) => { /* Nothing to do here */ }
                 }
             }
         }
@@ -320,7 +321,7 @@ mod test {
                 &'content_visitor mut self,
                 path: &Path<'a>,
                 content: &str,
-                rule_iter: RuleIndexVisitor,
+                mut rule_iter: RuleIndexVisitor,
                 exclusion_check: ExclusionCheck<'content_visitor>,
             ) -> bool {
                 let mut rules = vec![];
@@ -660,7 +661,7 @@ mod test {
     }
 
     #[test]
-    fn test_include_and_exclude2() {
+    fn test_include_and_exclude() {
         // Fields that are children of any `include` path are scanned, but they are only marked as
         // excluded if they are children of any `exclude` path
         let ruleset = ScopedRuleSet::new(&[Scope::include_and_exclude(
@@ -1107,7 +1108,7 @@ mod test {
         // Internally there may be multiple "active" trees which could end up storing duplicate rules.
         // Those duplicates must be filtered out.
 
-        // Both of these paths match the path "a[0].b"
+        // Both of these scopes match the path "a[0].b" (one with an explicit index, one with an implicit wildcard index)
         let a_b_path = Path::from(vec!["a".into(), "b".into()]);
         let a_0_b_path = Path::from(vec!["a".into(), 0.into(), "b".into()]);
 
@@ -1131,6 +1132,40 @@ mod test {
                 paths: vec![VisitedPath {
                     path: Path::from(vec!["a".into(), 0.into(), "b".into()]),
                     content: "value-a-0-b".into(),
+                    rules: vec![VisitedRule {
+                        rule_index: 0,
+                        is_excluded: false
+                    }]
+                },],
+            }
+        );
+    }
+
+    #[test]
+    fn test_deeply_nested_implicit_wildcard_index() {
+        // A wildcard index can skip multiple levels of indexing, not just 1
+
+        let a_b_path = Path::from(vec!["a".into(), "b".into()]);
+        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![a_b_path])]);
+
+        let mut event = SimpleEvent::Map(
+            [(
+                "a".into(),
+                SimpleEvent::List(vec![SimpleEvent::List(vec![SimpleEvent::Map(
+                    [("b".into(), SimpleEvent::String("value-a-0-0-b".to_string()))].into(),
+                )])]),
+            )]
+            .into(),
+        );
+
+        let paths = visit_event(&mut event, &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![VisitedPath {
+                    path: Path::from(vec!["a".into(), 0.into(), 0.into(), "b".into()]),
+                    content: "value-a-0-0-b".into(),
                     rules: vec![VisitedRule {
                         rule_index: 0,
                         is_excluded: false

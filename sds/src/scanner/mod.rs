@@ -477,7 +477,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         &'b mut self,
         path: &crate::Path<'a>,
         content: &str,
-        rule_visitor: crate::scoped_ruleset::RuleIndexVisitor,
+        mut rule_visitor: crate::scoped_ruleset::RuleIndexVisitor,
         exclusion_check: ExclusionCheck<'b>,
     ) -> bool {
         // matches for a single path
@@ -1014,6 +1014,7 @@ mod test {
         assert_eq!(matches.len(), 0);
     }
 
+    #[test]
     fn test_included_keywords_path_with_uncaught_separator_symbol() {
         let scanner = build_test_scanner(true);
 
@@ -1026,6 +1027,7 @@ mod test {
         assert_eq!(matches.len(), 0);
     }
 
+    #[test]
     fn test_included_keywords_path_deep() {
         let scanner = build_test_scanner(true);
 
@@ -1778,7 +1780,7 @@ mod test {
         use crate::scanner::ScannerBuilder;
         use crate::{
             simple_event::SimpleEvent, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
-            RuleMatch, ScannerFeatures, Scope,
+            ScannerFeatures, Scope,
         };
         use metrics::{Key, Label};
         use metrics_util::debugging::DebugValue;

@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main};
 
 mod scope_benchmark {
     use core::num;
-    use criterion::Criterion;
+    use criterion::{black_box, Criterion};
     use dd_sds::SimpleEvent;
     use dd_sds::{
         ContentVisitor, ExclusionCheck, Path, PathSegment, RuleIndexVisitor, Scope, ScopedRuleSet,
@@ -53,7 +53,7 @@ mod scope_benchmark {
                         &mut self,
                         path: &Path<'a>,
                         content: &str,
-                        rules: RuleIndexVisitor,
+                        mut rules: RuleIndexVisitor,
                         _check: ExclusionCheck,
                     ) -> bool {
                         rules.visit_rule_indices(|_rule_index| {
@@ -69,6 +69,7 @@ mod scope_benchmark {
                         num_visited: &mut num_visited,
                     },
                 );
+
                 assert_eq!(num_visited, 20_000);
             })
         });
