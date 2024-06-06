@@ -50,5 +50,5 @@ jobs:
               https://api.github.com/repos/$repo_owner/$repo_name/dispatches \
               -d "{\"event_type\": \"$event_type\", \"client_payload\": {\"commit_hash\": \"$GITHUB_SHA\" \
                 , \"pr_url\": \"${{steps.extract-pr-info.outputs.pr_url}}\" \
-                , \"commit_author\": \"${{steps.extract-pr-info.outputs.author}}\" \
+                , \"commit_author\": \"${{steps.extract-pr-info.outputs.commit_author}}\" \
               }}"
