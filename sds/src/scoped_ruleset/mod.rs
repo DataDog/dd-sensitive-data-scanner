@@ -159,14 +159,6 @@ where
         self.active_tree_count
             .push(self.tree_nodes.len() - tree_nodes_len);
 
-        // if self.path.len() + 1 == self.tree_nodes.len() {
-        //     let last_tree = *self.tree_nodes.last().unwrap();
-        //     if let Some(child) = last_tree.children.get(&segment) {
-        //         // All of the rules from the `child` node should be applied to the current path (and anything below it)
-        //         self.tree_nodes.push(child);
-        //     }
-        // }
-        //
         self.path.segments.push(segment);
     }
 
@@ -217,7 +209,6 @@ impl<'a> RuleIndexVisitor<'a> {
             for change in &include_node.rule_tree.rule_changes {
                 match change {
                     RuleChange::Add(rule_id) => {
-                        // if self.
                         if !self.used_rule_set.get_and_set(*rule_id) {
                             (visit)(*rule_id);
                         }
