@@ -39,7 +39,7 @@ mod scope_benchmark {
             scopes.push(exclude_scope.clone());
         }
 
-        let fast_rule_set = ScopedRuleSet::new(&scopes);
+        let fast_rule_set = ScopedRuleSet::new(&scopes).with_implicit_index_wildcards();
 
         c.bench_function("scoped_rule_set", |b| {
             b.iter(|| {

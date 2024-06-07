@@ -12,6 +12,7 @@ pub struct ScopedRuleSet {
     tree: RuleTree,
     // The number of rules stored in this set
     num_rules: usize,
+    add_implicit_index_wildcards: bool,
 }
 
 impl ScopedRuleSet {
@@ -41,7 +42,13 @@ impl ScopedRuleSet {
         Self {
             tree,
             num_rules: rules_scopes.len(),
+            add_implicit_index_wildcards: false,
         }
+    }
+
+    pub fn with_implicit_index_wildcards(mut self) -> Self {
+        self.add_implicit_index_wildcards = true;
+        self
     }
 
     pub fn visit_string_rule_combinations<'path, 'c: 'path>(
@@ -49,6 +56,11 @@ impl ScopedRuleSet {
         event: &'path mut impl Event,
         content_visitor: impl ContentVisitor<'path>,
     ) {
+        let bool_set = if self.add_implicit_index_wildcards {
+            Some(BoolSet::new(self.num_rules))
+        } else {
+            None
+        };
         let mut visitor = ScopedRuledSetEventVisitor {
             content_visitor,
             tree_nodes: vec![ActiveRuleTree {
@@ -57,7 +69,8 @@ impl ScopedRuleSet {
             }],
             active_tree_count: vec![1],
             path: Path::root(),
-            bool_set: BoolSet::new(self.num_rules),
+            bool_set,
+            add_implicit_index_wildcards: self.add_implicit_index_wildcards,
         };
 
         event.visit_event(&mut visitor)
@@ -121,7 +134,9 @@ struct ScopedRuledSetEventVisitor<'a, C> {
     path: Path<'a>,
 
     // A re-usable boolean set to de-duplicate rules
-    bool_set: BoolSet,
+    bool_set: Option<BoolSet>,
+
+    add_implicit_index_wildcards: bool,
 }
 
 impl<'path, C> EventVisitor<'path> for ScopedRuledSetEventVisitor<'path, C>
@@ -146,13 +161,15 @@ where
                 }
             }
 
-            if segment.is_index() {
-                // Optionally skip the index (it acts as a wildcard) by
-                // pushing the same tree back onto the stack.
-                self.tree_nodes.push(ActiveRuleTree {
-                    rule_tree: self.tree_nodes[tree_index].rule_tree,
-                    index_wildcard_match: true,
-                });
+            if self.add_implicit_index_wildcards {
+                if segment.is_index() {
+                    // Optionally skip the index (it acts as a wildcard) by
+                    // pushing the same tree back onto the stack.
+                    self.tree_nodes.push(ActiveRuleTree {
+                        rule_tree: self.tree_nodes[tree_index].rule_tree,
+                        index_wildcard_match: true,
+                    });
+                }
             }
         }
         // The new number of active trees is the number of new trees pushed
@@ -177,13 +194,15 @@ where
             value,
             RuleIndexVisitor {
                 tree_nodes: &self.tree_nodes,
-                used_rule_set: &mut self.bool_set,
+                used_rule_set: self.bool_set.as_mut(),
             },
             ExclusionCheck {
                 tree_nodes: &self.tree_nodes,
             },
         );
-        self.bool_set.reset();
+        if let Some(bool_set) = &mut self.bool_set {
+            bool_set.reset();
+        }
         VisitStringResult {
             might_mutate: will_mutate,
             path: &self.path,
@@ -193,7 +212,7 @@ where
 
 pub struct RuleIndexVisitor<'a> {
     tree_nodes: &'a Vec<ActiveRuleTree<'a>>,
-    used_rule_set: &'a mut BoolSet,
+    used_rule_set: Option<&'a mut BoolSet>,
 }
 
 impl<'a> RuleIndexVisitor<'a> {
@@ -209,7 +228,11 @@ impl<'a> RuleIndexVisitor<'a> {
             for change in &include_node.rule_tree.rule_changes {
                 match change {
                     RuleChange::Add(rule_id) => {
-                        if !self.used_rule_set.get_and_set(*rule_id) {
+                        if let Some(used_rule_set) = &mut self.used_rule_set {
+                            if !used_rule_set.get_and_set(*rule_id) {
+                                (visit)(*rule_id);
+                            }
+                        } else {
                             (visit)(*rule_id);
                         }
                     }
@@ -934,12 +957,14 @@ mod test {
             }
         );
     }
+
     #[test]
     fn test_fields_should_act_as_wildcard_on_lists() {
         let ruleset = ScopedRuleSet::new(&[Scope::include(vec![Path::from(vec![
             "a".into(),
             "b".into(),
-        ])])]);
+        ])])])
+        .with_implicit_index_wildcards();
 
         let mut event = SimpleEvent::Map(
             [(
@@ -978,7 +1003,8 @@ mod test {
         let ruleset = ScopedRuleSet::new(&[Scope::include_and_exclude(
             vec![ab_path.clone()],
             vec![ab_path],
-        )]);
+        )])
+        .with_implicit_index_wildcards();
 
         let mut event = SimpleEvent::Map(
             [(
@@ -1014,7 +1040,8 @@ mod test {
         let ab_path = Path::from(vec!["a".into(), "b".into()]);
         let a_1_d_path = Path::from(vec!["a".into(), 1.into(), "d".into()]);
 
-        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![a_0_c_path, ab_path, a_1_d_path])]);
+        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![a_0_c_path, ab_path, a_1_d_path])])
+            .with_implicit_index_wildcards();
 
         let mut event = SimpleEvent::Map(
             [(
@@ -1103,7 +1130,8 @@ mod test {
         let a_b_path = Path::from(vec!["a".into(), "b".into()]);
         let a_0_b_path = Path::from(vec!["a".into(), 0.into(), "b".into()]);
 
-        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![a_b_path, a_0_b_path])]);
+        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![a_b_path, a_0_b_path])])
+            .with_implicit_index_wildcards();
 
         let mut event = SimpleEvent::Map(
             [(
@@ -1137,7 +1165,8 @@ mod test {
         // A wildcard index can skip multiple levels of indexing, not just 1
 
         let a_b_path = Path::from(vec!["a".into(), "b".into()]);
-        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![a_b_path])]);
+        let ruleset =
+            ScopedRuleSet::new(&[Scope::include(vec![a_b_path])]).with_implicit_index_wildcards();
 
         let mut event = SimpleEvent::Map(
             [(
@@ -1161,6 +1190,38 @@ mod test {
                         rule_index: 0,
                         is_excluded: false
                     }]
+                },],
+            }
+        );
+    }
+
+    #[test]
+    fn test_implicit_index_wildcard_is_disabled_by_default() {
+        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![Path::from(vec![
+            "a".into(),
+            "b".into(),
+        ])])]);
+
+        let mut event = SimpleEvent::Map(
+            [(
+                "a".into(),
+                SimpleEvent::List(vec![SimpleEvent::Map(
+                    [("b".into(), SimpleEvent::String("value-a-0-b".to_string()))].into(),
+                )]),
+            )]
+            .into(),
+        );
+
+        let paths = visit_event(&mut event, &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![VisitedPath {
+                    path: Path::from(vec!["a".into(), 0.into(), "b".into()]),
+                    content: "value-a-0-b".into(),
+                    // Rule 0 does NOT match, since the implicit index wildcard is disabled
+                    rules: vec![]
                 },],
             }
         );
