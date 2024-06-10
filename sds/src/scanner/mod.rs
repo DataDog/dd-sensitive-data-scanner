@@ -618,7 +618,7 @@ mod test {
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
-            should_keywords_match_event_paths: bool,
+            _should_keywords_match_event_paths: bool,
         ) {
             match_emitter.emit(StringMatch { start: 10, end: 16 });
         }
@@ -1014,6 +1014,7 @@ mod test {
         assert_eq!(matches.len(), 0);
     }
 
+    #[test]
     fn test_included_keywords_path_with_uncaught_separator_symbol() {
         let scanner = build_test_scanner(true);
 
@@ -1026,6 +1027,7 @@ mod test {
         assert_eq!(matches.len(), 0);
     }
 
+    #[test]
     fn test_included_keywords_path_deep() {
         let scanner = build_test_scanner(true);
 
@@ -1691,6 +1693,7 @@ mod test {
 
     #[test]
     fn test_hash_with_leading_zero_utf16() {
+        #[allow(deprecated)]
         let rule_0 = RegexRuleConfig::builder(".+".to_owned())
             .match_action(MatchAction::Utf16Hash)
             .build();
@@ -1778,7 +1781,7 @@ mod test {
         use crate::scanner::ScannerBuilder;
         use crate::{
             simple_event::SimpleEvent, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
-            RuleMatch, ScannerFeatures, Scope,
+            ScannerFeatures, Scope,
         };
         use metrics::{Key, Label};
         use metrics_util::debugging::DebugValue;
