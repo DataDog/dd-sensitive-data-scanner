@@ -227,13 +227,13 @@ impl<'a> RuleIndexVisitor<'a> {
             }
             for change in &include_node.rule_tree.rule_changes {
                 match change {
-                    RuleChange::Add(rule_id) => {
+                    RuleChange::Add(rule_index) => {
                         if let Some(used_rule_set) = &mut self.used_rule_set {
-                            if !used_rule_set.get_and_set(*rule_id) {
-                                (visit)(*rule_id);
+                            if !used_rule_set.get_and_set(*rule_index) {
+                                (visit)(*rule_index);
                             }
                         } else {
-                            (visit)(*rule_id);
+                            (visit)(*rule_index);
                         }
                     }
                     RuleChange::Remove(_) => { /* Nothing to do here */ }
@@ -964,7 +964,7 @@ mod test {
             "a".into(),
             "b".into(),
         ])])])
-        .with_implicit_index_wildcards();
+        .with_implicit_index_wildcards(true);
 
         let mut event = SimpleEvent::Map(
             [(
@@ -1004,7 +1004,7 @@ mod test {
             vec![ab_path.clone()],
             vec![ab_path],
         )])
-        .with_implicit_index_wildcards();
+        .with_implicit_index_wildcards(true);
 
         let mut event = SimpleEvent::Map(
             [(
@@ -1041,7 +1041,7 @@ mod test {
         let a_1_d_path = Path::from(vec!["a".into(), 1.into(), "d".into()]);
 
         let ruleset = ScopedRuleSet::new(&[Scope::include(vec![a_0_c_path, ab_path, a_1_d_path])])
-            .with_implicit_index_wildcards();
+            .with_implicit_index_wildcards(true);
 
         let mut event = SimpleEvent::Map(
             [(
@@ -1131,7 +1131,7 @@ mod test {
         let a_0_b_path = Path::from(vec!["a".into(), 0.into(), "b".into()]);
 
         let ruleset = ScopedRuleSet::new(&[Scope::include(vec![a_b_path, a_0_b_path])])
-            .with_implicit_index_wildcards();
+            .with_implicit_index_wildcards(true);
 
         let mut event = SimpleEvent::Map(
             [(
@@ -1165,8 +1165,8 @@ mod test {
         // A wildcard index can skip multiple levels of indexing, not just 1
 
         let a_b_path = Path::from(vec!["a".into(), "b".into()]);
-        let ruleset =
-            ScopedRuleSet::new(&[Scope::include(vec![a_b_path])]).with_implicit_index_wildcards();
+        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![a_b_path])])
+            .with_implicit_index_wildcards(true);
 
         let mut event = SimpleEvent::Map(
             [(
