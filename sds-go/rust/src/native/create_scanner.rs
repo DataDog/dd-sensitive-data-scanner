@@ -1,7 +1,7 @@
 use std::ffi::{c_char, CStr, CString};
 use std::sync::Arc;
 
-use dd_sds::{RegexRuleConfig, Scanner, ScannerBuilder, ScannerFeatures};
+use dd_sds::{RegexRuleConfig, Scanner};
 
 use super::convert_panic_to_error;
 
