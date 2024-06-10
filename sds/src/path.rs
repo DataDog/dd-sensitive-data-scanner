@@ -76,6 +76,10 @@ impl<'a> PathSegment<'a> {
             PathSegment::Index(i) => PathSegment::Index(*i),
         }
     }
+
+    pub fn is_index(&self) -> bool {
+        matches!(self, PathSegment::Index(_))
+    }
 }
 
 impl<'a> Debug for Path<'a> {

@@ -2,9 +2,7 @@
 #![allow(warnings)]
 
 use afl::fuzz;
-use dd_sds::{
-    MatchAction, PartialRedactDirection, RegexRuleConfig, ScannerBuilder, ScannerFeatures, Scope,
-};
+use dd_sds::{MatchAction, PartialRedactDirection, RegexRuleConfig, ScannerBuilder, Scope};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 #[cfg(not(feature = "manual_test"))]
@@ -90,9 +88,7 @@ fn run_fuzz(pattern: &str, input: &str, mut rng: StdRng) {
     let scanner_result = ScannerBuilder::new(&[RegexRuleConfig::builder(pattern.to_string())
         .match_action(match_action)
         .build()])
-    .scanner_features(ScannerFeatures {
-        should_keywords_match_event_paths: true,
-    })
+    .with_keywords_should_match_event_paths(true)
     .build();
 
     if let Ok(scanner) = scanner_result {

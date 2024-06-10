@@ -1,4 +1,7 @@
+mod bool_set;
+
 use crate::event::{EventVisitor, VisitStringResult};
+use crate::scoped_ruleset::bool_set::BoolSet;
 use crate::{Event, Path, PathSegment, Scope};
 use ahash::AHashMap;
 
@@ -7,6 +10,9 @@ use ahash::AHashMap;
 #[derive(Debug)]
 pub struct ScopedRuleSet {
     tree: RuleTree,
+    // The number of rules stored in this set
+    num_rules: usize,
+    add_implicit_index_wildcards: bool,
 }
 
 impl ScopedRuleSet {
@@ -33,7 +39,16 @@ impl ScopedRuleSet {
                 }
             }
         }
-        Self { tree }
+        Self {
+            tree,
+            num_rules: rules_scopes.len(),
+            add_implicit_index_wildcards: false,
+        }
+    }
+
+    pub fn with_implicit_index_wildcards(mut self, value: bool) -> Self {
+        self.add_implicit_index_wildcards = value;
+        self
     }
 
     pub fn visit_string_rule_combinations<'path, 'c: 'path>(
@@ -41,10 +56,21 @@ impl ScopedRuleSet {
         event: &'path mut impl Event,
         content_visitor: impl ContentVisitor<'path>,
     ) {
+        let bool_set = if self.add_implicit_index_wildcards {
+            Some(BoolSet::new(self.num_rules))
+        } else {
+            None
+        };
         let mut visitor = ScopedRuledSetEventVisitor {
             content_visitor,
-            tree_nodes: vec![&self.tree],
+            tree_nodes: vec![ActiveRuleTree {
+                rule_tree: &self.tree,
+                index_wildcard_match: false,
+            }],
+            active_tree_count: vec![1],
             path: Path::root(),
+            bool_set,
+            add_implicit_index_wildcards: self.add_implicit_index_wildcards,
         };
 
         event.visit_event(&mut visitor)
@@ -52,16 +78,12 @@ impl ScopedRuleSet {
 }
 
 pub struct ExclusionCheck<'a> {
-    tree_nodes: &'a [&'a RuleTree],
+    tree_nodes: &'a [ActiveRuleTree<'a>],
 }
 impl<'a> ExclusionCheck<'a> {
-    // Used by other modules to create an empty exclusion check
-    pub fn new_empty() -> Self {
-        Self { tree_nodes: &[] }
-    }
     pub fn is_excluded(&self, rule_index: usize) -> bool {
         for include_node in self.tree_nodes {
-            for change in &include_node.rule_changes {
+            for change in &include_node.rule_tree.rule_changes {
                 match change {
                     RuleChange::Add(_) => { /* ignore */ }
                     RuleChange::Remove(i) => {
@@ -86,39 +108,78 @@ pub trait ContentVisitor<'path> {
     ) -> bool;
 }
 
+// This is just a reference to a RuleTree with some additional information
+struct ActiveRuleTree<'a> {
+    rule_tree: &'a RuleTree,
+    // If this tree was pushed because of a wildcard index, indices aren't
+    // allowed to match immediately after, so they are ignored.
+    index_wildcard_match: bool,
+}
+
 struct ScopedRuledSetEventVisitor<'a, C> {
     // The struct that will receive content / rules.
     content_visitor: C,
 
     // This is a list of parent tree nodes, which is a list of all of the "active" rule changes.
     // If an "Add" exists for a rule in this list, it will be scanned. If a single "Remove" exists, it will cause the `ExclusionCheck` to return true.
-    tree_nodes: Vec<&'a RuleTree>,
+    tree_nodes: Vec<ActiveRuleTree<'a>>,
+
+    // This counts how many trees are currently active, which can
+    // happen due to (implicit) wildcard segments. The last value in this
+    // list is the current number of active trees (n), which is the last
+    // n trees in `tree_nodes`.
+    active_tree_count: Vec<usize>,
 
     // The current path being visited
     path: Path<'a>,
+
+    // A re-usable boolean set to de-duplicate rules
+    bool_set: Option<BoolSet>,
+
+    add_implicit_index_wildcards: bool,
 }
 
-impl<'path: 'content_visitor, 'content_visitor, C> EventVisitor<'path>
-    for ScopedRuledSetEventVisitor<'path, C>
+impl<'path, C> EventVisitor<'path> for ScopedRuledSetEventVisitor<'path, C>
 where
     C: ContentVisitor<'path>,
 {
     fn push_segment(&mut self, segment: PathSegment<'path>) {
         // update the tree
         // The current path may go beyond what is stored in the "include" tree, so the tree is only updated if they are at the same height.
-        if self.path.len() + 1 == self.tree_nodes.len() {
-            let last_tree = *self.tree_nodes.last().unwrap();
-            if let Some(child) = last_tree.children.get(&segment) {
-                // All of the rules from the `child` node should be applied to the current path (and anything below it)
-                self.tree_nodes.push(child);
+
+        let num_active_trees = *self.active_tree_count.last().unwrap();
+        let tree_nodes_len = self.tree_nodes.len();
+        let active_trees_range = tree_nodes_len - num_active_trees..tree_nodes_len;
+
+        for tree_index in active_trees_range {
+            if !self.tree_nodes[tree_index].index_wildcard_match || !segment.is_index() {
+                if let Some(child) = self.tree_nodes[tree_index].rule_tree.children.get(&segment) {
+                    self.tree_nodes.push(ActiveRuleTree {
+                        rule_tree: child,
+                        index_wildcard_match: false,
+                    });
+                }
+            }
+
+            if self.add_implicit_index_wildcards && segment.is_index() {
+                // Optionally skip the index (it acts as a wildcard) by
+                // pushing the same tree back onto the stack.
+                self.tree_nodes.push(ActiveRuleTree {
+                    rule_tree: self.tree_nodes[tree_index].rule_tree,
+                    index_wildcard_match: true,
+                });
             }
         }
+        // The new number of active trees is the number of new trees pushed
+        self.active_tree_count
+            .push(self.tree_nodes.len() - tree_nodes_len);
 
         self.path.segments.push(segment);
     }
 
     fn pop_segment(&mut self) {
-        if self.path.len() + 1 == self.tree_nodes.len() {
+        let num_active_trees = self.active_tree_count.pop().unwrap();
+        for _ in 0..num_active_trees {
             // The rules from the last node are no longer active, so remove them.
             let _popped = self.tree_nodes.pop();
         }
@@ -131,11 +192,15 @@ where
             value,
             RuleIndexVisitor {
                 tree_nodes: &self.tree_nodes,
+                used_rule_set: self.bool_set.as_mut(),
             },
             ExclusionCheck {
                 tree_nodes: &self.tree_nodes,
             },
         );
+        if let Some(bool_set) = &mut self.bool_set {
+            bool_set.reset();
+        }
         VisitStringResult {
             might_mutate: will_mutate,
             path: &self.path,
@@ -144,23 +209,32 @@ where
 }
 
 pub struct RuleIndexVisitor<'a> {
-    tree_nodes: &'a Vec<&'a RuleTree>,
+    tree_nodes: &'a Vec<ActiveRuleTree<'a>>,
+    used_rule_set: Option<&'a mut BoolSet>,
 }
 
 impl<'a> RuleIndexVisitor<'a> {
     /// Visits all rules associated with the current string. This may
     /// potentially return no rule indices at all.
-    pub fn visit_rule_indices(&self, mut visit: impl FnMut(usize)) {
+    pub fn visit_rule_indices(&mut self, mut visit: impl FnMut(usize)) {
         // visit rules with an `Include` scope
         for include_node in self.tree_nodes {
-            for change in &include_node.rule_changes {
+            if include_node.index_wildcard_match {
+                // This is guaranteed to be a duplicated node. Skip it
+                continue;
+            }
+            for change in &include_node.rule_tree.rule_changes {
                 match change {
-                    RuleChange::Add(rule_id) => {
-                        (visit)(*rule_id);
+                    RuleChange::Add(rule_index) => {
+                        if let Some(used_rule_set) = &mut self.used_rule_set {
+                            if !used_rule_set.get_and_set(*rule_index) {
+                                (visit)(*rule_index);
+                            }
+                        } else {
+                            (visit)(*rule_index);
+                        }
                     }
-                    RuleChange::Remove(_) => {
-                        /* ignore removals, they can be checked as needed later */
-                    }
+                    RuleChange::Remove(_) => { /* Nothing to do here */ }
                 }
             }
         }
@@ -259,7 +333,7 @@ mod test {
                 &'content_visitor mut self,
                 path: &Path<'a>,
                 content: &str,
-                rule_iter: RuleIndexVisitor,
+                mut rule_iter: RuleIndexVisitor,
                 exclusion_check: ExclusionCheck<'content_visitor>,
             ) -> bool {
                 let mut rules = vec![];
@@ -878,6 +952,275 @@ mod test {
                         rules: vec![]
                     }
                 ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_fields_should_act_as_wildcard_on_lists() {
+        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![Path::from(vec![
+            "a".into(),
+            "b".into(),
+        ])])])
+        .with_implicit_index_wildcards(true);
+
+        let mut event = SimpleEvent::Map(
+            [(
+                "a".into(),
+                SimpleEvent::List(vec![SimpleEvent::Map(
+                    [("b".into(), SimpleEvent::String("value-a-0-b".to_string()))].into(),
+                )]),
+            )]
+            .into(),
+        );
+
+        let paths = visit_event(&mut event, &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![VisitedPath {
+                    path: Path::from(vec!["a".into(), 0.into(), "b".into()]),
+                    content: "value-a-0-b".into(),
+                    // Rule 0 matches this path even though there is a "0" index between the "a" and "b" field
+                    rules: vec![VisitedRule {
+                        rule_index: 0,
+                        is_excluded: false
+                    }]
+                },],
+            }
+        );
+    }
+
+    #[test]
+    fn test_exclude_implicit_wildcard_path() {
+        // This makes sure that exclusions are applied even when a path matches due to an
+        // implicit array wildcard.
+
+        let ab_path = Path::from(vec!["a".into(), "b".into()]);
+        let ruleset = ScopedRuleSet::new(&[Scope::include_and_exclude(
+            vec![ab_path.clone()],
+            vec![ab_path],
+        )])
+        .with_implicit_index_wildcards(true);
+
+        let mut event = SimpleEvent::Map(
+            [(
+                "a".into(),
+                SimpleEvent::List(vec![SimpleEvent::Map(
+                    [("b".into(), SimpleEvent::String("value-a-0-b".to_string()))].into(),
+                )]),
+            )]
+            .into(),
+        );
+
+        let paths = visit_event(&mut event, &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![VisitedPath {
+                    path: Path::from(vec!["a".into(), 0.into(), "b".into()]),
+                    content: "value-a-0-b".into(),
+                    // Rule 0 matches this path even though there is a "0" index between the "a" and "b" field
+                    rules: vec![VisitedRule {
+                        rule_index: 0,
+                        is_excluded: true
+                    }]
+                },],
+            }
+        );
+    }
+
+    #[test]
+    fn test_included_scope_both_implicit_and_explicit_index() {
+        let a_0_c_path = Path::from(vec!["a".into(), 0.into(), "c".into()]);
+        let ab_path = Path::from(vec!["a".into(), "b".into()]);
+        let a_1_d_path = Path::from(vec!["a".into(), 1.into(), "d".into()]);
+
+        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![a_0_c_path, ab_path, a_1_d_path])])
+            .with_implicit_index_wildcards(true);
+
+        let mut event = SimpleEvent::Map(
+            [(
+                "a".into(),
+                SimpleEvent::List(vec![
+                    SimpleEvent::Map(
+                        [
+                            ("b".into(), SimpleEvent::String("value-a-0-b".to_string())),
+                            ("c".into(), SimpleEvent::String("value-a-0-c".to_string())),
+                            ("d".into(), SimpleEvent::String("value-a-0-d".to_string())),
+                        ]
+                        .into(),
+                    ),
+                    SimpleEvent::Map(
+                        [
+                            ("b".into(), SimpleEvent::String("value-a-1-b".to_string())),
+                            ("c".into(), SimpleEvent::String("value-a-1-c".to_string())),
+                            ("d".into(), SimpleEvent::String("value-a-1-d".to_string())),
+                        ]
+                        .into(),
+                    ),
+                ]),
+            )]
+            .into(),
+        );
+
+        let paths = visit_event(&mut event, &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), 0.into(), "b".into()]),
+                        content: "value-a-0-b".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), 0.into(), "c".into()]),
+                        content: "value-a-0-c".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), 0.into(), "d".into()]),
+                        content: "value-a-0-d".into(),
+                        rules: vec![]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), 1.into(), "b".into()]),
+                        content: "value-a-1-b".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), 1.into(), "c".into()]),
+                        content: "value-a-1-c".into(),
+                        rules: vec![]
+                    },
+                    VisitedPath {
+                        path: Path::from(vec!["a".into(), 1.into(), "d".into()]),
+                        content: "value-a-1-d".into(),
+                        rules: vec![VisitedRule {
+                            rule_index: 0,
+                            is_excluded: false
+                        }]
+                    },
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_duplicate_rules_are_filtered_out() {
+        // Internally there may be multiple "active" trees which could end up storing duplicate rules.
+        // Those duplicates must be filtered out.
+
+        // Both of these scopes match the path "a[0].b" (one with an explicit index, one with an implicit wildcard index)
+        let a_b_path = Path::from(vec!["a".into(), "b".into()]);
+        let a_0_b_path = Path::from(vec!["a".into(), 0.into(), "b".into()]);
+
+        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![a_b_path, a_0_b_path])])
+            .with_implicit_index_wildcards(true);
+
+        let mut event = SimpleEvent::Map(
+            [(
+                "a".into(),
+                SimpleEvent::List(vec![SimpleEvent::Map(
+                    [("b".into(), SimpleEvent::String("value-a-0-b".to_string()))].into(),
+                )]),
+            )]
+            .into(),
+        );
+
+        let paths = visit_event(&mut event, &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![VisitedPath {
+                    path: Path::from(vec!["a".into(), 0.into(), "b".into()]),
+                    content: "value-a-0-b".into(),
+                    rules: vec![VisitedRule {
+                        rule_index: 0,
+                        is_excluded: false
+                    }]
+                },],
+            }
+        );
+    }
+
+    #[test]
+    fn test_deeply_nested_implicit_wildcard_index() {
+        // A wildcard index can skip multiple levels of indexing, not just 1
+
+        let a_b_path = Path::from(vec!["a".into(), "b".into()]);
+        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![a_b_path])])
+            .with_implicit_index_wildcards(true);
+
+        let mut event = SimpleEvent::Map(
+            [(
+                "a".into(),
+                SimpleEvent::List(vec![SimpleEvent::List(vec![SimpleEvent::Map(
+                    [("b".into(), SimpleEvent::String("value-a-0-0-b".to_string()))].into(),
+                )])]),
+            )]
+            .into(),
+        );
+
+        let paths = visit_event(&mut event, &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![VisitedPath {
+                    path: Path::from(vec!["a".into(), 0.into(), 0.into(), "b".into()]),
+                    content: "value-a-0-0-b".into(),
+                    rules: vec![VisitedRule {
+                        rule_index: 0,
+                        is_excluded: false
+                    }]
+                },],
+            }
+        );
+    }
+
+    #[test]
+    fn test_implicit_index_wildcard_is_disabled_by_default() {
+        let ruleset = ScopedRuleSet::new(&[Scope::include(vec![Path::from(vec![
+            "a".into(),
+            "b".into(),
+        ])])]);
+
+        let mut event = SimpleEvent::Map(
+            [(
+                "a".into(),
+                SimpleEvent::List(vec![SimpleEvent::Map(
+                    [("b".into(), SimpleEvent::String("value-a-0-b".to_string()))].into(),
+                )]),
+            )]
+            .into(),
+        );
+
+        let paths = visit_event(&mut event, &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![VisitedPath {
+                    path: Path::from(vec!["a".into(), 0.into(), "b".into()]),
+                    content: "value-a-0-b".into(),
+                    // Rule 0 does NOT match, since the implicit index wildcard is disabled
+                    rules: vec![]
+                },],
             }
         );
     }
