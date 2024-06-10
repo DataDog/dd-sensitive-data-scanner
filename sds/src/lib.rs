@@ -20,9 +20,6 @@ mod validation;
 #[cfg(any(test, feature = "bench"))]
 mod simple_event;
 
-// Just testing CI here - remove this line
-use std::collections::HashMap;
-
 // This is the public API of the SDS core library
 pub use encoding::{EncodeIndices, Encoding, Utf8Encoding};
 pub use event::{Event, EventVisitor, VisitStringResult};
