@@ -97,6 +97,7 @@ func TestScanMapEvent(t *testing.T) {
 			rules: []RuleMatch{{
 				Path:              "content",
 				RuleIdx:           2,
+				ReplacementType:   ReplacementTypePlaceholder,
 				StartIndex:        10,
 				EndIndexExclusive: 10 + uint32(len("[REDACTED]")),
 				ShiftOffset:       4,
@@ -114,6 +115,7 @@ func TestScanMapEvent(t *testing.T) {
 			rules: []RuleMatch{{
 				Path:              "content[0]",
 				RuleIdx:           2,
+				ReplacementType:   ReplacementTypePlaceholder,
 				StartIndex:        10,
 				EndIndexExclusive: 10 + uint32(len("[REDACTED]")),
 				ShiftOffset:       4,
@@ -135,6 +137,7 @@ func TestScanMapEvent(t *testing.T) {
 			rules: []RuleMatch{{
 				Path:              "content[0].key1",
 				RuleIdx:           2,
+				ReplacementType:   ReplacementTypePlaceholder,
 				StartIndex:        10,
 				EndIndexExclusive: 10 + uint32(len("[REDACTED]")),
 				ShiftOffset:       4,
@@ -162,6 +165,7 @@ func TestScanMapEvent(t *testing.T) {
 			rules: []RuleMatch{{
 				Path:              "content",
 				RuleIdx:           0,
+				ReplacementType:   ReplacementTypeNone,
 				StartIndex:        10,
 				EndIndexExclusive: 15,
 				ShiftOffset:       0,
@@ -178,6 +182,7 @@ func TestScanMapEvent(t *testing.T) {
 				Path:              "content.nested",
 				RuleIdx:           0,
 				StartIndex:        10,
+				ReplacementType:   ReplacementTypeNone,
 				EndIndexExclusive: 15,
 				ShiftOffset:       0,
 			}},
@@ -193,6 +198,7 @@ func TestScanMapEvent(t *testing.T) {
 			rules: []RuleMatch{{
 				Path:              "content[0]",
 				RuleIdx:           0,
+				ReplacementType:   ReplacementTypeNone,
 				StartIndex:        10,
 				EndIndexExclusive: 15,
 				ShiftOffset:       0,
@@ -214,12 +220,14 @@ func TestScanMapEvent(t *testing.T) {
 			rules: []RuleMatch{{
 				Path:              "content[0].nested0",
 				RuleIdx:           0,
+				ReplacementType:   ReplacementTypeNone,
 				StartIndex:        10,
 				EndIndexExclusive: 15,
 				ShiftOffset:       0,
 			}, {
 				Path:              "content[1].nested1",
 				RuleIdx:           0,
+				ReplacementType:   ReplacementTypeNone,
 				StartIndex:        10,
 				EndIndexExclusive: 15,
 				ShiftOffset:       0,
@@ -331,11 +339,13 @@ func TestScanStringEventMultipleMutations(t *testing.T) {
 			rules: []RuleMatch{{
 				RuleIdx:           1,
 				StartIndex:        65,
+				ReplacementType:   ReplacementTypePlaceholder,
 				EndIndexExclusive: 65 + uint32(len("[REDACTED]")),
 				ShiftOffset:       4,
 			}, {
 				RuleIdx:           2,
 				StartIndex:        95,
+				ReplacementType:   ReplacementTypePlaceholder,
 				EndIndexExclusive: 95 + uint32(len("[NREDAC]")),
 				ShiftOffset:       8,
 			}},
@@ -372,6 +382,7 @@ func TestProximityKeywords(t *testing.T) {
 			rules: []RuleMatch{{
 				RuleIdx:           0,
 				StartIndex:        10,
+				ReplacementType:   ReplacementTypeNone,
 				EndIndexExclusive: 16,
 				ShiftOffset:       0,
 			},
@@ -409,11 +420,13 @@ func TestSecondaryValidator(t *testing.T) {
 				{
 					RuleIdx:           0,
 					StartIndex:        0,
+					ReplacementType:   ReplacementTypePlaceholder,
 					EndIndexExclusive: 10,
 					ShiftOffset:       -6,
 				}, {
 					RuleIdx:           0,
 					StartIndex:        11,
+					ReplacementType:   ReplacementTypePlaceholder,
 					EndIndexExclusive: 21,
 					ShiftOffset:       -15,
 				},
@@ -429,6 +442,7 @@ func TestSecondaryValidator(t *testing.T) {
 			rules: []RuleMatch{{
 				RuleIdx:           0,
 				StartIndex:        17,
+				ReplacementType:   ReplacementTypePlaceholder,
 				EndIndexExclusive: 27,
 				ShiftOffset:       -9,
 			}},
@@ -437,7 +451,7 @@ func TestSecondaryValidator(t *testing.T) {
 	runTest(t, scannerWithChecksum, testData)
 }
 
-func TestPartialRedact(t *testing.T) {
+func TestPartialRedactStart(t *testing.T) {
 	extraConfig := ExtraConfig{
 		ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil),
 	}
@@ -462,6 +476,43 @@ func TestPartialRedact(t *testing.T) {
 			str:     "here card ****39, this one should match, but this second one 382448 should not as it's not prefixed by card",
 			rules: []RuleMatch{{
 				RuleIdx:           0,
+				ReplacementType:   ReplacementTypePartialStart,
+				StartIndex:        10,
+				EndIndexExclusive: 16,
+				ShiftOffset:       0,
+			}},
+		},
+	}
+
+	runTest(t, scanner, testData)
+}
+
+func TestPartialRedactEnd(t *testing.T) {
+	extraConfig := ExtraConfig{
+		ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil),
+	}
+
+	rules := []Rule{
+		NewPartialRedactRule("rule_6_numbers", "[0-9]{6}", 4, LastCharacters, extraConfig),
+	}
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create the scanner:", err.Error())
+	}
+	defer scanner.Delete()
+
+	testData := map[string]testResult{
+		"this is a log to process, no match no partial redact nor anything": {
+			mutated: false,
+			str:     "this is a log to process, no match no partial redact nor anything",
+			rules:   []RuleMatch{},
+		},
+		"here card 328339, this one should match, but this second one 382448 should not as it's not prefixed by card": {
+			mutated: true,
+			str:     "here card 32****, this one should match, but this second one 382448 should not as it's not prefixed by card",
+			rules: []RuleMatch{{
+				RuleIdx:           0,
+				ReplacementType:   ReplacementTypePartialEnd,
 				StartIndex:        10,
 				EndIndexExclusive: 16,
 				ShiftOffset:       0,

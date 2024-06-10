@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 	"unsafe"
 )
 
@@ -262,6 +263,21 @@ func encodeListEvent(log []interface{}, result []byte) ([]byte, error) {
 	return result, nil
 }
 
+func parseReplacementType(replacementType string) ReplacementType {
+	switch strings.ToLower(replacementType) {
+	case "placeholder":
+		return ReplacementTypePlaceholder
+	case "hash":
+		return ReplacementTypeHash
+	case "partial_beginning":
+		return ReplacementTypePartialStart
+	case "partial_end":
+		return ReplacementTypePartialEnd
+	default:
+		return ReplacementTypeNone
+	}
+}
+
 func decodeMatchResponse(result *ScanResult, buf *bytes.Buffer) {
 	// starts with a rule ID
 	ruleIdx := binary.BigEndian.Uint32(buf.Next(4))
@@ -272,7 +288,7 @@ func decodeMatchResponse(result *ScanResult, buf *bytes.Buffer) {
 	// then a replacement type
 	// TODO(https://datadoghq.atlassian.net/browse/SDS-301): implement replacement type
 	//replacementType := nextString(buf)
-	nextString(buf)
+	replacementType := parseReplacementType(string(nextString(buf)))
 
 	startIndex := binary.BigEndian.Uint32(buf.Next(4))
 	endIndexExclusive := binary.BigEndian.Uint32(buf.Next(4))
@@ -281,6 +297,7 @@ func decodeMatchResponse(result *ScanResult, buf *bytes.Buffer) {
 	result.Matches = append(result.Matches, RuleMatch{
 		RuleIdx:           ruleIdx,
 		Path:              string(path),
+		ReplacementType:   replacementType,
 		StartIndex:        startIndex,
 		EndIndexExclusive: endIndexExclusive,
 		ShiftOffset:       shiftOffset,
