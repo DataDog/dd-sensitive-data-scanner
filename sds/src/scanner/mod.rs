@@ -16,7 +16,6 @@ use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 use self::metrics::Metrics;
 use ahash::AHashSet;
 use regex_automata::{Input, Match};
-use serde::{Deserialize, Serialize};
 
 pub(crate) mod cache_pool;
 pub mod error;
@@ -460,7 +459,8 @@ impl<C: RuleConfigTrait> ScannerBuilder<'_, C> {
                 .iter()
                 .map(|rule| rule.get_scope().clone())
                 .collect::<Vec<_>>(),
-        );
+        )
+        .with_implicit_index_wildcards(self.scanner_features.add_implicit_index_wildcards);
 
         Ok(Scanner {
             rules: compiled_rules,

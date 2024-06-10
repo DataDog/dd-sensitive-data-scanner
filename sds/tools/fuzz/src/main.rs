@@ -2,9 +2,7 @@
 #![allow(warnings)]
 
 use afl::fuzz;
-use dd_sds::{
-    MatchAction, PartialRedactDirection, RegexRuleConfig, ScannerBuilder, ScannerFeatures, Scope,
-};
+use dd_sds::{MatchAction, PartialRedactDirection, RegexRuleConfig, ScannerBuilder, Scope};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 #[cfg(not(feature = "manual_test"))]

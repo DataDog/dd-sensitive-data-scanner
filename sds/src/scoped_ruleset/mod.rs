@@ -46,8 +46,8 @@ impl ScopedRuleSet {
         }
     }
 
-    pub fn with_implicit_index_wildcards(mut self) -> Self {
-        self.add_implicit_index_wildcards = true;
+    pub fn with_implicit_index_wildcards(mut self, value: bool) -> Self {
+        self.add_implicit_index_wildcards = value;
         self
     }
 
