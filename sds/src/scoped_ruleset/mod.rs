@@ -161,15 +161,13 @@ where
                 }
             }
 
-            if self.add_implicit_index_wildcards {
-                if segment.is_index() {
-                    // Optionally skip the index (it acts as a wildcard) by
-                    // pushing the same tree back onto the stack.
-                    self.tree_nodes.push(ActiveRuleTree {
-                        rule_tree: self.tree_nodes[tree_index].rule_tree,
-                        index_wildcard_match: true,
-                    });
-                }
+            if self.add_implicit_index_wildcards && segment.is_index() {
+                // Optionally skip the index (it acts as a wildcard) by
+                // pushing the same tree back onto the stack.
+                self.tree_nodes.push(ActiveRuleTree {
+                    rule_tree: self.tree_nodes[tree_index].rule_tree,
+                    index_wildcard_match: true,
+                });
             }
         }
         // The new number of active trees is the number of new trees pushed
