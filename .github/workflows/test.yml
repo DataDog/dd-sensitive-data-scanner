@@ -3,7 +3,7 @@ name: Test Suite
 on:
   pull_request:
   merge_group:
-    types: [checks_requested]
+    types: [ checks_requested ]
   push:
     branches:
       - main
@@ -21,6 +21,7 @@ env:
   VERBOSE: true
   CI: true
   PROFILE: debug
+  RUSTFLAGS: "-D warnings"
 
 jobs:
   sds:
