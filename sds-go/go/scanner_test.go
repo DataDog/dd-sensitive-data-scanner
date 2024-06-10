@@ -265,6 +265,7 @@ func TestScanStringEvent(t *testing.T) {
 			str:     "this is a hello event",
 			rules: []RuleMatch{{
 				RuleIdx:           0,
+				ReplacementType:   ReplacementTypeNone,
 				StartIndex:        10,
 				EndIndexExclusive: 15,
 				ShiftOffset:       0,
@@ -276,16 +277,19 @@ func TestScanStringEvent(t *testing.T) {
 			str:     "this is a hello event, even a hello world!",
 			rules: []RuleMatch{{
 				RuleIdx:           0,
+				ReplacementType:   ReplacementTypeNone,
 				StartIndex:        10,
 				EndIndexExclusive: 15,
 				ShiftOffset:       0,
 			}, {
 				RuleIdx:           0,
+				ReplacementType:   ReplacementTypeNone,
 				StartIndex:        30,
 				EndIndexExclusive: 35,
 				ShiftOffset:       0,
 			}, {
 				RuleIdx:           1,
+				ReplacementType:   ReplacementTypeNone,
 				StartIndex:        36,
 				EndIndexExclusive: 41,
 				ShiftOffset:       0,
@@ -297,11 +301,13 @@ func TestScanStringEvent(t *testing.T) {
 			str:     "this is a hello event, and containing a [REDACTED] here!",
 			rules: []RuleMatch{{
 				RuleIdx:           0,
+				ReplacementType:   ReplacementTypeNone,
 				StartIndex:        10,
 				EndIndexExclusive: 10 + uint32(len("hello")),
 				ShiftOffset:       0,
 			}, {
 				RuleIdx:           2,
+				ReplacementType:   ReplacementTypePlaceholder,
 				StartIndex:        40,
 				EndIndexExclusive: 40 + uint32(len("[REDACTED]")),
 				ShiftOffset:       4,
