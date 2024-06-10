@@ -1,7 +1,6 @@
 use criterion::{criterion_group, criterion_main};
 
 mod scope_benchmark {
-    use core::num;
     use criterion::Criterion;
     use dd_sds::SimpleEvent;
     use dd_sds::{
@@ -39,7 +38,7 @@ mod scope_benchmark {
             scopes.push(exclude_scope.clone());
         }
 
-        let fast_rule_set = ScopedRuleSet::new(&scopes);
+        let fast_rule_set = ScopedRuleSet::new(&scopes).with_implicit_index_wildcards(true);
 
         c.bench_function("scoped_rule_set", |b| {
             b.iter(|| {
@@ -51,9 +50,9 @@ mod scope_benchmark {
                 impl<'a> ContentVisitor<'a> for Counter<'a> {
                     fn visit_content(
                         &mut self,
-                        path: &Path<'a>,
-                        content: &str,
-                        rules: RuleIndexVisitor,
+                        _path: &Path<'a>,
+                        _content: &str,
+                        mut rules: RuleIndexVisitor,
                         _check: ExclusionCheck,
                     ) -> bool {
                         rules.visit_rule_indices(|_rule_index| {
@@ -69,6 +68,7 @@ mod scope_benchmark {
                         num_visited: &mut num_visited,
                     },
                 );
+
                 assert_eq!(num_visited, 20_000);
             })
         });
@@ -76,7 +76,7 @@ mod scope_benchmark {
 }
 
 mod luhn_checksum_benchmark {
-    use criterion::{black_box, BenchmarkId, Criterion};
+    use criterion::Criterion;
     use dd_sds::{LuhnChecksum, Validator};
 
     pub fn criterion_benchmark(c: &mut Criterion) {
