@@ -579,7 +579,7 @@ fn is_false_positive_match(
 #[cfg(test)]
 mod test {
     use super::cache_pool::{CachePoolBuilder, CachePoolGuard};
-    use super::{MatchEmitter, ScannerBuilder, ScannerFeatures, StringMatch};
+    use super::{MatchEmitter, ScannerBuilder, StringMatch};
     use crate::match_action::{MatchAction, MatchActionValidationError};
     use crate::observability::labels::Labels;
     use crate::rule::{
@@ -1720,7 +1720,7 @@ mod test {
 
     mod metrics_test {
         use crate::match_action::MatchAction;
-        use crate::scanner::{ScannerBuilder, ScannerFeatures};
+        use crate::scanner::ScannerBuilder;
         use crate::{
             simple_event::SimpleEvent, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
             Scope,
@@ -1730,7 +1730,6 @@ mod test {
         use metrics_util::debugging::DebuggingRecorder;
         use metrics_util::CompositeKey;
         use metrics_util::MetricKind::Counter;
-        use serde_test::{assert_tokens, Token};
         use std::collections::BTreeMap;
 
         #[test]
