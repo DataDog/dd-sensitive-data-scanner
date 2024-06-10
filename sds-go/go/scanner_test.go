@@ -237,6 +237,35 @@ func TestScanMapEvent(t *testing.T) {
 	runTestMap(t, scanner, testData)
 }
 
+func TestScanStringWithHash(t *testing.T) {
+	var extraConfig ExtraConfig
+
+	rules := []Rule{
+		NewHashRule("rule_secret", "se..et", extraConfig),
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create the scanner:", err.Error())
+	}
+	defer scanner.Delete()
+	event := "this is a hello event, and containing a secret here!"
+	result, err := scanner.Scan([]byte(event))
+	if err != nil {
+		t.Fatal("failed to scan the event:", err.Error())
+	}
+	if !result.Mutated {
+		t.Fatal("Failed to scan the event: not mutated")
+	}
+	if len(result.scanResult.Matches) != 1 {
+		t.Fatal("Failed to scan the event: not the good amount of rules returned")
+	}
+	if result.scanResult.Matches[0].ReplacementType != ReplacementTypeHash {
+		t.Fatal("Failed to scan the event: not hashed")
+	}
+
+}
+
 func TestScanStringEvent(t *testing.T) {
 	var extraConfig ExtraConfig
 
