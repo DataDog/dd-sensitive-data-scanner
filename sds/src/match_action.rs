@@ -1,3 +1,7 @@
+#![allow(deprecated)]
+// The module level deprecation allow is needed to suppress warnings from `MatchAction::Utf16Hash`
+// that I couldn't find a specific line to suppress. It can be removed when the variant is removed.
+
 use std::borrow::Cow;
 
 use serde::{Deserialize, Serialize};

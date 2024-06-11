@@ -579,7 +579,7 @@ fn is_false_positive_match(
 #[cfg(test)]
 mod test {
     use super::cache_pool::{CachePoolBuilder, CachePoolGuard};
-    use super::{MatchEmitter, ScannerBuilder, ScannerFeatures, StringMatch};
+    use super::{MatchEmitter, ScannerBuilder, StringMatch};
     use crate::match_action::{MatchAction, MatchActionValidationError};
     use crate::observability::labels::Labels;
     use crate::rule::{
@@ -624,7 +624,7 @@ mod test {
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
-            should_keywords_match_event_paths: bool,
+            _should_keywords_match_event_paths: bool,
         ) {
             match_emitter.emit(StringMatch { start: 10, end: 16 });
         }
@@ -1641,6 +1641,7 @@ mod test {
 
     #[test]
     fn test_hash_with_leading_zero_utf16() {
+        #[allow(deprecated)]
         let rule_0 = RegexRuleConfig::builder(".+".to_owned())
             .match_action(MatchAction::Utf16Hash)
             .build();
@@ -1719,7 +1720,7 @@ mod test {
 
     mod metrics_test {
         use crate::match_action::MatchAction;
-        use crate::scanner::{ScannerBuilder, ScannerFeatures};
+        use crate::scanner::ScannerBuilder;
         use crate::{
             simple_event::SimpleEvent, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
             Scope,
@@ -1729,7 +1730,6 @@ mod test {
         use metrics_util::debugging::DebuggingRecorder;
         use metrics_util::CompositeKey;
         use metrics_util::MetricKind::Counter;
-        use serde_test::{assert_tokens, Token};
         use std::collections::BTreeMap;
 
         #[test]
