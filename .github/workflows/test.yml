@@ -21,6 +21,7 @@ env:
   VERBOSE: true
   CI: true
   PROFILE: debug
+  # Error on warnings (https://doc.rust-lang.org/rustc/lints/groups.html)
   RUSTFLAGS: "-D warnings"
 
 jobs:
