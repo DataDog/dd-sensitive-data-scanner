@@ -76,6 +76,7 @@ impl CompiledRuleTrait for RegexCompiledRule {
 }
 
 impl RegexCompiledRule {
+    #[allow(clippy::too_many_arguments)]
     fn get_string_matches_with_included_keywords(
         &self,
         content: &str,
