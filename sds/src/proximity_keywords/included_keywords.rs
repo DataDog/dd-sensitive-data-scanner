@@ -18,13 +18,14 @@ impl CompiledIncludedProximityKeywords {
 pub struct IncludedKeywordSearch<'a> {
     keywords: &'a CompiledIncludedProximityKeywords,
     content: &'a str,
-    start: usize,
+    pub start: usize,
 }
 
 impl<'a> IncludedKeywordSearch<'a> {
     pub fn skip_to(&mut self, start: usize) {
-        debug_assert!(start >= self.start);
-        self.start = start;
+        if start > self.start {
+            self.start = start;
+        }
     }
 }
 

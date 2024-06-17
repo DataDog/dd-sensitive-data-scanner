@@ -178,7 +178,7 @@ pub fn is_index_within_prefix(
     content[prefix_start..]
         .char_indices()
         .nth(prefix_size)
-        .map_or(true, |(i, _)| prefix_start + i > target)
+        .map_or(true, |(i, _)| prefix_start + i >= target)
 }
 
 pub fn get_prefix_start(
@@ -480,12 +480,14 @@ mod test {
         assert_eq!(is_index_within_prefix(content, 0, 1, 10), true);
         assert_eq!(is_index_within_prefix(content, 0, 5, 10), true);
         assert_eq!(is_index_within_prefix(content, 0, 9, 10), true);
-        assert_eq!(is_index_within_prefix(content, 0, 10, 10), false);
+        assert_eq!(is_index_within_prefix(content, 0, 10, 10), true);
+        assert_eq!(is_index_within_prefix(content, 0, 11, 10), false);
 
         assert_eq!(is_index_within_prefix(content, 5, 6, 10), true);
         assert_eq!(is_index_within_prefix(content, 5, 10, 10), true);
         assert_eq!(is_index_within_prefix(content, 5, 14, 10), true);
-        assert_eq!(is_index_within_prefix(content, 5, 15, 10), false);
+        assert_eq!(is_index_within_prefix(content, 5, 15, 10), true);
+        assert_eq!(is_index_within_prefix(content, 5, 16, 10), false);
     }
 
     #[test]
@@ -494,7 +496,7 @@ mod test {
         let content = "éèéèéèéèéèéèéèéè";
         assert_eq!(is_index_within_prefix(content, 0, 2, 10), true);
         assert_eq!(is_index_within_prefix(content, 2, 6, 3), true);
-        assert_eq!(is_index_within_prefix(content, 2, 4, 1), false);
+        assert_eq!(is_index_within_prefix(content, 2, 6, 1), false);
     }
 
     #[test]
@@ -877,7 +879,7 @@ mod test {
 
     #[test]
     fn test_included_keyword_path() {
-        let (included_keywords, excluded_keywords) = try_new_compiled_proximity_keyword(
+        let (included_keywords, _excluded_keywords) = try_new_compiled_proximity_keyword(
             30,
             vec![
                 "aws_access_key_id".to_string(),

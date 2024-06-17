@@ -1725,75 +1725,97 @@ mod test {
         assert_eq!(matches.len(), 2);
     }
 
-    // #[test]
-    // fn test_included_keywords_on_start_boundary_with_space_including_word_boundary() {
-    //     let keywords = compile_keywords(7, &["id"]);
-    //
-    //     let keyword_matches = keywords.keyword_matches("users id   ab").collect::<Vec<_>>();
-    //     assert_eq!(keyword_matches, vec![6]);
-    //     let is_false_positive = keywords.is_false_positive_match("users id   ab", None, 11);
-    //
-    //     assert_eq!(is_false_positive, false);
-    // }
+    #[test]
+    fn test_included_keywords_on_start_boundary_with_space_including_word_boundary() {
+        let scanner = ScannerBuilder::new(&[RegexRuleConfig::builder("ab".to_owned())
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["id".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build()])
+        .build()
+        .unwrap();
 
-    // #[test]
-    // fn test_included_keywords_on_start_boundary_with_space() {
-    //     let keywords =
-    //         try_new_compiled_proximity_keyword(5, vec!["id".to_string()], vec![]).unwrap();
-    //
-    //     let is_false_positive = keywords.is_false_positive_match("users id   ab", None, 11);
-    //
-    //     assert_eq!(is_false_positive, false);
-    // }
+        let mut content = "users id   ab".to_string();
+        let matches = scanner.scan(&mut content);
 
-    // #[test]
-    // fn test_included_keywords_on_end_boundary() {
-    //     let keywords =
-    //         try_new_compiled_proximity_keyword(5, vec!["id".to_string()], vec![]).unwrap();
-    //
-    //     let is_false_positive = keywords.is_false_positive_match("foo idabc", None, 6);
-    //
-    //     assert_eq!(is_false_positive, true);
-    // }
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].start_index, 11);
+        assert_eq!(matches[0].end_index_exclusive, 13);
+    }
 
-    // #[test]
-    // fn should_look_ahead_too_far() {
-    //     let proximity_keywords =
-    //         try_new_compiled_proximity_keyword(10, vec!["host".to_string()], vec![]).unwrap();
-    //     assert!(proximity_keywords.is_false_positive_match("host 56789012345", None, 15));
-    //     assert!(!proximity_keywords.is_false_positive_match("host 56789012345", None, 10));
-    //     // prefix `ost 567890` does not contains host
-    //     assert!(proximity_keywords.is_false_positive_match("host 56789012345", None, 11));
-    //     assert!(!proximity_keywords.is_false_positive_match(" host 6789012345", None, 11));
-    //
-    //     let proximity_keywords =
-    //         try_new_compiled_proximity_keyword(10, vec![], vec!["host".to_string()]).unwrap();
-    //     assert!(!proximity_keywords.is_false_positive_match("host 56789012345", None, 15));
-    //     assert!(proximity_keywords.is_false_positive_match("host 56789012345", None, 10));
-    //     // prefix `ost 567890` does not contains host
-    //     assert!(!proximity_keywords.is_false_positive_match("host 56789012345", None, 11));
-    //     assert!(proximity_keywords.is_false_positive_match(" host 6789012345", None, 11));
-    // }
+    #[test]
+    fn test_included_keywords_on_end_boundary() {
+        let scanner = ScannerBuilder::new(&[RegexRuleConfig::builder("abc".to_owned())
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["id".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build()])
+        .build()
+        .unwrap();
 
-    // #[test]
-    // fn test_included_and_excluded_keyword() {
-    //     let (included_keywords, excluded_keywords) =
-    //         try_new_compiled_proximity_keyword(
-    //         30,
-    //         vec!["hey".to_string()],
-    //         vec!["hello".to_string()],
-    //     )
-    //     .unwrap();
-    //
-    //     // only the included keyword is present
-    //     assert!(!proximity_keywords.is_false_positive_match("hey world", None, 6));
-    //     // only the excluded keyword is present
-    //     assert!(proximity_keywords.is_false_positive_match("hello world", None, 6));
-    //     // no keyword is present
-    //     assert!(proximity_keywords.is_false_positive_match("world", None, 5));
-    //     // included and excluded keywords are present
-    //     assert!(!proximity_keywords.is_false_positive_match("hey, hello world", None, 11));
-    // }
+        let mut content = "users idabc".to_string();
+        let matches = scanner.scan(&mut content);
+
+        assert_eq!(matches.len(), 0);
+    }
+
+    #[test]
+    fn should_not_look_ahead_too_far() {
+        let scanner = ScannerBuilder::new(&[RegexRuleConfig::builder("x".to_owned())
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 10,
+                included_keywords: vec!["host".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build()])
+        .build()
+        .unwrap();
+
+        let mut content = "host           x".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 0);
+
+        let mut content = "host      x".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 1);
+
+        let mut content = "host       x".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 0);
+
+        let mut content = " host      x".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 1);
+    }
+
+    #[test]
+    fn test_included_and_excluded_keyword() {
+        let scanner = ScannerBuilder::new(&[RegexRuleConfig::builder("world".to_owned())
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 11,
+                included_keywords: vec!["hey".to_string()],
+                excluded_keywords: vec!["hello".to_string()],
+            })
+            .build()])
+        .build()
+        .unwrap();
+
+        // only the included keyword is present
+        let mut content = "hey world".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 1);
+
+        // // only the excluded keyword is present
+        let mut content = "hello world".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 0);
+
+        // no keyword is present
+        let mut content = "world".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 0);
+
+        // included and excluded keywords are present
+        let mut content = "hey, hello world".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 1);
+    }
 
     mod metrics_test {
         use crate::match_action::MatchAction;
