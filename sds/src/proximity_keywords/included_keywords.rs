@@ -32,7 +32,7 @@ impl<'a> Iterator for IncludedKeywordSearch<'a> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // TODO: use a custom cache for this regex too
+        // TODO: use a custom cache for this regex (https://datadoghq.atlassian.net/browse/SDS-329)
         let input = Input::new(self.content).range(self.start..).earliest(true);
 
         if let Some(included_keyword_match) =

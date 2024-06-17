@@ -201,32 +201,6 @@ pub fn get_prefix_start(
     }
 }
 
-// struct Metrics {
-//     pub false_positive_included_keywords: Counter,
-//     pub false_positive_excluded_keywords: Counter,
-// }
-//
-// impl Metrics {
-//     pub fn new(labels: &Labels) -> Self {
-//         Metrics {
-//             false_positive_included_keywords: counter!(
-//                 "false_positive.proximity_keywords",
-//                 labels.clone_with_labels(Labels::new(&[(TYPE, "included_keywords".to_string())]))
-//             ),
-//             false_positive_excluded_keywords: counter!(
-//                 "false_positive.proximity_keywords",
-//                 labels.clone_with_labels(Labels::new(&[(TYPE, "excluded_keywords".to_string())]))
-//             ),
-//         }
-//     }
-// }
-//
-// impl Default for Metrics {
-//     fn default() -> Self {
-//         Metrics::new(&Labels::empty())
-//     }
-// }
-
 fn compile_keywords_to_ast(
     keywords: &[String],
     look_ahead_character_count: usize,
