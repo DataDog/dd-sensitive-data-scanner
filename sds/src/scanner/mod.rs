@@ -1725,6 +1725,76 @@ mod test {
         assert_eq!(matches.len(), 2);
     }
 
+    // #[test]
+    // fn test_included_keywords_on_start_boundary_with_space_including_word_boundary() {
+    //     let keywords = compile_keywords(7, &["id"]);
+    //
+    //     let keyword_matches = keywords.keyword_matches("users id   ab").collect::<Vec<_>>();
+    //     assert_eq!(keyword_matches, vec![6]);
+    //     let is_false_positive = keywords.is_false_positive_match("users id   ab", None, 11);
+    //
+    //     assert_eq!(is_false_positive, false);
+    // }
+
+    // #[test]
+    // fn test_included_keywords_on_start_boundary_with_space() {
+    //     let keywords =
+    //         try_new_compiled_proximity_keyword(5, vec!["id".to_string()], vec![]).unwrap();
+    //
+    //     let is_false_positive = keywords.is_false_positive_match("users id   ab", None, 11);
+    //
+    //     assert_eq!(is_false_positive, false);
+    // }
+
+    // #[test]
+    // fn test_included_keywords_on_end_boundary() {
+    //     let keywords =
+    //         try_new_compiled_proximity_keyword(5, vec!["id".to_string()], vec![]).unwrap();
+    //
+    //     let is_false_positive = keywords.is_false_positive_match("foo idabc", None, 6);
+    //
+    //     assert_eq!(is_false_positive, true);
+    // }
+
+    // #[test]
+    // fn should_look_ahead_too_far() {
+    //     let proximity_keywords =
+    //         try_new_compiled_proximity_keyword(10, vec!["host".to_string()], vec![]).unwrap();
+    //     assert!(proximity_keywords.is_false_positive_match("host 56789012345", None, 15));
+    //     assert!(!proximity_keywords.is_false_positive_match("host 56789012345", None, 10));
+    //     // prefix `ost 567890` does not contains host
+    //     assert!(proximity_keywords.is_false_positive_match("host 56789012345", None, 11));
+    //     assert!(!proximity_keywords.is_false_positive_match(" host 6789012345", None, 11));
+    //
+    //     let proximity_keywords =
+    //         try_new_compiled_proximity_keyword(10, vec![], vec!["host".to_string()]).unwrap();
+    //     assert!(!proximity_keywords.is_false_positive_match("host 56789012345", None, 15));
+    //     assert!(proximity_keywords.is_false_positive_match("host 56789012345", None, 10));
+    //     // prefix `ost 567890` does not contains host
+    //     assert!(!proximity_keywords.is_false_positive_match("host 56789012345", None, 11));
+    //     assert!(proximity_keywords.is_false_positive_match(" host 6789012345", None, 11));
+    // }
+
+    // #[test]
+    // fn test_included_and_excluded_keyword() {
+    //     let (included_keywords, excluded_keywords) =
+    //         try_new_compiled_proximity_keyword(
+    //         30,
+    //         vec!["hey".to_string()],
+    //         vec!["hello".to_string()],
+    //     )
+    //     .unwrap();
+    //
+    //     // only the included keyword is present
+    //     assert!(!proximity_keywords.is_false_positive_match("hey world", None, 6));
+    //     // only the excluded keyword is present
+    //     assert!(proximity_keywords.is_false_positive_match("hello world", None, 6));
+    //     // no keyword is present
+    //     assert!(proximity_keywords.is_false_positive_match("world", None, 5));
+    //     // included and excluded keywords are present
+    //     assert!(!proximity_keywords.is_false_positive_match("hey, hello world", None, 11));
+    // }
+
     mod metrics_test {
         use crate::match_action::MatchAction;
         use crate::scanner::ScannerBuilder;

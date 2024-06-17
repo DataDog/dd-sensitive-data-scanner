@@ -48,8 +48,25 @@ impl<'a> Iterator for IncludedKeywordSearch<'a> {
 
 #[cfg(test)]
 mod test {
-    use crate::proximity_keywords::ProximityKeywordsRegex;
+    use crate::proximity_keywords::{
+        compile_keywords_proximity_config, CompiledIncludedProximityKeywords,
+        ProximityKeywordsRegex,
+    };
+    use crate::{Labels, ProximityKeywordsConfig};
     use regex_automata::meta;
+
+    fn compile_keywords(lookahead: usize, keywords: &[&str]) -> CompiledIncludedProximityKeywords {
+        let (included, _) = compile_keywords_proximity_config(
+            &ProximityKeywordsConfig {
+                look_ahead_character_count: lookahead,
+                included_keywords: keywords.iter().map(|s| s.to_string()).collect(),
+                excluded_keywords: vec![],
+            },
+            &Labels::empty(),
+        )
+        .unwrap();
+        included.unwrap()
+    }
 
     #[test]
     pub fn test_included_keyword_search() {
@@ -69,257 +86,162 @@ mod test {
         assert_eq!(search.next(), None);
     }
 
-    //
-    // #[test]
-    // fn test_included_keywords_on_start_boundary_with_space_including_word_boundary() {
-    //     let keywords =
-    //         try_new_compiled_proximity_keyword(7, vec!["id".to_string()], vec![]).unwrap();
-    //
-    //     let is_false_positive = keywords.is_false_positive_match("users id   ab", None, 11);
-    //
-    //     assert_eq!(is_false_positive, false);
-    // }
-    //
+    #[test]
+    fn test_included_keywords_on_start_boundary() {
+        let keywords = compile_keywords(5, &["id"]);
 
-    // #[test]
-    // fn test_included_keywords_on_start_boundary_with_space() {
-    //     let keywords =
-    //         try_new_compiled_proximity_keyword(5, vec!["id".to_string()], vec![]).unwrap();
-    //
-    //     let is_false_positive = keywords.is_false_positive_match("users id   ab", None, 11);
-    //
-    //     assert_eq!(is_false_positive, false);
-    // }
+        let keyword_matches = keywords
+            .keyword_matches("invalid   abc")
+            .collect::<Vec<_>>();
 
-    // #[test]
-    // fn test_included_keywords_on_end_boundary() {
-    //     let keywords =
-    //         try_new_compiled_proximity_keyword(5, vec!["id".to_string()], vec![]).unwrap();
-    //
-    //     let is_false_positive = keywords.is_false_positive_match("foo idabc", None, 6);
-    //
-    //     assert_eq!(is_false_positive, true);
-    // }
+        // There should be no matches since keywords have a word boundary
+        assert!(keyword_matches.is_empty());
+    }
 
-    // #[test]
-    // fn test_included_keywords_on_start_boundary() {
-    //     let keywords =
-    //         try_new_compiled_proximity_keyword(5, vec!["id".to_string()], vec![]).unwrap();
-    //
-    //     let is_false_positive = keywords.is_false_positive_match("invalid   abc", None, 10);
-    //
-    //     assert_eq!(is_false_positive, true);
-    // }
+    #[test]
+    fn should_detect_on_any_keyword() {
+        let keywords = compile_keywords(30, &["hello", "coty"]);
 
-    // #[test]
-    // fn should_look_ahead_too_far() {
-    //     let proximity_keywords =
-    //         try_new_compiled_proximity_keyword(10, vec!["host".to_string()], vec![]).unwrap();
-    //     assert!(proximity_keywords.is_false_positive_match("host 56789012345", None, 15));
-    //     assert!(!proximity_keywords.is_false_positive_match("host 56789012345", None, 10));
-    //     // prefix `ost 567890` does not contains host
-    //     assert!(proximity_keywords.is_false_positive_match("host 56789012345", None, 11));
-    //     assert!(!proximity_keywords.is_false_positive_match(" host 6789012345", None, 11));
-    //
-    //     let proximity_keywords =
-    //         try_new_compiled_proximity_keyword(10, vec![], vec!["host".to_string()]).unwrap();
-    //     assert!(!proximity_keywords.is_false_positive_match("host 56789012345", None, 15));
-    //     assert!(proximity_keywords.is_false_positive_match("host 56789012345", None, 10));
-    //     // prefix `ost 567890` does not contains host
-    //     assert!(!proximity_keywords.is_false_positive_match("host 56789012345", None, 11));
-    //     assert!(proximity_keywords.is_false_positive_match(" host 6789012345", None, 11));
-    // }
+        assert_eq!(
+            keywords
+                .keyword_matches("hello world")
+                .collect::<Vec<usize>>(),
+            vec![0]
+        );
 
-    // #[test]
-    // fn test_included_and_excluded_keyword() {
-    //     let (included_keywords, excluded_keywords) =
-    //         try_new_compiled_proximity_keyword(
-    //         30,
-    //         vec!["hey".to_string()],
-    //         vec!["hello".to_string()],
-    //     )
-    //     .unwrap();
-    //
-    //     // only the included keyword is present
-    //     assert!(!proximity_keywords.is_false_positive_match("hey world", None, 6));
-    //     // only the excluded keyword is present
-    //     assert!(proximity_keywords.is_false_positive_match("hello world", None, 6));
-    //     // no keyword is present
-    //     assert!(proximity_keywords.is_false_positive_match("world", None, 5));
-    //     // included and excluded keywords are present
-    //     assert!(!proximity_keywords.is_false_positive_match("hey, hello world", None, 11));
-    // }
-    //
-    // #[test]
-    // fn should_detect_on_any_keyword() {
-    //     let (included_keywords, excluded_keywords) =
-    //         try_new_compiled_proximity_keyword(
-    //         30,
-    //         vec!["hello".to_string(), "coty".to_string()],
-    //         vec![],
-    //     )
-    //     .unwrap();
-    //
-    //     assert!(!proximity_keywords.is_false_positive_match("hello world", None, 6));
-    //     assert!(!proximity_keywords.is_false_positive_match("hey coty, hello world", None, 16));
-    //
-    //     assert!(proximity_keywords.is_false_positive_match("hey hey hey world", None, 12));
-    //
-    //     let (included_keywords, excluded_keywords) =
-    //         try_new_compiled_proximity_keyword(
-    //         30,
-    //         vec![],
-    //         vec!["hello".to_string(), "coty".to_string()],
-    //     )
-    //     .unwrap();
-    //
-    //     assert!(proximity_keywords.is_false_positive_match("hello world", None, 6));
-    //     assert!(proximity_keywords.is_false_positive_match("hey coty, hello world", None, 16));
-    //
-    //     assert!(!proximity_keywords.is_false_positive_match("hey hey hey world", None, 12));
-    // }
-    //
-    // #[test]
-    // fn should_quote_keyword() {
-    //     let proximity_keywords =
-    //         try_new_compiled_proximity_keyword(30, vec!["he.*o".to_string()], vec![]).unwrap();
-    //
-    //     assert!(proximity_keywords.is_false_positive_match("hello world", None, 6));
-    //     assert!(!proximity_keywords.is_false_positive_match("he.*o world", None, 6));
-    //
-    //     let proximity_keywords =
-    //         try_new_compiled_proximity_keyword(30, vec![], vec!["he.*o".to_string()]).unwrap();
-    //
-    //     assert!(!proximity_keywords.is_false_positive_match("hello world", None, 6));
-    //     assert!(proximity_keywords.is_false_positive_match("he.*o world", None, 6));
-    // }
-    //
-    // #[test]
-    // fn keywords_should_be_case_insensitive() {
-    //     let proximity_keywords =
-    //         try_new_compiled_proximity_keyword(30, vec!["hello".to_string()], vec![]).unwrap();
-    //
-    //     assert!(!proximity_keywords.is_false_positive_match("hello world", None, 6));
-    //     assert!(!proximity_keywords.is_false_positive_match("HELLO world", None, 6));
-    //
-    //     let proximity_keywords =
-    //         try_new_compiled_proximity_keyword(30, vec![], vec!["hello".to_string()]).unwrap();
-    //
-    //     assert!(proximity_keywords.is_false_positive_match("hello world", None, 6));
-    //     assert!(proximity_keywords.is_false_positive_match("HELLO world", None, 6));
-    // }
-    //
-    // #[test]
-    // fn included_keyword_should_have_word_boundaries() {
-    //     let proximity_keywords =
-    //         try_new_compiled_proximity_keyword(30, vec!["host".to_string()], vec![]).unwrap();
-    //     assert!(!proximity_keywords.is_false_positive_match("host ping", None, 5));
-    //     assert!(proximity_keywords.is_false_positive_match("localhost ping", None, 10));
-    //     assert!(proximity_keywords.is_false_positive_match("hostlocal ping", None, 10));
-    //
-    //     // word boundaries are is added at the beginning (resp. end) only if the first (resp. last) character is a letter or a digit
-    //     let proximity_keywords =
-    //         try_new_compiled_proximity_keyword(30, vec!["-host".to_string()], vec![]).unwrap();
-    //     assert!(!proximity_keywords.is_false_positive_match("-host- ping", None, 6));
-    //     assert!(!proximity_keywords.is_false_positive_match("local-host ping", None, 11));
-    //     assert!(proximity_keywords.is_false_positive_match("-hostlocal ping", None, 11));
-    //
-    //     let proximity_keywords =
-    //         try_new_compiled_proximity_keyword(30, vec!["ৎhost".to_string()], vec![]).unwrap();
-    //     assert!(!proximity_keywords.is_false_positive_match("ৎhost ping", None, 7));
-    //     assert!(!proximity_keywords.is_false_positive_match("localৎhost ping", None, 12));
-    // }
+        assert_eq!(
+            keywords
+                .keyword_matches("hey coty, hello world")
+                .collect::<Vec<usize>>(),
+            vec![4, 10]
+        );
 
-    // #[test]
-    // fn test_included_keyword_content() {
-    //     let (included_keywords, excluded_keywords) =
-    //         try_new_compiled_proximity_keyword(30, vec!["hello".to_string()], vec![]).unwrap();
-    //
-    //     let included_keywords = included_keywords.unwrap();
-    //
-    //     assert!(!included_keywords.is_false_positive_match("hello world", None, 6));
-    //     assert!(!included_keywords.is_false_positive_match("hey, hello world", None, 11));
-    //     assert!(included_keywords.is_false_positive_match("world ", None, 5));
-    //     assert!(included_keywords.is_false_positive_match("world", None, 0));
-    //     assert!(included_keywords.is_false_positive_match("hello world", None, 3));
-    // }
+        assert!(keywords
+            .keyword_matches("hey hey hey world")
+            .collect::<Vec<usize>>()
+            .is_empty());
+    }
 
-    // #[test]
-    // fn test_included_keyword_path() {
-    //     let (included_keywords, excluded_keywords) =
-    //         try_new_compiled_proximity_keyword(
-    //         30,
-    //         vec![
-    //             "aws_access_key_id".to_string(),
-    //             "aws-access".to_string(),
-    //             "accessKey".to_string(),
-    //         ],
-    //         vec![],
-    //     )
-    //     .unwrap();
-    //
-    //     // Should match
-    //     assert_eq!(
-    //         proximity_keywords.is_false_positive_match(
-    //             "",
-    //             Some("aws.access.key.id".to_string()),
-    //             0,
-    //         ),
-    //         false
-    //     );
-    //     assert_eq!(
-    //         proximity_keywords.is_false_positive_match("", Some("aws.access.key".to_string()), 0),
-    //         false
-    //     );
-    //     assert_eq!(
-    //         proximity_keywords.is_false_positive_match("", Some("aws.access.keys".to_string()), 0),
-    //         false
-    //     );
-    //     assert_eq!(
-    //         proximity_keywords.is_false_positive_match("", Some("aws.access%key".to_string()), 0),
-    //         false
-    //     );
-    //     assert_eq!(
-    //         proximity_keywords.is_false_positive_match(
-    //             "",
-    //             Some("aws.access.key.identity".to_string()),
-    //             0,
-    //         ),
-    //         false
-    //     );
-    //     assert_eq!(
-    //         proximity_keywords.is_false_positive_match(
-    //             "",
-    //             Some("access.key.aws.another.long.keyword".to_string()),
-    //             0,
-    //         ),
-    //         false
-    //     );
-    //
-    //     // Should not match
-    //     assert_eq!(
-    //         proximity_keywords.is_false_positive_match("", Some("aws.key".to_string()), 0),
-    //         true
-    //     );
-    //     assert_eq!(
-    //         proximity_keywords.is_false_positive_match("", Some("key".to_string()), 0),
-    //         true
-    //     );
-    //     assert_eq!(
-    //         proximity_keywords.is_false_positive_match("", Some("aws.app.key".to_string()), 0),
-    //         true
-    //     );
-    //     assert_eq!(
-    //         proximity_keywords.is_false_positive_match("", Some("aws.accessible".to_string()), 0),
-    //         true
-    //     );
-    //     assert_eq!(
-    //         proximity_keywords.is_false_positive_match("", Some("access#key".to_string()), 0),
-    //         true
-    //     );
-    //     assert_eq!(
-    //         proximity_keywords.is_false_positive_match("", Some("key.access.aws".to_string()), 0),
-    //         true
-    //     );
-    // }
+    #[test]
+    fn should_quote_keyword() {
+        let keywords = compile_keywords(30, &["he.*o"]);
+
+        assert!(keywords
+            .keyword_matches("hello world")
+            .collect::<Vec<usize>>()
+            .is_empty(),);
+
+        assert_eq!(
+            keywords
+                .keyword_matches("he.*o world")
+                .collect::<Vec<usize>>(),
+            vec![0]
+        );
+    }
+
+    #[test]
+    fn keywords_should_be_case_insensitive() {
+        let keywords = compile_keywords(30, &["hello"]);
+
+        assert_eq!(
+            keywords
+                .keyword_matches("HELLO world")
+                .collect::<Vec<usize>>(),
+            vec![0]
+        );
+        assert_eq!(
+            keywords
+                .keyword_matches("hello world")
+                .collect::<Vec<usize>>(),
+            vec![0]
+        );
+    }
+
+    #[test]
+    fn included_keyword_should_have_word_boundaries() {
+        let keywords = compile_keywords(30, &["host"]);
+
+        assert_eq!(
+            keywords
+                .keyword_matches("host ping")
+                .collect::<Vec<usize>>(),
+            vec![0]
+        );
+        assert!(keywords
+            .keyword_matches("localhost ping")
+            .collect::<Vec<usize>>()
+            .is_empty());
+        assert!(keywords
+            .keyword_matches("hostlocal ping")
+            .collect::<Vec<usize>>()
+            .is_empty());
+
+        // word boundaries are is added at the beginning (resp. end) only if the first (resp. last) character is a letter or a digit
+        let keywords = compile_keywords(30, &["-host"]);
+
+        assert_eq!(
+            keywords
+                .keyword_matches("-host ping")
+                .collect::<Vec<usize>>(),
+            vec![0]
+        );
+        assert_eq!(
+            keywords
+                .keyword_matches("local-host ping")
+                .collect::<Vec<usize>>(),
+            vec![5]
+        );
+        assert!(keywords
+            .keyword_matches("-hostlocal ping")
+            .collect::<Vec<usize>>()
+            .is_empty());
+
+        let keywords = compile_keywords(30, &["ৎhost"]);
+        assert_eq!(
+            keywords
+                .keyword_matches("ৎhost ping")
+                .collect::<Vec<usize>>(),
+            vec![0]
+        );
+        assert_eq!(
+            keywords
+                .keyword_matches("localৎhost ping")
+                .collect::<Vec<usize>>(),
+            vec![5]
+        );
+    }
+
+    #[test]
+    fn test_included_keyword_content() {
+        let keywords = compile_keywords(30, &["hello"]);
+
+        assert_eq!(
+            keywords
+                .keyword_matches("hello world")
+                .collect::<Vec<usize>>(),
+            vec![0]
+        );
+
+        assert_eq!(
+            keywords
+                .keyword_matches("hey, hello world")
+                .collect::<Vec<usize>>(),
+            vec![5]
+        );
+
+        assert!(keywords
+            .keyword_matches("world")
+            .collect::<Vec<usize>>()
+            .is_empty());
+
+        assert!(keywords
+            .keyword_matches("")
+            .collect::<Vec<usize>>()
+            .is_empty());
+
+        assert!(keywords
+            .keyword_matches("hel")
+            .collect::<Vec<usize>>()
+            .is_empty());
+    }
 }

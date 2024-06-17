@@ -874,4 +874,52 @@ mod test {
         assert_eq!(prev_char_index("a€b", 0), None);
         assert_eq!(prev_char_index("", 0), None);
     }
+
+    #[test]
+    fn test_included_keyword_path() {
+        let (included_keywords, excluded_keywords) = try_new_compiled_proximity_keyword(
+            30,
+            vec![
+                "aws_access_key_id".to_string(),
+                "aws-access".to_string(),
+                "accessKey".to_string(),
+            ],
+            vec![],
+        )
+        .unwrap();
+        let included_keywords = included_keywords.unwrap();
+
+        let should_match = vec![
+            "aws.access.key.id",
+            "aws.access.key",
+            "aws.access.keys",
+            "aws.access%key",
+            "aws.access.key.identity",
+            "access.key.aws.another.long.keyword",
+        ];
+
+        // Should match
+        for path in should_match {
+            assert_eq!(
+                contains_keyword_in_path(path, &included_keywords.keywords_pattern),
+                true
+            );
+        }
+
+        let should_not_match = vec![
+            "aws.key",
+            "key",
+            "aws.app.key",
+            "aws.accessible",
+            "access#key",
+            "key.access.aws",
+        ];
+
+        for path in should_not_match {
+            assert_eq!(
+                contains_keyword_in_path(path, &included_keywords.keywords_pattern),
+                false
+            );
+        }
+    }
 }
