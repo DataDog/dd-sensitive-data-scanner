@@ -18,7 +18,7 @@ impl CompiledIncludedProximityKeywords {
 pub struct IncludedKeywordSearch<'a> {
     keywords: &'a CompiledIncludedProximityKeywords,
     content: &'a str,
-    pub start: usize,
+    start: usize,
 }
 
 impl<'a> IncludedKeywordSearch<'a> {
