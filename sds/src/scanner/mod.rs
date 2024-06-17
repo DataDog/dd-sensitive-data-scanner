@@ -8,21 +8,20 @@ use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::validation::validate_and_create_regex;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Path, Scope};
-use regex_automata::meta::{Cache, Regex as MetaRegex};
+use regex_automata::meta::Regex as MetaRegex;
 use std::sync::Arc;
 
 use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 use self::metrics::Metrics;
-use crate::proximity_keywords::{
-    compile_keywords_proximity_config, contains_keyword_in_path, is_index_within_prefix,
-    CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
-};
+use crate::proximity_keywords::compile_keywords_proximity_config;
+use crate::scanner::regex_rule::RegexCompiledRule;
 use ahash::AHashSet;
-use regex_automata::{Input, Match};
+use regex_automata::Match;
 
 pub(crate) mod cache_pool;
 pub mod error;
 mod metrics;
+mod regex_rule;
 
 pub struct StringMatch {
     pub start: usize,
@@ -59,230 +58,6 @@ pub trait CompiledRuleTrait: Send + Sync {
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
     );
-}
-
-/// This is the internal representation of a rule after it has been validated / compiled.
-pub struct RegexCompiledRule {
-    pub rule_index: usize,
-    pub regex: MetaRegex,
-    pub match_action: MatchAction,
-    pub scope: Scope,
-    pub included_keywords: Option<CompiledIncludedProximityKeywords>,
-    pub excluded_keywords: Option<CompiledExcludedProximityKeywords>,
-    pub validator: Option<Arc<dyn Validator>>,
-    pub rule_cache_index: usize,
-    metrics: Metrics,
-}
-
-impl CompiledRuleTrait for RegexCompiledRule {
-    fn get_match_action(&self) -> &MatchAction {
-        &self.match_action
-    }
-    fn get_scope(&self) -> &Scope {
-        &self.scope
-    }
-    fn get_string_matches(
-        &self,
-        content: &str,
-        path: &Path,
-        caches: &mut CachePoolGuard<'_>,
-        exclusion_check: &ExclusionCheck<'_>,
-        excluded_matches: &mut AHashSet<String>,
-        match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
-    ) {
-        match self.included_keywords {
-            Some(ref included_keywords) => self.get_string_matches_with_included_keywords(
-                content,
-                path,
-                caches,
-                exclusion_check,
-                excluded_matches,
-                match_emitter,
-                should_keywords_match_event_paths,
-                included_keywords,
-            ),
-            None => self.get_string_matches_no_included_keywords(
-                content,
-                caches,
-                exclusion_check,
-                excluded_matches,
-                match_emitter,
-                true,
-            ),
-        }
-    }
-}
-
-impl RegexCompiledRule {
-    fn get_string_matches_no_included_keywords(
-        &self,
-        content: &str,
-        caches: &mut CachePoolGuard<'_>,
-        exclusion_check: &ExclusionCheck<'_>,
-        excluded_matches: &mut AHashSet<String>,
-        match_emitter: &mut dyn MatchEmitter,
-        check_excluded_keywords: bool,
-    ) {
-        let cache = &mut caches[self.rule_cache_index];
-        self.find_true_positive_matches(
-            content,
-            0,
-            cache,
-            check_excluded_keywords,
-            exclusion_check,
-            excluded_matches,
-            &mut |x| {
-                match_emitter.emit(x);
-                ShouldMatchContinue::Continue
-            },
-        );
-    }
-
-    fn get_string_matches_with_included_keywords(
-        &self,
-        content: &str,
-        path: &Path,
-        caches: &mut CachePoolGuard<'_>,
-        exclusion_check: &ExclusionCheck<'_>,
-        excluded_matches: &mut AHashSet<String>,
-        match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
-        included_keywords: &CompiledIncludedProximityKeywords,
-    ) {
-        let cache = &mut caches[self.rule_cache_index];
-
-        if should_keywords_match_event_paths {
-            // TODO: this can probably be re-written so a `sanitize` isn't needed (e.g. write a custom function to compare sanitized paths)
-            let sanitized_path = path.sanitize();
-            if contains_keyword_in_path(&sanitized_path, &included_keywords.keywords_pattern) {
-                // since the path contains a match, we can skip future included keyword checks
-                self.find_true_positive_matches(
-                    content,
-                    0,
-                    cache,
-                    false,
-                    exclusion_check,
-                    excluded_matches,
-                    &mut |x| {
-                        match_emitter.emit(x);
-                        ShouldMatchContinue::Continue
-                    },
-                );
-                return;
-            }
-        }
-
-        // Find matches for an included keyword, then check if there is a real match after that
-
-        let mut start = 0;
-
-        let input = Input::new(content).range(start..).earliest(true);
-
-        // TODO: use a custom cache for this regex too?
-        if let Some(included_keyword_match) = included_keywords
-            .keywords_pattern
-            .content_regex
-            .search(&input)
-        {
-            start = included_keyword_match.end();
-            self.find_true_positive_matches(
-                content,
-                start,
-                cache,
-                false,
-                exclusion_check,
-                excluded_matches,
-                &mut |true_positive_match: StringMatch| {
-                    if is_index_within_prefix(
-                        content,
-                        included_keyword_match.start(),
-                        true_positive_match.start,
-                        included_keywords.look_ahead_character_count,
-                    ) {
-                        // The match start might be further than the current start, so some chars
-                        // can be skipped before the next included keyword scanning. The start
-                        // is used instead of the end since the included keyword can overlap with
-                        // a previous match (maybe this can be removed in the future?)
-                        start = true_positive_match.start;
-
-                        match_emitter.emit(true_positive_match);
-
-                        // Another true positive could potentially be found within the same prefix
-                        ShouldMatchContinue::Continue
-                    } else {
-                        ShouldMatchContinue::Stop
-                    }
-                },
-            );
-        } else {
-            // There are no more included keywords, so no more matches can be found
-            return;
-        }
-    }
-
-    fn find_true_positive_matches(
-        &self,
-        content: &str,
-        mut start: usize,
-        cache: &mut Cache,
-        check_excluded_keywords: bool,
-        exclusion_check: &ExclusionCheck<'_>,
-        excluded_matches: &mut AHashSet<String>,
-        match_emitter: &mut impl MatchEmitter<ShouldMatchContinue>,
-    ) {
-        loop {
-            let input = Input::new(content).range(start..);
-            // let cache = &mut caches[self.rule_cache_index];
-            if let Some(regex_match) = self.regex.search_with(cache, &input) {
-                // this is only checking extra validators (e.g. checksums)
-                let mut is_false_positive_match =
-                    is_false_positive_match(&regex_match, self, content, check_excluded_keywords);
-
-                if is_false_positive_match {
-                    if let Some(next) = get_next_regex_start(content, &regex_match) {
-                        start = next;
-                    } else {
-                        // There are no more chars to scan
-                        return;
-                    }
-                } else {
-                    if exclusion_check.is_excluded(self.rule_index) {
-                        // Matches from excluded paths are saved and used to treat additional equal matches as false positives
-                        excluded_matches.insert(content[regex_match.range()].to_string());
-                    } else {
-                        // If the matched content is in `excluded_matches` it should not count as a match.
-                        // This is temporary to maintain backwards compatibility, but this should eventually happen
-                        // after all scanning is done so `excluded_matches` is fully populated.
-                        if !excluded_matches.contains(&content[regex_match.range()]) {
-                            match match_emitter.emit(StringMatch {
-                                start: regex_match.start(),
-                                end: regex_match.end(),
-                            }) {
-                                ShouldMatchContinue::Continue => {}
-                                ShouldMatchContinue::Stop => return,
-                            }
-                        } else {
-                            self.metrics.false_positive_excluded_attributes.increment(1)
-                        }
-                    }
-
-                    // The next match will start at the end of this match. This is fine because
-                    // patterns that can match empty matches are rejected.
-                    start = regex_match.end()
-                }
-            } else {
-                return;
-            }
-        }
-    }
-}
-
-#[must_use]
-#[derive(PartialEq, Eq, Debug)]
-enum ShouldMatchContinue {
-    Continue,
-    Stop,
 }
 
 impl RuleConfigTrait for Box<dyn RuleConfigTrait> {
@@ -1920,6 +1695,33 @@ mod test {
         let matches = scanner.scan(&mut content);
 
         // Both "world" matches fit within the 30 char prefix.
+        assert_eq!(matches.len(), 2);
+    }
+
+    #[test]
+    fn test_included_keyword_multiple_prefix_matches() {
+        let redact_test_rule = RegexRuleConfig::builder("world".to_owned())
+            .match_action(MatchAction::Redact {
+                replacement: "[REDACTED]".to_string(),
+            })
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["hello".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build();
+
+        let scanner = ScannerBuilder::new(&[redact_test_rule])
+            .with_keywords_should_match_event_paths(true)
+            .build()
+            .unwrap();
+
+        let mut content =
+            "hello world [this takes up enough space to separate the prefixes] world hello world"
+                .to_string();
+        let matches = scanner.scan(&mut content);
+
+        // Both "worlds" after a "hello" should match
         assert_eq!(matches.len(), 2);
     }
 

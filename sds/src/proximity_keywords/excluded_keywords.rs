@@ -2,7 +2,7 @@ use metrics::Counter;
 
 pub struct CompiledExcludedProximityKeywords {
     pub look_ahead_character_count: usize,
-    pub keywords_pattern: super::ProximityKeywordsRegex<true>,
+    pub keywords_pattern: super::ProximityKeywordsRegex,
     pub false_positive_counter: Counter,
 }
 
