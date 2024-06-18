@@ -7,7 +7,7 @@ use regex_automata::Input;
 
 pub struct CompiledExcludedProximityKeywords {
     pub look_ahead_character_count: usize,
-    pub keywords_pattern: super::ProximityKeywordsRegex,
+    pub keywords_pattern: ProximityKeywordsRegex,
     pub false_positive_counter: Counter,
 }
 
