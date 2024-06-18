@@ -1,3 +1,4 @@
+use crate::proximity_keywords::next_char_index;
 use regex_automata::Input;
 
 pub struct CompiledIncludedProximityKeywords {
@@ -39,7 +40,10 @@ impl<'a> Iterator for IncludedKeywordSearch<'a> {
         if let Some(included_keyword_match) =
             self.keywords.keywords_pattern.content_regex.search(&input)
         {
-            self.start = included_keyword_match.end();
+            // The next scan starts at the next character after the start of the keyword since
+            // multi-word keywords can overlap
+            self.start = next_char_index(self.content, included_keyword_match.start())
+                .unwrap_or(included_keyword_match.end());
             Some(included_keyword_match.start())
         } else {
             None
@@ -97,6 +101,15 @@ mod test {
 
         // There should be no matches since keywords have a word boundary
         assert!(keyword_matches.is_empty());
+    }
+
+    #[test]
+    fn test_overlapping_keywords() {
+        let keywords = compile_keywords(5, &["a b", "b c"]);
+
+        let keyword_matches = keywords.keyword_matches("a b c").collect::<Vec<_>>();
+
+        assert_eq!(keyword_matches, vec![0, 2]);
     }
 
     #[test]
