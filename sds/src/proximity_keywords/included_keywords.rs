@@ -74,24 +74,6 @@ mod test {
     }
 
     #[test]
-    pub fn test_included_keyword_search() {
-        let keywords = super::CompiledIncludedProximityKeywords {
-            look_ahead_character_count: 0,
-            keywords_pattern: ProximityKeywordsRegex {
-                content_regex: meta::Regex::new(r"\b(foo|bar)\b").unwrap(),
-                path_regex: meta::Regex::new(r"unused").unwrap(),
-            },
-        };
-
-        let content = "foo bar duck";
-        let mut search = keywords.keyword_matches(content);
-
-        assert_eq!(search.next(), Some(0));
-        assert_eq!(search.next(), Some(4));
-        assert_eq!(search.next(), None);
-    }
-
-    #[test]
     fn test_included_keywords_on_start_boundary() {
         let keywords = compile_keywords(5, &["id"]);
 

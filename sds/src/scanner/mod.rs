@@ -1649,7 +1649,7 @@ mod test {
     }
 
     #[test]
-    fn test_included_keyword_match_further_than_look_ahead_character_count() {
+    fn test_included_keyword_not_match_further_than_look_ahead_character_count() {
         let redact_test_rule = RegexRuleConfig::builder("world".to_owned())
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
@@ -1669,7 +1669,6 @@ mod test {
         let mut content = "hello [this block is exactly 37 chars long] world".to_string();
         let matches = scanner.scan(&mut content);
 
-        // There should be no matches because the included keyword is too far from the actual match
         assert_eq!(matches.len(), 0);
     }
 
@@ -1804,7 +1803,7 @@ mod test {
         let mut content = "hey world".to_string();
         assert_eq!(scanner.scan(&mut content).len(), 1);
 
-        // // only the excluded keyword is present
+        // only the excluded keyword is present
         let mut content = "hello world".to_string();
         assert_eq!(scanner.scan(&mut content).len(), 0);
 
