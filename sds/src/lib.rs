@@ -17,7 +17,6 @@ mod scoped_ruleset;
 mod secondary_validation;
 mod validation;
 
-#[cfg(any(test, feature = "bench"))]
 mod simple_event;
 
 // This is the public API of the SDS core library
@@ -37,6 +36,7 @@ pub use scanner::{
     StringMatch,
 };
 pub use scoped_ruleset::ExclusionCheck;
+pub use simple_event::SimpleEvent;
 pub use validation::{
     get_regex_complexity_estimate_very_slow, validate_regex, RegexValidationError,
 };
@@ -45,5 +45,4 @@ pub use validation::{
 pub use crate::{
     scoped_ruleset::{ContentVisitor, RuleIndexVisitor, ScopedRuleSet},
     secondary_validation::{LuhnChecksum, Validator},
-    simple_event::SimpleEvent,
 };
