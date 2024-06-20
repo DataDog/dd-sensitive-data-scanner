@@ -54,7 +54,7 @@ pub trait CompiledRuleTrait: Send + Sync {
         content: &str,
         path: &Path,
         caches: &mut CachePoolGuard<'_>,
-        cached_string_matches_per_rule_idx: &mut HashMap<usize, Vec<StringMatch>>,
+        cached_string_matches_per_rule_idx: &mut HashMap<usize, AHashSet<String>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -407,7 +407,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     caches: CachePoolGuard<'a>,
     rule_matches: &'a mut Vec<(crate::Path<'static>, Vec<InternalRuleMatch<E>>)>,
     excluded_matches: &'a mut AHashSet<String>,
-    cached_string_matches_per_rule_idx: &'a mut HashMap<usize, Vec<StringMatch>>,
+    cached_string_matches_per_rule_idx: &'a mut HashMap<usize, AHashSet<String>>,
 }
 
 impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
@@ -556,7 +556,7 @@ mod test {
             _content: &str,
             _path: &Path,
             _caches: &mut CachePoolGuard<'_>,
-            _cached_string_matches_per_rule_idx: &mut HashMap<usize, Vec<StringMatch>>,
+            _cached_string_matches_per_rule_idx: &mut HashMap<usize, AHashSet<String>>,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
