@@ -1,14 +1,19 @@
-use criterion::{criterion_group, criterion_main};
+#[cfg(not(feature = "bench"))]
+compile_error!(
+    "These benchmarks must be ran with the `bench` feature enabled. Run `cargo bench --features bench`"
+);
 
-mod scope_benchmark {
+#[cfg(feature = "bench")]
+mod benchmarks {
     use criterion::Criterion;
-    use dd_sds::SimpleEvent;
     use dd_sds::{
         ContentVisitor, ExclusionCheck, Path, PathSegment, RuleIndexVisitor, Scope, ScopedRuleSet,
     };
+    use dd_sds::{LuhnChecksum, Validator};
+    use dd_sds::{ProximityKeywordsConfig, RegexRuleConfig, Scanner, SimpleEvent};
     use std::collections::BTreeMap;
 
-    pub fn criterion_benchmark(c: &mut Criterion) {
+    pub fn scoped_ruleset(c: &mut Criterion) {
         let mut paths = vec![];
 
         for i in 0..100 {
@@ -73,13 +78,8 @@ mod scope_benchmark {
             })
         });
     }
-}
 
-mod luhn_checksum_benchmark {
-    use criterion::Criterion;
-    use dd_sds::{LuhnChecksum, Validator};
-
-    pub fn criterion_benchmark(c: &mut Criterion) {
+    pub fn luhn_checksum(c: &mut Criterion) {
         let credit_cards = vec![
             // source https://www.paypalobjects.com/en_AU/vhelp/paypalmanager_help/credit_card_numbers.htm
             // American Express
@@ -119,10 +119,47 @@ mod luhn_checksum_benchmark {
             })
         });
     }
+
+    pub fn included_keywords(c: &mut Criterion) {
+        let scanner =
+            Scanner::builder(&[RegexRuleConfig::builder("[a-zA-z0-9]{4,25}".to_string())
+                .proximity_keywords(ProximityKeywordsConfig {
+                    look_ahead_character_count: 30,
+                    included_keywords: vec![
+                        "secret".to_string(),
+                        "password".to_string(),
+                        "token".to_string(),
+                        "key".to_string(),
+                        "code".to_string(),
+                        "credential".to_string(),
+                        "passphrase".to_string(),
+                        "ssn".to_string(),
+                        "confidential".to_string(),
+                        "private".to_string(),
+                    ],
+                    excluded_keywords: vec![],
+                })
+                .build()])
+            .build()
+            .unwrap();
+
+        let mut message = "a".repeat(1_000_000);
+
+        c.bench_function("included_keywords_worst_case_scenario", |b| {
+            b.iter(|| {
+                let matches = scanner.scan(&mut message);
+                assert_eq!(matches.len(), 0);
+            })
+        });
+    }
 }
-criterion_group!(
+
+#[cfg(feature = "bench")]
+criterion::criterion_group!(
     benches,
-    scope_benchmark::criterion_benchmark,
-    luhn_checksum_benchmark::criterion_benchmark
+    benchmarks::scoped_ruleset,
+    benchmarks::luhn_checksum,
+    benchmarks::included_keywords
 );
-criterion_main!(benches);
+
+criterion::criterion_main!(benches);

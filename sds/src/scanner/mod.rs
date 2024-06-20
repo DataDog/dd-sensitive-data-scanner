@@ -2,7 +2,6 @@ use crate::encoding::Encoding;
 use crate::event::Event;
 use crate::observability::labels::Labels;
 
-use crate::proximity_keywords::CompiledProximityKeywords;
 use crate::rule::{RegexRuleConfig, RuleConfigTrait};
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
@@ -14,29 +13,32 @@ use std::sync::Arc;
 
 use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 use self::metrics::Metrics;
+use crate::proximity_keywords::compile_keywords_proximity_config;
+use crate::scanner::regex_rule::RegexCompiledRule;
 use ahash::AHashSet;
-use regex_automata::{Input, Match};
+use regex_automata::Match;
 
 pub(crate) mod cache_pool;
 pub mod error;
 mod metrics;
+mod regex_rule;
 
 pub struct StringMatch {
     pub start: usize,
     pub end: usize,
 }
 
-pub trait MatchEmitter {
-    fn emit(&mut self, string_match: StringMatch);
+pub trait MatchEmitter<T = ()> {
+    fn emit(&mut self, string_match: StringMatch) -> T;
 }
 
 // This implements MatchEmitter for mutable closures (so you can use a closure instead of a custom
 // struct that implements MatchEmitter)
-impl<F> MatchEmitter for F
+impl<F, T> MatchEmitter<T> for F
 where
-    F: FnMut(StringMatch),
+    F: FnMut(StringMatch) -> T,
 {
-    fn emit(&mut self, string_match: StringMatch) {
+    fn emit(&mut self, string_match: StringMatch) -> T {
         // This just calls the closure (itself)
         (self)(string_match)
     }
@@ -56,80 +58,6 @@ pub trait CompiledRuleTrait: Send + Sync {
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
     );
-}
-
-/// This is the internal representation of a rule after it has been validated / compiled.
-pub struct RegexCompiledRule {
-    pub rule_index: usize,
-    pub regex: MetaRegex,
-    pub match_action: MatchAction,
-    pub scope: Scope,
-    pub proximity_keywords: CompiledProximityKeywords,
-    pub validator: Option<Arc<dyn Validator>>,
-    pub rule_cache_index: usize,
-    metrics: Metrics,
-}
-
-impl CompiledRuleTrait for RegexCompiledRule {
-    fn get_match_action(&self) -> &MatchAction {
-        &self.match_action
-    }
-    fn get_scope(&self) -> &Scope {
-        &self.scope
-    }
-    fn get_string_matches(
-        &self,
-        content: &str,
-        path: &Path,
-        caches: &mut CachePoolGuard<'_>,
-        exclusion_check: &ExclusionCheck<'_>,
-        excluded_matches: &mut AHashSet<String>,
-        match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
-    ) {
-        let mut start = 0;
-        let mut sanitized_path = None;
-        loop {
-            let input = Input::new(content).range(start..);
-            let cache = &mut caches[self.rule_cache_index];
-            if let Some(regex_match) = self.regex.search_with(cache, &input) {
-                if should_keywords_match_event_paths && sanitized_path.is_none() {
-                    sanitized_path = Some(path.sanitize());
-                }
-                if is_false_positive_match(&regex_match, self, content, sanitized_path.clone()) {
-                    if let Some(next) = get_next_regex_start(content, &regex_match) {
-                        start = next;
-                    } else {
-                        // There are no more chars to scan
-                        return;
-                    }
-                } else {
-                    if exclusion_check.is_excluded(self.rule_index) {
-                        // Matches from excluded paths are saved and used to treat additional equal matches as false positives
-                        excluded_matches.insert(content[regex_match.range()].to_string());
-                    } else {
-                        // If the matched content is in `excluded_matches` it should not count as a match.
-                        // This is temporary to maintain backwards compatibility, but this should eventually happen
-                        // after all scanning is done so `excluded_matches` is fully populated.
-                        if !excluded_matches.contains(&content[regex_match.range()]) {
-                            match_emitter.emit(StringMatch {
-                                start: regex_match.start(),
-                                end: regex_match.end(),
-                            });
-                        } else {
-                            self.metrics.false_positive_excluded_attributes.increment(1)
-                        }
-                    }
-
-                    // The next match will start at the end of this match. This is fine because
-                    // patterns that can match empty matches are rejected.
-                    start = regex_match.end()
-                }
-            } else {
-                return;
-            }
-        }
-    }
 }
 
 impl RuleConfigTrait for Box<dyn RuleConfigTrait> {
@@ -171,12 +99,11 @@ impl RuleConfigTrait for RegexRuleConfig {
 
         let rule_labels = scanner_labels.clone_with_labels(self.labels.clone());
 
-        let compiled_keywords = self
+        let (included_keywords, excluded_keywords) = self
             .proximity_keywords
-            .clone()
-            .map_or(Ok(CompiledProximityKeywords::default()), |keywords| {
-                CompiledProximityKeywords::try_new(keywords, &rule_labels)
-            })?;
+            .as_ref()
+            .map(|config| compile_keywords_proximity_config(config, &rule_labels))
+            .unwrap_or(Ok((None, None)))?;
 
         let cache_index = cache_pool_builder.push(regex.clone());
         Ok(Box::new(RegexCompiledRule {
@@ -184,7 +111,8 @@ impl RuleConfigTrait for RegexRuleConfig {
             regex,
             match_action: self.match_action.clone(),
             scope: self.scope.clone(),
-            proximity_keywords: compiled_keywords,
+            included_keywords,
+            excluded_keywords,
             validator: self
                 .validator
                 .clone()
@@ -557,17 +485,19 @@ fn get_next_regex_start(content: &str, regex_match: &Match) -> Option<usize> {
 }
 
 fn is_false_positive_match(
-    regex_match: &regex_automata::Match,
+    regex_match: &Match,
     rule: &RegexCompiledRule,
     content: &str,
-    sanitized_path: Option<String>,
+    check_excluded_keywords: bool,
 ) -> bool {
-    if rule
-        .proximity_keywords
-        .is_false_positive_match(content, sanitized_path, regex_match.start())
-    {
-        return true;
+    if check_excluded_keywords {
+        if let Some(excluded_keywords) = &rule.excluded_keywords {
+            if excluded_keywords.is_false_positive_match(content, regex_match.start()) {
+                return true;
+            }
+        }
     }
+
     if let Some(validator) = rule.validator.as_ref() {
         if !validator.is_valid_match(&content[regex_match.range()]) {
             return true;
@@ -1718,6 +1648,174 @@ mod test {
         assert_eq!(matches.len(), 1);
     }
 
+    #[test]
+    fn test_included_keyword_not_match_further_than_look_ahead_character_count() {
+        let redact_test_rule = RegexRuleConfig::builder("world".to_owned())
+            .match_action(MatchAction::Redact {
+                replacement: "[REDACTED]".to_string(),
+            })
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["hello".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build();
+
+        let scanner = ScannerBuilder::new(&[redact_test_rule])
+            .with_keywords_should_match_event_paths(true)
+            .build()
+            .unwrap();
+
+        let mut content = "hello [this block is exactly 37 chars long] world".to_string();
+        let matches = scanner.scan(&mut content);
+
+        assert_eq!(matches.len(), 0);
+    }
+
+    #[test]
+    fn test_included_keyword_multiple_matches_in_one_prefix() {
+        let redact_test_rule = RegexRuleConfig::builder("world".to_owned())
+            .match_action(MatchAction::Redact {
+                replacement: "[REDACTED]".to_string(),
+            })
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["hello".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build();
+
+        let scanner = ScannerBuilder::new(&[redact_test_rule])
+            .with_keywords_should_match_event_paths(true)
+            .build()
+            .unwrap();
+
+        let mut content = "hello world world".to_string();
+        let matches = scanner.scan(&mut content);
+
+        // Both "world" matches fit within the 30 char prefix.
+        assert_eq!(matches.len(), 2);
+    }
+
+    #[test]
+    fn test_included_keyword_multiple_prefix_matches() {
+        let redact_test_rule = RegexRuleConfig::builder("world".to_owned())
+            .match_action(MatchAction::Redact {
+                replacement: "[REDACTED]".to_string(),
+            })
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["hello".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build();
+
+        let scanner = ScannerBuilder::new(&[redact_test_rule])
+            .with_keywords_should_match_event_paths(true)
+            .build()
+            .unwrap();
+
+        let mut content =
+            "hello world [this takes up enough space to separate the prefixes] world hello world"
+                .to_string();
+        let matches = scanner.scan(&mut content);
+
+        // Both "worlds" after a "hello" should match
+        assert_eq!(matches.len(), 2);
+    }
+
+    #[test]
+    fn test_included_keywords_on_start_boundary_with_space_including_word_boundary() {
+        let scanner = ScannerBuilder::new(&[RegexRuleConfig::builder("ab".to_owned())
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["id".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build()])
+        .build()
+        .unwrap();
+
+        let mut content = "users id   ab".to_string();
+        let matches = scanner.scan(&mut content);
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].start_index, 11);
+        assert_eq!(matches[0].end_index_exclusive, 13);
+    }
+
+    #[test]
+    fn test_included_keywords_on_end_boundary() {
+        let scanner = ScannerBuilder::new(&[RegexRuleConfig::builder("abc".to_owned())
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["id".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build()])
+        .build()
+        .unwrap();
+
+        let mut content = "users idabc".to_string();
+        let matches = scanner.scan(&mut content);
+
+        assert_eq!(matches.len(), 0);
+    }
+
+    #[test]
+    fn should_not_look_ahead_too_far() {
+        let scanner = ScannerBuilder::new(&[RegexRuleConfig::builder("x".to_owned())
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 10,
+                included_keywords: vec!["host".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build()])
+        .build()
+        .unwrap();
+
+        let mut content = "host           x".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 0);
+
+        let mut content = "host      x".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 1);
+
+        let mut content = "host       x".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 0);
+
+        let mut content = " host      x".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 1);
+    }
+
+    #[test]
+    fn test_included_and_excluded_keyword() {
+        let scanner = ScannerBuilder::new(&[RegexRuleConfig::builder("world".to_owned())
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 11,
+                included_keywords: vec!["hey".to_string()],
+                excluded_keywords: vec!["hello".to_string()],
+            })
+            .build()])
+        .build()
+        .unwrap();
+
+        // only the included keyword is present
+        let mut content = "hey world".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 1);
+
+        // only the excluded keyword is present
+        let mut content = "hello world".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 0);
+
+        // no keyword is present
+        let mut content = "world".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 0);
+
+        // included and excluded keywords are present
+        let mut content = "hey, hello world".to_string();
+        assert_eq!(scanner.scan(&mut content).len(), 1);
+    }
+
     mod metrics_test {
         use crate::match_action::MatchAction;
         use crate::scanner::ScannerBuilder;
@@ -1804,50 +1902,6 @@ mod test {
             let metric_name = "false_positive.proximity_keywords";
 
             let labels = vec![Label::new("type", "excluded_keywords")];
-
-            let metric_value = snapshot
-                .get(&CompositeKey::new(
-                    Counter,
-                    Key::from_parts(metric_name, labels),
-                ))
-                .expect("metric not found");
-
-            assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
-        }
-
-        #[test]
-        fn should_submit_included_keywords_metric() {
-            let recorder = DebuggingRecorder::new();
-            let snapshotter = recorder.snapshotter();
-
-            metrics::with_local_recorder(&recorder, || {
-                let redact_test_rule = RegexRuleConfig::builder("world".to_owned())
-                    .match_action(MatchAction::Redact {
-                        replacement: "[REDACTED]".to_string(),
-                    })
-                    .proximity_keywords(ProximityKeywordsConfig {
-                        look_ahead_character_count: 30,
-                        included_keywords: vec!["aws".to_owned()],
-                        excluded_keywords: vec![],
-                    })
-                    .build();
-
-                let scanner = ScannerBuilder::new(&[redact_test_rule])
-                    .with_keywords_should_match_event_paths(true)
-                    .build()
-                    .unwrap();
-                let mut content = SimpleEvent::Map(BTreeMap::from([(
-                    "test".to_string(),
-                    SimpleEvent::String("hello world".to_string()),
-                )]));
-                scanner.scan(&mut content);
-            });
-
-            let snapshot = snapshotter.snapshot().into_hashmap();
-
-            let metric_name = "false_positive.proximity_keywords";
-
-            let labels = vec![Label::new("type", "included_keywords")];
 
             let metric_value = snapshot
                 .get(&CompositeKey::new(
