@@ -41,6 +41,7 @@ impl CompiledRuleTrait for RegexCompiledRule {
         content: &str,
         path: &Path,
         caches: &mut CachePoolGuard<'_>,
+        _rule_idx: usize,
         _cached_string_matches_per_rule_idx: &mut HashMap<usize, AHashSet<String>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
