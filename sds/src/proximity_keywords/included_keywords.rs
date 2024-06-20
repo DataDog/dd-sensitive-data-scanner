@@ -55,10 +55,8 @@ impl<'a> Iterator for IncludedKeywordSearch<'a> {
 mod test {
     use crate::proximity_keywords::{
         compile_keywords_proximity_config, CompiledIncludedProximityKeywords,
-        ProximityKeywordsRegex,
     };
     use crate::{Labels, ProximityKeywordsConfig};
-    use regex_automata::meta;
 
     fn compile_keywords(lookahead: usize, keywords: &[&str]) -> CompiledIncludedProximityKeywords {
         let (included, _) = compile_keywords_proximity_config(
