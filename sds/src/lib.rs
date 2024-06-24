@@ -36,7 +36,7 @@ pub use scanner::{
     StringMatch,
 };
 pub use scoped_ruleset::ExclusionCheck;
-pub use simple_event::SimpleEvent;
+pub use simple_event::{MessageFirstKey, SimpleEvent};
 pub use validation::{
     get_regex_complexity_estimate_very_slow, validate_regex, RegexValidationError,
 };
