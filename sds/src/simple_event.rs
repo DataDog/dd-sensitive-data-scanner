@@ -26,7 +26,16 @@ impl Event for SimpleEvent {
                 }
             }
             Self::Map(map) => {
+                if map.get("message").is_some() {
+                    // Always visit the message field first
+                    visitor.push_segment("message".into());
+                    map.get_mut("message").unwrap().visit_event(visitor);
+                    visitor.pop_segment();
+                }
                 for (key, child) in map.iter_mut() {
+                    if key == "message" {
+                        continue;
+                    }
                     visitor.push_segment(key.as_str().into());
                     child.visit_event(visitor);
                     visitor.pop_segment();
