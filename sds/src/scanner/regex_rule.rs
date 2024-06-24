@@ -13,6 +13,7 @@ use ahash::AHashSet;
 use regex_automata::meta::Cache;
 use regex_automata::meta::Regex as MetaRegex;
 use regex_automata::Input;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// This is the internal representation of a rule after it has been validated / compiled.
@@ -40,6 +41,7 @@ impl CompiledRuleTrait for RegexCompiledRule {
         content: &str,
         path: &Path,
         caches: &mut CachePoolGuard<'_>,
+        _cached_string_matches_per_rule_idx: &mut HashMap<usize, Vec<StringMatch>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
