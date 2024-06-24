@@ -46,7 +46,7 @@ impl Event for String {
 #[cfg(test)]
 pub(crate) mod test {
 
-    use crate::simple_event::SimpleEvent;
+    use crate::simple_event::{MessageFirstKey, SimpleEvent};
 
     use super::*;
 
@@ -96,14 +96,14 @@ pub(crate) mod test {
         let mut event = SimpleEvent::Map(
             [
                 (
-                    "key-a".to_string(),
+                    MessageFirstKey::new("key-a".to_string()),
                     SimpleEvent::String("value-a".to_string()),
                 ),
                 (
-                    "key-b".to_string(),
+                    MessageFirstKey::new("key-b".to_string()),
                     SimpleEvent::Map(
                         [(
-                            "key-b-1".to_string(),
+                            MessageFirstKey::new("key-b-1".to_string()),
                             SimpleEvent::String("value-b-1".to_string()),
                         )]
                         .into(),

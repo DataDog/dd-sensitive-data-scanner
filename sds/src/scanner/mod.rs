@@ -525,6 +525,7 @@ mod test {
     };
     use crate::scanner::{get_next_regex_start, CreateScannerError, Scanner};
     use crate::scoped_ruleset::ExclusionCheck;
+    use crate::simple_event::MessageFirstKey;
     use crate::validation::RegexValidationError;
     use crate::SecondaryValidator::ChineseIdChecksum;
     use crate::SecondaryValidator::GithubTokenChecksum;
@@ -872,9 +873,9 @@ mod test {
         let scanner = build_test_scanner(false);
 
         let mut content = SimpleEvent::Map(BTreeMap::from([(
-            "aws".to_string(),
+            MessageFirstKey::new("aws".to_string()),
             SimpleEvent::Map(BTreeMap::from([(
-                "access".to_string(),
+                MessageFirstKey::new("access".to_string()),
                 SimpleEvent::String("hello world".to_string()),
             )])),
         )]));
@@ -888,9 +889,9 @@ mod test {
         let scanner = build_test_scanner(true);
 
         let mut content = SimpleEvent::Map(BTreeMap::from([(
-            "aws".to_string(),
+            MessageFirstKey::new("aws".to_string()),
             SimpleEvent::Map(BTreeMap::from([(
-                "access".to_string(),
+                MessageFirstKey::new("access".to_string()),
                 SimpleEvent::String("hello world".to_string()),
             )])),
         )]));
@@ -904,9 +905,9 @@ mod test {
         let scanner = build_test_scanner(true);
 
         let mut content = SimpleEvent::Map(BTreeMap::from([(
-            "access".to_string(),
+            MessageFirstKey::new("access".to_string()),
             SimpleEvent::Map(BTreeMap::from([(
-                "KEY".to_string(),
+                MessageFirstKey::new("KEY".to_string()),
                 SimpleEvent::String("hello world".to_string()),
             )])),
         )]));
@@ -920,14 +921,14 @@ mod test {
         let scanner = build_test_scanner(true);
 
         let mut content = SimpleEvent::Map(BTreeMap::from([(
-            "aws".to_string(),
+            MessageFirstKey::new("aws".to_string()),
             SimpleEvent::List(vec![
                 SimpleEvent::Map(BTreeMap::from([(
-                    "key".to_string(),
+                    MessageFirstKey::new("key".to_string()),
                     SimpleEvent::String("hello world".to_string()),
                 )])),
                 SimpleEvent::Map(BTreeMap::from([(
-                    "access".to_string(),
+                    MessageFirstKey::new("access".to_string()),
                     SimpleEvent::String("hello".to_string()),
                 )])),
             ]),
@@ -942,7 +943,7 @@ mod test {
         let scanner = build_test_scanner(true);
 
         let mut content = SimpleEvent::Map(BTreeMap::from([(
-            "aws%access".to_string(),
+            MessageFirstKey::new("aws%access".to_string()),
             SimpleEvent::String("hello".to_string()),
         )]));
 
@@ -955,22 +956,22 @@ mod test {
         let scanner = build_test_scanner(true);
 
         let mut content = SimpleEvent::Map(BTreeMap::from([(
-            "aws".to_string(),
+            MessageFirstKey::new("aws".to_string()),
             SimpleEvent::List(vec![
                 SimpleEvent::Map(BTreeMap::from([(
-                    "key".to_string(),
+                    MessageFirstKey::new("key".to_string()),
                     SimpleEvent::String("hello world".to_string()),
                 )])),
                 SimpleEvent::Map(BTreeMap::from([
                     (
-                        "access".to_string(),
+                        MessageFirstKey::new("access".to_string()),
                         SimpleEvent::Map(BTreeMap::from([(
-                            "random_key".to_string(),
+                            MessageFirstKey::new("random_key".to_string()),
                             SimpleEvent::String("hello world".to_string()),
                         )])),
                     ),
                     (
-                        "another_key".to_string(),
+                        MessageFirstKey::new("another_key".to_string()),
                         SimpleEvent::String("hello world".to_string()),
                     ),
                 ])),
@@ -1421,14 +1422,17 @@ mod test {
 
         let mut content = SimpleEvent::Map(BTreeMap::from([
             (
-                "a-match".to_string(),
+                MessageFirstKey::new("a-match".to_string()),
                 SimpleEvent::String("bcdef".to_string()),
             ),
             (
-                "z-match".to_string(),
+                MessageFirstKey::new("z-match".to_string()),
                 SimpleEvent::String("bcdef".to_string()),
             ),
-            ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
+            (
+                MessageFirstKey::new("test".to_string()),
+                SimpleEvent::String("bcdef".to_string()),
+            ),
         ]));
 
         let matches = scanner.scan(&mut content);
@@ -1468,10 +1472,13 @@ mod test {
 
         let mut content = SimpleEvent::Map(BTreeMap::from([
             (
-                "message".to_string(),
+                MessageFirstKey::new("message".to_string()),
                 SimpleEvent::String("secret abcdef".to_string()),
             ),
-            ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
+            (
+                MessageFirstKey::new("test".to_string()),
+                SimpleEvent::String("bcdef".to_string()),
+            ),
         ]));
 
         let matches = scanner.scan(&mut content);
@@ -1549,7 +1556,7 @@ mod test {
             .unwrap();
 
         let mut content = OrderAssertEvent(SimpleEvent::Map(BTreeMap::from([(
-            "message".to_string(),
+            MessageFirstKey::new("message".to_string()),
             SimpleEvent::String("abc-efg".to_string()),
         )])));
 
@@ -1829,8 +1836,8 @@ mod test {
         use crate::match_action::MatchAction;
         use crate::scanner::ScannerBuilder;
         use crate::{
-            simple_event::SimpleEvent, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
-            Scope,
+            simple_event::MessageFirstKey, simple_event::SimpleEvent, Path, PathSegment,
+            ProximityKeywordsConfig, RegexRuleConfig, Scope,
         };
         use metrics::{Key, Label};
         use metrics_util::debugging::DebugValue;
@@ -1859,10 +1866,13 @@ mod test {
                 let mut content = SimpleEvent::Map(BTreeMap::from([
                     // z-match is considered as a false positive here
                     (
-                        "z-match".to_string(),
+                        MessageFirstKey::new("z-match".to_string()),
                         SimpleEvent::String("bcdef".to_string()),
                     ),
-                    ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
+                    (
+                        MessageFirstKey::new("test".to_string()),
+                        SimpleEvent::String("bcdef".to_string()),
+                    ),
                 ]));
 
                 scanner.scan(&mut content);
@@ -1900,7 +1910,7 @@ mod test {
                     .build()
                     .unwrap();
                 let mut content = SimpleEvent::Map(BTreeMap::from([(
-                    "test".to_string(),
+                    MessageFirstKey::new("test".to_string()),
                     SimpleEvent::String("hello world".to_string()),
                 )]));
                 scanner.scan(&mut content);

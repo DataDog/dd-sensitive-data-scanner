@@ -1,13 +1,49 @@
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use crate::{encoding::Utf8Encoding, Event, EventVisitor, Path, PathSegment};
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct MessageFirstKey(String);
+
+impl MessageFirstKey {
+    fn as_str(&self) -> &str {
+        &self.0
+    }
+    pub fn new(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for MessageFirstKey {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl Ord for MessageFirstKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self.0.as_str(), other.0.as_str()) {
+            ("message", "message") => Ordering::Equal,
+            ("message", _) => Ordering::Less,
+            (_, "message") => Ordering::Greater,
+            (_, _) => self.0.cmp(&other.0),
+        }
+    }
+}
+
+impl PartialOrd for MessageFirstKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 /// A simple implementation of `Event`. This is meant for testing / demonstration purposes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SimpleEvent {
     String(String),
     List(Vec<SimpleEvent>),
-    Map(BTreeMap<String, SimpleEvent>),
+    Map(BTreeMap<MessageFirstKey, SimpleEvent>),
 }
 
 impl Event for SimpleEvent {
@@ -26,16 +62,7 @@ impl Event for SimpleEvent {
                 }
             }
             Self::Map(map) => {
-                if map.get("message").is_some() {
-                    // Always visit the message field first
-                    visitor.push_segment("message".into());
-                    map.get_mut("message").unwrap().visit_event(visitor);
-                    visitor.pop_segment();
-                }
                 for (key, child) in map.iter_mut() {
-                    if key == "message" {
-                        continue;
-                    }
                     visitor.push_segment(key.as_str().into());
                     child.visit_event(visitor);
                     visitor.pop_segment();
@@ -50,7 +77,8 @@ impl Event for SimpleEvent {
         for segment in &path.segments {
             match segment {
                 PathSegment::Field(key) => {
-                    value = value.as_map_mut().unwrap().get_mut(key.as_ref()).unwrap();
+                    let key_ref = MessageFirstKey::from(key.as_ref());
+                    value = value.as_map_mut().unwrap().get_mut(&key_ref).unwrap();
                 }
                 PathSegment::Index(i) => {
                     value = value.as_list_mut().unwrap().get_mut(*i).unwrap();
@@ -71,7 +99,7 @@ impl SimpleEvent {
     }
 
     /// Gets a mutable reference to the map.
-    pub fn as_map_mut(&mut self) -> Option<&mut BTreeMap<String, SimpleEvent>> {
+    pub fn as_map_mut(&mut self) -> Option<&mut BTreeMap<MessageFirstKey, SimpleEvent>> {
         match self {
             Self::Map(x) => Some(x),
             _ => None,
