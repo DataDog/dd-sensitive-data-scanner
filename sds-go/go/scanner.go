@@ -231,20 +231,29 @@ func encodeValueRecursive(v interface{}, priorityKeys []string, result []byte) (
 
 }
 
+func encodeMapKeyValueEvent(key string, value interface{}, priorityKeys []string, result []byte) ([]byte, error) {
+	// push path field
+	result = append(result, 0)                                       // push map type
+	result = binary.BigEndian.AppendUint32(result, uint32(len(key))) // length of the key
+	result = append(result, []byte(key)...)                          // key
+	var err error = nil
+	result, err = encodeValueRecursive(value, priorityKeys, result)
+	if err != nil {
+		return result, err
+	}
+	// pop index
+	result = append(result, 2) // pop  path index
+	return result, nil
+}
+
 func encodeMapEvent(event map[string]interface{}, priorityKeys []string, result []byte) ([]byte, error) {
 	for _, k := range priorityKeys {
 		if v, ok := event[k]; ok {
-			// push path field
-			result = append(result, 0)                                     // push map type
-			result = binary.BigEndian.AppendUint32(result, uint32(len(k))) // length of the key
-			result = append(result, []byte(k)...)                          // key
 			var err error = nil
-			result, err = encodeValueRecursive(v, priorityKeys, result)
+			result, err = encodeMapKeyValueEvent(k, v, priorityKeys, result)
 			if err != nil {
 				return result, err
 			}
-			// pop index
-			result = append(result, 2) // pop  path index
 		}
 
 	}
@@ -252,17 +261,11 @@ func encodeMapEvent(event map[string]interface{}, priorityKeys []string, result 
 		if slices.Contains(priorityKeys, k) {
 			continue
 		}
-		// // push path field
-		result = append(result, 0)                                     // push map type
-		result = binary.BigEndian.AppendUint32(result, uint32(len(k))) // length of the key
-		result = append(result, []byte(k)...)                          // key
 		var err error = nil
-		result, err = encodeValueRecursive(v, priorityKeys, result)
+		result, err = encodeMapKeyValueEvent(k, v, priorityKeys, result)
 		if err != nil {
 			return result, err
 		}
-		// pop index
-		result = append(result, 2) // pop  path index
 	}
 	return result, nil
 }
