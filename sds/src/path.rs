@@ -121,12 +121,6 @@ impl<'a> From<&'a str> for PathSegment<'a> {
     }
 }
 
-impl<'a> From<String> for PathSegment<'a> {
-    fn from(value: String) -> Self {
-        Self::Field(Cow::Owned(value))
-    }
-}
-
 impl From<usize> for PathSegment<'static> {
     fn from(value: usize) -> Self {
         PathSegment::Index(value)
