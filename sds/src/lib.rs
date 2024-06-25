@@ -41,7 +41,7 @@ pub use validation::{
     get_regex_complexity_estimate_very_slow, validate_regex, RegexValidationError,
 };
 
-#[cfg(any(test, feature = "bench"))]
+#[cfg(feature = "bench")]
 pub use crate::{
     scoped_ruleset::{ContentVisitor, RuleIndexVisitor, ScopedRuleSet},
     secondary_validation::{LuhnChecksum, Validator},
