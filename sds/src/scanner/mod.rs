@@ -441,7 +441,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     path,
                     &mut self.caches,
                     rule_index,
-                    &mut self.cached_string_matches_per_rule_idx,
+                    self.cached_string_matches_per_rule_idx,
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
