@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"slices"
 	"strings"
 	"unsafe"
 )
@@ -199,9 +198,9 @@ func (s *Scanner) Scan(event []byte) (ScanResult, error) {
 // ScanEventsMap sends a map event to the SDS shared library for processing.
 // In case of mutation, event is updated in place.
 // The returned ScanResult contains the mutated string in the Event attribute (not the event)
-func (s *Scanner) ScanEventsMap(event map[string]interface{}, priorityKeys []string) (ScanResult, error) {
+func (s *Scanner) ScanEventsMap(event map[string]interface{}) (ScanResult, error) {
 	encodedEvent := make([]byte, 0)
-	encodedEvent, err := encodeMapEvent(event, priorityKeys, encodedEvent)
+	encodedEvent, err := encodeMapEvent(event, encodedEvent)
 	if err != nil {
 		return ScanResult{}, err
 	}
@@ -217,66 +216,44 @@ func encodeStringEvent(log []byte, result []byte) ([]byte, error) {
 	return result, nil
 }
 
-func encodeValueRecursive(v interface{}, priorityKeys []string, result []byte) ([]byte, error) {
+func encodeValueRecursive(v interface{}, result []byte) ([]byte, error) {
 	switch v := v.(type) {
 	case string:
 		return encodeStringEvent([]byte(v), result)
 	case map[string]interface{}:
-		return encodeMapEvent(v, priorityKeys, result)
+		return encodeMapEvent(v, result)
 	case []interface{}:
-		return encodeListEvent(v, priorityKeys, result)
+		return encodeListEvent(v, result)
 	default:
 		return result, fmt.Errorf("encodeValueRecursive: unknown type %T", v)
 	}
 
 }
 
-func encodeMapKeyValueEvent(key string, value interface{}, priorityKeys []string, result []byte) ([]byte, error) {
-	// push path field
-	result = append(result, 0)                                       // push map type
-	result = binary.BigEndian.AppendUint32(result, uint32(len(key))) // length of the key
-	result = append(result, []byte(key)...)                          // key
-	var err error = nil
-	result, err = encodeValueRecursive(value, priorityKeys, result)
-	if err != nil {
-		return result, err
-	}
-	// pop index
-	result = append(result, 2) // pop  path index
-	return result, nil
-}
-
-func encodeMapEvent(event map[string]interface{}, priorityKeys []string, result []byte) ([]byte, error) {
-	for _, k := range priorityKeys {
-		if v, ok := event[k]; ok {
-			var err error = nil
-			result, err = encodeMapKeyValueEvent(k, v, priorityKeys, result)
-			if err != nil {
-				return result, err
-			}
-		}
-
-	}
+func encodeMapEvent(event map[string]interface{}, result []byte) ([]byte, error) {
 	for k, v := range event {
-		if slices.Contains(priorityKeys, k) {
-			continue
-		}
+		// // push path field
+		result = append(result, 0)                                     // push map type
+		result = binary.BigEndian.AppendUint32(result, uint32(len(k))) // length of the key
+		result = append(result, []byte(k)...)                          // key
 		var err error = nil
-		result, err = encodeMapKeyValueEvent(k, v, priorityKeys, result)
+		result, err = encodeValueRecursive(v, result)
 		if err != nil {
 			return result, err
 		}
+		// pop index
+		result = append(result, 2) // pop  path index
 	}
 	return result, nil
 }
 
-func encodeListEvent(log []interface{}, priorityKeys []string, result []byte) ([]byte, error) {
+func encodeListEvent(log []interface{}, result []byte) ([]byte, error) {
 	for idx, v := range log {
 		// push path field
 		result = append(result, 1)                                  // push index
 		result = binary.BigEndian.AppendUint32(result, uint32(idx)) // index
 		var err error = nil
-		result, err = encodeValueRecursive(v, priorityKeys, result)
+		result, err = encodeValueRecursive(v, result)
 		if err != nil {
 			return result, err
 		}
