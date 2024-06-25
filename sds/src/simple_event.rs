@@ -1,49 +1,16 @@
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use crate::{encoding::Utf8Encoding, Event, EventVisitor, Path, PathSegment};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct MessageFirstKey(String);
-
-impl MessageFirstKey {
-    fn as_str(&self) -> &str {
-        &self.0
-    }
-    pub fn new(value: String) -> Self {
-        Self(value)
-    }
-}
-
-impl From<&str> for MessageFirstKey {
-    fn from(value: &str) -> Self {
-        Self(value.to_string())
-    }
-}
-
-impl Ord for MessageFirstKey {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match (self.0.as_str(), other.0.as_str()) {
-            ("message", "message") => Ordering::Equal,
-            ("message", _) => Ordering::Less,
-            (_, "message") => Ordering::Greater,
-            (_, _) => self.0.cmp(&other.0),
-        }
-    }
-}
-
-impl PartialOrd for MessageFirstKey {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
+static FIRST_VISIT_KEY: &str = "message";
 
 /// A simple implementation of `Event`. This is meant for testing / demonstration purposes.
+/// It always start visiting elements with key == "message" first, then the rest of the keys in the map
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SimpleEvent {
     String(String),
     List(Vec<SimpleEvent>),
-    Map(BTreeMap<MessageFirstKey, SimpleEvent>),
+    Map(BTreeMap<String, SimpleEvent>),
 }
 
 impl Event for SimpleEvent {
@@ -62,7 +29,18 @@ impl Event for SimpleEvent {
                 }
             }
             Self::Map(map) => {
+                // Create a data structure holding the key that will be processed after the message key
+                let mut key_to_post_process: Vec<(&String, &mut SimpleEvent)> = vec![];
                 for (key, child) in map.iter_mut() {
+                    if key == FIRST_VISIT_KEY {
+                        visitor.push_segment(key.as_str().into());
+                        child.visit_event(visitor);
+                        visitor.pop_segment();
+                    } else {
+                        key_to_post_process.push((key, child));
+                    }
+                }
+                for (key, child) in key_to_post_process {
                     visitor.push_segment(key.as_str().into());
                     child.visit_event(visitor);
                     visitor.pop_segment();
@@ -77,8 +55,7 @@ impl Event for SimpleEvent {
         for segment in &path.segments {
             match segment {
                 PathSegment::Field(key) => {
-                    let key_ref = MessageFirstKey::from(key.as_ref());
-                    value = value.as_map_mut().unwrap().get_mut(&key_ref).unwrap();
+                    value = value.as_map_mut().unwrap().get_mut(key.as_ref()).unwrap();
                 }
                 PathSegment::Index(i) => {
                     value = value.as_list_mut().unwrap().get_mut(*i).unwrap();
@@ -99,7 +76,7 @@ impl SimpleEvent {
     }
 
     /// Gets a mutable reference to the map.
-    pub fn as_map_mut(&mut self) -> Option<&mut BTreeMap<MessageFirstKey, SimpleEvent>> {
+    pub fn as_map_mut(&mut self) -> Option<&mut BTreeMap<String, SimpleEvent>> {
         match self {
             Self::Map(x) => Some(x),
             _ => None,
