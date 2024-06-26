@@ -536,7 +536,7 @@ mod test {
     use crate::{Encoding, Utf8Encoding};
     use ahash::AHashSet;
     use regex_automata::Match;
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::BTreeMap;
 
     use super::CompiledRuleTrait;
     use super::RuleConfigTrait;
