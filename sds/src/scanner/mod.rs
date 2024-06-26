@@ -422,7 +422,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         let mut path_rules_matches = vec![];
         rule_visitor.visit_rule_indices(|rule_index| {
             let rule = &self.scanner.rules[rule_index];
-            let matches_per_rule = self
+            let mut matches_per_rule = self
                 .cached_string_matches_per_rule_idx
                 .entry(rule_index)
                 .or_default();
@@ -443,7 +443,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     content,
                     path,
                     &mut self.caches,
-                    matches_per_rule,
+                    &mut matches_per_rule,
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
