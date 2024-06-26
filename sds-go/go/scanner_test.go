@@ -561,7 +561,7 @@ func TestPartialRedactEnd(t *testing.T) {
 func runTestMap(t *testing.T, scanner *Scanner, testData map[string]mapTestResult) {
 	for key, testResult := range testData {
 
-		result, err := scanner.ScanEventsMap(testResult.event)
+		result, err := scanner.ScanEventsMap(testResult.event, []string{})
 		if err != nil {
 			t.Fatal("failed to scan the event:", err.Error())
 		}
