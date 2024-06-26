@@ -54,8 +54,7 @@ pub trait CompiledRuleTrait: Send + Sync {
         content: &str,
         path: &Path,
         caches: &mut CachePoolGuard<'_>,
-        rule_idx: usize,
-        cached_string_matches_per_rule_idx: &mut HashMap<usize, AHashSet<String>>,
+        cached_string_matches_per_rule: &mut AHashSet<String>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -421,9 +420,13 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
     ) -> bool {
         // matches for a single path
         let mut path_rules_matches = vec![];
-
         rule_visitor.visit_rule_indices(|rule_index| {
             let rule = &self.scanner.rules[rule_index];
+            let mut matches_per_rule = self
+                .cached_string_matches_per_rule_idx
+                .entry(rule_index)
+                .or_default();
+
             {
                 // creating the emitter is basically free, it will get mostly optimized away
                 let mut emitter = |rule_match: StringMatch| {
@@ -440,8 +443,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     content,
                     path,
                     &mut self.caches,
-                    rule_index,
-                    self.cached_string_matches_per_rule_idx,
+                    matches_per_rule,
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
@@ -558,8 +560,7 @@ mod test {
             _content: &str,
             _path: &Path,
             _caches: &mut CachePoolGuard<'_>,
-            _rule_idx: usize,
-            _cached_string_matches_per_rule_idx: &mut HashMap<usize, AHashSet<String>>,
+            _cached_string_matches_per_rule: &mut AHashSet<String>,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
