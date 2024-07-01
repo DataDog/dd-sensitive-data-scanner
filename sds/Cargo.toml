@@ -10,6 +10,7 @@ members = ["tools/fuzz"]
 
 [features]
 default = []
+testing = []
 
 # Depreacted - Support hash from UTF-16 encoded bytes for backward compatibility. Users should use instead standalone hash match action
 utf16_hash_match_action = []

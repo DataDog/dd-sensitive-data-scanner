@@ -2,7 +2,10 @@ use std::collections::BTreeMap;
 
 use crate::{encoding::Utf8Encoding, Event, EventVisitor, Path, PathSegment};
 
+static FIRST_VISIT_KEY: &str = "message";
+
 /// A simple implementation of `Event`. This is meant for testing / demonstration purposes.
+/// It always start visiting elements with key == "message" first, then the rest of the keys in the map
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SimpleEvent {
     String(String),
@@ -26,7 +29,18 @@ impl Event for SimpleEvent {
                 }
             }
             Self::Map(map) => {
+                // Create a data structure holding the key that will be processed after the message key
+                let mut key_to_post_process: Vec<(&String, &mut SimpleEvent)> = vec![];
                 for (key, child) in map.iter_mut() {
+                    if key == FIRST_VISIT_KEY {
+                        visitor.push_segment(key.as_str().into());
+                        child.visit_event(visitor);
+                        visitor.pop_segment();
+                    } else {
+                        key_to_post_process.push((key, child));
+                    }
+                }
+                for (key, child) in key_to_post_process {
                     visitor.push_segment(key.as_str().into());
                     child.visit_event(visitor);
                     visitor.pop_segment();

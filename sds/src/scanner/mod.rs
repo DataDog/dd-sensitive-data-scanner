@@ -1,6 +1,7 @@
 use crate::encoding::Encoding;
 use crate::event::Event;
 use crate::observability::labels::Labels;
+use std::collections::HashMap;
 
 use crate::rule::{RegexRuleConfig, RuleConfigTrait};
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
@@ -53,6 +54,7 @@ pub trait CompiledRuleTrait: Send + Sync {
         content: &str,
         path: &Path,
         caches: &mut CachePoolGuard<'_>,
+        cached_string_matches_per_rule: &mut AHashSet<String>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -163,6 +165,7 @@ impl Scanner {
                 caches,
                 rule_matches: &mut rule_matches_list,
                 excluded_matches: &mut excluded_matches,
+                cached_string_matches_per_rule_idx: &mut HashMap::new(),
             },
         );
         let mut output_rule_matches = vec![];
@@ -404,6 +407,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     caches: CachePoolGuard<'a>,
     rule_matches: &'a mut Vec<(crate::Path<'static>, Vec<InternalRuleMatch<E>>)>,
     excluded_matches: &'a mut AHashSet<String>,
+    cached_string_matches_per_rule_idx: &'a mut HashMap<usize, AHashSet<String>>,
 }
 
 impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
@@ -416,9 +420,13 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
     ) -> bool {
         // matches for a single path
         let mut path_rules_matches = vec![];
-
         rule_visitor.visit_rule_indices(|rule_index| {
             let rule = &self.scanner.rules[rule_index];
+            let matches_per_rule = self
+                .cached_string_matches_per_rule_idx
+                .entry(rule_index)
+                .or_default();
+
             {
                 // creating the emitter is basically free, it will get mostly optimized away
                 let mut emitter = |rule_match: StringMatch| {
@@ -435,6 +443,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     content,
                     path,
                     &mut self.caches,
+                    matches_per_rule,
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
@@ -551,6 +560,7 @@ mod test {
             _content: &str,
             _path: &Path,
             _caches: &mut CachePoolGuard<'_>,
+            _cached_string_matches_per_rule: &mut AHashSet<String>,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,

@@ -40,6 +40,7 @@ impl CompiledRuleTrait for RegexCompiledRule {
         content: &str,
         path: &Path,
         caches: &mut CachePoolGuard<'_>,
+        _cached_string_matches_per_rule: &mut AHashSet<String>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
