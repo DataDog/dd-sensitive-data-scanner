@@ -53,12 +53,15 @@ impl<'a> Path<'a> {
     }
 
     fn size(&self) -> usize {
-        self.segments.iter().map(|segment| {
-            if let PathSegment::Field(field) = segment {
-                return field.len();
-            }
-            return 0;
-        }).sum()
+        self.segments
+            .iter()
+            .map(|segment| {
+                if let PathSegment::Field(field) = segment {
+                    return field.len();
+                }
+                return 0;
+            })
+            .sum()
     }
 
     pub fn sanitize(&self) -> String {
@@ -170,7 +173,7 @@ mod test {
                 "CHICKEN".into(),
                 2.into(),
             ])
-                .sanitize(),
+            .sanitize(),
             "hello.world.of.chicken"
         );
 
@@ -183,10 +186,12 @@ mod test {
     #[test]
     fn test_size() {
         assert_eq!(
-            Path::from(vec!["hello".into(), 0.into(), "world".into()]).size(), 10
+            Path::from(vec!["hello".into(), 0.into(), "world".into()]).size(),
+            10
         );
         assert_eq!(
-            Path::from(vec!["".into(), 0.into(), "path✅".into()]).size(), 7
+            Path::from(vec!["".into(), 0.into(), "path✅".into()]).size(),
+            7
         );
     }
 }
