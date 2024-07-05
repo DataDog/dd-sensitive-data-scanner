@@ -59,7 +59,7 @@ impl<'a> Path<'a> {
                 if let PathSegment::Field(field) = segment {
                     return field.len();
                 }
-                return 0;
+                0
             })
             .sum()
     }
