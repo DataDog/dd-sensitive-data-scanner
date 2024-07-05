@@ -184,10 +184,10 @@ impl Validator for IbanChecker {
             .filter(|c| c.is_alphanumeric())
             .collect();
         let iban = iban_candidate.parse::<Iban>();
-        if let Err(_) = iban {
+        if iban.is_err() {
             return false;
         }
-        return true;
+        true
     }
 }
 
