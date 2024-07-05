@@ -368,8 +368,13 @@ mod test {
 
     #[test]
     fn test_invalid_ibans() {
-        let invalid_ibans = vec!["DE45500105175407324931", "ZZZFO6666000000000000031231ZZZ"];
-        for iban in invalid_ibans {
+        let invalid_ibans_checksum =
+            vec!["DE45500105175407324931", "ZZZFO6666000000000000031231ZZZ"];
+        for iban in invalid_ibans_checksum {
+            assert!(!IbanChecker.is_valid_match(iban));
+        }
+        let invalid_ibans_bban = vec!["AL84212110090000AB023569874"];
+        for iban in invalid_ibans_bban {
             assert!(!IbanChecker.is_valid_match(iban));
         }
     }
