@@ -3,7 +3,7 @@ use crate::proximity_keywords::{
     contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
     CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
 };
-use crate::scanner::metrics::Metrics;
+use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::{
     CachePoolGuard, CompiledRuleTrait, ExclusionCheck, MatchAction, MatchEmitter, Path, Scope,
@@ -25,7 +25,7 @@ pub struct RegexCompiledRule {
     pub excluded_keywords: Option<CompiledExcludedProximityKeywords>,
     pub validator: Option<Arc<dyn Validator>>,
     pub rule_cache_index: usize,
-    pub metrics: Metrics,
+    pub metrics: RuleMetrics,
 }
 
 impl CompiledRuleTrait for RegexCompiledRule {
