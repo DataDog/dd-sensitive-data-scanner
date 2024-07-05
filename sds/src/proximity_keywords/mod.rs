@@ -279,19 +279,27 @@ fn get_char_type(c: &char) -> CharType {
 
 /// Function that standardizes a list of characters, by pushing characters one by one in a standard way.
 /// Takes a closure that will be called when a character is to be pushed
-pub fn standardize_path_chars<F>(chars: &str, mut push_character: F)
+pub fn standardize_path_chars<F>(characters: &str, mut push_character: F)
 where
     F: FnMut(&char),
 {
-    let kw_length = chars.len();
-
-    if let Some(c) = chars.chars().next() {
-        push_character(&c);
-    } else {
+    let kw_length = characters.len();
+    if kw_length == 0 {
         return;
     }
 
-    for (i, chars) in chars.as_bytes().windows(2).enumerate() {
+    let mut char_iterator = characters.chars();
+    if char_iterator.all(|c| c.is_ascii_lowercase()) || char_iterator.all(|c| c.is_ascii_uppercase()) {
+        for c in characters.chars() {
+            push_character(&c)
+        }
+        return;
+    }
+
+    let character_bytes = characters.as_bytes();
+    push_character(&(character_bytes[0] as char));
+
+    for (i, chars) in character_bytes.windows(2).enumerate() {
         let current = &(chars[1] as char);
         let prev_char = get_char_type(&(chars[0] as char));
         let current_char = get_char_type(current);
@@ -404,7 +412,7 @@ pub enum ProximityKeywordsValidationError {
     KeywordTooLong(usize),
 
     #[error(
-        "Look ahead character count should be bigger than 0 and cannot be longer than {}",
+    "Look ahead character count should be bigger than 0 and cannot be longer than {}",
         MAX_LOOK_AHEAD_CHARACTER_COUNT
     )]
     InvalidLookAheadCharacterCount,
@@ -849,7 +857,7 @@ mod test {
             ],
             vec![],
         )
-        .unwrap();
+            .unwrap();
         let included_keywords = included_keywords.unwrap();
 
         let should_match = vec![
