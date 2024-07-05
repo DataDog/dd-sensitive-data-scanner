@@ -19,7 +19,7 @@ impl RuleMetrics {
 pub struct ScannerMetrics {
     pub num_scanned_events: Counter,
     pub duration_ns: Counter,
-    pub num_matches: Counter,
+    pub match_count: Counter,
     pub event_size_bytes: Counter,
 }
 
@@ -28,7 +28,7 @@ impl ScannerMetrics {
         ScannerMetrics {
             num_scanned_events: counter!("scanned_events", labels.clone()),
             duration_ns: counter!("scanning.duration", labels.clone()),
-            num_matches: counter!("scanning.num_matches", labels.clone()),
+            match_count: counter!("scanning.match_count", labels.clone()),
             event_size_bytes: counter!("scanned_bytes", labels.clone()),
         }
     }

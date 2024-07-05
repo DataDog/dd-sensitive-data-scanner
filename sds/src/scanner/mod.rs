@@ -201,7 +201,7 @@ impl Scanner {
         self.metrics.num_scanned_events.increment(1);
         // Add number of matches
         self.metrics
-            .num_matches
+            .match_count
             .increment(output_rule_matches.len() as u64);
 
         output_rule_matches
@@ -1897,7 +1897,7 @@ mod test {
                 .expect("metric not found");
             assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
 
-            let metric_name = "scanning.num_matches";
+            let metric_name = "scanning.match_count";
             let metric_value = snapshot
                 .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
                 .expect("metric not found");
