@@ -135,7 +135,7 @@ impl Validator for NhsCheckDigit {
         // The NHS number is a 10-digit number in the format 123 456 7890.
         let stripped_match = regex_match
             .chars()
-            .filter(|c| c.is_digit(10))
+            .filter(|c| c.is_ascii_digit())
             .collect::<String>();
 
         if stripped_match.len() != 10 {
