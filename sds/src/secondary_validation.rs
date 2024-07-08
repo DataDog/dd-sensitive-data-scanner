@@ -10,6 +10,8 @@ pub struct LuhnChecksum;
 pub struct ChineseIdChecksum;
 pub struct GithubTokenChecksum;
 
+pub struct NhsCheckDigit;
+
 impl Validator for SecondaryValidator {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         match self {
@@ -18,6 +20,7 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::GithubTokenChecksum => {
                 GithubTokenChecksum.is_valid_match(regex_match)
             }
+            SecondaryValidator::NhsCheckDigit => NhsCheckDigit.is_valid_match(regex_match),
         }
     }
 }
@@ -119,6 +122,55 @@ impl Validator for GithubTokenChecksum {
         let computed_checksum_b62 = base62::encode(computed_checksum);
         // check that the crc is the last 6 chars
         computed_checksum_b62 == last_part[last_part.len() - 6..]
+    }
+}
+
+fn nhs_multiplier_from_number_idx(index: usize) -> u32 {
+    11 - (index as u32)
+}
+
+impl Validator for NhsCheckDigit {
+    fn is_valid_match(&self, regex_match: &str) -> bool {
+        // https://www.datadictionary.nhs.uk/attributes/nhs_number.html
+        if regex_match.len() != 10 {
+            return false;
+        }
+        let mut total_sum = 0;
+        let mut check_digit = 0;
+        for (i, c) in regex_match.chars().enumerate() {
+            let digit = c.to_digit(10);
+            if digit.is_none() {
+                return false;
+            }
+            let digit_value = digit.unwrap();
+            if i < 9 {
+                let multiplier = nhs_multiplier_from_number_idx(i);
+                total_sum = total_sum + (digit_value * multiplier);
+            } else {
+                check_digit = digit_value;
+            }
+        }
+        // Divide the total_sum by 11 and get the remainder
+        let remainder = total_sum % 11;
+
+        // Subtract the remainder from 11 to give us the total
+        let mut identifier = 11 - remainder;
+
+        // The identifier is used to compare against the check digit we extracted earlier
+        // If the total is 11, we set the identifier to 0
+        if identifier == 11 {
+            identifier = 0;
+        }
+
+        // Finally, we check the identifier against the check digit to see if the NHS number is valid
+        if identifier == 10 {
+            // If the identifier is 10, we know the NHS number is INVALID
+            return false;
+        } else if identifier == check_digit {
+            // If the identifier is equal to the check digit, we know the NHS number is VALID
+            return true;
+        }
+        return false;
     }
 }
 
@@ -249,6 +301,25 @@ mod test {
         ];
         for id in invalid_ids {
             assert!(!GithubTokenChecksum.is_valid_match(id));
+        }
+    }
+
+    #[test]
+    fn test_valid_nhs_number() {
+        let valid_ids = vec!["1234567881"];
+        for id in valid_ids {
+            assert!(NhsCheckDigit.is_valid_match(id));
+        }
+    }
+
+    #[test]
+    fn test_invalid_nhs_number() {
+        let invalid_ids = vec![
+            "1234567890", // can't compute check digit
+            "1234567882", // invalid check digit
+        ];
+        for id in invalid_ids {
+            assert!(!NhsCheckDigit.is_valid_match(id));
         }
     }
 }
