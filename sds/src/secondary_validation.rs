@@ -145,7 +145,7 @@ impl Validator for NhsCheckDigit {
             let digit_value = digit.unwrap();
             if i < 9 {
                 let multiplier = nhs_multiplier_from_number_idx(i);
-                total_sum = total_sum + (digit_value * multiplier);
+                total_sum += digit_value * multiplier;
             } else {
                 check_digit = digit_value;
             }
@@ -170,7 +170,7 @@ impl Validator for NhsCheckDigit {
             // If the identifier is equal to the check digit, we know the NHS number is VALID
             return true;
         }
-        return false;
+        false
     }
 }
 
