@@ -126,18 +126,24 @@ impl Validator for GithubTokenChecksum {
 }
 
 fn nhs_multiplier_from_number_idx(index: usize) -> u32 {
-    11 - (index as u32)
+    11 - ((index + 1) as u32)
 }
 
 impl Validator for NhsCheckDigit {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         // https://www.datadictionary.nhs.uk/attributes/nhs_number.html
-        if regex_match.len() != 10 {
+        // The NHS number is a 10-digit number in the format 123 456 7890.
+        let stripped_match = regex_match
+            .chars()
+            .filter(|c| c.is_digit(10))
+            .collect::<String>();
+
+        if stripped_match.len() != 10 {
             return false;
         }
         let mut total_sum = 0;
         let mut check_digit = 0;
-        for (i, c) in regex_match.chars().enumerate() {
+        for (i, c) in stripped_match.chars().enumerate() {
             let digit = c.to_digit(10);
             if digit.is_none() {
                 return false;
@@ -306,7 +312,20 @@ mod test {
 
     #[test]
     fn test_valid_nhs_number() {
-        let valid_ids = vec!["1234567881"];
+        let valid_ids = vec![
+            "1234567881",
+            "907 784 4449",
+            "798 428 4334",
+            "111 431 1456",
+            "095 558 1001",
+            "649 261 8610",
+            "600 562 5942",
+            "110 537 9787",
+            "166 584 5783",
+            "714 375 8426",
+            "434 539 1210",
+            "064 327 9288",
+        ];
         for id in valid_ids {
             assert!(NhsCheckDigit.is_valid_match(id));
         }
