@@ -145,9 +145,6 @@ impl Validator for NhsCheckDigit {
         let mut check_digit = 0;
         for (i, c) in stripped_match.chars().enumerate() {
             let digit = c.to_digit(10);
-            if digit.is_none() {
-                return false;
-            }
             let digit_value = digit.unwrap();
             if i < 9 {
                 let multiplier = nhs_multiplier_from_number_idx(i);
