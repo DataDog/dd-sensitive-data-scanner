@@ -551,6 +551,7 @@ mod test {
     use crate::validation::RegexValidationError;
     use crate::SecondaryValidator::ChineseIdChecksum;
     use crate::SecondaryValidator::GithubTokenChecksum;
+    use crate::SecondaryValidator::IbanChecker;
     use crate::SecondaryValidator::NhsCheckDigit;
     use crate::{
         simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch, Scope,
@@ -1093,6 +1094,35 @@ mod test {
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "[IDCARD] 513231200012121651");
+    }
+
+    #[test]
+    fn test_iban_checksum() {
+        let pattern = "DE[0-9]+";
+        let rule_with_checksum = RegexRuleConfig::builder(pattern.to_string())
+            .match_action(MatchAction::Redact {
+                replacement: "[IBAN]".to_string(),
+            })
+            .validator(IbanChecker)
+            .build();
+
+        // Valid content with checksum
+        let mut content = "number=DE44500105175407324931".to_string();
+        let scanner = ScannerBuilder::new(&[rule_with_checksum.clone()])
+            .build()
+            .unwrap();
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "number=[IBAN]");
+
+        // Invalid content with checksum
+        let mut content = "number=DE34500105175407324931".to_string();
+        let scanner = ScannerBuilder::new(&[rule_with_checksum.clone()])
+            .build()
+            .unwrap();
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 0);
+        assert_eq!(content, "number=DE34500105175407324931");
     }
 
     #[test]
