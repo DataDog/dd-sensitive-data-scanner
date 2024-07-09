@@ -1134,13 +1134,10 @@ mod test {
     #[test]
     fn test_nhs_checksum() {
         let pattern = ".+";
-        let rule = RegexRuleConfig::builder(pattern.to_string())
+        let rule_with_checksum = RegexRuleConfig::builder(pattern.to_string())
             .match_action(MatchAction::Redact {
                 replacement: "[NHS]".to_string(),
             })
-            .build();
-
-        let rule_with_checksum = RuleConfigBuilder::from(&rule)
             .validator(NhsCheckDigit)
             .build();
 
