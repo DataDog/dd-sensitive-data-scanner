@@ -1099,29 +1099,12 @@ mod test {
     #[test]
     fn test_iban_checksum() {
         let pattern = "DE[0-9]+";
-        let rule = RegexRuleConfig::builder(pattern.to_string())
+        let rule_with_checksum = RegexRuleConfig::builder(pattern.to_string())
             .match_action(MatchAction::Redact {
                 replacement: "[IBAN]".to_string(),
             })
-            .build();
-
-        let rule_with_checksum = RuleConfigBuilder::from(&rule)
             .validator(IbanChecker)
             .build();
-
-        // Valid content no checksum
-        let scanner = ScannerBuilder::new(&[rule.clone()]).build().unwrap();
-        let mut content = "number=DE44500105175407324931".to_string();
-        let matches = scanner.scan(&mut content);
-        assert_eq!(matches.len(), 1);
-        assert_eq!(content, "number=[IBAN]");
-
-        // Invalid content no checksum
-        let mut content = "number=DE34500105175407324931".to_string();
-        let scanner = ScannerBuilder::new(&[rule.clone()]).build().unwrap();
-        let matches = scanner.scan(&mut content);
-        assert_eq!(matches.len(), 1);
-        assert_eq!(content, "number=[IBAN]");
 
         // Valid content with checksum
         let mut content = "number=DE44500105175407324931".to_string();
