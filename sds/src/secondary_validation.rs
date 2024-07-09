@@ -1,6 +1,6 @@
 use crate::rule::SecondaryValidator;
+use iban::Iban;
 use std::str::Chars;
-
 pub trait Validator: Send + Sync {
     fn is_valid_match(&self, regex_match: &str) -> bool;
 }
@@ -9,7 +9,7 @@ pub trait Validator: Send + Sync {
 pub struct LuhnChecksum;
 pub struct ChineseIdChecksum;
 pub struct GithubTokenChecksum;
-
+pub struct IbanChecker;
 pub struct NhsCheckDigit;
 
 fn get_next_digit(chars: &mut Chars<'_>) -> Option<u32> {
@@ -30,6 +30,7 @@ impl Validator for SecondaryValidator {
                 GithubTokenChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::NhsCheckDigit => NhsCheckDigit.is_valid_match(regex_match),
+            SecondaryValidator::IbanChecker => IbanChecker.is_valid_match(regex_match),
         }
     }
 }
@@ -173,6 +174,20 @@ impl Validator for NhsCheckDigit {
             return true;
         }
         false
+    }
+}
+
+impl Validator for IbanChecker {
+    fn is_valid_match(&self, regex_match: &str) -> bool {
+        let iban_candidate: String = regex_match
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect();
+        let iban = iban_candidate.parse::<Iban>();
+        if let Err(_) = iban {
+            return false;
+        }
+        return true;
     }
 }
 
@@ -336,6 +351,26 @@ mod test {
         ];
         for id in invalid_ids {
             assert!(!NhsCheckDigit.is_valid_match(id));
+        }
+    }
+
+    #[test]
+    fn test_valid_ibans() {
+        let valid_ibans = vec![
+            "DE44500105175407324931",
+            "DE4450-0105-1754-0732-4931",
+            "KZ86 125K ZT50 0410 0100",
+        ];
+        for iban in valid_ibans {
+            assert!(IbanChecker.is_valid_match(iban));
+        }
+    }
+
+    #[test]
+    fn test_invalid_ibans() {
+        let invalid_ibans = vec!["DE45500105175407324931", "ZZZFO6666000000000000031231ZZZ"];
+        for iban in invalid_ibans {
+            assert!(!IbanChecker.is_valid_match(iban));
         }
     }
 }

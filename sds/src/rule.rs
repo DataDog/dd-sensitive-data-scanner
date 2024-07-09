@@ -109,6 +109,7 @@ pub enum SecondaryValidator {
     ChineseIdChecksum,
     GithubTokenChecksum,
     NhsCheckDigit,
+    IbanChecker,
 }
 
 pub struct RuleConfigBuilder {
