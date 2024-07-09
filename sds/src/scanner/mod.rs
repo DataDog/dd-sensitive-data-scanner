@@ -551,6 +551,7 @@ mod test {
     use crate::validation::RegexValidationError;
     use crate::SecondaryValidator::ChineseIdChecksum;
     use crate::SecondaryValidator::GithubTokenChecksum;
+    use crate::SecondaryValidator::NhsCheckDigit;
     use crate::{
         simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch, Scope,
     };
@@ -1128,6 +1129,26 @@ mod test {
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "[GITHUB] ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5");
+    }
+
+    #[test]
+    fn test_nhs_checksum() {
+        let pattern = ".+";
+        let rule_with_checksum = RegexRuleConfig::builder(pattern.to_string())
+            .match_action(MatchAction::Redact {
+                replacement: "[NHS]".to_string(),
+            })
+            .validator(NhsCheckDigit)
+            .build();
+
+        let mut content = "1234567881".to_string();
+        // Test matching NHS number with checksum
+        let scanner = ScannerBuilder::new(&[rule_with_checksum.clone()])
+            .build()
+            .unwrap();
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "[NHS]");
     }
 
     #[test]
