@@ -12,6 +12,15 @@ pub struct GithubTokenChecksum;
 
 pub struct NhsCheckDigit;
 
+fn get_next_digit(chars: &mut Chars<'_>) -> Option<u32> {
+    while let Some(char) = chars.next_back() {
+        if let Some(digit) = char.to_digit(10) {
+            return Some(digit);
+        }
+    }
+    None
+}
+
 impl Validator for SecondaryValidator {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         match self {
@@ -28,15 +37,6 @@ impl Validator for SecondaryValidator {
 impl Validator for LuhnChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         let mut input_iter = regex_match.chars();
-
-        fn get_next_digit(chars: &mut Chars<'_>) -> Option<u32> {
-            while let Some(char) = chars.next_back() {
-                if let Some(digit) = char.to_digit(10) {
-                    return Some(digit);
-                }
-            }
-            None
-        }
 
         if let Some(checksum) = get_next_digit(&mut input_iter) {
             let mut sum: u32 = 0;
@@ -133,26 +133,25 @@ impl Validator for NhsCheckDigit {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         // https://www.datadictionary.nhs.uk/attributes/nhs_number.html
         // The NHS number is a 10-digit number in the format 123 456 7890.
-        let stripped_match = regex_match
-            .chars()
-            .filter(|c| c.is_ascii_digit())
-            .collect::<String>();
 
-        if stripped_match.len() != 10 {
-            return false;
-        }
+        let mut input_iter = regex_match.chars();
         let mut total_sum = 0;
+        let mut nb_digit = 0;
         let mut check_digit = 0;
-        for (i, c) in stripped_match.chars().enumerate() {
-            let digit = c.to_digit(10);
-            let digit_value = digit.unwrap();
-            if i < 9 {
-                let multiplier = nhs_multiplier_from_number_idx(i);
-                total_sum += digit_value * multiplier;
-            } else {
-                check_digit = digit_value;
+
+        while let Some(digit) = get_next_digit(&mut input_iter) {
+            if nb_digit > 10 {
+                return false;
             }
+            if nb_digit < 9 {
+                let multiplier = nhs_multiplier_from_number_idx(nb_digit);
+                total_sum += digit * multiplier;
+            } else {
+                check_digit = digit;
+            }
+            nb_digit += 1;
         }
+
         // Divide the total_sum by 11 and get the remainder
         let remainder = total_sum % 11;
 
@@ -331,8 +330,9 @@ mod test {
     #[test]
     fn test_invalid_nhs_number() {
         let invalid_ids = vec![
-            "1234567890", // can't compute check digit
-            "1234567882", // invalid check digit
+            "1234567890",  // can't compute check digit
+            "1234567882",  // invalid check digit
+            "12345678810", // invalid length
         ];
         for id in invalid_ids {
             assert!(!NhsCheckDigit.is_valid_match(id));

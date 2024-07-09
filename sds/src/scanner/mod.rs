@@ -1147,7 +1147,6 @@ mod test {
         let mut content = "1234567881".to_string();
         // Test matching NHS number with checksum
         let scanner = ScannerBuilder::new(&[rule_with_checksum.clone()])
-            .with_keywords_should_match_event_paths(true)
             .build()
             .unwrap();
         let matches = scanner.scan(&mut content);
