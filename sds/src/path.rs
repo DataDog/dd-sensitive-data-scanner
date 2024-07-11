@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
-use crate::proximity_keywords::{standardize_path_chars, UNIFIED_LINK_CHAR};
+use crate::proximity_keywords::{should_bypass_standardize_path, standardize_path_chars, UNIFIED_LINK_CHAR};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -72,9 +72,14 @@ impl<'a> Path<'a> {
                 if i != 0 {
                     sanitized_path.push(UNIFIED_LINK_CHAR);
                 }
-                standardize_path_chars(field, |c| {
-                    sanitized_path.push(c.to_ascii_lowercase());
-                });
+
+                if should_bypass_standardize_path(field) {
+                    sanitized_path.push_str(field)
+                } else {
+                    standardize_path_chars(field, |c| {
+                        sanitized_path.push(c.to_ascii_lowercase());
+                    });
+                }
             }
         });
 

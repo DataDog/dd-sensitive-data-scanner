@@ -277,7 +277,7 @@ fn get_char_type(c: &char) -> CharType {
     }
 }
 
-fn should_bypass_standardize_path(characters: &str) -> bool {
+pub fn should_bypass_standardize_path(characters: &str) -> bool {
     let mut all_lower = true;
     let mut all_upper = true;
     for char in characters.chars() {
@@ -307,16 +307,6 @@ where
 {
     let kw_length = characters.len();
     if kw_length == 0 {
-        return;
-    }
-
-    let mut char_iterator = characters.chars();
-    if char_iterator.all(|c| c.is_ascii_lowercase())
-        || char_iterator.all(|c| c.is_ascii_uppercase())
-    {
-        for c in characters.chars() {
-            push_character(&c)
-        }
         return;
     }
 
