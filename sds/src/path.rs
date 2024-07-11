@@ -52,7 +52,7 @@ impl<'a> Path<'a> {
         true
     }
 
-    fn size(&self) -> usize {
+    fn size_segments_only(&self) -> usize {
         self.segments
             .iter()
             .map(|segment| {
@@ -65,7 +65,8 @@ impl<'a> Path<'a> {
     }
 
     pub fn sanitize(&self) -> String {
-        let mut sanitized_path = String::with_capacity(self.size() * 2);
+        let size_segments = self.size_segments_only();
+        let mut sanitized_path = String::with_capacity(size_segments + size_segments / 2);
         self.segments.iter().enumerate().for_each(|(i, segment)| {
             if let PathSegment::Field(field) = segment {
                 if i != 0 {
@@ -173,7 +174,7 @@ mod test {
                 "CHICKEN".into(),
                 2.into(),
             ])
-            .sanitize(),
+                .sanitize(),
             "hello.world.of.chicken"
         );
 
@@ -186,11 +187,11 @@ mod test {
     #[test]
     fn test_size() {
         assert_eq!(
-            Path::from(vec!["hello".into(), 0.into(), "world".into()]).size(),
+            Path::from(vec!["hello".into(), 0.into(), "world".into()]).size_segments_only(),
             10
         );
         assert_eq!(
-            Path::from(vec!["".into(), 0.into(), "path✅".into()]).size(),
+            Path::from(vec!["".into(), 0.into(), "path✅".into()]).size_segments_only(),
             7
         );
     }
