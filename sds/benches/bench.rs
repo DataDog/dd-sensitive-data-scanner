@@ -12,6 +12,7 @@ mod benchmarks {
     use dd_sds::{LuhnChecksum, Validator};
     use dd_sds::{ProximityKeywordsConfig, RegexRuleConfig, Scanner, SimpleEvent};
     use std::collections::BTreeMap;
+    use std::fmt::format;
 
     pub fn scoped_ruleset(c: &mut Criterion) {
         let mut paths = vec![];
@@ -140,8 +141,8 @@ mod benchmarks {
                     excluded_keywords: vec![],
                 })
                 .build()])
-            .build()
-            .unwrap();
+                .build()
+                .unwrap();
 
         let mut message = "a".repeat(1_000_000);
 
@@ -152,6 +153,95 @@ mod benchmarks {
             })
         });
     }
+
+    pub fn included_keywords_on_path(c: &mut Criterion) {
+        let mut event_map = BTreeMap::new();
+
+        for i in 0..100 {
+            let mut nested_event = BTreeMap::new();
+            for j in 0..100 {
+                let is_secret = j % 6 == 0;
+                let key = if is_secret { "secret" } else { "another-key" };
+                nested_event.insert(
+                    key.to_string(),
+                    SimpleEvent::String(format!("value-{}", i)),
+                );
+            }
+
+            event_map.insert(
+                format!("key-{}", i),
+                SimpleEvent::Map(nested_event),
+            );
+        }
+
+        for i in 0..100 {
+            let mut nested_event = BTreeMap::new();
+            for j in 0..1000 {
+                let mut double_nested_event = BTreeMap::new();
+                for k in 0..100 {
+                    double_nested_event.insert(
+                        "yet-another-key".to_string(),
+                        SimpleEvent::String(format!("value-{}", i)),
+                    );
+                }
+                nested_event.insert(
+                    "randomkey".to_string(),
+                    SimpleEvent::Map(double_nested_event),
+                );
+            }
+
+            event_map.insert(
+                format!("ssn-{}", i),
+                SimpleEvent::Map(nested_event),
+            );
+        }
+
+        let mut event = SimpleEvent::Map(event_map);
+
+        let scanner =
+            Scanner::builder(&[RegexRuleConfig::builder("value".to_string())
+                .proximity_keywords(ProximityKeywordsConfig {
+                    look_ahead_character_count: 30,
+                    included_keywords: vec![
+                        "secret".to_string(),
+                        "ssn".to_string(),
+                    ],
+                    excluded_keywords: vec![],
+                })
+                .build()])
+                .with_keywords_should_match_event_paths(false)
+                .build()
+                .unwrap();
+
+        c.bench_function("included_keywords_on_path_off", |b| {
+            b.iter(|| {
+                let matches = scanner.scan(&mut event);
+                assert_eq!(matches.len(), 0);
+            });
+        });
+
+        let scanner =
+            Scanner::builder(&[RegexRuleConfig::builder("value".to_string())
+                .proximity_keywords(ProximityKeywordsConfig {
+                    look_ahead_character_count: 30,
+                    included_keywords: vec![
+                        "secret".to_string(),
+                        "ssn".to_string(),
+                    ],
+                    excluded_keywords: vec![],
+                })
+                .build()])
+                .with_keywords_should_match_event_paths(true)
+                .build()
+                .unwrap();
+
+        c.bench_function("included_keywords_on_path_on", |b| {
+            b.iter(|| {
+                let matches = scanner.scan(&mut event);
+                assert!(matches.len() > 0);
+            })
+        });
+    }
 }
 
 #[cfg(feature = "bench")]
@@ -159,7 +249,8 @@ criterion::criterion_group!(
     benches,
     benchmarks::scoped_ruleset,
     benchmarks::luhn_checksum,
-    benchmarks::included_keywords
+    benchmarks::included_keywords,
+    benchmarks::included_keywords_on_path
 );
 
 criterion::criterion_main!(benches);
