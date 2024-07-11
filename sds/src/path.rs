@@ -76,7 +76,7 @@ impl<'a> Path<'a> {
                 }
 
                 if should_bypass_standardize_path(field) {
-                    sanitized_path.push_str(field)
+                    sanitized_path.push_str(field.to_ascii_lowercase().as_str())
                 } else {
                     standardize_path_chars(field, |c| {
                         sanitized_path.push(c.to_ascii_lowercase());
