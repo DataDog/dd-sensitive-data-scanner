@@ -277,6 +277,28 @@ fn get_char_type(c: &char) -> CharType {
     }
 }
 
+fn should_bypass_standardize_path(characters: &str) -> bool {
+    let mut all_lower = true;
+    let mut all_upper = true;
+    for char in characters.chars() {
+        let is_upper = char.is_ascii_uppercase();
+        let is_lower = char.is_ascii_lowercase();
+        // If it's neither an uppercase character nor a lowercase character, return false
+        if !is_lower && !is_upper {
+            return false;
+        }
+        all_lower = all_lower && is_lower;
+        all_upper = all_upper && is_upper;
+        // If we realise that we don't have all uppercase nor all lowercase, return false
+        if !all_lower && !all_upper {
+            return false;
+        }
+    }
+
+    // The characters contain only uppercase characters or only lowercase characters by now
+    return true;
+}
+
 /// Function that standardizes a list of characters, by pushing characters one by one in a standard way.
 /// Takes a closure that will be called when a character is to be pushed
 pub fn standardize_path_chars<F>(characters: &str, mut push_character: F)
@@ -414,7 +436,7 @@ pub enum ProximityKeywordsValidationError {
     KeywordTooLong(usize),
 
     #[error(
-        "Look ahead character count should be bigger than 0 and cannot be longer than {}",
+    "Look ahead character count should be bigger than 0 and cannot be longer than {}",
         MAX_LOOK_AHEAD_CHARACTER_COUNT
     )]
     InvalidLookAheadCharacterCount,
@@ -849,6 +871,15 @@ mod test {
     }
 
     #[test]
+    fn test_should_bypass_standardize() {
+        assert_eq!(should_bypass_standardize_path("hello world"), false);
+        assert_eq!(should_bypass_standardize_path("helloWorld"), false);
+        assert_eq!(should_bypass_standardize_path("hello-world"), false);
+        assert_eq!(should_bypass_standardize_path("helloworld"), true);
+        assert_eq!(should_bypass_standardize_path("HELLOWORLD"), true);
+    }
+
+    #[test]
     fn test_included_keyword_path() {
         let (included_keywords, _excluded_keywords) = try_new_compiled_proximity_keyword(
             30,
@@ -859,7 +890,7 @@ mod test {
             ],
             vec![],
         )
-        .unwrap();
+            .unwrap();
         let included_keywords = included_keywords.unwrap();
 
         let should_match = vec![
