@@ -305,48 +305,52 @@ pub fn standardize_path_chars<F>(characters: &str, mut push_character: F)
 where
     F: FnMut(&char),
 {
-    let kw_length = characters.len();
-    if kw_length == 0 {
+    let mut characters_iter = characters.chars();
+    let char = if let Some(char) = characters_iter.next() {
+        push_character(&char);
+        char
+    } else {
         return;
-    }
+    };
 
-    let character_bytes = characters.as_bytes();
-    push_character(&(character_bytes[0] as char));
+    let kw_length = characters.len();
 
-    for (i, chars) in character_bytes.windows(2).enumerate() {
-        let current = &(chars[1] as char);
-        let prev_char = get_char_type(&(chars[0] as char));
-        let current_char = get_char_type(current);
-
+    let mut previous = char;
+    for (i, current) in characters_iter.enumerate() {
         let is_last_char = i == kw_length - 2;
+
+        let prev_char = get_char_type(&previous);
+        let current_char = get_char_type(&current);
 
         match (is_last_char, prev_char, current_char) {
             // The last character is simply pushed
             (true, _, _) => {
-                push_character(current);
+                push_character(&current);
             }
             // Regular character is simply pushed
             (_, _, CharType::Regular) => {
-                push_character(current);
+                push_character(&current);
             }
             // Character coming after a separator is pushed
             (_, CharType::Separator, _) => {
-                push_character(current);
+                push_character(&current);
             }
             // Uppercase after an uppercase is pushed
             (_, CharType::Uppercase, CharType::Uppercase) => {
-                push_character(current);
+                push_character(&current);
             }
             (_, CharType::Regular, CharType::Uppercase) => {
                 push_character(&UNIFIED_LINK_CHAR);
                 // CamelCase: push a link character and push the current character
-                push_character(current);
+                push_character(&current);
             }
             // Regular separation in the keyword: push a link character only
             (_, _, CharType::Separator) => {
                 push_character(&UNIFIED_LINK_CHAR);
             }
         }
+
+        previous = current;
     }
 }
 
@@ -426,7 +430,7 @@ pub enum ProximityKeywordsValidationError {
     KeywordTooLong(usize),
 
     #[error(
-    "Look ahead character count should be bigger than 0 and cannot be longer than {}",
+        "Look ahead character count should be bigger than 0 and cannot be longer than {}",
         MAX_LOOK_AHEAD_CHARACTER_COUNT
     )]
     InvalidLookAheadCharacterCount,
@@ -782,7 +786,11 @@ mod test {
         assert_eq!(
             calculate_keyword_path_pattern("test").to_string(),
             "(?-u:\\b)test(?-u:\\b)".to_string()
-        )
+        );
+        assert_eq!(
+            calculate_keyword_path_pattern("t").to_string(),
+            "(?-u:\\b)t(?-u:\\b)".to_string()
+        );
     }
 
     #[test]
@@ -880,7 +888,7 @@ mod test {
             ],
             vec![],
         )
-            .unwrap();
+        .unwrap();
         let included_keywords = included_keywords.unwrap();
 
         let should_match = vec![
