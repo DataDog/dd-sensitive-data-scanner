@@ -296,7 +296,7 @@ pub fn should_bypass_standardize_path(characters: &str) -> bool {
     }
 
     // The characters contain only uppercase characters or only lowercase characters by now
-    return true;
+    true
 }
 
 /// Function that standardizes a list of characters, by pushing characters one by one in a standard way.
@@ -426,7 +426,7 @@ pub enum ProximityKeywordsValidationError {
     KeywordTooLong(usize),
 
     #[error(
-        "Look ahead character count should be bigger than 0 and cannot be longer than {}",
+    "Look ahead character count should be bigger than 0 and cannot be longer than {}",
         MAX_LOOK_AHEAD_CHARACTER_COUNT
     )]
     InvalidLookAheadCharacterCount,
@@ -880,7 +880,7 @@ mod test {
             ],
             vec![],
         )
-        .unwrap();
+            .unwrap();
         let included_keywords = included_keywords.unwrap();
 
         let should_match = vec![
