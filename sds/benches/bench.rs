@@ -141,8 +141,8 @@ mod benchmarks {
                     excluded_keywords: vec![],
                 })
                 .build()])
-                .build()
-                .unwrap();
+            .build()
+            .unwrap();
 
         let mut message = "a".repeat(1_000_000);
 
@@ -162,16 +162,10 @@ mod benchmarks {
             for j in 0..100 {
                 let is_secret = j % 6 == 0;
                 let key = if is_secret { "secret" } else { "another-key" };
-                nested_event.insert(
-                    key.to_string(),
-                    SimpleEvent::String(format!("value-{}", i)),
-                );
+                nested_event.insert(key.to_string(), SimpleEvent::String(format!("value-{}", i)));
             }
 
-            event_map.insert(
-                format!("key-{}", i),
-                SimpleEvent::Map(nested_event),
-            );
+            event_map.insert(format!("key-{}", i), SimpleEvent::Map(nested_event));
         }
 
         for i in 0..100 {
@@ -190,28 +184,21 @@ mod benchmarks {
                 );
             }
 
-            event_map.insert(
-                format!("ssn-{}", i),
-                SimpleEvent::Map(nested_event),
-            );
+            event_map.insert(format!("ssn-{}", i), SimpleEvent::Map(nested_event));
         }
 
         let mut event = SimpleEvent::Map(event_map);
 
-        let scanner =
-            Scanner::builder(&[RegexRuleConfig::builder("value".to_string())
-                .proximity_keywords(ProximityKeywordsConfig {
-                    look_ahead_character_count: 30,
-                    included_keywords: vec![
-                        "secret".to_string(),
-                        "ssn".to_string(),
-                    ],
-                    excluded_keywords: vec![],
-                })
-                .build()])
-                .with_keywords_should_match_event_paths(false)
-                .build()
-                .unwrap();
+        let scanner = Scanner::builder(&[RegexRuleConfig::builder("value".to_string())
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["secret".to_string(), "ssn".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build()])
+        .with_keywords_should_match_event_paths(false)
+        .build()
+        .unwrap();
 
         c.bench_function("included_keywords_on_path_off", |b| {
             b.iter(|| {
@@ -220,20 +207,16 @@ mod benchmarks {
             });
         });
 
-        let scanner =
-            Scanner::builder(&[RegexRuleConfig::builder("value".to_string())
-                .proximity_keywords(ProximityKeywordsConfig {
-                    look_ahead_character_count: 30,
-                    included_keywords: vec![
-                        "secret".to_string(),
-                        "ssn".to_string(),
-                    ],
-                    excluded_keywords: vec![],
-                })
-                .build()])
-                .with_keywords_should_match_event_paths(true)
-                .build()
-                .unwrap();
+        let scanner = Scanner::builder(&[RegexRuleConfig::builder("value".to_string())
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["secret".to_string(), "ssn".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build()])
+        .with_keywords_should_match_event_paths(true)
+        .build()
+        .unwrap();
 
         c.bench_function("included_keywords_on_path_on", |b| {
             b.iter(|| {

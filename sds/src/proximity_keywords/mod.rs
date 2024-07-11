@@ -426,7 +426,7 @@ pub enum ProximityKeywordsValidationError {
     KeywordTooLong(usize),
 
     #[error(
-    "Look ahead character count should be bigger than 0 and cannot be longer than {}",
+        "Look ahead character count should be bigger than 0 and cannot be longer than {}",
         MAX_LOOK_AHEAD_CHARACTER_COUNT
     )]
     InvalidLookAheadCharacterCount,
@@ -880,7 +880,7 @@ mod test {
             ],
             vec![],
         )
-            .unwrap();
+        .unwrap();
         let included_keywords = included_keywords.unwrap();
 
         let should_match = vec![

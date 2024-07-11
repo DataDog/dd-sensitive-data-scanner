@@ -1,7 +1,9 @@
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
-use crate::proximity_keywords::{should_bypass_standardize_path, standardize_path_chars, UNIFIED_LINK_CHAR};
+use crate::proximity_keywords::{
+    should_bypass_standardize_path, standardize_path_chars, UNIFIED_LINK_CHAR,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -179,7 +181,7 @@ mod test {
                 "CHICKEN".into(),
                 2.into(),
             ])
-                .sanitize(),
+            .sanitize(),
             "hello.world.of.chicken"
         );
 
