@@ -1,7 +1,9 @@
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
-use crate::proximity_keywords::{standardize_path_chars, UNIFIED_LINK_CHAR};
+use crate::proximity_keywords::{
+    should_bypass_standardize_path, standardize_path_chars, UNIFIED_LINK_CHAR,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -52,16 +54,34 @@ impl<'a> Path<'a> {
         true
     }
 
+    fn size_segments_only(&self) -> usize {
+        self.segments
+            .iter()
+            .map(|segment| {
+                if let PathSegment::Field(field) = segment {
+                    return field.len();
+                }
+                0
+            })
+            .sum()
+    }
+
     pub fn sanitize(&self) -> String {
-        let mut sanitized_path = "".to_string();
+        let size_segments = self.size_segments_only();
+        let mut sanitized_path = String::with_capacity(size_segments + size_segments / 2);
         self.segments.iter().enumerate().for_each(|(i, segment)| {
             if let PathSegment::Field(field) = segment {
                 if i != 0 {
                     sanitized_path.push(UNIFIED_LINK_CHAR);
                 }
-                standardize_path_chars(field, |c| {
-                    sanitized_path.push(c.to_ascii_lowercase());
-                });
+
+                if should_bypass_standardize_path(field) {
+                    sanitized_path.push_str(field.to_ascii_lowercase().as_str())
+                } else {
+                    standardize_path_chars(field, |c| {
+                        sanitized_path.push(c.to_ascii_lowercase());
+                    });
+                }
             }
         });
 
@@ -168,6 +188,18 @@ mod test {
         assert_eq!(
             Path::from(vec!["hello_world-of-".into(), "/chickens_/".into()]).sanitize(),
             "hello.world.of-./chickens./"
+        );
+    }
+
+    #[test]
+    fn test_size() {
+        assert_eq!(
+            Path::from(vec!["hello".into(), 0.into(), "world".into()]).size_segments_only(),
+            10
+        );
+        assert_eq!(
+            Path::from(vec!["".into(), 0.into(), "path✅".into()]).size_segments_only(),
+            7
         );
     }
 }

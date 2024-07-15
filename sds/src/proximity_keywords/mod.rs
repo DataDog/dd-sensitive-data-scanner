@@ -277,54 +277,80 @@ fn get_char_type(c: &char) -> CharType {
     }
 }
 
+pub fn should_bypass_standardize_path(characters: &str) -> bool {
+    let mut all_lower = true;
+    let mut all_upper = true;
+    for char in characters.chars() {
+        let is_upper = char.is_ascii_uppercase();
+        let is_lower = char.is_ascii_lowercase();
+        // If it's neither an uppercase character nor a lowercase character, return false
+        if !is_lower && !is_upper {
+            return false;
+        }
+        all_lower = all_lower && is_lower;
+        all_upper = all_upper && is_upper;
+        // If we realise that we don't have all uppercase nor all lowercase, return false
+        if !all_lower && !all_upper {
+            return false;
+        }
+    }
+
+    // The characters contain only uppercase characters or only lowercase characters by now
+    true
+}
+
 /// Function that standardizes a list of characters, by pushing characters one by one in a standard way.
 /// Takes a closure that will be called when a character is to be pushed
-pub fn standardize_path_chars<F>(chars: &str, mut push_character: F)
+pub fn standardize_path_chars<F>(characters: &str, mut push_character: F)
 where
     F: FnMut(&char),
 {
-    let kw_length = chars.len();
-
-    if let Some(c) = chars.chars().next() {
-        push_character(&c);
+    let mut characters_iter = characters.chars();
+    let char = if let Some(char) = characters_iter.next() {
+        push_character(&char);
+        char
     } else {
         return;
-    }
+    };
 
-    for (i, chars) in chars.as_bytes().windows(2).enumerate() {
-        let current = &(chars[1] as char);
-        let prev_char = get_char_type(&(chars[0] as char));
-        let current_char = get_char_type(current);
+    let kw_length = characters.len();
 
+    let mut previous = char;
+    for (i, current) in characters_iter.enumerate() {
         let is_last_char = i == kw_length - 2;
+
+        let prev_char = get_char_type(&previous);
+        let current_char = get_char_type(&current);
 
         match (is_last_char, prev_char, current_char) {
             // The last character is simply pushed
             (true, _, _) => {
-                push_character(current);
+                push_character(&current);
             }
             // Regular character is simply pushed
             (_, _, CharType::Regular) => {
-                push_character(current);
+                push_character(&current);
             }
             // Character coming after a separator is pushed
             (_, CharType::Separator, _) => {
-                push_character(current);
+                push_character(&current);
             }
             // Uppercase after an uppercase is pushed
             (_, CharType::Uppercase, CharType::Uppercase) => {
-                push_character(current);
+                push_character(&current);
             }
             (_, CharType::Regular, CharType::Uppercase) => {
                 push_character(&UNIFIED_LINK_CHAR);
                 // CamelCase: push a link character and push the current character
-                push_character(current);
+                push_character(&current);
             }
             // Regular separation in the keyword: push a link character only
             (_, _, CharType::Separator) => {
                 push_character(&UNIFIED_LINK_CHAR);
             }
         }
+
+        previous = current;
     }
 }
 
@@ -760,7 +786,11 @@ mod test {
         assert_eq!(
             calculate_keyword_path_pattern("test").to_string(),
             "(?-u:\\b)test(?-u:\\b)".to_string()
-        )
+        );
+        assert_eq!(
+            calculate_keyword_path_pattern("t").to_string(),
+            "(?-u:\\b)t(?-u:\\b)".to_string()
+        );
     }
 
     #[test]
@@ -836,6 +866,15 @@ mod test {
         assert_eq!(prev_char_index("a€b", 1), Some(0));
         assert_eq!(prev_char_index("a€b", 0), None);
         assert_eq!(prev_char_index("", 0), None);
+    }
+
+    #[test]
+    fn test_should_bypass_standardize() {
+        assert_eq!(should_bypass_standardize_path("hello world"), false);
+        assert_eq!(should_bypass_standardize_path("helloWorld"), false);
+        assert_eq!(should_bypass_standardize_path("hello-world"), false);
+        assert_eq!(should_bypass_standardize_path("helloworld"), true);
+        assert_eq!(should_bypass_standardize_path("HELLOWORLD"), true);
     }
 
     #[test]
