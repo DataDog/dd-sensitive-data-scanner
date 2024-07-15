@@ -35,6 +35,15 @@ impl CompiledRuleTrait for RegexCompiledRule {
     fn get_scope(&self) -> &Scope {
         &self.scope
     }
+
+    fn should_exclude_multipass_v0(&self) -> bool {
+        true
+    }
+
+    fn on_excluded_match_multipass_v0(&self) {
+        self.metrics.false_positive_excluded_attributes.increment(1);
+    }
+
     fn get_string_matches(
         &self,
         content: &str,
@@ -219,28 +228,39 @@ impl<'a> Iterator for TruePositiveSearch<'a> {
                     // patterns that can match empty matches are rejected.
                     self.start = regex_match.end();
 
+                    // if self.exclusion_check.is_excluded(self.rule.rule_index) {
+                    //     // Matches from excluded paths are saved and used to treat additional equal matches as false positives
+                    //     self.excluded_matches
+                    //         .insert(self.content[regex_match.range()].to_string());
+                    // } else {
+                    //     // If the matched content is in `excluded_matches` it should not count as a match.
+                    //     // This is temporary to maintain backwards compatibility, but this should eventually happen
+                    //     // after all scanning is done so `excluded_matches` is fully populated.
+                    //     if !self
+                    //         .excluded_matches
+                    //         .contains(&self.content[regex_match.range()])
+                    //     {
+                    //         return Some(StringMatch {
+                    //             start: regex_match.start(),
+                    //             end: regex_match.end(),
+                    //         });
+                    //     } else {
+                    //         self.rule
+                    //             .metrics
+                    //             .false_positive_excluded_attributes
+                    //             .increment(1)
+                    //     }
+                    // }
                     if self.exclusion_check.is_excluded(self.rule.rule_index) {
-                        // Matches from excluded paths are saved and used to treat additional equal matches as false positives
+                        // Matches from excluded paths are saved and used to treat additional equal matches as false positives.
+                        // Matches are checked against this `excluded_matches` set after all scanning has been done.
                         self.excluded_matches
                             .insert(self.content[regex_match.range()].to_string());
                     } else {
-                        // If the matched content is in `excluded_matches` it should not count as a match.
-                        // This is temporary to maintain backwards compatibility, but this should eventually happen
-                        // after all scanning is done so `excluded_matches` is fully populated.
-                        if !self
-                            .excluded_matches
-                            .contains(&self.content[regex_match.range()])
-                        {
-                            return Some(StringMatch {
-                                start: regex_match.start(),
-                                end: regex_match.end(),
-                            });
-                        } else {
-                            self.rule
-                                .metrics
-                                .false_positive_excluded_attributes
-                                .increment(1)
-                        }
+                        return Some(StringMatch {
+                            start: regex_match.start(),
+                            end: regex_match.end(),
+                        });
                     }
                 }
             } else {
