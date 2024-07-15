@@ -13,7 +13,8 @@ use regex_automata::meta::Regex as MetaRegex;
 use std::sync::Arc;
 
 use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
-use self::metrics::Metrics;
+use self::metrics::RuleMetrics;
+use self::metrics::ScannerMetrics;
 use crate::proximity_keywords::compile_keywords_proximity_config;
 use crate::scanner::regex_rule::RegexCompiledRule;
 use ahash::AHashSet;
@@ -120,7 +121,7 @@ impl RuleConfigTrait for RegexRuleConfig {
                 .clone()
                 .map(|x| Arc::new(x) as Arc<dyn Validator>),
             rule_cache_index: cache_index,
-            metrics: Metrics::new(&rule_labels),
+            metrics: RuleMetrics::new(&rule_labels),
         }))
     }
 }
@@ -136,6 +137,7 @@ pub struct Scanner {
     scoped_ruleset: ScopedRuleSet,
     cache_pool: CachePool,
     scanner_features: ScannerFeatures,
+    metrics: ScannerMetrics,
 }
 
 impl Scanner {
@@ -158,6 +160,8 @@ impl Scanner {
 
         let mut excluded_matches = AHashSet::new();
 
+        // Measure detection time
+        let start = std::time::Instant::now();
         self.scoped_ruleset.visit_string_rule_combinations(
             event,
             ScannerContentVisitor {
@@ -189,6 +193,16 @@ impl Scanner {
                 will_mutate
             });
         }
+        // Record detection time
+        self.metrics
+            .duration_ns
+            .increment(start.elapsed().as_nanos() as u64);
+        // Add number of scanned events
+        self.metrics.num_scanned_events.increment(1);
+        // Add number of matches
+        self.metrics
+            .match_count
+            .increment(output_rule_matches.len() as u64);
 
         output_rule_matches
     }
@@ -398,6 +412,7 @@ impl<C: RuleConfigTrait> ScannerBuilder<'_, C> {
             scoped_ruleset,
             cache_pool: cache_pool_builder.build(),
             scanner_features: self.scanner_features,
+            metrics: ScannerMetrics::new(&self.labels),
         })
     }
 }
@@ -453,6 +468,12 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 );
             }
         });
+
+        // Emit metrics for event_size_bytes
+        self.scanner
+            .metrics
+            .event_size_bytes
+            .increment(content.len() as u64);
 
         // calculate_indices requires that matches are sorted by start index
         path_rules_matches.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
@@ -530,6 +551,8 @@ mod test {
     use crate::validation::RegexValidationError;
     use crate::SecondaryValidator::ChineseIdChecksum;
     use crate::SecondaryValidator::GithubTokenChecksum;
+    use crate::SecondaryValidator::IbanChecker;
+    use crate::SecondaryValidator::NhsCheckDigit;
     use crate::{
         simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch, Scope,
     };
@@ -1074,6 +1097,35 @@ mod test {
     }
 
     #[test]
+    fn test_iban_checksum() {
+        let pattern = "DE[0-9]+";
+        let rule_with_checksum = RegexRuleConfig::builder(pattern.to_string())
+            .match_action(MatchAction::Redact {
+                replacement: "[IBAN]".to_string(),
+            })
+            .validator(IbanChecker)
+            .build();
+
+        // Valid content with checksum
+        let mut content = "number=DE44500105175407324931".to_string();
+        let scanner = ScannerBuilder::new(&[rule_with_checksum.clone()])
+            .build()
+            .unwrap();
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "number=[IBAN]");
+
+        // Invalid content with checksum
+        let mut content = "number=DE34500105175407324931".to_string();
+        let scanner = ScannerBuilder::new(&[rule_with_checksum.clone()])
+            .build()
+            .unwrap();
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 0);
+        assert_eq!(content, "number=DE34500105175407324931");
+    }
+
+    #[test]
     fn test_github_token_checksum() {
         let pattern = "\\bgh[opsu]_[0-9a-zA-Z]{36}\\b";
         let rule = RegexRuleConfig::builder(pattern.to_string())
@@ -1107,6 +1159,26 @@ mod test {
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "[GITHUB] ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5");
+    }
+
+    #[test]
+    fn test_nhs_checksum() {
+        let pattern = ".+";
+        let rule_with_checksum = RegexRuleConfig::builder(pattern.to_string())
+            .match_action(MatchAction::Redact {
+                replacement: "[NHS]".to_string(),
+            })
+            .validator(NhsCheckDigit)
+            .build();
+
+        let mut content = "1234567881".to_string();
+        // Test matching NHS number with checksum
+        let scanner = ScannerBuilder::new(&[rule_with_checksum.clone()])
+            .build()
+            .unwrap();
+        let matches = scanner.scan(&mut content);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "[NHS]");
     }
 
     #[test]
@@ -1839,6 +1911,71 @@ mod test {
         use metrics_util::CompositeKey;
         use metrics_util::MetricKind::Counter;
         use std::collections::BTreeMap;
+
+        #[test]
+        fn should_submit_scanning_metrics() {
+            let recorder = DebuggingRecorder::new();
+            let snapshotter = recorder.snapshotter();
+
+            let content_1 = "bcdef";
+            let content_2 = "no match";
+
+            metrics::with_local_recorder(&recorder, || {
+                let rule_0 = RegexRuleConfig::builder(content_1.to_owned())
+                    .match_action(MatchAction::None)
+                    .build();
+
+                let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
+                let mut content = SimpleEvent::Map(BTreeMap::from([
+                    (
+                        "key1".to_string(),
+                        SimpleEvent::String(content_1.to_string()),
+                    ),
+                    (
+                        "key2".to_string(),
+                        SimpleEvent::String(content_2.to_string()),
+                    ),
+                ]));
+
+                scanner.scan(&mut content);
+            });
+
+            let snapshot = snapshotter.snapshot().into_hashmap();
+
+            let metric_name = "scanned_events";
+            let metric_value = snapshot
+                .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
+                .expect("metric not found");
+            assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+
+            let metric_name = "scanning.match_count";
+            let metric_value = snapshot
+                .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
+                .expect("metric not found");
+            assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+
+            let metric_name = "scanning.duration";
+            let metric_value = snapshot
+                .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
+                .expect("metric not found");
+            match metric_value.2 {
+                DebugValue::Counter(val) => assert!(val > 0),
+                _ => assert!(false),
+            }
+
+            let metric_name = "scanned_bytes";
+            let metric_value = snapshot
+                .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
+                .expect("metric not found");
+            assert_eq!(
+                metric_value,
+                &(
+                    None,
+                    None,
+                    DebugValue::Counter((content_1.len() + content_2.len()) as u64)
+                )
+            );
+        }
 
         #[test]
         fn should_submit_excluded_match_metric() {
