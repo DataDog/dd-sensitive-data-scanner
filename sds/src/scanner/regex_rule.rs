@@ -51,8 +51,9 @@ impl CompiledRuleTrait for RegexCompiledRule {
         should_keywords_match_event_paths: bool,
     ) {
         let cache_pool: &mut CachePool = caches.unwrap().as_any_mut().downcast_mut().unwrap();
-        // This is not optimal as each rule will have to lock the pool, but it is the simplest for now
-        // Need to loop with @nathan to see how we can improve this
+        // It should be as fast as before if single-threaded, but it should be slower if multi-threaded
+        // PoolGuard does not lock if first get comes from the CachePool thread owner
+        // Check with @nathan how we can improve this
         let caches: &mut regex_automata::util::pool::PoolGuard<
             Vec<Cache>,
             Box<dyn Fn() -> Vec<Cache> + Send + Sync>,
