@@ -61,6 +61,17 @@ pub trait CompiledRuleTrait: Send + Sync {
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
     );
+
+    // Whether a match from this rule should be excluded (marked as a false-positive)
+    // if the content of this match was found in a match from an excluded scope
+    fn should_exclude_multipass_v0(&self) -> bool {
+        // default is to NOT use Multi-pass V0
+        false
+    }
+
+    fn on_excluded_match_multipass_v0(&self) {
+        // default is to do nothing
+    }
 }
 
 impl RuleConfigTrait for Box<dyn RuleConfigTrait> {
@@ -177,8 +188,20 @@ impl Scanner {
         for (path, rule_matches) in &mut rule_matches_list {
             // All rule matches in each inner list are for a single path, so they can be processed independently.
             event.visit_string_mut(path, |content| {
-                // Normally matches should be filtered out that match `excluded_matches` here, but it
-                // has temporarily moved for backwards compatibility
+                // Now that the `excluded_matches` set is fully populated, filter out any matches
+                // that are the same as excluded matches (also known as "Multi-pass V0")
+                rule_matches.retain(|rule_match| {
+                    if self.rules[rule_match.rule_index].should_exclude_multipass_v0() {
+                        let is_false_positive = excluded_matches
+                            .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
+                        if is_false_positive {
+                            self.rules[rule_match.rule_index].on_excluded_match_multipass_v0();
+                        }
+                        !is_false_positive
+                    } else {
+                        true
+                    }
+                });
 
                 self.sort_and_remove_overlapping_rules::<E::Encoding>(rule_matches);
 
@@ -1508,11 +1531,11 @@ mod test {
 
         // Due to the ordering of the scan (alphabetical in this case), the match from "a-match" is not
         // excluded yet, but "z-match" is, so only 1 match is found.
-        assert_eq!(matches.len(), 1);
-        assert_eq!(
-            matches[0].path,
-            Path::from(vec![PathSegment::Field("a-match".into())])
-        );
+
+        // "test" is excluded because it matches the excluded scope.
+        // Both "a-match" and "z-match" are excluded due to having the
+        // same match value as "test" (multi-pass V0)
+        assert_eq!(matches.len(), 0);
     }
 
     #[test]
