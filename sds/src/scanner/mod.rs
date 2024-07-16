@@ -62,6 +62,7 @@ pub trait GroupCacheConfigTrait: Send + Sync + std::any::Any {
 pub trait GroupCacheTrait: Send + Sync + std::any::Any {
     fn as_any(&self) -> &dyn std::any::Any;
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
+    fn prepare_content_scanning(&mut self);
 }
 
 pub trait CompiledRuleTrait: Send + Sync {

@@ -41,6 +41,10 @@ impl GroupCacheTrait for CachePool {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
+    fn prepare_content_scanning(&mut self) {
+        // This should create a CachePoolGuard and reuse it for all content scanning
+        // Unfortunately I haven't find a smart way of doing it yet
+    }
 }
 
 pub struct CachePoolBuilder {
