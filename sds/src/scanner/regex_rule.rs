@@ -227,7 +227,7 @@ impl<'a> Iterator for TruePositiveSearch<'a> {
                     // The next match will start at the end of this match. This is fine because
                     // patterns that can match empty matches are rejected.
                     self.start = regex_match.end();
-                    
+
                     if self.exclusion_check.is_excluded(self.rule.rule_index) {
                         // Matches from excluded paths are saved and used to treat additional equal matches as false positives.
                         // Matches are checked against this `excluded_matches` set after all scanning has been done.
