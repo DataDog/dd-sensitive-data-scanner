@@ -192,7 +192,6 @@ impl Scanner {
                 // that are the same as excluded matches (also known as "Multi-pass V0")
                 rule_matches.retain(|rule_match| {
                     if self.rules[rule_match.rule_index].should_exclude_multipass_v0() {
-                        // TODO: emit metrics for filtered matches due to multi-pass V0
                         let is_false_positive = excluded_matches
                             .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
                         if is_false_positive {
