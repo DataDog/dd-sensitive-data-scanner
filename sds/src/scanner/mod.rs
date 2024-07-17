@@ -66,6 +66,7 @@ pub trait GroupCacheTrait: Send + Sync + std::any::Any {
 }
 
 pub trait CompiledRuleTrait: Send + Sync {
+    fn get_cache_type(&self) -> GroupCacheType;
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
     #[allow(clippy::too_many_arguments)]
