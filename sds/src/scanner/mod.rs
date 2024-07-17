@@ -62,7 +62,7 @@ pub trait GroupCacheConfigTrait: Send + Sync + std::any::Any {
 pub trait GroupCacheTrait: Send + Sync + std::any::Any {
     fn as_any(&self) -> &dyn std::any::Any;
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
-    fn prepare_content_scanning(&mut self);
+    fn prepare_content_scanning(&mut self, content: &str);
 }
 
 pub trait CompiledRuleTrait: Send + Sync {
@@ -485,6 +485,10 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
     ) -> bool {
         // matches for a single path
         let mut path_rules_matches = vec![];
+
+        self.cache_per_type.iter_mut().for_each(|(_, cache)| {
+            cache.prepare_content_scanning(content);
+        });
 
         rule_visitor.visit_rule_indices(|rule_index| {
             let rule = &self.scanner.rules[rule_index];
