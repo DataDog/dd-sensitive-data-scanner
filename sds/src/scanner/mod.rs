@@ -492,12 +492,6 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
             }
         });
 
-        // Emit metrics for event_size_bytes
-        self.scanner
-            .metrics
-            .event_size_bytes
-            .increment(content.len() as u64);
-
         // calculate_indices requires that matches are sorted by start index
         path_rules_matches.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
 
@@ -1985,19 +1979,6 @@ mod test {
                 DebugValue::Counter(val) => assert!(val > 0),
                 _ => assert!(false),
             }
-
-            let metric_name = "scanned_bytes";
-            let metric_value = snapshot
-                .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
-                .expect("metric not found");
-            assert_eq!(
-                metric_value,
-                &(
-                    None,
-                    None,
-                    DebugValue::Counter((content_1.len() + content_2.len()) as u64)
-                )
-            );
         }
 
         #[test]
