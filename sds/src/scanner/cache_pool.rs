@@ -5,7 +5,10 @@ use regex_automata::{
     util::pool::{Pool, PoolGuard},
 };
 
+use crate::scanner::GroupCacheTrait;
 use crate::scanner::MetaRegex;
+
+use super::GroupCacheConfigTrait;
 
 type CachePoolFn = Box<dyn Fn() -> Vec<Cache> + Send + Sync>;
 pub type CachePoolGuard<'a> = PoolGuard<'a, Vec<Cache>, CachePoolFn>;
@@ -31,8 +34,29 @@ impl CachePool {
     }
 }
 
+impl GroupCacheTrait for CachePool {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
 pub struct CachePoolBuilder {
     regexes: Vec<MetaRegex>,
+}
+
+impl GroupCacheConfigTrait for CachePoolBuilder {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+    fn build(&self) -> Box<dyn GroupCacheTrait> {
+        Box::new(CachePool::new(Arc::new(self.regexes.clone())))
+    }
 }
 
 impl Default for CachePoolBuilder {
@@ -49,9 +73,5 @@ impl CachePoolBuilder {
     pub fn push(&mut self, regex: MetaRegex) -> usize {
         self.regexes.push(regex);
         self.regexes.len() - 1
-    }
-
-    pub fn build(self) -> CachePool {
-        CachePool::new(Arc::new(self.regexes))
     }
 }

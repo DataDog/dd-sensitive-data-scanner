@@ -4,10 +4,12 @@ use crate::proximity_keywords::{
     CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
 };
 use crate::scanner::metrics::RuleMetrics;
-use crate::scanner::{get_next_regex_start, is_false_positive_match};
+use crate::scanner::{
+    get_next_regex_start, is_false_positive_match, GroupCacheTrait, GroupCacheType,
+};
 use crate::{
-    CachePoolGuard, CompiledRuleTrait, ExclusionCheck, MatchAction, MatchEmitter, Path, Scope,
-    StringMatch,
+    CachePool, CachePoolGuard, CompiledRuleTrait, ExclusionCheck, MatchAction, MatchEmitter, Path,
+    Scope, StringMatch,
 };
 use ahash::AHashSet;
 use regex_automata::meta::Cache;
@@ -29,6 +31,9 @@ pub struct RegexCompiledRule {
 }
 
 impl CompiledRuleTrait for RegexCompiledRule {
+    fn get_cache_type(&self) -> GroupCacheType {
+        GroupCacheType::Regex
+    }
     fn get_match_action(&self) -> &MatchAction {
         &self.match_action
     }
@@ -39,13 +44,19 @@ impl CompiledRuleTrait for RegexCompiledRule {
         &self,
         content: &str,
         path: &Path,
-        caches: &mut CachePoolGuard<'_>,
-        _cached_string_matches_per_rule: &mut AHashSet<String>,
+        caches: Option<&mut Box<dyn GroupCacheTrait>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
     ) {
+        let cache_pool: &mut CachePool = caches.unwrap().as_any_mut().downcast_mut().unwrap();
+        // This is not optimal as each rule will have to lock the pool, but it is the simplest for now
+        // Need to loop with @nathan to see how we can improve this
+        let caches: &mut regex_automata::util::pool::PoolGuard<
+            Vec<Cache>,
+            Box<dyn Fn() -> Vec<Cache> + Send + Sync>,
+        > = &mut cache_pool.get();
         match self.included_keywords {
             Some(ref included_keywords) => {
                 self.get_string_matches_with_included_keywords(
