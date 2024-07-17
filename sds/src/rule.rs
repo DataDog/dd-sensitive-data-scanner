@@ -2,9 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::match_action::MatchAction;
 use crate::path::Path;
-use crate::scanner::cache_pool::CachePoolBuilder;
 use crate::scanner::error::CreateScannerError;
-use crate::scanner::CompiledRuleTrait;
+use crate::scanner::{CompiledRuleTrait, GroupCacheConfigTrait, GroupCacheType};
 use crate::Labels;
 use serde_with::{serde_as, DefaultOnNull};
 
@@ -13,8 +12,10 @@ pub trait RuleConfigTrait {
         &self,
         rule_index: usize,
         label: Labels,
-        cache_pool_builder: &mut CachePoolBuilder,
+        cache_config: Option<&mut Box<dyn GroupCacheConfigTrait>>,
     ) -> Result<Box<dyn CompiledRuleTrait>, CreateScannerError>;
+    fn get_cache_type(&self) -> GroupCacheType;
+    fn new_cache_config(&self) -> Option<Box<dyn GroupCacheConfigTrait>>;
 }
 
 #[serde_as]
