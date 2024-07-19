@@ -5,10 +5,10 @@ use crate::proximity_keywords::{
 };
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::{
-    get_next_regex_start, is_false_positive_match, GroupCacheTrait, GroupCacheType,
+    get_next_regex_start, is_false_positive_match,
 };
 use crate::{
-    CachePool, CachePoolGuard, CompiledRuleTrait, ExclusionCheck, MatchAction, MatchEmitter, Path,
+    CachePool, CachePoolGuard, CompiledRule, ExclusionCheck, MatchAction, MatchEmitter, Path,
     Scope, StringMatch,
 };
 use ahash::AHashSet;
@@ -30,10 +30,13 @@ pub struct RegexCompiledRule {
     pub metrics: RuleMetrics,
 }
 
-impl CompiledRuleTrait for RegexCompiledRule {
-    fn get_cache_type(&self) -> GroupCacheType {
-        GroupCacheType::Regex
-    }
+impl CompiledRule for RegexCompiledRule {
+    // no special data
+    type GroupData = ();
+
+    // fn get_cache_type(&self) -> GroupCacheType {
+    //     GroupCacheType::Regex
+    // }
     fn get_match_action(&self) -> &MatchAction {
         &self.match_action
     }
@@ -44,20 +47,21 @@ impl CompiledRuleTrait for RegexCompiledRule {
         &self,
         content: &str,
         path: &Path,
-        caches: Option<&mut Box<dyn GroupCacheTrait>>,
+        caches: &mut CachePoolGuard<'_>,
+        group_data: &mut (),
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
     ) {
-        let cache_pool: &mut CachePool = caches.unwrap().as_any_mut().downcast_mut().unwrap();
-        // It should be as fast as before if single-threaded, but it should be slower if multi-threaded
-        // PoolGuard does not lock if first get comes from the CachePool thread owner
-        // Check with @nathan how we can improve this
-        let caches: &mut regex_automata::util::pool::PoolGuard<
-            Vec<Cache>,
-            Box<dyn Fn() -> Vec<Cache> + Send + Sync>,
-        > = &mut cache_pool.get();
+        // let cache_pool: &mut CachePool = caches.unwrap().as_any_mut().downcast_mut().unwrap();
+        // // It should be as fast as before if single-threaded, but it should be slower if multi-threaded
+        // // PoolGuard does not lock if first get comes from the CachePool thread owner
+        // // Check with @nathan how we can improve this
+        // let caches: &mut regex_automata::util::pool::PoolGuard<
+        //     Vec<Cache>,
+        //     Box<dyn Fn() -> Vec<Cache> + Send + Sync>,
+        // > = &mut cache_pool.get();
         match self.included_keywords {
             Some(ref included_keywords) => {
                 self.get_string_matches_with_included_keywords(
