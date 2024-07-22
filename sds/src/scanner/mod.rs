@@ -48,25 +48,6 @@ where
     }
 }
 
-// #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
-// pub enum GroupCacheType {
-//     Regex,
-//     ML,
-//     None,
-// }
-
-// pub trait GroupCacheConfigTrait: Send + Sync + std::any::Any {
-//     fn as_any(&self) -> &dyn std::any::Any;
-//     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
-//     fn build(&self) -> Box<dyn GroupCacheTrait>;
-// }
-
-// pub trait GroupCacheTrait: Send + Sync + std::any::Any {
-//     fn as_any(&self) -> &dyn std::any::Any;
-//     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
-//     fn prepare_content_scanning(&mut self, content: &str);
-// }
-
 pub trait CompiledRuleDyn: Send + Sync {
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
