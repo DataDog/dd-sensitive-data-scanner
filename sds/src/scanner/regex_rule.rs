@@ -41,7 +41,7 @@ impl CompiledRule for RegexCompiledRule {
     fn get_scope(&self) -> &Scope {
         &self.scope
     }
-    fn pre_rule_match(&self, _content: &str, _group_data: &mut Self::GroupData) {}
+    fn pre_rule_match(&self, _group_data: &mut Self::GroupData) {}
     fn get_string_matches(
         &self,
         content: &str,
