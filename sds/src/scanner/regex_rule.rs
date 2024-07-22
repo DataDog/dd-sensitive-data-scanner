@@ -6,8 +6,8 @@ use crate::proximity_keywords::{
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::{
-    CachePool, CachePoolGuard, CompiledRule, ExclusionCheck, MatchAction, MatchEmitter, Path,
-    Scope, StringMatch,
+    CachePoolGuard, CompiledRule, ExclusionCheck, MatchAction, MatchEmitter, Path, Scope,
+    StringMatch,
 };
 use ahash::AHashSet;
 use regex_automata::meta::Cache;
@@ -41,6 +41,7 @@ impl CompiledRule for RegexCompiledRule {
     fn get_scope(&self) -> &Scope {
         &self.scope
     }
+    fn pre_rule_match(&self, _content: &str, _group_data: &mut Self::GroupData) {}
     fn get_string_matches(
         &self,
         content: &str,

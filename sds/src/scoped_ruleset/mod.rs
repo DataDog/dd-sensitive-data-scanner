@@ -214,6 +214,32 @@ pub struct RuleIndexVisitor<'a> {
 }
 
 impl<'a> RuleIndexVisitor<'a> {
+    /// Prepare all rules associated with the current string. This may
+    /// potentially return no rule indices at all.
+    /// This is used to configure the groupCache with all rules involved
+    pub fn prepare_rule_indices(&self, mut visit: impl FnMut(usize)) {
+        for include_node in self.tree_nodes {
+            if include_node.index_wildcard_match {
+                // This is guaranteed to be a duplicated node. Skip it
+                continue;
+            }
+            for change in &include_node.rule_tree.rule_changes {
+                match change {
+                    RuleChange::Add(rule_index) => {
+                        if let Some(used_rule_set) = &self.used_rule_set {
+                            if !used_rule_set.get(*rule_index) {
+                                (visit)(*rule_index);
+                            }
+                        } else {
+                            (visit)(*rule_index);
+                        }
+                    }
+                    RuleChange::Remove(_) => { /* Nothing to do here */ }
+                }
+            }
+        }
+    }
+
     /// Visits all rules associated with the current string. This may
     /// potentially return no rule indices at all.
     pub fn visit_rule_indices(&mut self, mut visit: impl FnMut(usize)) {

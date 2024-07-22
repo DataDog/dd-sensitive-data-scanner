@@ -3,12 +3,11 @@ use serde::{Deserialize, Serialize};
 use crate::match_action::MatchAction;
 use crate::path::Path;
 use crate::scanner::error::CreateScannerError;
-use crate::scanner::{CompiledRule, CompiledRuleDyn};
+use crate::scanner::CompiledRuleDyn;
 use crate::{CachePoolBuilder, Labels};
 use serde_with::{serde_as, DefaultOnNull};
 
 pub trait RuleConfigTrait {
-    
     fn convert_to_compiled_rule(
         &self,
         rule_index: usize,
@@ -16,7 +15,7 @@ pub trait RuleConfigTrait {
         // cache_config: Option<&mut Box<dyn GroupCacheConfigTrait>>,
         cache_pool_builder: &mut CachePoolBuilder,
     ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError>;
-    
+
     // fn get_cache_type(&self) -> GroupCacheType;
     // fn new_cache_config(&self) -> Option<Box<dyn GroupCacheConfigTrait>>;
 }

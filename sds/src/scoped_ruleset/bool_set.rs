@@ -12,6 +12,9 @@ impl BoolSet {
         }
     }
 
+    pub fn get(&self, index: usize) -> bool {
+        self.rule_used[index]
+    }
     pub fn get_and_set(&mut self, index: usize) -> bool {
         let result = self.rule_used[index];
         self.rule_used[index] = true;
