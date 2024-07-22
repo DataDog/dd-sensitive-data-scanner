@@ -46,20 +46,12 @@ impl CompiledRule for RegexCompiledRule {
         content: &str,
         path: &Path,
         caches: &mut CachePoolGuard<'_>,
-        group_data: &mut (),
+        _group_data: &mut (),
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
     ) {
-        // let cache_pool: &mut CachePool = caches.unwrap().as_any_mut().downcast_mut().unwrap();
-        // // It should be as fast as before if single-threaded, but it should be slower if multi-threaded
-        // // PoolGuard does not lock if first get comes from the CachePool thread owner
-        // // Check with @nathan how we can improve this
-        // let caches: &mut regex_automata::util::pool::PoolGuard<
-        //     Vec<Cache>,
-        //     Box<dyn Fn() -> Vec<Cache> + Send + Sync>,
-        // > = &mut cache_pool.get();
         match self.included_keywords {
             Some(ref included_keywords) => {
                 self.get_string_matches_with_included_keywords(

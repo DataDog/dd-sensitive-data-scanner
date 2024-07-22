@@ -161,18 +161,11 @@ where
 }
 
 impl RuleConfigTrait for RegexRuleConfig {
-    // fn new_cache_config(&self) -> Option<Box<dyn GroupCacheConfigTrait>> {
-    //     Some(Box::new(CachePoolBuilder::new()))
-    // }
-    // fn get_cache_type(&self) -> GroupCacheType {
-    //     GroupCacheType::Regex
-    // }
     fn convert_to_compiled_rule(
         &self,
         rule_index: usize,
         scanner_labels: Labels,
         cache_pool_builder: &mut CachePoolBuilder,
-        // cache_config: Option<&mut Box<dyn GroupCacheConfigTrait>>,
     ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
         let regex = validate_and_create_regex(&self.pattern)?;
         self.match_action.validate()?;
@@ -213,7 +206,6 @@ pub struct Scanner {
     rules: Vec<Box<dyn CompiledRuleDyn>>,
     scoped_ruleset: ScopedRuleSet,
     cache_pool: CachePool,
-    // cache_config_per_type: HashMap<GroupCacheType, Box<dyn GroupCacheConfigTrait>>,
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
 }
@@ -232,13 +224,6 @@ impl Scanner {
             Box<dyn Fn() -> Vec<regex_automata::meta::Cache> + Send + Sync>,
         > = self.cache_pool.get();
 
-        // Let build one cache per GroupType
-        // let mut cache_per_type: HashMap<GroupCacheType, Box<dyn GroupCacheTrait>> = HashMap::new();
-        // for (cache_type, cache_config) in &self.cache_config_per_type {
-        //     cache_per_type.insert(*cache_type, cache_config.build());
-        // }
-        let mut group_data: AHashMap<std::any::TypeId, Box<dyn Any>> = AHashMap::new();
-
         // All matches, after some (but not all) false-positives have been removed.
         // This is a vec of vecs, where each inner vec is a set of matches for a single path.
         let mut rule_matches_list = vec![];
@@ -251,7 +236,6 @@ impl Scanner {
             event,
             ScannerContentVisitor {
                 scanner: self,
-                // group_data: &mut group_data,
                 caches,
                 // cache_per_type: &mut cache_per_type,
                 rule_matches: &mut rule_matches_list,
@@ -507,7 +491,6 @@ impl<C: RuleConfigTrait> ScannerBuilder<'_, C> {
 struct ScannerContentVisitor<'a, E: Encoding> {
     scanner: &'a Scanner,
     caches: CachePoolGuard<'a>,
-    // group_data: &'a mut AHashMap<std::any::TypeId, Box<dyn Any>>,
     rule_matches: &'a mut Vec<(crate::Path<'static>, Vec<InternalRuleMatch<E>>)>,
     excluded_matches: &'a mut AHashSet<String>,
 }
@@ -523,10 +506,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         // matches for a single path
         let mut path_rules_matches = vec![];
 
-        // self.cache_per_type.iter_mut().for_each(|(_, cache)| {
-        //     cache.prepare_content_scanning(content);
-        // });
-
+        // Create a map of per rule type data that can be shared between rules of the same type
         let mut group_data: AHashMap<TypeId, Box<dyn Any>> = AHashMap::new();
 
         rule_visitor.visit_rule_indices(|rule_index| {
@@ -542,8 +522,6 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                         custom_end: E::zero_index(),
                     });
                 };
-
-                // let cache = self.cache_per_type.get_mut(&rule.get_cache_type());
 
                 rule.get_string_matches(
                     content,
