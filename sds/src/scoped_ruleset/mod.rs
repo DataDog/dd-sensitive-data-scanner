@@ -225,15 +225,7 @@ impl<'a> RuleIndexVisitor<'a> {
             }
             for change in &include_node.rule_tree.rule_changes {
                 match change {
-                    RuleChange::Add(rule_index) => {
-                        if let Some(used_rule_set) = &self.used_rule_set {
-                            if !used_rule_set.get(*rule_index) {
-                                (visit)(*rule_index);
-                            }
-                        } else {
-                            (visit)(*rule_index);
-                        }
-                    }
+                    RuleChange::Add(rule_index) => (visit)(*rule_index),
                     RuleChange::Remove(_) => { /* Nothing to do here */ }
                 }
             }
