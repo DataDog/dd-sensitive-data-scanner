@@ -5,10 +5,7 @@ use regex_automata::{
     util::pool::{Pool, PoolGuard},
 };
 
-// use crate::scanner::GroupCacheTrait;
 use crate::scanner::MetaRegex;
-
-// use super::GroupCacheConfigTrait;
 
 type CachePoolFn = Box<dyn Fn() -> Vec<Cache> + Send + Sync>;
 pub type CachePoolGuard<'a> = PoolGuard<'a, Vec<Cache>, CachePoolFn>;
