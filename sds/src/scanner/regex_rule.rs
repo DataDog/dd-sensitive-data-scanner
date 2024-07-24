@@ -32,9 +32,6 @@ impl CompiledRule for RegexCompiledRule {
     // no special data
     type GroupData = ();
 
-    // fn get_cache_type(&self) -> GroupCacheType {
-    //     GroupCacheType::Regex
-    // }
     fn get_match_action(&self) -> &MatchAction {
         &self.match_action
     }
