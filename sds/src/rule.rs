@@ -12,12 +12,8 @@ pub trait RuleConfigTrait {
         &self,
         rule_index: usize,
         label: Labels,
-        // cache_config: Option<&mut Box<dyn GroupCacheConfigTrait>>,
         cache_pool_builder: &mut CachePoolBuilder,
     ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError>;
-
-    // fn get_cache_type(&self) -> GroupCacheType;
-    // fn new_cache_config(&self) -> Option<Box<dyn GroupCacheConfigTrait>>;
 }
 
 #[serde_as]
