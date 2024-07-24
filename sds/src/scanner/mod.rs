@@ -64,8 +64,6 @@ pub trait CompiledRuleDyn: Send + Sync {
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
     );
-
-    fn pre_rule_match(&self, group_data: &mut AHashMap<TypeId, Box<dyn Any>>);
 }
 
 pub trait CompiledRule: Send + Sync {
@@ -89,8 +87,6 @@ pub trait CompiledRule: Send + Sync {
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
     );
-
-    fn pre_rule_match(&self, group_data: &mut Self::GroupData);
 }
 
 impl<T: CompiledRule> CompiledRuleDyn for T {
@@ -100,14 +96,6 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
 
     fn get_scope(&self) -> &Scope {
         self.get_scope()
-    }
-
-    fn pre_rule_match(&self, group_data: &mut AHashMap<TypeId, Box<dyn Any>>) {
-        let group_data_any = group_data
-            .entry(TypeId::of::<T::GroupData>())
-            .or_insert_with(|| Box::new(T::GroupData::default()));
-        let group_data: &mut T::GroupData = group_data_any.downcast_mut().unwrap();
-        self.pre_rule_match(group_data)
     }
 
     fn get_string_matches(
@@ -502,12 +490,6 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         // Create a map of per rule type data that can be shared between rules of the same type
         let mut group_data: AHashMap<TypeId, Box<dyn Any>> = AHashMap::new();
 
-        // Prepare rule visit (each rule is called once per string, so this is a good place to prepare any data that needs to be shared between rules)
-        rule_visitor.prepare_rule_indices(|rule_index| {
-            let rule = &self.scanner.rules[rule_index];
-            rule.pre_rule_match(&mut group_data);
-        });
-
         rule_visitor.visit_rule_indices(|rule_index| {
             let rule = &self.scanner.rules[rule_index];
             {
@@ -646,7 +628,6 @@ mod test {
         fn get_scope(&self) -> &Scope {
             &self.scope
         }
-        fn pre_rule_match(&self, _group_data: &mut Self::GroupData) {}
         fn get_string_matches(
             &self,
             _content: &str,
