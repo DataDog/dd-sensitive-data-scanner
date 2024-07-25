@@ -10,7 +10,7 @@ mod benchmarks {
     use dd_sds::{LuhnChecksum, Validator};
     use dd_sds::{Scanner, SimpleEvent};
     use std::collections::BTreeMap;
-    use std::fmt::format;
+    
 
     pub fn scoped_ruleset(c: &mut Criterion) {
         let mut paths = vec![];
