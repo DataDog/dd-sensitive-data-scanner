@@ -1,8 +1,5 @@
-use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
-use crate::match_action::MatchAction;
-use crate::path::Path;
 use crate::scanner::cache_pool::CachePoolBuilder;
 use crate::scanner::error::CreateScannerError;
 use crate::scanner::CompiledRuleTrait;

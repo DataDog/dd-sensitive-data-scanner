@@ -4,15 +4,12 @@ use crate::observability::labels::Labels;
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
-use crate::validation::validate_and_create_regex;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Path};
 use regex_automata::meta::Regex as MetaRegex;
 use std::sync::Arc;
 
 use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
-use self::metrics::RuleMetrics;
 use self::metrics::ScannerMetrics;
-use crate::proximity_keywords::compile_keywords_proximity_config;
 // use crate::scanner::regex_rule::RegexCompiledRule;
 use ahash::AHashSet;
 use regex_automata::Match;

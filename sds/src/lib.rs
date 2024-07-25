@@ -30,7 +30,7 @@ pub use rule_match::{ReplacementType, RuleMatch};
 pub use scanner::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 pub use scanner::{
     error::CreateScannerError, CompiledRuleTrait, MatchEmitter, Scanner, ScannerBuilder,
-    StringMatch,
+    StringMatch, scope::Scope, regex_rule::config::RegexRuleConfig, config::ProximityKeywordsConfig
 };
 pub use scoped_ruleset::ExclusionCheck;
 pub use validation::{
