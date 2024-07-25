@@ -1,7 +1,9 @@
 use std::ffi::{c_char, CStr, CString};
+use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
 use dd_sds::{RegexRuleConfig, Scanner};
+use crate::RuleList;
 
 use super::convert_panic_to_error;
 
@@ -10,17 +12,18 @@ const ERR_PANIC: i64 = -5;
 
 #[no_mangle]
 pub extern "C" fn create_scanner(
-    rules_as_json: *const c_char,
+    rules: i64,
     error_out: *mut *const c_char,
     should_keywords_match_event_paths: bool,
 ) -> i64 {
     match convert_panic_to_error(|| {
-        // json bytes parameter
-        let c_str = unsafe { CStr::from_ptr(rules_as_json) };
-        let val = c_str.to_string_lossy();
-
-        // parse the json
-        let rules: Vec<RegexRuleConfig> = serde_json::from_str(&val).unwrap();
+        // // json bytes parameter
+        // let c_str = unsafe { CStr::from_ptr(rules_as_json) };
+        // let val = c_str.to_string_lossy();
+        // 
+        // // parse the json
+        // let rules: Vec<RegexRuleConfig> = serde_json::from_str(&val).unwrap();
+        let rules = ManuallyDrop::new(unsafe {RuleList::from_raw(rules as usize as *const _)}).lock().unwrap();
 
         // create the scanner
         let scanner = match Scanner::builder(&rules)

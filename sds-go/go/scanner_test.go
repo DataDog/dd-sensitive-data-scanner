@@ -1,4 +1,4 @@
-package sds
+package dd_sds
 
 import (
 	"bytes"

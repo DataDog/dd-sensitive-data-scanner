@@ -1,4 +1,4 @@
-package sds
+package dd_sds
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 
 /*
 #include <stdlib.h>
-#include <sds.h>
+#include <dd_sds.h>
 */
 import "C"
 

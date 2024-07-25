@@ -187,6 +187,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dd_sds_go"
+version = "0.1.2"
+dependencies = [
+ "dd-sds",
+ "sds-bindings-utils",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "deranged"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -554,16 +564,6 @@ name = "sds-bindings-utils"
 version = "0.1.2"
 dependencies = [
  "dd-sds",
-]
-
-[[package]]
-name = "sds_go"
-version = "0.1.2"
-dependencies = [
- "dd-sds",
- "sds-bindings-utils",
- "serde",
- "serde_json",
 ]
 
 [[package]]

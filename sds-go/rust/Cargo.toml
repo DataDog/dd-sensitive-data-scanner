@@ -1,5 +1,5 @@
 [package]
-name = "sds_go"
+name = "dd_sds_go"
 version = "0.1.2"
 edition = "2021"
 license = "Apache-2.0"
