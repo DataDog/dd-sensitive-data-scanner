@@ -11,16 +11,6 @@ use serde_with::serde_as;
 use serde_with::DefaultOnNull;
 use std::sync::Arc;
 
-// #[derive(Clone)]
-// pub struct RegexRuleConfigBuilder {
-//     pattern: String,
-//     match_action: MatchAction,
-//     scope: Scope,
-//     proximity_keywords: Option<ProximityKeywordsConfig>,
-//     validator: Option<SecondaryValidator>,
-//     labels: Labels,
-// }
-
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RegexRuleConfig {
