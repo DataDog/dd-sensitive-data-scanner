@@ -1,19 +1,14 @@
-use super::Validator;
-use crate::proximity_keywords::{
-    contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
-    CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
-};
-use crate::scanner::metrics::RuleMetrics;
-use crate::scanner::{get_next_regex_start, is_false_positive_match};
-use crate::{
-    CachePoolGuard, CompiledRuleTrait, ExclusionCheck, MatchAction, MatchEmitter, Path, Scope,
-    StringMatch,
-};
-use ahash::AHashSet;
-use regex_automata::meta::Cache;
-use regex_automata::meta::Regex as MetaRegex;
-use regex_automata::Input;
 use std::sync::Arc;
+use ahash::AHashSet;
+use regex_automata::Input;
+use regex_automata::meta::Regex as MetaRegex;
+use crate::{CachePoolGuard, CompiledRuleTrait, ExclusionCheck, MatchAction, MatchEmitter, Path, StringMatch};
+use crate::secondary_validation::Validator;
+use crate::proximity_keywords::{CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords, contains_keyword_in_path, get_prefix_start, is_index_within_prefix};
+use crate::scanner::metrics::RuleMetrics;
+use regex_automata::meta::Cache;
+use crate::scanner::{get_next_regex_start, is_false_positive_match};
+use crate::scanner::scope::Scope;
 
 /// This is the internal representation of a rule after it has been validated / compiled.
 pub struct RegexCompiledRule {
@@ -147,7 +142,7 @@ impl RegexCompiledRule {
                         included_keywords.look_ahead_character_count,
                         content,
                     )
-                    .start;
+                        .start;
                     included_keyword_matches.skip_to(new_start);
                     // Switch back to included keyword search, since we are past the prefix
                     continue 'included_keyword_search;

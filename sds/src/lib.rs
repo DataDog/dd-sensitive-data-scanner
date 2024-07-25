@@ -10,7 +10,7 @@ mod observability;
 mod parser;
 mod path;
 mod proximity_keywords;
-mod rule;
+mod config;
 mod rule_match;
 mod scanner;
 mod scoped_ruleset;
@@ -26,10 +26,6 @@ pub use event::{Event, EventVisitor, VisitStringResult};
 pub use match_action::{MatchAction, PartialRedactDirection};
 pub use observability::labels::Labels;
 pub use path::{Path, PathSegment};
-pub use rule::{
-    ProximityKeywordsConfig, RegexRuleConfig, RuleConfigBuilder, RuleConfigTrait, Scope,
-    SecondaryValidator,
-};
 pub use rule_match::{ReplacementType, RuleMatch};
 pub use scanner::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 pub use scanner::{
