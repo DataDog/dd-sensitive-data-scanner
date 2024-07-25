@@ -61,47 +61,6 @@ pub trait CompiledRuleTrait: Send + Sync {
     );
 }
 
-impl RuleConfig for Box<dyn RuleConfig> {
-    fn convert_to_compiled_rule(
-        &self,
-        rule_index: usize,
-        scanner_labels: Labels,
-        cache_pool_builder: &mut CachePoolBuilder,
-    ) -> Result<Box<dyn CompiledRuleTrait>, CreateScannerError> {
-        self.as_ref()
-            .convert_to_compiled_rule(rule_index, scanner_labels, cache_pool_builder)
-    }
-}
-
-impl RuleConfig for Arc<dyn RuleConfig> {
-    fn convert_to_compiled_rule(
-        &self,
-        rule_index: usize,
-        scanner_labels: Labels,
-        cache_pool_builder: &mut CachePoolBuilder,
-    ) -> Result<Box<dyn CompiledRuleTrait>, CreateScannerError> {
-        self.as_ref()
-            .convert_to_compiled_rule(rule_index, scanner_labels, cache_pool_builder)
-    }
-}
-
-impl<T> RuleConfig for Box<T>
-where
-    T: RuleConfig,
-{
-    fn convert_to_compiled_rule(
-        &self,
-        rule_index: usize,
-        scanner_labels: Labels,
-        cache_pool_builder: &mut CachePoolBuilder,
-    ) -> Result<Box<dyn CompiledRuleTrait>, CreateScannerError> {
-        self.as_ref()
-            .convert_to_compiled_rule(rule_index, scanner_labels, cache_pool_builder)
-    }
-}
-
-
-
 #[derive(Default, Debug, PartialEq)]
 struct ScannerFeatures {
     pub should_keywords_match_event_paths: bool,
@@ -117,7 +76,7 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn builder<C: RuleConfig>(rules: &[C]) -> ScannerBuilder<C> {
+    pub fn builder(rules: &[Arc<dyn RuleConfig>]) -> ScannerBuilder {
         ScannerBuilder::new(rules)
     }
 
@@ -330,14 +289,14 @@ impl Scanner {
 }
 
 #[derive(Default)]
-pub struct ScannerBuilder<'a, C: RuleConfig> {
-    rules: &'a [C],
+pub struct ScannerBuilder<'a> {
+    rules: &'a [Arc<dyn RuleConfig>],
     labels: Labels,
     scanner_features: ScannerFeatures,
 }
 
-impl<C: RuleConfig> ScannerBuilder<'_, C> {
-    pub fn new(rules: &[C]) -> ScannerBuilder<C> {
+impl ScannerBuilder<'_> {
+    pub fn new(rules: &[Arc<dyn RuleConfig>]) -> ScannerBuilder {
         ScannerBuilder {
             rules,
             labels: Labels::empty(),
@@ -568,7 +527,7 @@ mod test {
 
     #[test]
     fn dumb_custom_rule() {
-        let scanner = ScannerBuilder::new(&[DumbRuleConfig {}])
+        let scanner = ScannerBuilder::new(&[Arc::new(DumbRuleConfig {})])
             .with_keywords_should_match_event_paths(true)
             .build()
             .unwrap();
@@ -584,14 +543,12 @@ mod test {
     #[test]
     fn test_mixed_rules() {
         let scanner = ScannerBuilder::new(&[
-            Box::new(DumbRuleConfig {}) as Box<dyn RuleConfig>,
-            Box::new(
-                RegexRuleConfig::new("secret")
-                    .match_action(MatchAction::Redact {
-                        replacement: "[SECRET]".to_string(),
-                    })
-                    .build(),
-            ) as Box<dyn RuleConfig>,
+            Arc::new(DumbRuleConfig {}),
+            RegexRuleConfig::new("secret")
+                .match_action(MatchAction::Redact {
+                    replacement: "[SECRET]".to_string(),
+                })
+                .build(),
         ])
         .with_keywords_should_match_event_paths(true)
         .build()
