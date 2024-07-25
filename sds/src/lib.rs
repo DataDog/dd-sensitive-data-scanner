@@ -31,7 +31,7 @@ pub use scanner::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 pub use scanner::{
     config::ProximityKeywordsConfig, error::CreateScannerError,
     regex_rule::config::RegexRuleConfig, scope::Scope, CompiledRuleTrait, MatchEmitter, Scanner,
-    ScannerBuilder, StringMatch,
+    ScannerBuilder, StringMatch, config::RuleConfig
 };
 pub use scoped_ruleset::ExclusionCheck;
 pub use validation::{
