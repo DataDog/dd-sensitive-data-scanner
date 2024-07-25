@@ -29,9 +29,9 @@ pub use path::{Path, PathSegment};
 pub use rule_match::{ReplacementType, RuleMatch};
 pub use scanner::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 pub use scanner::{
-    config::ProximityKeywordsConfig, error::CreateScannerError,
+    config::ProximityKeywordsConfig, config::RuleConfig, error::CreateScannerError,
     regex_rule::config::RegexRuleConfig, scope::Scope, CompiledRuleTrait, MatchEmitter, Scanner,
-    ScannerBuilder, StringMatch, config::RuleConfig
+    ScannerBuilder, StringMatch,
 };
 pub use scoped_ruleset::ExclusionCheck;
 pub use validation::{
