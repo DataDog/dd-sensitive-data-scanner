@@ -11,17 +11,17 @@ use std::sync::Arc;
 use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 use self::metrics::ScannerMetrics;
 // use crate::scanner::regex_rule::RegexCompiledRule;
-use ahash::AHashSet;
-use regex_automata::Match;
 use crate::scanner::config::RuleConfig;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::scope::Scope;
+use ahash::AHashSet;
+use regex_automata::Match;
 
 pub mod cache_pool;
+pub mod config;
 pub mod error;
 pub mod metrics;
 pub mod regex_rule;
-pub mod config;
 pub mod scope;
 
 pub struct StringMatch {
@@ -460,11 +460,15 @@ fn is_false_positive_match(
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use super::cache_pool::{CachePoolBuilder, CachePoolGuard};
+    use super::*;
     use super::{MatchEmitter, ScannerBuilder, StringMatch};
     use crate::match_action::{MatchAction, MatchActionValidationError};
     use crate::observability::labels::Labels;
+    use crate::scanner::config::SecondaryValidator::*;
+    use crate::scanner::config::{ProximityKeywordsConfig, SecondaryValidator};
+    use crate::scanner::regex_rule::config::RegexRuleConfig;
+    use crate::scanner::scope::Scope;
     use crate::scanner::{get_next_regex_start, CreateScannerError, Scanner};
     use crate::scoped_ruleset::ExclusionCheck;
     use crate::validation::RegexValidationError;
@@ -473,10 +477,6 @@ mod test {
     use ahash::AHashSet;
     use regex_automata::Match;
     use std::collections::BTreeMap;
-    use crate::scanner::config::{ProximityKeywordsConfig, SecondaryValidator};
-    use crate::scanner::config::SecondaryValidator::*;
-    use crate::scanner::regex_rule::config::{RegexRuleConfig};
-    use crate::scanner::scope::Scope;
 
     use super::CompiledRuleTrait;
     use super::RuleConfig;
@@ -606,10 +606,9 @@ mod test {
 
     #[test]
     fn should_fail_on_compilation_error() {
-        let scanner_result =
-            ScannerBuilder::new(&[RegexRuleConfig::new("\\u").build()])
-                .with_keywords_should_match_event_paths(true)
-                .build();
+        let scanner_result = ScannerBuilder::new(&[RegexRuleConfig::new("\\u").build()])
+            .with_keywords_should_match_event_paths(true)
+            .build();
         assert!(scanner_result.is_err());
         assert_eq!(
             scanner_result.err().unwrap(),
@@ -694,7 +693,6 @@ mod test {
 
     #[test]
     fn test_indices() {
-
         let test_builder = RegexRuleConfig::new("test");
         let detect_test_rule = test_builder.build();
         let redact_test_rule = test_builder
@@ -956,9 +954,7 @@ mod test {
                 replacement: "[credit card]".to_string(),
             });
 
-        let rule_with_checksum = rule
-            .validator(SecondaryValidator::LuhnChecksum)
-            .build();
+        let rule_with_checksum = rule.validator(SecondaryValidator::LuhnChecksum).build();
 
         let scanner = ScannerBuilder::new(&[rule.build()])
             .with_keywords_should_match_event_paths(true)
@@ -982,14 +978,11 @@ mod test {
     #[test]
     fn test_chinese_id_checksum() {
         let pattern = "\\b[1-9]\\d{5}(?:(?:19|20)\\d{2}(?:(?:0[1-9]|1[0-2])(?:0[1-9]|[1-2]\\d|3[0-1]))\\d{3}[0-9Xx]|\\d{7,18})\\b";
-        let rule = RegexRuleConfig::new(pattern)
-            .match_action(MatchAction::Redact {
-                replacement: "[IDCARD]".to_string(),
-            });
+        let rule = RegexRuleConfig::new(pattern).match_action(MatchAction::Redact {
+            replacement: "[IDCARD]".to_string(),
+        });
 
-        let rule_with_checksum = rule
-            .validator(ChineseIdChecksum)
-            .build();
+        let rule_with_checksum = rule.validator(ChineseIdChecksum).build();
 
         let scanner = ScannerBuilder::new(&[rule.build()])
             .with_keywords_should_match_event_paths(true)
@@ -1042,14 +1035,11 @@ mod test {
     #[test]
     fn test_github_token_checksum() {
         let pattern = "\\bgh[opsu]_[0-9a-zA-Z]{36}\\b";
-        let rule = RegexRuleConfig::new(pattern)
-            .match_action(MatchAction::Redact {
-                replacement: "[GITHUB]".to_string(),
-            });
+        let rule = RegexRuleConfig::new(pattern).match_action(MatchAction::Redact {
+            replacement: "[GITHUB]".to_string(),
+        });
 
-        let rule_with_checksum = rule
-            .validator(GithubTokenChecksum)
-            .build();
+        let rule_with_checksum = rule.validator(GithubTokenChecksum).build();
 
         let scanner = ScannerBuilder::new(&[rule.build()])
             .with_keywords_should_match_event_paths(true)
@@ -1813,19 +1803,17 @@ mod test {
 
     mod metrics_test {
         use crate::match_action::MatchAction;
+        use crate::scanner::config::ProximityKeywordsConfig;
+        use crate::scanner::regex_rule::config::RegexRuleConfig;
+        use crate::scanner::scope::Scope;
         use crate::scanner::ScannerBuilder;
-        use crate::{
-            simple_event::SimpleEvent, Path, PathSegment,
-        };
+        use crate::{simple_event::SimpleEvent, Path, PathSegment};
         use metrics::{Key, Label};
         use metrics_util::debugging::DebugValue;
         use metrics_util::debugging::DebuggingRecorder;
         use metrics_util::CompositeKey;
         use metrics_util::MetricKind::Counter;
         use std::collections::BTreeMap;
-        use crate::scanner::config::ProximityKeywordsConfig;
-        use crate::scanner::regex_rule::config::RegexRuleConfig;
-        use crate::scanner::scope::Scope;
 
         #[test]
         fn should_submit_scanning_metrics() {

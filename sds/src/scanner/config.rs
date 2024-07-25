@@ -39,12 +39,10 @@ pub enum SecondaryValidator {
     IbanChecker,
 }
 
-
-
 #[cfg(test)]
 mod test {
     use super::*;
-    
+
     #[test]
     fn proximity_keywords_should_have_default() {
         let json_config = r#"{"look_ahead_character_count": 0}"#;

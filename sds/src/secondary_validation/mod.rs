@@ -10,8 +10,8 @@ pub use crate::secondary_validation::iban_checker::IbanChecker;
 pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 
-use std::str::Chars;
 use crate::scanner::config::SecondaryValidator;
+use std::str::Chars;
 
 pub trait Validator: Send + Sync {
     fn is_valid_match(&self, regex_match: &str) -> bool;

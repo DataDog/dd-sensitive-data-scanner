@@ -2,6 +2,7 @@
 // override with `#[allow(clippy::print_stdout)]`.
 #![deny(clippy::print_stdout)]
 
+mod config;
 mod encoding;
 mod event;
 mod match_action;
@@ -10,7 +11,6 @@ mod observability;
 mod parser;
 mod path;
 mod proximity_keywords;
-mod config;
 mod rule_match;
 mod scanner;
 mod scoped_ruleset;
@@ -29,8 +29,9 @@ pub use path::{Path, PathSegment};
 pub use rule_match::{ReplacementType, RuleMatch};
 pub use scanner::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 pub use scanner::{
-    error::CreateScannerError, CompiledRuleTrait, MatchEmitter, Scanner, ScannerBuilder,
-    StringMatch, scope::Scope, regex_rule::config::RegexRuleConfig, config::ProximityKeywordsConfig
+    config::ProximityKeywordsConfig, error::CreateScannerError,
+    regex_rule::config::RegexRuleConfig, scope::Scope, CompiledRuleTrait, MatchEmitter, Scanner,
+    ScannerBuilder, StringMatch,
 };
 pub use scoped_ruleset::ExclusionCheck;
 pub use validation::{

@@ -1,15 +1,15 @@
-use std::sync::Arc;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use crate::{CachePoolBuilder, CompiledRuleTrait, CreateScannerError, Labels, MatchAction};
-use crate::secondary_validation::Validator;
 use crate::proximity_keywords::compile_keywords_proximity_config;
 use crate::scanner::config::{ProximityKeywordsConfig, RuleConfig, SecondaryValidator};
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::scope::Scope;
+use crate::secondary_validation::Validator;
 use crate::validation::validate_and_create_regex;
+use crate::{CachePoolBuilder, CompiledRuleTrait, CreateScannerError, Labels, MatchAction};
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use serde_with::DefaultOnNull;
+use std::sync::Arc;
 
 // #[derive(Clone)]
 // pub struct RegexRuleConfigBuilder {
@@ -43,25 +43,22 @@ impl RegexRuleConfig {
             scope: Scope::default(),
             proximity_keywords: None,
             validator: None,
-            labels: Labels::default()
+            labels: Labels::default(),
         }
     }
-    
+
     pub fn pattern(&self, pattern: String) -> Self {
-        self.mutate_clone(|x|x.pattern = pattern)
+        self.mutate_clone(|x| x.pattern = pattern)
     }
 
     pub fn match_action(&self, match_action: MatchAction) -> Self {
-        self.mutate_clone(|x|x.match_action = match_action)
+        self.mutate_clone(|x| x.match_action = match_action)
     }
     pub fn scope(&self, scope: Scope) -> Self {
-        self.mutate_clone(|x|x.scope = scope)
+        self.mutate_clone(|x| x.scope = scope)
     }
-    pub fn proximity_keywords(
-        &self,
-        proximity_keywords: ProximityKeywordsConfig,
-    ) -> Self {
-        self.mutate_clone(|x|x.proximity_keywords = Some(proximity_keywords))
+    pub fn proximity_keywords(&self, proximity_keywords: ProximityKeywordsConfig) -> Self {
+        self.mutate_clone(|x| x.proximity_keywords = Some(proximity_keywords))
     }
 
     pub fn validator(&self, validator: SecondaryValidator) -> Self {
@@ -69,7 +66,7 @@ impl RegexRuleConfig {
     }
 
     pub fn labels(&self, labels: Labels) -> Self {
-        self.mutate_clone(|x|x.labels = labels)
+        self.mutate_clone(|x| x.labels = labels)
     }
 
     pub fn build(&self) -> Arc<dyn RuleConfig> {
@@ -129,11 +126,10 @@ impl RuleConfig for RegexRuleConfig {
 #[cfg(test)]
 mod test {
     use super::*;
-    
+
     #[test]
     fn should_override_pattern() {
-        let rule_config = RegexRuleConfig::new("123")
-            .pattern("456".to_string());
+        let rule_config = RegexRuleConfig::new("123").pattern("456".to_string());
         assert_eq!(rule_config.pattern, "456");
     }
 

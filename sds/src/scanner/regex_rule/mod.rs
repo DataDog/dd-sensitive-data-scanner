@@ -27,8 +27,3 @@ pub mod config;
 // use crate::scanner::metrics::RuleMetrics;
 // use crate::scanner::regex_rule::RegexCompiledRule;
 // use crate::validation::validate_and_create_regex;
-
-
-
-
-

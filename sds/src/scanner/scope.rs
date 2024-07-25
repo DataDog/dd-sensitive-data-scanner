@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::Path;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "type", content = "paths")]

@@ -7,6 +7,7 @@ pub use crate::proximity_keywords::included_keywords::*;
 use crate::proximity_keywords::ProximityKeywordsValidationError::{
     EmptyKeyword, InvalidLookAheadCharacterCount, KeywordTooLong, TooManyKeywords,
 };
+use crate::scanner::config::ProximityKeywordsConfig;
 use crate::Labels;
 use metrics::counter;
 use regex_automata::{meta, Input};
@@ -15,7 +16,6 @@ use regex_syntax::ast::{
     Group, GroupKind, Literal, LiteralKind, Position, Span,
 };
 use thiserror::Error;
-use crate::scanner::config::ProximityKeywordsConfig;
 
 const MAX_KEYWORD_COUNT: usize = 50;
 pub const MAX_LOOK_AHEAD_CHARACTER_COUNT: usize = 50;

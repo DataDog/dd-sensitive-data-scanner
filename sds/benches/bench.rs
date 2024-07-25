@@ -6,11 +6,13 @@ compile_error!(
 #[cfg(feature = "bench")]
 mod benchmarks {
     use criterion::Criterion;
-    use dd_sds::{ContentVisitor, ExclusionCheck, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig, RuleIndexVisitor, Scope, ScopedRuleSet};
+    use dd_sds::{
+        ContentVisitor, ExclusionCheck, Path, PathSegment, ProximityKeywordsConfig,
+        RegexRuleConfig, RuleIndexVisitor, Scope, ScopedRuleSet,
+    };
     use dd_sds::{LuhnChecksum, Validator};
     use dd_sds::{Scanner, SimpleEvent};
     use std::collections::BTreeMap;
-    
 
     pub fn scoped_ruleset(c: &mut Criterion) {
         let mut paths = vec![];
@@ -120,27 +122,26 @@ mod benchmarks {
     }
 
     pub fn included_keywords(c: &mut Criterion) {
-        let scanner =
-            Scanner::builder(&[RegexRuleConfig::new("[a-zA-z0-9]{4,25}")
-                .proximity_keywords(ProximityKeywordsConfig {
-                    look_ahead_character_count: 30,
-                    included_keywords: vec![
-                        "secret".to_string(),
-                        "password".to_string(),
-                        "token".to_string(),
-                        "key".to_string(),
-                        "code".to_string(),
-                        "credential".to_string(),
-                        "passphrase".to_string(),
-                        "ssn".to_string(),
-                        "confidential".to_string(),
-                        "private".to_string(),
-                    ],
-                    excluded_keywords: vec![],
-                })
-                .build()])
-            .build()
-            .unwrap();
+        let scanner = Scanner::builder(&[RegexRuleConfig::new("[a-zA-z0-9]{4,25}")
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec![
+                    "secret".to_string(),
+                    "password".to_string(),
+                    "token".to_string(),
+                    "key".to_string(),
+                    "code".to_string(),
+                    "credential".to_string(),
+                    "passphrase".to_string(),
+                    "ssn".to_string(),
+                    "confidential".to_string(),
+                    "private".to_string(),
+                ],
+                excluded_keywords: vec![],
+            })
+            .build()])
+        .build()
+        .unwrap();
 
         let mut message = "a".repeat(1_000_000);
 
