@@ -1019,7 +1019,7 @@ mod test {
 
     #[test]
     fn test_luhn_checksum() {
-        let rule = RegexRuleConfig::builder("\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b".to_string())
+        let rule = RegexRuleConfig::builder("(\\d{16})|((\\d{4} ){3}\\d{4})".to_string())
             .match_action(MatchAction::Redact {
                 replacement: "[credit card]".to_string(),
             })
@@ -1033,25 +1033,24 @@ mod test {
             .with_keywords_should_match_event_paths(true)
             .build()
             .unwrap();
-        let mut content = "4556997807150071 4111 1111 1111 1111".to_string();
+        let mut content = "4556997807150071  4111 1111 1111 1111".to_string();
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 2);
-        assert_eq!(content, "[credit card] [credit card]");
+        assert_eq!(content, "[credit card]  [credit card]");
 
         let scanner = ScannerBuilder::new(&[rule_with_checksum])
             .with_keywords_should_match_event_paths(true)
             .build()
             .unwrap();
-        let mut content = "4556997807150071 4111 1111 1111 1111".to_string();
+        let mut content = "4556997807150071  4111 1111 1111 1111".to_string();
         let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
-        assert_eq!(content, "4556997807150071 [credit card]");
+        assert_eq!(content, "4556997807150071  [credit card]");
     }
 
     #[test]
     fn test_chinese_id_checksum() {
-        let pattern = "\\b[1-9]\\d{5}(?:(?:19|20)\\d{2}(?:(?:0[1-9]|1[0-2])(?:0[1-9]|[1-2]\\d|3[0-1]))\\d{3}[0-9Xx]|\\d{7,18})\\b";
-        let rule = RegexRuleConfig::builder(pattern.to_string())
+        let rule = RegexRuleConfig::builder("\\d+")
             .match_action(MatchAction::Redact {
                 replacement: "[IDCARD]".to_string(),
             })
@@ -1082,8 +1081,7 @@ mod test {
 
     #[test]
     fn test_iban_checksum() {
-        let pattern = "DE[0-9]+";
-        let rule_with_checksum = RegexRuleConfig::builder(pattern.to_string())
+        let rule_with_checksum = RegexRuleConfig::builder("DE[0-9]+")
             .match_action(MatchAction::Redact {
                 replacement: "[IBAN]".to_string(),
             })
@@ -1111,8 +1109,7 @@ mod test {
 
     #[test]
     fn test_github_token_checksum() {
-        let pattern = "\\bgh[opsu]_[0-9a-zA-Z]{36}\\b";
-        let rule = RegexRuleConfig::builder(pattern.to_string())
+        let rule = RegexRuleConfig::builder("[^ ]+")
             .match_action(MatchAction::Redact {
                 replacement: "[GITHUB]".to_string(),
             })
@@ -1147,8 +1144,7 @@ mod test {
 
     #[test]
     fn test_nhs_checksum() {
-        let pattern = ".+";
-        let rule_with_checksum = RegexRuleConfig::builder(pattern.to_string())
+        let rule_with_checksum = RegexRuleConfig::builder(".+")
             .match_action(MatchAction::Redact {
                 replacement: "[NHS]".to_string(),
             })
