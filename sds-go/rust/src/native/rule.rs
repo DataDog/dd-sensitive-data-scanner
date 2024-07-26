@@ -2,8 +2,8 @@ use std::ffi::{c_char, CStr, CString};
 use std::mem::ManuallyDrop;
 use std::sync::{Arc, Mutex};
 
-use dd_sds::{Labels, MatchAction, RegexRuleConfig, RuleConfigTrait, Scanner, Scope};
 use crate::native::{convert_panic_to_go_error, ERR_PANIC, GoError, handle_panic_ptr_return};
+use crate::{RuleDoublePtr, RuleList};
 
 
 #[no_mangle]

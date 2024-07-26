@@ -2,7 +2,7 @@ use core::panic::UnwindSafe;
 use std::ffi::{c_char, CStr, CString};
 use std::sync::{Arc, Mutex};
 use serde::de::DeserializeOwned;
-use dd_sds::RuleConfigTrait;
+use dd_sds::RuleConfig;
 
 mod create_scanner;
 mod delete_scanner;
@@ -10,7 +10,7 @@ mod scan;
 mod rule;
 
 pub const ERR_PANIC: i64 = -5;
-pub type RulePtr = Arc<dyn RuleConfigTrait>;
+pub type RulePtr = Arc<dyn RuleConfig>;
 pub type RuleDoublePtr = Arc<RulePtr>;
 pub type RuleList = Arc<Mutex<Vec<RulePtr>>>;
 

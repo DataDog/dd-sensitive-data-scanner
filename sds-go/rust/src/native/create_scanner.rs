@@ -2,8 +2,8 @@ use std::ffi::{c_char, CStr, CString};
 use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
-use dd_sds::{RegexRuleConfig, Scanner};
 use crate::RuleList;
+use dd_sds::{RegexRuleConfig, RuleConfig, Scanner};
 
 use super::convert_panic_to_error;
 
@@ -23,12 +23,14 @@ pub extern "C" fn create_scanner(
         // 
         // // parse the json
         // let rules: Vec<RegexRuleConfig> = serde_json::from_str(&val).unwrap();
-        let rules = ManuallyDrop::new(unsafe {RuleList::from_raw(rules as usize as *const _)}).lock().unwrap();
+        let rules_mutex = ManuallyDrop::new(unsafe {RuleList::from_raw(rules as usize as *const _)});
+        
+        let rules = rules_mutex.lock().unwrap();
 
         // create the scanner
         let scanner = match Scanner::builder(&rules)
-            .with_keywords_should_match_event_paths(should_keywords_match_event_paths)
-            .build()
+        .with_keywords_should_match_event_paths(should_keywords_match_event_paths)
+        .build()
         {
             Ok(s) => s,
             Err(err) => match err.try_into() {
