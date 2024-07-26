@@ -10,7 +10,7 @@ pub use crate::secondary_validation::iban_checker::IbanChecker;
 pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 
-use crate::scanner::config::SecondaryValidator;
+use crate::scanner::regex_rule::config::SecondaryValidator;
 use std::str::Chars;
 
 pub trait Validator: Send + Sync {
