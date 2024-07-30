@@ -8,36 +8,39 @@ impl Validator for NirChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         let mut input_iter = regex_match.chars();
 
-        let digit: Option<i64> = get_next_digit_chars(&mut input_iter, 13)
-            .and_then(|chars| chars.into_iter().collect::<String>().parse().ok());
+        let digit = get_next_digit_chars(&mut input_iter, 13);
         if digit.is_none() {
             return false;
         }
 
-        let checksum: Option<u8> = get_next_digit_chars(&mut input_iter, 2)
-            .and_then(|chars| chars.into_iter().collect::<String>().parse().ok());
-        if checksum.is_none() || get_next_digit_str(&mut input_iter).is_some() {
+        let checksum = get_next_digit_chars(&mut input_iter, 2);
+        if checksum.is_none() || get_next_digit(&mut input_iter).is_some() {
             return false;
         }
 
-        (97 - digit.unwrap() % 97) as u8 == checksum.unwrap()
+        (97 - digit.unwrap() % 97) == checksum.unwrap()
     }
 }
 
-fn get_next_digit_str(chars: &mut Chars<'_>) -> Option<char> {
-    chars.find(|&char| char.is_ascii_digit())
+fn get_next_digit(chars: &mut Chars<'_>) -> Option<u32> {
+    for char in chars.by_ref() {
+        if let Some(digit) = char.to_digit(10) {
+            return Some(digit);
+        }
+    }
+    None
 }
 
-fn get_next_digit_chars(chars: &mut Chars<'_>, size: usize) -> Option<Vec<char>> {
-    let mut checksum_vec: Vec<char> = Vec::with_capacity(size);
+fn get_next_digit_chars(chars: &mut Chars<'_>, size: usize) -> Option<i64> {
+    let mut total: i64 = 0;
     for _ in 0..size {
-        if let Some(digit) = get_next_digit_str(chars) {
-            checksum_vec.push(digit);
+        if let Some(digit) = get_next_digit(chars) {
+            total = total * 10 + digit as i64;
         } else {
             return None;
         }
     }
-    Some(checksum_vec)
+    Some(total)
 }
 
 #[cfg(test)]
