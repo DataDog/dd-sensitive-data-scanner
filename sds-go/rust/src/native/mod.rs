@@ -4,10 +4,10 @@ use std::sync::{Arc, Mutex};
 use serde::de::DeserializeOwned;
 use dd_sds::RuleConfig;
 
-mod create_scanner;
-mod delete_scanner;
-mod scan;
-mod rule;
+pub mod create_scanner;
+pub mod delete_scanner;
+pub mod scan;
+pub mod rule;
 
 pub const ERR_PANIC: i64 = -5;
 pub type RulePtr = Arc<dyn RuleConfig>;
