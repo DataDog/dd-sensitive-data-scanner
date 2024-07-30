@@ -1,4 +1,4 @@
-use crate::secondary_validation::{get_next_digit, Validator};
+use crate::secondary_validation::{get_previous_digit, Validator};
 
 pub struct LuhnChecksum;
 
@@ -6,10 +6,10 @@ impl Validator for LuhnChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         let mut input_iter = regex_match.chars();
 
-        if let Some(checksum) = get_next_digit(&mut input_iter) {
+        if let Some(checksum) = get_previous_digit(&mut input_iter) {
             let mut sum: u32 = 0;
             let mut is_odd = false;
-            while let Some(digit) = get_next_digit(&mut input_iter) {
+            while let Some(digit) = get_previous_digit(&mut input_iter) {
                 if is_odd {
                     sum += digit
                 } else if digit > 4 {
