@@ -19,8 +19,16 @@ pub trait Validator: Send + Sync {
     fn is_valid_match(&self, regex_match: &str) -> bool;
 }
 
-fn get_next_digit(chars: &mut Chars<'_>) -> Option<u32> {
+fn get_previous_digit(chars: &mut Chars<'_>) -> Option<u32> {
     while let Some(char) = chars.next_back() {
+        if let Some(digit) = char.to_digit(10) {
+            return Some(digit);
+        }
+    }
+    None
+}
+fn get_next_digit(chars: &mut Chars<'_>) -> Option<u32> {
+    for char in chars.by_ref() {
         if let Some(digit) = char.to_digit(10) {
             return Some(digit);
         }

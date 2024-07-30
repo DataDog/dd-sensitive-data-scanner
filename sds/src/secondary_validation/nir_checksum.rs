@@ -1,6 +1,6 @@
 use std::str::Chars;
 
-use crate::secondary_validation::Validator;
+use crate::secondary_validation::{get_next_digit, Validator};
 
 pub struct NirChecksum;
 
@@ -20,15 +20,6 @@ impl Validator for NirChecksum {
 
         (97 - digit.unwrap() % 97) == checksum.unwrap()
     }
-}
-
-fn get_next_digit(chars: &mut Chars<'_>) -> Option<u32> {
-    for char in chars.by_ref() {
-        if let Some(digit) = char.to_digit(10) {
-            return Some(digit);
-        }
-    }
-    None
 }
 
 fn get_next_digit_chars(chars: &mut Chars<'_>, size: usize) -> Option<i64> {
