@@ -558,6 +558,99 @@ func TestPartialRedactEnd(t *testing.T) {
 	runTest(t, scanner, testData)
 }
 
+func TestExclude(t *testing.T) {
+	rules := []Rule{
+		NewRedactingRule("rule_card",
+			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
+			"[REDACTED]", ExtraConfig{
+				ProximityKeywords: CreateProximityKeywordsConfig(10, nil, []string{"traceid"}),
+			}),
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create the scanner:", err.Error())
+	}
+	defer scanner.Delete()
+
+	testData := map[string]testResult{
+		"this is a potato 4111 1111 1111 1111": {
+			mutated: true,
+			str:     "this is a potato [REDACTED]",
+			rules: []RuleMatch{{
+				RuleIdx:           0,
+				StartIndex:        17,
+				ReplacementType:   ReplacementTypePlaceholder,
+				EndIndexExclusive: 17 + uint32(len("[REDACTED]")),
+				ShiftOffset:       -9,
+			}},
+		},
+
+		"this is a credit card 4111 1111 1111 1111": {
+			mutated: true,
+			str:     "this is a credit card [REDACTED]",
+			rules: []RuleMatch{{
+				RuleIdx:           0,
+				StartIndex:        22,
+				ReplacementType:   ReplacementTypePlaceholder,
+				EndIndexExclusive: 22 + uint32(len("[REDACTED]")),
+				ShiftOffset:       -9,
+			}},
+		},
+		"this is a traceid 4111 1111 1111 1111": {
+			mutated: false,
+			str:     "this is a traceid 4111 1111 1111 1111",
+			rules:   []RuleMatch{},
+		},
+	}
+
+	runTest(t, scanner, testData)
+}
+
+func TestIncludeExclude(t *testing.T) {
+	// Include rules take priority over exclude rules
+	rules := []Rule{
+		NewRedactingRule("rule_card",
+			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
+			"[REDACTED]", ExtraConfig{
+				ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, []string{"card", "traceid"}),
+			}),
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create the scanner:", err.Error())
+	}
+	defer scanner.Delete()
+
+	testData := map[string]testResult{
+		"this is a potato 4111 1111 1111 1111": {
+			mutated: false,
+			str:     "this is a potato 4111 1111 1111 1111",
+			rules:   []RuleMatch{},
+		},
+
+		"this is a credit card 4111 1111 1111 1111": {
+			mutated: true,
+			str:     "this is a credit card [REDACTED]",
+			rules: []RuleMatch{{
+				RuleIdx:           0,
+				StartIndex:        22,
+				ReplacementType:   ReplacementTypePlaceholder,
+				EndIndexExclusive: 22 + uint32(len("[REDACTED]")),
+				ShiftOffset:       -9,
+			}},
+		},
+		"this is a traceid 4111 1111 1111 1111": {
+			mutated: false,
+			str:     "this is a traceid 4111 1111 1111 1111",
+			rules:   []RuleMatch{},
+		},
+	}
+
+	runTest(t, scanner, testData)
+}
+
 func runTestMap(t *testing.T, scanner *Scanner, testData map[string]mapTestResult) {
 	for key, testResult := range testData {
 
