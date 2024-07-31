@@ -574,6 +574,18 @@ func TestExclude(t *testing.T) {
 	defer scanner.Delete()
 
 	testData := map[string]testResult{
+		"this is a potato 4111 1111 1111 1111": {
+			mutated: true,
+			str:     "this is a potato [REDACTED]",
+			rules: []RuleMatch{{
+				RuleIdx:           0,
+				StartIndex:        17,
+				ReplacementType:   ReplacementTypePlaceholder,
+				EndIndexExclusive: 17 + uint32(len("[REDACTED]")),
+				ShiftOffset:       -9,
+			}},
+		},
+
 		"this is a credit card 4111 1111 1111 1111": {
 			mutated: true,
 			str:     "this is a credit card [REDACTED]",
@@ -615,7 +627,7 @@ func TestIncludeExclude(t *testing.T) {
 		"this is a potato 4111 1111 1111 1111": {
 			mutated: false,
 			str:     "this is a potato 4111 1111 1111 1111",
-			rules: []RuleMatch{},
+			rules:   []RuleMatch{},
 		},
 
 		"this is a credit card 4111 1111 1111 1111": {
