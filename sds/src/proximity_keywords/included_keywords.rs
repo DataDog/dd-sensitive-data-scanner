@@ -56,7 +56,8 @@ mod test {
     use crate::proximity_keywords::{
         compile_keywords_proximity_config, CompiledIncludedProximityKeywords,
     };
-    use crate::{Labels, ProximityKeywordsConfig};
+    use crate::scanner::regex_rule::config::ProximityKeywordsConfig;
+    use crate::Labels;
 
     fn compile_keywords(lookahead: usize, keywords: &[&str]) -> CompiledIncludedProximityKeywords {
         let (included, _) = compile_keywords_proximity_config(

@@ -5,7 +5,6 @@ mod luhn_checksum;
 mod nhs_check_digit;
 mod nir_checksum;
 
-use crate::rule::SecondaryValidator;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
@@ -13,6 +12,7 @@ pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 pub use crate::secondary_validation::nir_checksum::NirChecksum;
 
+use crate::scanner::regex_rule::config::SecondaryValidator;
 use std::str::Chars;
 
 pub trait Validator: Send + Sync {
