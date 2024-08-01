@@ -1,4 +1,4 @@
-use crate::secondary_validation::{get_next_digit, Validator};
+use crate::secondary_validation::{get_previous_digit, Validator};
 
 pub struct NhsCheckDigit;
 
@@ -16,7 +16,7 @@ impl Validator for NhsCheckDigit {
         let mut nb_digit = 0;
         let mut check_digit = 0;
 
-        while let Some(digit) = get_next_digit(&mut input_iter) {
+        while let Some(digit) = get_previous_digit(&mut input_iter) {
             if nb_digit > 10 {
                 return false;
             }

@@ -135,6 +135,7 @@ pub enum SecondaryValidator {
     GithubTokenChecksum,
     NhsCheckDigit,
     IbanChecker,
+    NirChecksum,
 }
 
 #[cfg(test)]
