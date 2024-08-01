@@ -464,7 +464,9 @@ mod test {
     use super::{MatchEmitter, ScannerBuilder, StringMatch};
     use crate::match_action::{MatchAction, MatchActionValidationError};
     use crate::observability::labels::Labels;
-    use crate::scanner::regex_rule::config::{ProximityKeywordsConfig, SecondaryValidator, SecondaryValidator::*, RegexRuleConfig};
+    use crate::scanner::regex_rule::config::{
+        ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator, SecondaryValidator::*,
+    };
     use crate::scanner::scope::Scope;
     use crate::scanner::{get_next_regex_start, CreateScannerError, Scanner};
     use crate::scoped_ruleset::ExclusionCheck;
@@ -1800,7 +1802,7 @@ mod test {
 
     mod metrics_test {
         use crate::match_action::MatchAction;
-        use crate::scanner::regex_rule::config::{RegexRuleConfig, ProximityKeywordsConfig};
+        use crate::scanner::regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig};
         use crate::scanner::scope::Scope;
         use crate::scanner::ScannerBuilder;
         use crate::{simple_event::SimpleEvent, Path, PathSegment};
