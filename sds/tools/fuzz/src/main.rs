@@ -85,7 +85,7 @@ fn run_fuzz(pattern: &str, input: &str, mut rng: StdRng) {
         println!("Match action: {:?}", match_action);
     }
 
-    let scanner_result = ScannerBuilder::new(&[RegexRuleConfig::builder(pattern.to_string())
+    let scanner_result = ScannerBuilder::new(&[RegexRuleConfig::new(pattern)
         .match_action(match_action)
         .build()])
     .with_keywords_should_match_event_paths(true)

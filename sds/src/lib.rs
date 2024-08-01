@@ -30,6 +30,7 @@ pub use scanner::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 pub use scanner::{
     config::RuleConfig,
     error::CreateScannerError,
+    regex_rule::config::SecondaryValidator,
     regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig},
     scope::Scope,
     CompiledRuleTrait, MatchEmitter, Scanner, ScannerBuilder, StringMatch,
