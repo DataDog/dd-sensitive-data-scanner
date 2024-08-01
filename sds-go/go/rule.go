@@ -1,7 +1,5 @@
 package dd_sds
 
-import "C"
-
 /*
 #include <dd_sds.h>
 */
