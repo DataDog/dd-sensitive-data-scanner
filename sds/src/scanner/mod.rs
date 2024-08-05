@@ -68,7 +68,6 @@ pub trait CompiledRule: Send + Sync {
     /// have the same `GroupData` type. `Default` will be used to initialize this data.
     type GroupData: Default + 'static;
 
-    // fn get_cache_type(&self) -> GroupCacheType;
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
 
@@ -179,7 +178,6 @@ impl Scanner {
             ScannerContentVisitor {
                 scanner: self,
                 caches,
-                // cache_per_type: &mut cache_per_type,
                 rule_matches: &mut rule_matches_list,
                 excluded_matches: &mut excluded_matches,
             },
@@ -578,9 +576,6 @@ mod test {
         fn get_match_action(&self) -> &MatchAction {
             &self.match_action
         }
-        // fn get_cache_type(&self) -> GroupCacheType {
-        //     GroupCacheType::None
-        // }
         fn get_scope(&self) -> &Scope {
             &self.scope
         }
