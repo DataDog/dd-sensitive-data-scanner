@@ -61,6 +61,7 @@ type scanResult struct {
 func CreateScanner(ruleConfigs []RuleConfig) (*Scanner, error) {
 
 	ruleList := CreateRuleList()
+	defer ruleList.Delete()
 
 	for _, ruleConfig := range ruleConfigs {
 		rule, err := ruleConfig.CreateRule()
@@ -68,6 +69,7 @@ func CreateScanner(ruleConfigs []RuleConfig) (*Scanner, error) {
 			return nil, err
 		}
 		ruleList.AppendRule(rule)
+		rule.Delete()
 	}
 
 	var errorString *C.char
