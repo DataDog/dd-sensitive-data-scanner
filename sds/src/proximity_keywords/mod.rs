@@ -7,8 +7,7 @@ pub use crate::proximity_keywords::included_keywords::*;
 use crate::proximity_keywords::ProximityKeywordsValidationError::{
     EmptyKeyword, InvalidLookAheadCharacterCount, KeywordTooLong, TooManyKeywords,
 };
-use crate::rule::ProximityKeywordsConfig;
-use crate::Labels;
+use crate::{Labels, ProximityKeywordsConfig};
 use metrics::counter;
 use regex_automata::{meta, Input};
 use regex_syntax::ast::{

@@ -1,13 +1,13 @@
-use super::Validator;
 use crate::proximity_keywords::{
     contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
     CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
 };
 use crate::scanner::metrics::RuleMetrics;
+use crate::scanner::scope::Scope;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
+use crate::secondary_validation::Validator;
 use crate::{
-    CachePoolGuard, CompiledRule, ExclusionCheck, MatchAction, MatchEmitter, Path, Scope,
-    StringMatch,
+    CachePoolGuard, CompiledRule, ExclusionCheck, MatchAction, MatchEmitter, Path, StringMatch,
 };
 use ahash::AHashSet;
 use regex_automata::meta::Cache;
