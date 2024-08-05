@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+long create_regex_rule(const char* json_config);
+
 long create_scanner(long rule_list, const char** error, bool should_keywords_match_event_paths);
 void delete_scanner(long scanner_id);
 

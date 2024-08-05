@@ -58,21 +58,19 @@ type scanResult struct {
 // stored in the Scanner Go object for convenience. See `Scan` to process events.
 // The rules used to create the Scanner are stored as a read-only information in the
 // returned Scanner.
-func CreateScanner(ruleList RuleList) (*Scanner, error) {
-	//if len(rules) == 0 {
-	//	return nil, fmt.Errorf("no rules provided")
-	//}
+func CreateScanner(ruleConfigs []RuleConfig) (*Scanner, error) {
 
-	//data, err := json.Marshal(rules)
-	//if err != nil {
-	//	return nil, err
-	//}
+	ruleList := CreateRuleList()
 
-	//cdata := C.CString(string(data)) // this call adds the 0, memory has to be freed
-	//defer C.free(unsafe.Pointer(cdata))
+	for _, ruleConfig := range ruleConfigs {
+		rule, err := ruleConfig.CreateRule()
+		if err != nil {
+			return nil, err
+		}
+		ruleList.AppendRule(rule)
+	}
 
 	var errorString *C.char
-
 	id := C.create_scanner(C.long(ruleList.nativePtr), &errorString, C.bool(false) /* should_keywords_match_event_paths */)
 
 	if id < 0 {
