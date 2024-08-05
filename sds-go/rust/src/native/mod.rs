@@ -9,28 +9,12 @@ pub mod delete_scanner;
 pub mod scan;
 pub mod rule;
 
+const ERR_UNKNOWN: i64 = -1;
 pub const ERR_PANIC: i64 = -5;
+
 pub type RulePtr = Arc<dyn RuleConfig>;
 pub type RuleDoublePtr = Arc<RulePtr>;
 pub type RuleList = Arc<Mutex<Vec<RulePtr>>>;
-
-#[deprecated]
-pub fn convert_panic_to_error<R>(f: impl FnOnce() -> R + UnwindSafe) -> Result<R, GoError> {
-    match std::panic::catch_unwind(f) {
-        Ok(result) => Ok(result),
-        Err(err) => {
-            let message = if let Some(string) = err.downcast_ref::<&str>() {
-                string.to_string()
-            } else if let Some(string) = err.downcast_ref::<String>() {
-                string.to_string()
-            } else {
-                "Rust panicked. No more information is available.".to_string()
-            };
-
-            Err(GoError { message })
-        }
-    }
-}
 
 /// Safety: The pointer passed in must be a valid cstr pointer.
 unsafe fn read_json<T: DeserializeOwned>(raw_value: *const c_char) -> Result<T, serde_json::Error> {

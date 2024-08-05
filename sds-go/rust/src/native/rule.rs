@@ -1,9 +1,9 @@
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char};
 use std::mem::ManuallyDrop;
 use std::sync::{Arc, Mutex};
 use dd_sds::RegexRuleConfig;
 
-use crate::native::{convert_panic_to_go_error, ERR_PANIC, GoError, handle_panic_ptr_return};
+use crate::native::{convert_panic_to_go_error, handle_panic_ptr_return, read_json};
 use crate::{RuleDoublePtr, RuleList, RulePtr};
 
 
@@ -12,13 +12,8 @@ pub extern "C" fn create_regex_rule(
     json_config: *const c_char,
 ) -> i64 {
     handle_panic_ptr_return(None, || {
-
-        // json bytes parameter
-        let c_str = unsafe { CStr::from_ptr(json_config) };
-        let val = c_str.to_string_lossy();
-        
         // parse the json
-        let config: RegexRuleConfig = serde_json::from_str(&val).unwrap();
+        let config: RegexRuleConfig = unsafe {read_json(json_config).unwrap()};
         
         let rule: RulePtr = Arc::new(config);
         // A trait object in Rust is a fat-pointer (1 data + 1 vtable pointer). This is boxed again
