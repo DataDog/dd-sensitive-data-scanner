@@ -1,6 +1,6 @@
 use crate::scanner::cache_pool::CachePoolBuilder;
 use crate::scanner::error::CreateScannerError;
-use crate::scanner::CompiledRuleTrait;
+use crate::scanner::CompiledRuleDyn;
 use crate::Labels;
 
 pub trait RuleConfig {
@@ -9,5 +9,5 @@ pub trait RuleConfig {
         rule_index: usize,
         label: Labels,
         cache_pool_builder: &mut CachePoolBuilder,
-    ) -> Result<Box<dyn CompiledRuleTrait>, CreateScannerError>;
+    ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError>;
 }

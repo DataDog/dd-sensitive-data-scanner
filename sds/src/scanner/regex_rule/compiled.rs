@@ -7,7 +7,7 @@ use crate::scanner::scope::Scope;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::secondary_validation::Validator;
 use crate::{
-    CachePoolGuard, CompiledRuleTrait, ExclusionCheck, MatchAction, MatchEmitter, Path, StringMatch,
+    CachePoolGuard, CompiledRule, ExclusionCheck, MatchAction, MatchEmitter, Path, StringMatch,
 };
 use ahash::AHashSet;
 use regex_automata::meta::Cache;
@@ -28,7 +28,10 @@ pub struct RegexCompiledRule {
     pub metrics: RuleMetrics,
 }
 
-impl CompiledRuleTrait for RegexCompiledRule {
+impl CompiledRule for RegexCompiledRule {
+    // no special data
+    type GroupData = ();
+
     fn get_match_action(&self) -> &MatchAction {
         &self.match_action
     }
@@ -40,6 +43,7 @@ impl CompiledRuleTrait for RegexCompiledRule {
         content: &str,
         path: &Path,
         caches: &mut CachePoolGuard<'_>,
+        _group_data: &mut (),
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,

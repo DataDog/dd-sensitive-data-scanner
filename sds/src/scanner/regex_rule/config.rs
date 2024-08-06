@@ -5,7 +5,7 @@ use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::scope::Scope;
 use crate::secondary_validation::Validator;
 use crate::validation::validate_and_create_regex;
-use crate::{CachePoolBuilder, CompiledRuleTrait, CreateScannerError, Labels, MatchAction};
+use crate::{CachePoolBuilder, CompiledRuleDyn, CreateScannerError, Labels, MatchAction};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DefaultOnNull;
@@ -83,7 +83,7 @@ impl RuleConfig for RegexRuleConfig {
         rule_index: usize,
         scanner_labels: Labels,
         cache_pool_builder: &mut CachePoolBuilder,
-    ) -> Result<Box<dyn CompiledRuleTrait>, CreateScannerError> {
+    ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
         let regex = validate_and_create_regex(&self.pattern)?;
         self.match_action.validate()?;
 
