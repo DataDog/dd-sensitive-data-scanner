@@ -147,7 +147,7 @@ mod benchmarks {
 
         c.bench_function("included_keywords_worst_case_scenario", |b| {
             b.iter(|| {
-                let matches = scanner.scan(&mut message);
+                let matches = scanner.scan(&mut message, None);
                 assert_eq!(matches.len(), 0);
             })
         });
@@ -201,7 +201,7 @@ mod benchmarks {
 
         c.bench_function("included_keywords_on_path_off", |b| {
             b.iter(|| {
-                let matches = scanner.scan(&mut event);
+                let matches = scanner.scan(&mut event, None);
                 assert_eq!(matches.len(), 0);
             });
         });
@@ -219,7 +219,7 @@ mod benchmarks {
 
         c.bench_function("included_keywords_on_path_on", |b| {
             b.iter(|| {
-                let matches = scanner.scan(&mut event);
+                let matches = scanner.scan(&mut event, None);
                 assert!(matches.len() > 0);
             })
         });
