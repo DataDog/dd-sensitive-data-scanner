@@ -33,7 +33,7 @@ pub use scanner::{
     regex_rule::config::SecondaryValidator,
     regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig},
     scope::Scope,
-    CompiledRuleTrait, MatchEmitter, Scanner, ScannerBuilder, StringMatch,
+    CompiledRule, CompiledRuleDyn, MatchEmitter, Scanner, ScannerBuilder, StringMatch,
 };
 pub use scoped_ruleset::ExclusionCheck;
 pub use validation::{

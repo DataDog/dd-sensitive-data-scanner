@@ -6,6 +6,7 @@ use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Path};
 use regex_automata::meta::Regex as MetaRegex;
+use std::any::{Any, TypeId};
 use std::sync::Arc;
 
 use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
@@ -13,7 +14,7 @@ use self::metrics::ScannerMetrics;
 use crate::scanner::config::RuleConfig;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::scope::Scope;
-use ahash::AHashSet;
+use ahash::{AHashMap, AHashSet};
 use regex_automata::Match;
 
 pub mod cache_pool;
@@ -44,20 +45,103 @@ where
     }
 }
 
-pub trait CompiledRuleTrait: Send + Sync {
+// CompiledRuleDyn is a private trait that is used to hide the complexity of downcasting the group data
+// into the correct type.
+// This is used to allow the group data to be stored in a map only if the group of rule has a groupData associated with it (unlike regex rules)
+pub trait CompiledRuleDyn: Send + Sync {
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
+
     #[allow(clippy::too_many_arguments)]
     fn get_string_matches(
         &self,
         content: &str,
         path: &Path,
         caches: &mut CachePoolGuard<'_>,
+        group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
     );
+}
+
+// This is the "hidden" implementation of CompiledRuleDyn for any type that implements CompiledRule
+// get_string_matches will downcast the group data to the correct type and call the actual implementation
+// done in the CompiledRule trait
+impl<T: CompiledRule> CompiledRuleDyn for T {
+    fn get_match_action(&self) -> &MatchAction {
+        self.get_match_action()
+    }
+
+    fn get_scope(&self) -> &Scope {
+        self.get_scope()
+    }
+
+    fn get_string_matches(
+        &self,
+        content: &str,
+        path: &Path,
+        caches: &mut CachePoolGuard<'_>,
+        group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
+        exclusion_check: &ExclusionCheck<'_>,
+        excluded_matches: &mut AHashSet<String>,
+        match_emitter: &mut dyn MatchEmitter,
+        should_keywords_match_event_paths: bool,
+    ) {
+        let group_data_any = group_data
+            .entry(TypeId::of::<T::GroupData>())
+            .or_insert_with(|| Box::new(T::GroupData::default()));
+        let group_data: &mut T::GroupData = group_data_any.downcast_mut().unwrap();
+        self.get_string_matches(
+            content,
+            path,
+            caches,
+            group_data,
+            exclusion_check,
+            excluded_matches,
+            match_emitter,
+            should_keywords_match_event_paths,
+        )
+    }
+}
+
+// This is the public trait that is used to define the behavior of a compiled rule.
+pub trait CompiledRule: Send + Sync {
+    /// Data that is instantiated once per string being scanned, and shared with all rules that
+    /// have the same `GroupData` type. `Default` will be used to initialize this data.
+    type GroupData: Default + 'static;
+
+    fn get_match_action(&self) -> &MatchAction;
+    fn get_scope(&self) -> &Scope;
+
+    #[allow(clippy::too_many_arguments)]
+    fn get_string_matches(
+        &self,
+        content: &str,
+        path: &Path,
+        caches: &mut CachePoolGuard<'_>,
+        group_data: &mut Self::GroupData,
+        exclusion_check: &ExclusionCheck<'_>,
+        excluded_matches: &mut AHashSet<String>,
+        match_emitter: &mut dyn MatchEmitter,
+        should_keywords_match_event_paths: bool,
+    );
+}
+
+impl<T> RuleConfig for Box<T>
+where
+    T: RuleConfig + ?Sized,
+{
+    fn convert_to_compiled_rule(
+        &self,
+        rule_index: usize,
+        labels: Labels,
+        cache_pool_builder: &mut CachePoolBuilder,
+    ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
+        self.as_ref()
+            .convert_to_compiled_rule(rule_index, labels, cache_pool_builder)
+    }
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -67,7 +151,7 @@ struct ScannerFeatures {
 }
 
 pub struct Scanner {
-    rules: Vec<Box<dyn CompiledRuleTrait>>,
+    rules: Vec<Box<dyn CompiledRuleDyn>>,
     scoped_ruleset: ScopedRuleSet,
     cache_pool: CachePool,
     scanner_features: ScannerFeatures,
@@ -103,7 +187,6 @@ impl Scanner {
                 caches,
                 rule_matches: &mut rule_matches_list,
                 excluded_matches: &mut excluded_matches,
-                // cached_string_matches_per_rule_idx: &mut AHashMap::new(),
             },
         );
         let mut output_rule_matches = vec![];
@@ -320,6 +403,7 @@ impl ScannerBuilder<'_> {
 
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
         let mut cache_pool_builder = CachePoolBuilder::new();
+
         let compiled_rules = self
             .rules
             .iter()
@@ -331,7 +415,7 @@ impl ScannerBuilder<'_> {
                     &mut cache_pool_builder,
                 )
             })
-            .collect::<Result<Vec<Box<dyn CompiledRuleTrait>>, CreateScannerError>>()?;
+            .collect::<Result<Vec<Box<dyn CompiledRuleDyn>>, CreateScannerError>>()?;
 
         let scoped_ruleset = ScopedRuleSet::new(
             &compiled_rules
@@ -368,6 +452,10 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
     ) -> bool {
         // matches for a single path
         let mut path_rules_matches = vec![];
+
+        // Create a map of per rule type data that can be shared between rules of the same type
+        let mut group_data: AHashMap<TypeId, Box<dyn Any>> = AHashMap::new();
+
         rule_visitor.visit_rule_indices(|rule_index| {
             let rule = &self.scanner.rules[rule_index];
             {
@@ -386,6 +474,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     content,
                     path,
                     &mut self.caches,
+                    &mut group_data,
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
@@ -460,6 +549,7 @@ fn is_false_positive_match(
 #[cfg(test)]
 mod test {
     use super::cache_pool::{CachePoolBuilder, CachePoolGuard};
+    use super::CompiledRuleDyn;
     use super::*;
     use super::{MatchEmitter, ScannerBuilder, StringMatch};
     use crate::match_action::{MatchAction, MatchActionValidationError};
@@ -477,7 +567,7 @@ mod test {
     use regex_automata::Match;
     use std::collections::BTreeMap;
 
-    use super::CompiledRuleTrait;
+    use super::CompiledRule;
     use super::RuleConfig;
 
     pub struct DumbRuleConfig {}
@@ -487,7 +577,9 @@ mod test {
         pub scope: Scope,
     }
 
-    impl CompiledRuleTrait for DumbCompiledRule {
+    impl CompiledRule for DumbCompiledRule {
+        type GroupData = ();
+
         fn get_match_action(&self) -> &MatchAction {
             &self.match_action
         }
@@ -499,6 +591,7 @@ mod test {
             _content: &str,
             _path: &Path,
             _caches: &mut CachePoolGuard<'_>,
+            _group_data: &mut Self::GroupData,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
@@ -514,7 +607,7 @@ mod test {
             _content: usize,
             _: Labels,
             _: &mut CachePoolBuilder,
-        ) -> Result<Box<dyn CompiledRuleTrait>, CreateScannerError> {
+        ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
             Ok(Box::new(DumbCompiledRule {
                 match_action: MatchAction::Redact {
                     replacement: "[REDACTED]".to_string(),
