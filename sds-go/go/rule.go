@@ -6,10 +6,6 @@ package dd_sds
 */
 import "C"
 
-//import (
-//	"encoding/json"
-//)
-
 type RuleConfig interface {
 	CreateRule() (*Rule, error)
 }
