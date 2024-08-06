@@ -45,6 +45,9 @@ where
     }
 }
 
+// CompiledRuleDyn is a private trait that is used to hide the complexity of downcasting the group data
+// into the correct type.
+// This is used to allow the group data to be stored in a map only if the group of rule has a groupData associated with it (unlike regex rules)
 pub trait CompiledRuleDyn: Send + Sync {
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
@@ -63,28 +66,9 @@ pub trait CompiledRuleDyn: Send + Sync {
     );
 }
 
-pub trait CompiledRule: Send + Sync {
-    /// Data that is instantiated once per string being scanned, and shared with all rules that
-    /// have the same `GroupData` type. `Default` will be used to initialize this data.
-    type GroupData: Default + 'static;
-
-    fn get_match_action(&self) -> &MatchAction;
-    fn get_scope(&self) -> &Scope;
-
-    #[allow(clippy::too_many_arguments)]
-    fn get_string_matches(
-        &self,
-        content: &str,
-        path: &Path,
-        caches: &mut CachePoolGuard<'_>,
-        group_data: &mut Self::GroupData,
-        exclusion_check: &ExclusionCheck<'_>,
-        excluded_matches: &mut AHashSet<String>,
-        match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
-    );
-}
-
+// This is the "hidden" implementation of CompiledRuleDyn for any type that implements CompiledRule
+// get_string_matches will downcast the group data to the correct type and call the actual implementation
+// done in the CompiledRule trait
 impl<T: CompiledRule> CompiledRuleDyn for T {
     fn get_match_action(&self) -> &MatchAction {
         self.get_match_action()
@@ -120,6 +104,29 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
             should_keywords_match_event_paths,
         )
     }
+}
+
+// This is the public trait that is used to define the behavior of a compiled rule.
+pub trait CompiledRule: Send + Sync {
+    /// Data that is instantiated once per string being scanned, and shared with all rules that
+    /// have the same `GroupData` type. `Default` will be used to initialize this data.
+    type GroupData: Default + 'static;
+
+    fn get_match_action(&self) -> &MatchAction;
+    fn get_scope(&self) -> &Scope;
+
+    #[allow(clippy::too_many_arguments)]
+    fn get_string_matches(
+        &self,
+        content: &str,
+        path: &Path,
+        caches: &mut CachePoolGuard<'_>,
+        group_data: &mut Self::GroupData,
+        exclusion_check: &ExclusionCheck<'_>,
+        excluded_matches: &mut AHashSet<String>,
+        match_emitter: &mut dyn MatchEmitter,
+        should_keywords_match_event_paths: bool,
+    );
 }
 
 impl<T> RuleConfig for Box<T>
