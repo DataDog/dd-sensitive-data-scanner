@@ -146,7 +146,7 @@ pub trait CompiledRule: Send + Sync {
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
     );
-    
+
     // Whether a match from this rule should be excluded (marked as a false-positive)
     // if the content of this match was found in a match from an excluded scope
     fn should_exclude_multipass_v0(&self) -> bool {
