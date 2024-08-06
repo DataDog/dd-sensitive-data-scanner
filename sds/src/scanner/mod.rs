@@ -115,6 +115,14 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
             should_keywords_match_event_paths,
         )
     }
+
+    fn should_exclude_multipass_v0(&self) -> bool {
+        T::should_exclude_multipass_v0(self)
+    }
+
+    fn on_excluded_match_multipass_v0(&self) {
+        T::on_excluded_match_multipass_v0(self)
+    }
 }
 
 // This is the public trait that is used to define the behavior of a compiled rule.
@@ -138,6 +146,17 @@ pub trait CompiledRule: Send + Sync {
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
     );
+    
+    // Whether a match from this rule should be excluded (marked as a false-positive)
+    // if the content of this match was found in a match from an excluded scope
+    fn should_exclude_multipass_v0(&self) -> bool {
+        // default is to NOT use Multi-pass V0
+        false
+    }
+
+    fn on_excluded_match_multipass_v0(&self) {
+        // default is to do nothing
+    }
 }
 
 impl<T> RuleConfig for Box<T>

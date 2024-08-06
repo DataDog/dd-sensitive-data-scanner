@@ -39,14 +39,6 @@ impl CompiledRule for RegexCompiledRule {
         &self.scope
     }
 
-    fn should_exclude_multipass_v0(&self) -> bool {
-        true
-    }
-
-    fn on_excluded_match_multipass_v0(&self) {
-        self.metrics.false_positive_excluded_attributes.increment(1);
-    }
-
     fn get_string_matches(
         &self,
         content: &str,
@@ -85,6 +77,14 @@ impl CompiledRule for RegexCompiledRule {
                 }
             }
         }
+    }
+
+    fn should_exclude_multipass_v0(&self) -> bool {
+        true
+    }
+
+    fn on_excluded_match_multipass_v0(&self) {
+        self.metrics.false_positive_excluded_attributes.increment(1);
     }
 }
 
