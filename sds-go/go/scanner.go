@@ -3,7 +3,6 @@ package dd_sds
 import (
 	"bytes"
 	"encoding/binary"
-	//"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -108,7 +107,7 @@ func CreateScanner(ruleConfigs []RuleConfig) (*Scanner, error) {
 func (s *Scanner) Delete() {
 	C.delete_scanner(C.long(s.Id))
 	s.Id = 0
-	//s.Rules = nil
+	s.RuleConfigs = nil
 }
 
 func (s *Scanner) lowLevelScan(encodedEvent []byte) ([]byte, error) {
