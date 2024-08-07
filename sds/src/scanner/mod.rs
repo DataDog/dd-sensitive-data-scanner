@@ -1540,8 +1540,6 @@ mod test {
 
         let matches = scanner.scan(&mut content);
 
-        // Due to the ordering of the scan (alphabetical in this case), the match from "a-match" is not
-        // excluded yet, but "z-match" is, so only 1 match is found.
 
         // "test" is excluded because it matches the excluded scope.
         // Both "a-match" and "z-match" are excluded due to having the
