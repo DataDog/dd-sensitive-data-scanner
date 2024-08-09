@@ -26,7 +26,7 @@ pub extern "C" fn scan(
 
         let mut event = BinaryEvent::<Utf8Encoding>::new(data, false);
 
-        let matches = scanner.scan(&mut event, None);
+        let matches = scanner.scan(&mut event, vec![]);
 
         if let Some(encoded_response) = encode_response(&event.storage, &matches) {
             let mut str = std::mem::ManuallyDrop::new(encoded_response);
