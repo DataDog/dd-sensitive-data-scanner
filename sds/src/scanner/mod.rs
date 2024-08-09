@@ -163,6 +163,10 @@ impl Scanner {
         ScannerBuilder::new(rules)
     }
 
+    // This function scans the given event with the rules configured in the scanner.
+    // The event parameter is a mutable reference to the event that should be scanned (implemented the Event trait).
+    // The blocked_rules_idx parameter is a list of rule indices that should be skipped for this scan.
+    // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
     pub fn scan<E: Event>(&self, event: &mut E, blocked_rules_idx: Vec<usize>) -> Vec<RuleMatch> {
         // This is a set of caches (1 for each rule) that can be used for scanning. This is obtained once per scan to reduce
         // lock contention. (Normally it has to be obtained for each regex scan individually)
