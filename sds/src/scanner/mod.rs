@@ -445,6 +445,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     caches: CachePoolGuard<'a>,
     rule_matches: &'a mut Vec<(crate::Path<'static>, Vec<InternalRuleMatch<E>>)>,
     // Rules that shall be skipped for this scan
+    // This list shall be small (<10), so a linear search is acceptable
     blocked_rules: &'a Vec<usize>,
     excluded_matches: &'a mut AHashSet<String>,
 }
