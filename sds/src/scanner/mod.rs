@@ -182,11 +182,6 @@ impl Scanner {
 
         let mut excluded_matches = AHashSet::new();
 
-        let mut arr_blocked_rules_idx: Vec<bool> = vec![false; self.rules.len()];
-        blocked_rules_idx.into_iter().for_each(|idx| {
-            arr_blocked_rules_idx[idx] = true;
-        });
-
         // Measure detection time
         let start = std::time::Instant::now();
         self.scoped_ruleset.visit_string_rule_combinations(
@@ -195,7 +190,7 @@ impl Scanner {
                 scanner: self,
                 caches,
                 rule_matches: &mut rule_matches_list,
-                blocked_rules: &arr_blocked_rules_idx,
+                blocked_rules: &blocked_rules_idx,
                 excluded_matches: &mut excluded_matches,
             },
         );
@@ -450,7 +445,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     caches: CachePoolGuard<'a>,
     rule_matches: &'a mut Vec<(crate::Path<'static>, Vec<InternalRuleMatch<E>>)>,
     // Rules that shall be skipped for this scan
-    blocked_rules: &'a Vec<bool>,
+    blocked_rules: &'a Vec<usize>,
     excluded_matches: &'a mut AHashSet<String>,
 }
 
@@ -469,7 +464,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         let mut group_data: AHashMap<TypeId, Box<dyn Any>> = AHashMap::new();
 
         rule_visitor.visit_rule_indices(|rule_index| {
-            if self.blocked_rules[rule_index] {
+            if self.blocked_rules.contains(&rule_index) {
                 return;
             }
             let rule = &self.scanner.rules[rule_index];
