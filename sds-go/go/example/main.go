@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	rules := []sds.Rule{
+	rules := []sds.RuleConfig{
 		sds.NewMatchingRule("hello", "hello", sds.ExtraConfig{}),
 		sds.NewMatchingRule("world", "(?i)WoRlD", sds.ExtraConfig{}),
 		sds.NewRedactingRule("secret", "se..et", "[REDACTED]", sds.ExtraConfig{}),
