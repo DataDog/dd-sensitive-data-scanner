@@ -1,4 +1,4 @@
-package sds
+package dd_sds
 
 import (
 	"bytes"
@@ -23,7 +23,7 @@ func TestCreateScannerFailOnBadRegex(t *testing.T) {
 	var extraConfig ExtraConfig
 
 	// scanner ok
-	rules := []Rule{
+	rules := []RuleConfig{
 		NewMatchingRule("rule_hello", "hello", extraConfig),
 		NewMatchingRule("rule_world", "(?i)WoRlD", extraConfig),
 		NewRedactingRule("rule_secret", "se..et", "aaaaaaaaa", extraConfig),
@@ -37,7 +37,7 @@ func TestCreateScannerFailOnBadRegex(t *testing.T) {
 
 	// this scanner creation should fail, one of the rule
 	// contains a bad regex
-	rules = []Rule{
+	rules = []RuleConfig{
 		NewMatchingRule("rule_hello", "hello", extraConfig),
 		NewMatchingRule("rule_world", "(?i)Wo))RlD", extraConfig),
 		NewRedactingRule("rule_secret", "se..et", "aaaaaaaaa", extraConfig),
@@ -55,7 +55,7 @@ func TestCreateScannerFailOnBadRegex(t *testing.T) {
 func TestCreateScanner(t *testing.T) {
 	var extraConfig ExtraConfig
 
-	rules := []Rule{
+	rules := []RuleConfig{
 		NewMatchingRule("rule_hello", "hello", extraConfig),
 		NewMatchingRule("rule_world", "(?i)WoRlD", extraConfig),
 		NewRedactingRule("rule_secret", "se..et", "aaaaaaaaa", extraConfig),
@@ -68,16 +68,12 @@ func TestCreateScanner(t *testing.T) {
 	if scanner.Id == 0 {
 		t.Fatal("Failed to create the scanner: id == 0")
 	}
-
-	if len(scanner.Rules) != len(rules) {
-		t.Fatal("Failed to create the scanner: rules number inconsistent")
-	}
 }
 
 func TestScanMapEvent(t *testing.T) {
 	var extraConfig ExtraConfig
 
-	rules := []Rule{
+	rules := []RuleConfig{
 		NewMatchingRule("rule_hello", "hello", extraConfig),
 		NewMatchingRule("rule_world", "(?i)WoRlD", extraConfig),
 		NewRedactingRule("rule_secret", "se..et", "[REDACTED]", extraConfig),
@@ -240,7 +236,7 @@ func TestScanMapEvent(t *testing.T) {
 func TestScanStringWithHash(t *testing.T) {
 	var extraConfig ExtraConfig
 
-	rules := []Rule{
+	rules := []RuleConfig{
 		NewHashRule("rule_secret", "se..et", extraConfig),
 	}
 
@@ -269,7 +265,7 @@ func TestScanStringWithHash(t *testing.T) {
 func TestScanStringEvent(t *testing.T) {
 	var extraConfig ExtraConfig
 
-	rules := []Rule{
+	rules := []RuleConfig{
 		NewMatchingRule("rule_hello", "hello", extraConfig),
 		NewMatchingRule("rule_world", "(?i)WoRlD", extraConfig),
 		NewRedactingRule("rule_secret", "se..et", "[REDACTED]", extraConfig),
@@ -350,7 +346,7 @@ func TestScanStringEvent(t *testing.T) {
 func TestScanStringEventMultipleMutations(t *testing.T) {
 	var extraConfig ExtraConfig
 
-	rules := []Rule{
+	rules := []RuleConfig{
 		NewMatchingRule("rule_hello", "hello", extraConfig),
 		NewRedactingRule("rule_secret", "se..et", "[REDACTED]", extraConfig),
 		NewRedactingRule("rule_numbers", "[0-9]{4}", "[NREDAC]", extraConfig),
@@ -395,7 +391,7 @@ func TestProximityKeywords(t *testing.T) {
 		ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil),
 	}
 
-	rules := []Rule{
+	rules := []RuleConfig{
 		NewMatchingRule("rule_6_numbers", "[0-9]{6}", extraConfig),
 	}
 
@@ -428,7 +424,7 @@ func TestProximityKeywords(t *testing.T) {
 }
 
 func TestSecondaryValidator(t *testing.T) {
-	scannerWithoutChecksum, err := CreateScanner([]Rule{
+	scannerWithoutChecksum, err := CreateScanner([]RuleConfig{
 		NewRedactingRule("rule_card",
 			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
 			"[redacted]", ExtraConfig{}),
@@ -437,7 +433,7 @@ func TestSecondaryValidator(t *testing.T) {
 		t.Fatal("failed to create the scanner wo checksum:", err.Error())
 	}
 	defer scannerWithoutChecksum.Delete()
-	scannerWithChecksum, err := CreateScanner([]Rule{
+	scannerWithChecksum, err := CreateScanner([]RuleConfig{
 		NewRedactingRule("rule_card",
 			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
 			"[redacted]", ExtraConfig{SecondaryValidator: LuhnChecksum}),
@@ -491,7 +487,7 @@ func TestPartialRedactStart(t *testing.T) {
 		ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil),
 	}
 
-	rules := []Rule{
+	rules := []RuleConfig{
 		NewPartialRedactRule("rule_6_numbers", "[0-9]{6}", 4, FirstCharacters, extraConfig),
 	}
 	scanner, err := CreateScanner(rules)
@@ -527,7 +523,7 @@ func TestPartialRedactEnd(t *testing.T) {
 		ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil),
 	}
 
-	rules := []Rule{
+	rules := []RuleConfig{
 		NewPartialRedactRule("rule_6_numbers", "[0-9]{6}", 4, LastCharacters, extraConfig),
 	}
 	scanner, err := CreateScanner(rules)
@@ -559,7 +555,7 @@ func TestPartialRedactEnd(t *testing.T) {
 }
 
 func TestExclude(t *testing.T) {
-	rules := []Rule{
+	rules := []RuleConfig{
 		NewRedactingRule("rule_card",
 			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
 			"[REDACTED]", ExtraConfig{
@@ -609,7 +605,7 @@ func TestExclude(t *testing.T) {
 
 func TestIncludeExclude(t *testing.T) {
 	// Include rules take priority over exclude rules
-	rules := []Rule{
+	rules := []RuleConfig{
 		NewRedactingRule("rule_card",
 			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
 			"[REDACTED]", ExtraConfig{

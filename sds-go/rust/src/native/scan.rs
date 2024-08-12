@@ -5,8 +5,7 @@ use std::sync::Arc;
 
 use dd_sds::{Scanner, Utf8Encoding};
 use sds_bindings_utils::{encode_response, BinaryEvent};
-
-use crate::native::convert_panic_to_error;
+use crate::{convert_panic_to_go_error};
 
 #[no_mangle]
 pub extern "C" fn scan(
@@ -17,7 +16,7 @@ pub extern "C" fn scan(
     retcapacity: *mut i64,
     error_out: *mut *const c_char,
 ) -> *const c_char {
-    match convert_panic_to_error(|| {
+    match convert_panic_to_go_error(|| {
         let scanner =
             std::mem::ManuallyDrop::new(unsafe { Arc::from_raw(scanner_id as *mut Scanner) });
 
@@ -26,7 +25,7 @@ pub extern "C" fn scan(
 
         let mut event = BinaryEvent::<Utf8Encoding>::new(data, false);
 
-        let matches = scanner.scan(&mut event);
+        let matches = scanner.scan(&mut event, vec![]);
 
         if let Some(encoded_response) = encode_response(&event.storage, &matches) {
             let mut str = std::mem::ManuallyDrop::new(encoded_response);
