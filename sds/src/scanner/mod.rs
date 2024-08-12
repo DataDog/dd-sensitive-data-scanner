@@ -1540,7 +1540,6 @@ mod test {
 
         let matches = scanner.scan(&mut content);
 
-
         // "test" is excluded because it matches the excluded scope.
         // Both "a-match" and "z-match" are excluded due to having the
         // same match value as "test" (multi-pass V0)
