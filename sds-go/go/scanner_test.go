@@ -253,10 +253,10 @@ func TestScanStringWithHash(t *testing.T) {
 	if !result.Mutated {
 		t.Fatal("Failed to scan the event: not mutated")
 	}
-	if len(result.scanResult.Matches) != 1 {
+	if len(result.Matches) != 1 {
 		t.Fatal("Failed to scan the event: not the good amount of rules returned")
 	}
-	if result.scanResult.Matches[0].ReplacementType != ReplacementTypeHash {
+	if result.Matches[0].ReplacementType != ReplacementTypeHash {
 		t.Fatal("Failed to scan the event: not hashed")
 	}
 
