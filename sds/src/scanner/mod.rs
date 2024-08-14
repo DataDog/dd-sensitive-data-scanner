@@ -186,6 +186,7 @@ pub struct Scanner {
     cache_pool: CachePool,
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
+    multipass_v0_enabled: bool,
 }
 
 impl Scanner {
@@ -230,20 +231,22 @@ impl Scanner {
         for (path, rule_matches) in &mut rule_matches_list {
             // All rule matches in each inner list are for a single path, so they can be processed independently.
             event.visit_string_mut(path, |content| {
-                // Now that the `excluded_matches` set is fully populated, filter out any matches
-                // that are the same as excluded matches (also known as "Multi-pass V0")
-                rule_matches.retain(|rule_match| {
-                    if self.rules[rule_match.rule_index].should_exclude_multipass_v0() {
-                        let is_false_positive = excluded_matches
-                            .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
-                        if is_false_positive {
-                            self.rules[rule_match.rule_index].on_excluded_match_multipass_v0();
+                if self.multipass_v0_enabled {
+                    // Now that the `excluded_matches` set is fully populated, filter out any matches
+                    // that are the same as excluded matches (also known as "Multi-pass V0")
+                    rule_matches.retain(|rule_match| {
+                        if self.rules[rule_match.rule_index].should_exclude_multipass_v0() {
+                            let is_false_positive = excluded_matches
+                                .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
+                            if is_false_positive && self.multipass_v0_enabled {
+                                self.rules[rule_match.rule_index].on_excluded_match_multipass_v0();
+                            }
+                            !is_false_positive
+                        } else {
+                            true
                         }
-                        !is_false_positive
-                    } else {
-                        true
-                    }
-                });
+                    });
+                }
 
                 self.sort_and_remove_overlapping_rules::<E::Encoding>(rule_matches);
 
@@ -423,6 +426,7 @@ pub struct ScannerBuilder<'a> {
     rules: &'a [Arc<dyn RuleConfig>],
     labels: Labels,
     scanner_features: ScannerFeatures,
+    multipass_v0: bool,
 }
 
 impl ScannerBuilder<'_> {
@@ -431,6 +435,7 @@ impl ScannerBuilder<'_> {
             rules,
             labels: Labels::empty(),
             scanner_features: ScannerFeatures::default(),
+            multipass_v0: true,
         }
     }
 
@@ -446,6 +451,14 @@ impl ScannerBuilder<'_> {
 
     pub fn with_implicit_wildcard_indexes_for_scopes(mut self, value: bool) -> Self {
         self.scanner_features.add_implicit_index_wildcards = value;
+        self
+    }
+
+    /// Enables/Disables the Multipass V0 feature. This defaults to TRUE.
+    /// Multipass V0 saves matches from excluded scopes, and marks any identical
+    /// matches in included scopes as a false positive.
+    pub fn with_multipass_v0(mut self, value: bool) -> Self {
+        self.multipass_v0 = value;
         self
     }
 
@@ -479,6 +492,7 @@ impl ScannerBuilder<'_> {
             cache_pool: cache_pool_builder.build(),
             scanner_features: self.scanner_features,
             metrics: ScannerMetrics::new(&self.labels),
+            multipass_v0_enabled: self.multipass_v0,
         })
     }
 }
@@ -1579,6 +1593,42 @@ mod test {
         // Both "a-match" and "z-match" are excluded due to having the
         // same match value as "test" (multi-pass V0)
         assert_eq!(matches.len(), 0);
+    }
+
+    #[test]
+    fn should_be_able_to_disable_multipass_v0() {
+        let rule_0 = RegexRuleConfig::new("b.*")
+            .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
+                "test".into(),
+            )])]))
+            .match_action(MatchAction::Redact {
+                replacement: "[scrub]".to_string(),
+            })
+            .build();
+
+        let scanner = ScannerBuilder::new(&[rule_0])
+            .with_keywords_should_match_event_paths(true)
+            .with_multipass_v0(false)
+            .build()
+            .unwrap();
+
+        let mut content = SimpleEvent::Map(BTreeMap::from([
+            (
+                "a-match".to_string(),
+                SimpleEvent::String("bcdef".to_string()),
+            ),
+            (
+                "z-match".to_string(),
+                SimpleEvent::String("bcdef".to_string()),
+            ),
+            ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
+        ]));
+
+        let matches = scanner.scan(&mut content, vec![]);
+
+        // "test" is excluded because it matches the excluded scope.
+        // Both "a-match" and "z-match" are kept since multipass V0 is disabled
+        assert_eq!(matches.len(), 2);
     }
 
     #[test]
