@@ -41,10 +41,6 @@ type ScanResult struct {
 	// If `Mutated` is false:
 	//   * it contains the original event, unchanged.
 	Event []byte
-	scanResult
-}
-
-type scanResult struct {
 	// Mutated indicates if the processed event has been
 	// mutated or not (e.g. redacted).
 	Mutated bool
