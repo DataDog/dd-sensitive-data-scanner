@@ -174,10 +174,21 @@ where
     }
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 struct ScannerFeatures {
     pub should_keywords_match_event_paths: bool,
     pub add_implicit_index_wildcards: bool,
+    pub multipass_v0_enabled: bool,
+}
+
+impl Default for ScannerFeatures {
+    fn default() -> Self {
+        Self {
+            should_keywords_match_event_paths: false,
+            add_implicit_index_wildcards: false,
+            multipass_v0_enabled: true,
+        }
+    }
 }
 
 pub struct Scanner {
@@ -186,7 +197,6 @@ pub struct Scanner {
     cache_pool: CachePool,
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
-    multipass_v0_enabled: bool,
 }
 
 impl Scanner {
@@ -231,14 +241,14 @@ impl Scanner {
         for (path, rule_matches) in &mut rule_matches_list {
             // All rule matches in each inner list are for a single path, so they can be processed independently.
             event.visit_string_mut(path, |content| {
-                if self.multipass_v0_enabled {
+                if self.scanner_features.multipass_v0_enabled {
                     // Now that the `excluded_matches` set is fully populated, filter out any matches
                     // that are the same as excluded matches (also known as "Multi-pass V0")
                     rule_matches.retain(|rule_match| {
                         if self.rules[rule_match.rule_index].should_exclude_multipass_v0() {
                             let is_false_positive = excluded_matches
                                 .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
-                            if is_false_positive && self.multipass_v0_enabled {
+                            if is_false_positive && self.scanner_features.multipass_v0_enabled {
                                 self.rules[rule_match.rule_index].on_excluded_match_multipass_v0();
                             }
                             !is_false_positive
@@ -426,7 +436,6 @@ pub struct ScannerBuilder<'a> {
     rules: &'a [Arc<dyn RuleConfig>],
     labels: Labels,
     scanner_features: ScannerFeatures,
-    multipass_v0: bool,
 }
 
 impl ScannerBuilder<'_> {
@@ -435,7 +444,6 @@ impl ScannerBuilder<'_> {
             rules,
             labels: Labels::empty(),
             scanner_features: ScannerFeatures::default(),
-            multipass_v0: true,
         }
     }
 
@@ -458,7 +466,7 @@ impl ScannerBuilder<'_> {
     /// Multipass V0 saves matches from excluded scopes, and marks any identical
     /// matches in included scopes as a false positive.
     pub fn with_multipass_v0(mut self, value: bool) -> Self {
-        self.multipass_v0 = value;
+        self.scanner_features.multipass_v0_enabled = value;
         self
     }
 
@@ -492,7 +500,6 @@ impl ScannerBuilder<'_> {
             cache_pool: cache_pool_builder.build(),
             scanner_features: self.scanner_features,
             metrics: ScannerMetrics::new(&self.labels),
-            multipass_v0_enabled: self.multipass_v0,
         })
     }
 }
