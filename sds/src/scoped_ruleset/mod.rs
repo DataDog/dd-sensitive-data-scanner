@@ -128,6 +128,7 @@ struct NodeCounter {
     // list is the current number of active trees (n), which is the last
     // n trees in `tree_nodes`.
     active_tree_count: usize,
+    #[allow(dead_code)]
     // This counts how many rule indices we have pushed at the given node.
     // This helps remove the right number of elements when popping the segment.
     true_positive_rules_count: usize,
@@ -141,6 +142,7 @@ struct ScopedRuledSetEventVisitor<'a, C> {
     // If an "Add" exists for a rule in this list, it will be scanned. If a single "Remove" exists, it will cause the `ExclusionCheck` to return true.
     tree_nodes: Vec<ActiveRuleTree<'a>>,
 
+    #[allow(dead_code)]
     // This is a list of rule indices that have been detected as true positives for the current path.
     true_positive_rule_idx: Vec<usize>,
 
