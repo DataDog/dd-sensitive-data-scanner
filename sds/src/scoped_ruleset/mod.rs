@@ -68,7 +68,11 @@ impl ScopedRuleSet {
                 rule_tree: &self.tree,
                 index_wildcard_match: false,
             }],
-            active_tree_count: vec![1],
+            true_positive_rule_idx: vec![],
+            active_node_counter: vec![NodeCounter {
+                active_tree_count: 1,
+                true_positive_rules_count: 0,
+            }],
             path: Path::root(),
             bool_set,
             add_implicit_index_wildcards: self.add_implicit_index_wildcards,
@@ -81,6 +85,7 @@ impl ScopedRuleSet {
 pub struct ExclusionCheck<'a> {
     tree_nodes: &'a [ActiveRuleTree<'a>],
 }
+
 impl<'a> ExclusionCheck<'a> {
     pub fn is_excluded(&self, rule_index: usize) -> bool {
         for include_node in self.tree_nodes {
@@ -117,6 +122,17 @@ struct ActiveRuleTree<'a> {
     index_wildcard_match: bool,
 }
 
+struct NodeCounter {
+    // This counts how many trees are currently active, which can
+    // happen due to (implicit) wildcard segments. The last value in this
+    // list is the current number of active trees (n), which is the last
+    // n trees in `tree_nodes`.
+    active_tree_count: usize,
+    // This counts how many rule indices we have pushed at the given node.
+    // This helps remove the right number of elements when popping the segment.
+    true_positive_rules_count: usize,
+}
+
 struct ScopedRuledSetEventVisitor<'a, C> {
     // The struct that will receive content / rules.
     content_visitor: C,
@@ -125,11 +141,12 @@ struct ScopedRuledSetEventVisitor<'a, C> {
     // If an "Add" exists for a rule in this list, it will be scanned. If a single "Remove" exists, it will cause the `ExclusionCheck` to return true.
     tree_nodes: Vec<ActiveRuleTree<'a>>,
 
-    // This counts how many trees are currently active, which can
-    // happen due to (implicit) wildcard segments. The last value in this
-    // list is the current number of active trees (n), which is the last
-    // n trees in `tree_nodes`.
-    active_tree_count: Vec<usize>,
+    // This is a list of rule indices that have been detected as true positives for the current path.
+    true_positive_rule_idx: Vec<usize>,
+
+    // This is a counter that helps keep track of how many elements we have pushed
+    // In the tree_nodes list and in the rule_in
+    active_node_counter: Vec<NodeCounter>,
 
     // The current path being visited
     path: Path<'a>,
@@ -148,7 +165,7 @@ where
         // update the tree
         // The current path may go beyond what is stored in the "include" tree, so the tree is only updated if they are at the same height.
 
-        let num_active_trees = *self.active_tree_count.last().unwrap();
+        let num_active_trees = self.active_node_counter.last().unwrap().active_tree_count;
         let tree_nodes_len = self.tree_nodes.len();
         let active_trees_range = tree_nodes_len - num_active_trees..tree_nodes_len;
 
@@ -172,14 +189,16 @@ where
             }
         }
         // The new number of active trees is the number of new trees pushed
-        self.active_tree_count
-            .push(self.tree_nodes.len() - tree_nodes_len);
+        self.active_node_counter.push(NodeCounter {
+            active_tree_count: self.tree_nodes.len() - tree_nodes_len,
+            true_positive_rules_count: 0,
+        });
 
         self.path.segments.push(segment);
     }
 
     fn pop_segment(&mut self) {
-        let num_active_trees = self.active_tree_count.pop().unwrap();
+        let num_active_trees = self.active_node_counter.pop().unwrap().active_tree_count;
         for _ in 0..num_active_trees {
             // The rules from the last node are no longer active, so remove them.
             let _popped = self.tree_nodes.pop();
