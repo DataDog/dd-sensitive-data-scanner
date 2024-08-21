@@ -147,7 +147,7 @@ struct ScopedRuledSetEventVisitor<'a, C> {
     true_positive_rule_idx: Vec<usize>,
 
     // This is a counter that helps keep track of how many elements we have pushed
-    // In the tree_nodes list and in the rule_in
+    // In the tree_nodes list and in the true_positive_rule_idx list
     active_node_counter: Vec<NodeCounter>,
 
     // The current path being visited
