@@ -214,6 +214,7 @@ where
             // The rules from the last node are no longer active, so remove them.
             let _popped = self.tree_nodes.pop();
         }
+        self.sanitized_segments_until_node.pop();
         self.path.segments.pop();
     }
 
