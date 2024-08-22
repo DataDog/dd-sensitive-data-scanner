@@ -40,6 +40,10 @@ impl CompiledRule for RegexCompiledRule {
         &self.scope
     }
     fn create_group_data(_: &Labels) {}
+    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
+        self.included_keywords.as_ref()
+    }
+
     fn get_string_matches(
         &self,
         content: &str,

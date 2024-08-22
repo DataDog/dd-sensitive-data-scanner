@@ -14,9 +14,13 @@ use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Path};
 use std::any::{Any, TypeId};
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use self::metrics::ScannerMetrics;
+use crate::proximity_keywords::{
+    contains_keyword_in_path, CompiledIncludedProximityKeywords, UNIFIED_LINK_STR,
+};
 use crate::scanner::config::RuleConfig;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::{access_regex_caches, RegexCaches};
@@ -59,6 +63,7 @@ where
 pub trait CompiledRuleDyn: Send + Sync {
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
+    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords>;
 
     #[allow(clippy::too_many_arguments)]
     fn get_string_matches(
@@ -100,6 +105,10 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
 
     fn get_scope(&self) -> &Scope {
         self.get_scope()
+    }
+
+    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
+        self.get_included_keywords()
     }
 
     fn get_string_matches(
@@ -158,6 +167,7 @@ pub trait CompiledRule: Send + Sync {
 
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
+    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords>;
 
     #[allow(clippy::too_many_arguments)]
     fn get_string_matches(
@@ -801,7 +811,13 @@ mod test {
         fn get_scope(&self) -> &Scope {
             &self.scope
         }
+
         fn create_group_data(_: &Labels) {}
+
+        fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
+            None
+        }
+
         fn get_string_matches(
             &self,
             _content: &str,
