@@ -126,7 +126,11 @@ pub trait ContentVisitor<'path> {
 
     fn find_true_positive_rules_from_current_path(
         &self,
+<<<<<<< HEAD
         sanitized_path: &str,
+=======
+        sanitized_segments: &[Cow<str>],
+>>>>>>> a86af49 (Add find_true_positive_rules_from_current_path method to ContentVisitor trait)
         current_true_positive_rule_idx: &mut Vec<usize>,
     ) -> usize;
 }
@@ -434,8 +438,13 @@ mod test {
 
             fn find_true_positive_rules_from_current_path(
                 &self,
+<<<<<<< HEAD
                 _sanitized_path: &str,
                 _current_true_positive_rule_idx: &mut Vec<usize>,
+=======
+                sanitized_segments: &[Cow<str>],
+                current_true_positive_rule_idx: &mut Vec<usize>,
+>>>>>>> a86af49 (Add find_true_positive_rules_from_current_path method to ContentVisitor trait)
             ) -> usize {
                 0
             }
