@@ -1,9 +1,8 @@
+use std::ascii::AsciiExt;
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
-use crate::proximity_keywords::{
-    should_bypass_standardize_path, standardize_path_chars, UNIFIED_LINK_CHAR,
-};
+use crate::proximity_keywords::{BypassStandardizePathResult, should_bypass_standardize_path, standardize_path_chars, UNIFIED_LINK_CHAR};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -75,7 +74,7 @@ impl<'a> Path<'a> {
                     sanitized_path.push(UNIFIED_LINK_CHAR);
                 }
 
-                if should_bypass_standardize_path(field) {
+                if should_bypass_standardize_path(field) != BypassStandardizePathResult::ShouldNotBypass {
                     sanitized_path.push_str(field.to_ascii_lowercase().as_str())
                 } else {
                     standardize_path_chars(field, |c| {
@@ -110,17 +109,21 @@ impl<'a> PathSegment<'a> {
     }
 
     pub fn sanitize(&self) -> Cow<'a, str> {
-        let mut sanitized_segment = String::with_capacity(self.length() + 1);
         if let PathSegment::Field(field) = self {
-            if should_bypass_standardize_path(field) {
-                sanitized_segment.push_str(field.to_ascii_lowercase().as_str())
-            } else {
-                standardize_path_chars(field, |c| {
-                    sanitized_segment.push(c.to_ascii_lowercase());
-                });
+            match should_bypass_standardize_path(&field) {
+                BypassStandardizePathResult::ShouldBypassAndAllLowercase => field.clone(),
+                BypassStandardizePathResult::ShouldBypassAndAllUppercase => Cow::Owned(field.to_ascii_lowercase()),
+                BypassStandardizePathResult::ShouldNotBypass => {
+                    let mut sanitized_segment = String::with_capacity(self.length() + 1);
+                    standardize_path_chars(&field, |c| {
+                        sanitized_segment.push(c.to_ascii_lowercase());
+                    });
+                    Cow::Owned(sanitized_segment)
+                }
             }
+        } else {
+            Cow::Owned(String::new())
         }
-        Cow::Owned(sanitized_segment)
     }
 }
 

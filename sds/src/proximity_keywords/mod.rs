@@ -15,6 +15,7 @@ use regex_syntax::ast::{
     Group, GroupKind, Literal, LiteralKind, Position, Span,
 };
 use thiserror::Error;
+use crate::proximity_keywords::BypassStandardizePathResult::{ShouldBypassAndAllLowercase, ShouldBypassAndAllUppercase, ShouldNotBypass};
 
 const MAX_KEYWORD_COUNT: usize = 50;
 pub const MAX_LOOK_AHEAD_CHARACTER_COUNT: usize = 50;
@@ -276,7 +277,14 @@ fn get_char_type(c: &char) -> CharType {
     }
 }
 
-pub fn should_bypass_standardize_path(characters: &str) -> bool {
+#[derive(Debug, PartialEq)]
+pub enum BypassStandardizePathResult {
+    ShouldBypassAndAllLowercase,
+    ShouldBypassAndAllUppercase,
+    ShouldNotBypass,
+}
+
+pub fn should_bypass_standardize_path(characters: &str) -> BypassStandardizePathResult {
     let mut all_lower = true;
     let mut all_upper = true;
     for char in characters.chars() {
@@ -284,18 +292,22 @@ pub fn should_bypass_standardize_path(characters: &str) -> bool {
         let is_lower = char.is_ascii_lowercase();
         // If it's neither an uppercase character nor a lowercase character, return false
         if !is_lower && !is_upper {
-            return false;
+            return ShouldNotBypass;
         }
         all_lower = all_lower && is_lower;
         all_upper = all_upper && is_upper;
         // If we realise that we don't have all uppercase nor all lowercase, return false
         if !all_lower && !all_upper {
-            return false;
+            return ShouldNotBypass;
         }
     }
 
     // The characters contain only uppercase characters or only lowercase characters by now
-    true
+    return if all_lower {
+        ShouldBypassAndAllLowercase
+    } else {
+        ShouldBypassAndAllUppercase
+    };
 }
 
 /// Function that standardizes a list of characters, by pushing characters one by one in a standard way.
@@ -869,11 +881,11 @@ mod test {
 
     #[test]
     fn test_should_bypass_standardize() {
-        assert_eq!(should_bypass_standardize_path("hello world"), false);
-        assert_eq!(should_bypass_standardize_path("helloWorld"), false);
-        assert_eq!(should_bypass_standardize_path("hello-world"), false);
-        assert_eq!(should_bypass_standardize_path("helloworld"), true);
-        assert_eq!(should_bypass_standardize_path("HELLOWORLD"), true);
+        assert_eq!(should_bypass_standardize_path("hello world"), ShouldNotBypass);
+        assert_eq!(should_bypass_standardize_path("helloWorld"), ShouldNotBypass);
+        assert_eq!(should_bypass_standardize_path("hello-world"), ShouldNotBypass);
+        assert_eq!(should_bypass_standardize_path("helloworld"), ShouldBypassAndAllLowercase);
+        assert_eq!(should_bypass_standardize_path("HELLOWORLD"), ShouldBypassAndAllUppercase);
     }
 
     #[test]
