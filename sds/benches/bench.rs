@@ -12,6 +12,7 @@ mod benchmarks {
     };
     use dd_sds::{LuhnChecksum, Validator};
     use dd_sds::{Scanner, SimpleEvent};
+    use std::borrow::Cow;
     use std::collections::BTreeMap;
 
     pub fn scoped_ruleset(c: &mut Criterion) {
@@ -65,6 +66,14 @@ mod benchmarks {
                             *self.num_visited += 1;
                         });
                         false
+                    }
+
+                    fn find_true_positive_rules_from_current_path(
+                        &self,
+                        sanitized_segments: &[Cow<str>],
+                        current_true_positive_rule_idx: &mut Vec<usize>,
+                    ) -> usize {
+                        0
                     }
                 }
 
