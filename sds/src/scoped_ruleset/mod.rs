@@ -1,5 +1,6 @@
 mod bool_set;
 
+use std::borrow::Cow;
 use crate::event::{EventVisitor, VisitStringResult};
 use crate::scanner::scope::Scope;
 use crate::scoped_ruleset::bool_set::BoolSet;
@@ -148,7 +149,7 @@ struct ScopedRuledSetEventVisitor<'a, C> {
     true_positive_rule_idx: Vec<usize>,
 
     // This is a list of sanitized segments until the current node.
-    sanitized_segments_until_node: Vec<&'a str>,
+    sanitized_segments_until_node: Vec<Cow<'a, str>>,
 
     // This is a counter that helps keep track of how many elements we have pushed
     // In the tree_nodes list and in the true_positive_rule_idx list
@@ -196,7 +197,7 @@ where
         }
 
         // Sanitize the segment and push it
-        self.sanitized_segments_until_node.push(&segment.sanitize());
+        self.sanitized_segments_until_node.push(segment.sanitize());
 
         // The new number of active trees is the number of new trees pushed
         self.active_node_counter.push(NodeCounter {

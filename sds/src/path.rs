@@ -109,7 +109,7 @@ impl<'a> PathSegment<'a> {
         }
     }
 
-    pub fn sanitize(&self) -> String {
+    pub fn sanitize(&self) -> Cow<'a, str> {
         let mut sanitized_segment = String::with_capacity(self.length() + 1);
         if let PathSegment::Field(field) = self {
             if should_bypass_standardize_path(field) {
@@ -120,7 +120,7 @@ impl<'a> PathSegment<'a> {
                 });
             }
         }
-        sanitized_segment
+        Cow::Owned(sanitized_segment)
     }
 }
 
