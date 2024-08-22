@@ -59,6 +59,14 @@ pub fn scoped_ruleset(c: &mut Criterion) {
                     });
                     false
                 }
+
+                fn find_true_positive_rules_from_current_path(
+                    &self,
+                    sanitized_path: &str,
+                    current_true_positive_rule_idx: &mut Vec<usize>,
+                ) -> usize {
+                    0
+                }
             }
 
             fast_rule_set.visit_string_rule_combinations(

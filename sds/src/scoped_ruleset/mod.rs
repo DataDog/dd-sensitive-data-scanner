@@ -122,6 +122,12 @@ pub trait ContentVisitor<'path> {
         rules: RuleIndexVisitor,
         is_excluded: ExclusionCheck<'content_visitor>,
     ) -> bool;
+
+    fn find_true_positive_rules_from_current_path(
+        &self,
+        sanitized_segments: &[Cow<str>],
+        current_true_positive_rule_idx: &mut Vec<usize>,
+    ) -> usize;
 }
 
 // This is just a reference to a RuleTree with some additional information
@@ -391,6 +397,14 @@ mod test {
                     rules,
                 });
                 true
+            }
+
+            fn find_true_positive_rules_from_current_path(
+                &self,
+                sanitized_segments: &[Cow<str>],
+                current_true_positive_rule_idx: &mut Vec<usize>,
+            ) -> usize {
+                0
             }
         }
 
