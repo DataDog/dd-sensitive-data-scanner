@@ -38,6 +38,9 @@ impl CompiledRule for RegexCompiledRule {
     fn get_scope(&self) -> &Scope {
         &self.scope
     }
+    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
+        self.included_keywords.as_ref()
+    }
 
     fn get_string_matches(
         &self,
