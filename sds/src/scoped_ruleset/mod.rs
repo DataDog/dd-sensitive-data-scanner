@@ -214,20 +214,34 @@ where
         // Sanitize the segment and push it
         self.sanitized_segments_until_node.push(segment.sanitize());
 
+        let true_positive_rules_count = if self.should_keywords_match_event_paths {
+            self.content_visitor
+                .find_true_positive_rules_from_current_path(
+                    self.sanitized_segments_until_node.as_slice(),
+                    &mut self.true_positive_rule_idx,
+                )
+        } else {
+            0
+        };
+
         // The new number of active trees is the number of new trees pushed
         self.active_node_counter.push(NodeCounter {
             active_tree_count: self.tree_nodes.len() - tree_nodes_len,
-            true_positive_rules_count: 0,
+            true_positive_rules_count,
         });
 
         self.path.segments.push(segment);
     }
 
     fn pop_segment(&mut self) {
-        let num_active_trees = self.active_node_counter.pop().unwrap().active_tree_count;
-        for _ in 0..num_active_trees {
+        let node_counter = self.active_node_counter.pop().unwrap();
+        for _ in 0..node_counter.active_tree_count {
             // The rules from the last node are no longer active, so remove them.
             let _popped = self.tree_nodes.pop();
+        }
+        for _ in 0..node_counter.true_positive_rules_count {
+            // The true positive rule indices from the last node are no longer active, remove them.
+            let _popped = self.true_positive_rule_idx.pop();
         }
         self.sanitized_segments_until_node.pop();
         self.path.segments.pop();
