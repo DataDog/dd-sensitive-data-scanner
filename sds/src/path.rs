@@ -100,6 +100,28 @@ impl<'a> PathSegment<'a> {
     pub fn is_index(&self) -> bool {
         matches!(self, PathSegment::Index(_))
     }
+
+    pub fn length(&self) -> usize {
+        if let PathSegment::Field(field) = self {
+            field.len()
+        } else {
+            0
+        }
+    }
+
+    pub fn sanitize(&self) -> String {
+        let mut sanitized_segment = String::with_capacity(self.length() + 1);
+        if let PathSegment::Field(field) = self {
+            if should_bypass_standardize_path(field) {
+                sanitized_segment.push_str(field.to_ascii_lowercase().as_str())
+            } else {
+                standardize_path_chars(field, |c| {
+                    sanitized_segment.push(c.to_ascii_lowercase());
+                });
+            }
+        }
+        sanitized_segment
+    }
 }
 
 impl<'a> Debug for Path<'a> {
