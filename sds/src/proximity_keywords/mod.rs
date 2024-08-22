@@ -4,6 +4,9 @@ mod included_keywords;
 pub use crate::proximity_keywords::excluded_keywords::CompiledExcludedProximityKeywords;
 pub use crate::proximity_keywords::included_keywords::*;
 
+use crate::proximity_keywords::BypassStandardizePathResult::{
+    ShouldBypassAndAllLowercase, ShouldBypassAndAllUppercase, ShouldNotBypass,
+};
 use crate::proximity_keywords::ProximityKeywordsValidationError::{
     EmptyKeyword, InvalidLookAheadCharacterCount, KeywordTooLong, TooManyKeywords,
 };
@@ -15,7 +18,6 @@ use regex_syntax::ast::{
     Group, GroupKind, Literal, LiteralKind, Position, Span,
 };
 use thiserror::Error;
-use crate::proximity_keywords::BypassStandardizePathResult::{ShouldBypassAndAllLowercase, ShouldBypassAndAllUppercase, ShouldNotBypass};
 
 const MAX_KEYWORD_COUNT: usize = 50;
 pub const MAX_LOOK_AHEAD_CHARACTER_COUNT: usize = 50;
@@ -881,11 +883,26 @@ mod test {
 
     #[test]
     fn test_should_bypass_standardize() {
-        assert_eq!(should_bypass_standardize_path("hello world"), ShouldNotBypass);
-        assert_eq!(should_bypass_standardize_path("helloWorld"), ShouldNotBypass);
-        assert_eq!(should_bypass_standardize_path("hello-world"), ShouldNotBypass);
-        assert_eq!(should_bypass_standardize_path("helloworld"), ShouldBypassAndAllLowercase);
-        assert_eq!(should_bypass_standardize_path("HELLOWORLD"), ShouldBypassAndAllUppercase);
+        assert_eq!(
+            should_bypass_standardize_path("hello world"),
+            ShouldNotBypass
+        );
+        assert_eq!(
+            should_bypass_standardize_path("helloWorld"),
+            ShouldNotBypass
+        );
+        assert_eq!(
+            should_bypass_standardize_path("hello-world"),
+            ShouldNotBypass
+        );
+        assert_eq!(
+            should_bypass_standardize_path("helloworld"),
+            ShouldBypassAndAllLowercase
+        );
+        assert_eq!(
+            should_bypass_standardize_path("HELLOWORLD"),
+            ShouldBypassAndAllUppercase
+        );
     }
 
     #[test]

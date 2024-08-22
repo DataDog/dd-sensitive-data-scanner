@@ -1,7 +1,10 @@
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
-use crate::proximity_keywords::{BypassStandardizePathResult, should_bypass_standardize_path, standardize_path_chars, UNIFIED_LINK_CHAR};
+use crate::proximity_keywords::{
+    should_bypass_standardize_path, standardize_path_chars, BypassStandardizePathResult,
+    UNIFIED_LINK_CHAR,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -73,7 +76,9 @@ impl<'a> Path<'a> {
                     sanitized_path.push(UNIFIED_LINK_CHAR);
                 }
 
-                if should_bypass_standardize_path(field) != BypassStandardizePathResult::ShouldNotBypass {
+                if should_bypass_standardize_path(field)
+                    != BypassStandardizePathResult::ShouldNotBypass
+                {
                     sanitized_path.push_str(field.to_ascii_lowercase().as_str())
                 } else {
                     standardize_path_chars(field, |c| {
@@ -111,7 +116,9 @@ impl<'a> PathSegment<'a> {
         if let PathSegment::Field(field) = self {
             match should_bypass_standardize_path(&field) {
                 BypassStandardizePathResult::ShouldBypassAndAllLowercase => field.clone(),
-                BypassStandardizePathResult::ShouldBypassAndAllUppercase => Cow::Owned(field.to_ascii_lowercase()),
+                BypassStandardizePathResult::ShouldBypassAndAllUppercase => {
+                    Cow::Owned(field.to_ascii_lowercase())
+                }
                 BypassStandardizePathResult::ShouldNotBypass => {
                     let mut sanitized_segment = String::with_capacity(self.length() + 1);
                     standardize_path_chars(&field, |c| {
