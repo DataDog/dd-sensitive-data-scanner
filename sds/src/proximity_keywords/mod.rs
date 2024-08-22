@@ -4,9 +4,6 @@ mod included_keywords;
 pub use crate::proximity_keywords::excluded_keywords::CompiledExcludedProximityKeywords;
 pub use crate::proximity_keywords::included_keywords::*;
 
-use crate::proximity_keywords::BypassStandardizePathResult::{
-    ShouldBypassAndAllLowercase, ShouldBypassAndAllUppercase, ShouldNotBypass,
-};
 use crate::proximity_keywords::ProximityKeywordsValidationError::{
     EmptyKeyword, InvalidLookAheadCharacterCount, KeywordTooLong, TooManyKeywords,
 };
@@ -281,9 +278,9 @@ fn get_char_type(c: &char) -> CharType {
 
 #[derive(Debug, PartialEq)]
 pub enum BypassStandardizePathResult {
-    ShouldBypassAndAllLowercase,
-    ShouldBypassAndAllUppercase,
-    ShouldNotBypass,
+    BypassAndAllLowercase,
+    BypassAndAllUppercase,
+    NoBypass,
 }
 
 pub fn should_bypass_standardize_path(characters: &str) -> BypassStandardizePathResult {
@@ -294,22 +291,22 @@ pub fn should_bypass_standardize_path(characters: &str) -> BypassStandardizePath
         let is_lower = char.is_ascii_lowercase();
         // If it's neither an uppercase character nor a lowercase character, return false
         if !is_lower && !is_upper {
-            return ShouldNotBypass;
+            return BypassStandardizePathResult::NoBypass;
         }
         all_lower = all_lower && is_lower;
         all_upper = all_upper && is_upper;
         // If we realise that we don't have all uppercase nor all lowercase, return false
         if !all_lower && !all_upper {
-            return ShouldNotBypass;
+            return BypassStandardizePathResult::NoBypass;
         }
     }
 
     // The characters contain only uppercase characters or only lowercase characters by now
-    return if all_lower {
-        ShouldBypassAndAllLowercase
+    if all_lower {
+        BypassStandardizePathResult::BypassAndAllLowercase
     } else {
-        ShouldBypassAndAllUppercase
-    };
+        BypassStandardizePathResult::BypassAndAllUppercase
+    }
 }
 
 /// Function that standardizes a list of characters, by pushing characters one by one in a standard way.
@@ -452,6 +449,7 @@ pub enum ProximityKeywordsValidationError {
 #[cfg(test)]
 mod test {
     use crate::proximity_keywords::*;
+    use crate::proximity_keywords::BypassStandardizePathResult::{BypassAndAllLowercase, BypassAndAllUppercase, NoBypass};
 
     fn try_new_compiled_proximity_keyword(
         look_ahead_character_count: usize,
@@ -885,23 +883,23 @@ mod test {
     fn test_should_bypass_standardize() {
         assert_eq!(
             should_bypass_standardize_path("hello world"),
-            ShouldNotBypass
+            NoBypass
         );
         assert_eq!(
             should_bypass_standardize_path("helloWorld"),
-            ShouldNotBypass
+            NoBypass
         );
         assert_eq!(
             should_bypass_standardize_path("hello-world"),
-            ShouldNotBypass
+            NoBypass
         );
         assert_eq!(
             should_bypass_standardize_path("helloworld"),
-            ShouldBypassAndAllLowercase
+            BypassAndAllLowercase
         );
         assert_eq!(
             should_bypass_standardize_path("HELLOWORLD"),
-            ShouldBypassAndAllUppercase
+            BypassAndAllUppercase
         );
     }
 

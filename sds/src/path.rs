@@ -77,7 +77,7 @@ impl<'a> Path<'a> {
                 }
 
                 if should_bypass_standardize_path(field)
-                    != BypassStandardizePathResult::ShouldNotBypass
+                    != BypassStandardizePathResult::NoBypass
                 {
                     sanitized_path.push_str(field.to_ascii_lowercase().as_str())
                 } else {
@@ -114,14 +114,14 @@ impl<'a> PathSegment<'a> {
 
     pub fn sanitize(&self) -> Cow<'a, str> {
         if let PathSegment::Field(field) = self {
-            match should_bypass_standardize_path(&field) {
-                BypassStandardizePathResult::ShouldBypassAndAllLowercase => field.clone(),
-                BypassStandardizePathResult::ShouldBypassAndAllUppercase => {
+            match should_bypass_standardize_path(field) {
+                BypassStandardizePathResult::BypassAndAllLowercase => field.clone(),
+                BypassStandardizePathResult::BypassAndAllUppercase => {
                     Cow::Owned(field.to_ascii_lowercase())
                 }
-                BypassStandardizePathResult::ShouldNotBypass => {
+                BypassStandardizePathResult::NoBypass => {
                     let mut sanitized_segment = String::with_capacity(self.length() + 1);
-                    standardize_path_chars(&field, |c| {
+                    standardize_path_chars(field, |c| {
                         sanitized_segment.push(c.to_ascii_lowercase());
                     });
                     Cow::Owned(sanitized_segment)
