@@ -448,8 +448,10 @@ pub enum ProximityKeywordsValidationError {
 
 #[cfg(test)]
 mod test {
+    use crate::proximity_keywords::BypassStandardizePathResult::{
+        BypassAndAllLowercase, BypassAndAllUppercase, NoBypass,
+    };
     use crate::proximity_keywords::*;
-    use crate::proximity_keywords::BypassStandardizePathResult::{BypassAndAllLowercase, BypassAndAllUppercase, NoBypass};
 
     fn try_new_compiled_proximity_keyword(
         look_ahead_character_count: usize,
@@ -881,18 +883,9 @@ mod test {
 
     #[test]
     fn test_should_bypass_standardize() {
-        assert_eq!(
-            should_bypass_standardize_path("hello world"),
-            NoBypass
-        );
-        assert_eq!(
-            should_bypass_standardize_path("helloWorld"),
-            NoBypass
-        );
-        assert_eq!(
-            should_bypass_standardize_path("hello-world"),
-            NoBypass
-        );
+        assert_eq!(should_bypass_standardize_path("hello world"), NoBypass);
+        assert_eq!(should_bypass_standardize_path("helloWorld"), NoBypass);
+        assert_eq!(should_bypass_standardize_path("hello-world"), NoBypass);
         assert_eq!(
             should_bypass_standardize_path("helloworld"),
             BypassAndAllLowercase

@@ -76,9 +76,7 @@ impl<'a> Path<'a> {
                     sanitized_path.push(UNIFIED_LINK_CHAR);
                 }
 
-                if should_bypass_standardize_path(field)
-                    != BypassStandardizePathResult::NoBypass
-                {
+                if should_bypass_standardize_path(field) != BypassStandardizePathResult::NoBypass {
                     sanitized_path.push_str(field.to_ascii_lowercase().as_str())
                 } else {
                     standardize_path_chars(field, |c| {
