@@ -625,7 +625,10 @@ impl ScannerBuilder<'_> {
                 .map(|rule| rule.get_scope().clone())
                 .collect::<Vec<_>>(),
         )
-        .with_implicit_index_wildcards(self.scanner_features.add_implicit_index_wildcards);
+        .with_implicit_index_wildcards(self.scanner_features.add_implicit_index_wildcards)
+        .with_keywords_should_match_event_paths(
+            self.scanner_features.should_keywords_match_event_paths,
+        );
 
         {
             let stats = &*GLOBAL_STATS;
