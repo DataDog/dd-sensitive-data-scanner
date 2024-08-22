@@ -14,7 +14,6 @@ use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Path};
 use std::any::{Any, TypeId};
-use std::borrow::Cow;
 use std::sync::Arc;
 
 use self::metrics::ScannerMetrics;
