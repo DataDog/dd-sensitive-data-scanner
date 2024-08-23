@@ -432,8 +432,8 @@ mod test {
 
             fn find_true_positive_rules_from_current_path(
                 &self,
-                sanitized_path: &str,
-                current_true_positive_rule_idx: &mut Vec<usize>,
+                _sanitized_path: &str,
+                _current_true_positive_rule_idx: &mut Vec<usize>,
             ) -> usize {
                 0
             }
