@@ -2,7 +2,8 @@ use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
 use crate::proximity_keywords::{
-    should_bypass_standardize_path, standardize_path_chars, UNIFIED_LINK_CHAR,
+    should_bypass_standardize_path, standardize_path_chars, BypassStandardizePathResult,
+    UNIFIED_LINK_CHAR,
 };
 use serde::{Deserialize, Serialize};
 
@@ -75,7 +76,7 @@ impl<'a> Path<'a> {
                     sanitized_path.push(UNIFIED_LINK_CHAR);
                 }
 
-                if should_bypass_standardize_path(field) {
+                if should_bypass_standardize_path(field) != BypassStandardizePathResult::NoBypass {
                     sanitized_path.push_str(field.to_ascii_lowercase().as_str())
                 } else {
                     standardize_path_chars(field, |c| {
@@ -99,6 +100,34 @@ impl<'a> PathSegment<'a> {
 
     pub fn is_index(&self) -> bool {
         matches!(self, PathSegment::Index(_))
+    }
+
+    pub fn length(&self) -> usize {
+        if let PathSegment::Field(field) = self {
+            field.len()
+        } else {
+            0
+        }
+    }
+
+    pub fn sanitize(&self) -> Option<Cow<'a, str>> {
+        if let PathSegment::Field(field) = self {
+            match should_bypass_standardize_path(field) {
+                BypassStandardizePathResult::BypassAndAllLowercase => Some(field.clone()),
+                BypassStandardizePathResult::BypassAndAllUppercase => {
+                    Some(Cow::Owned(field.to_ascii_lowercase()))
+                }
+                BypassStandardizePathResult::NoBypass => {
+                    let mut sanitized_segment = String::with_capacity(self.length() + 1);
+                    standardize_path_chars(field, |c| {
+                        sanitized_segment.push(c.to_ascii_lowercase());
+                    });
+                    Some(Cow::Owned(sanitized_segment))
+                }
+            }
+        } else {
+            None
+        }
     }
 }
 
@@ -150,6 +179,7 @@ impl From<usize> for PathSegment<'static> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::proximity_keywords::UNIFIED_LINK_STR;
 
     #[test]
     fn test_starts_with() {
@@ -162,6 +192,52 @@ mod test {
         assert!(foo.starts_with(&foo));
         assert!(!foo.starts_with(&array_foo));
         assert!(!array_foo.starts_with(&foo));
+    }
+
+    #[test]
+    fn test_sanitize_segments() {
+        assert_eq!(
+            Path::from(vec!["hello".into(), 0.into(), "world".into()])
+                .segments
+                .iter()
+                .filter_map(|segment| { segment.sanitize() })
+                .collect::<Vec<_>>()
+                .join(UNIFIED_LINK_STR),
+            "hello.world"
+        );
+        assert_eq!(
+            Path::from(vec!["hello".into(), 1.into(), "CHICKEN".into(), 2.into()])
+                .segments
+                .iter()
+                .filter_map(|segment| { segment.sanitize() })
+                .collect::<Vec<_>>()
+                .join(UNIFIED_LINK_STR),
+            "hello.chicken"
+        );
+        assert_eq!(
+            Path::from(vec![
+                "hello_world-of".into(),
+                1.into(),
+                "CHICKEN".into(),
+                2.into(),
+            ])
+            .segments
+            .iter()
+            .filter_map(|segment| { segment.sanitize() })
+            .collect::<Vec<_>>()
+            .join(UNIFIED_LINK_STR),
+            "hello.world.of.chicken"
+        );
+
+        assert_eq!(
+            Path::from(vec!["hello_world-of-".into(), "/chickens_/".into()])
+                .segments
+                .iter()
+                .filter_map(|segment| { segment.sanitize() })
+                .collect::<Vec<_>>()
+                .join(UNIFIED_LINK_STR),
+            "hello.world.of-./chickens./"
+        );
     }
 
     #[test]
