@@ -11,9 +11,7 @@ use std::sync::Arc;
 
 use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 use self::metrics::ScannerMetrics;
-use crate::proximity_keywords::{
-    contains_keyword_in_path, CompiledIncludedProximityKeywords,
-};
+use crate::proximity_keywords::{contains_keyword_in_path, CompiledIncludedProximityKeywords};
 use crate::scanner::config::RuleConfig;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::scope::Scope;
