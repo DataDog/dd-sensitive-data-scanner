@@ -36,6 +36,8 @@ pub struct ProximityKeywordsRegex {
 pub const MULTI_WORD_KEYWORDS_LINK_CHARS: &[char] = &['-', '_', '.', ' ', '/'];
 
 pub const UNIFIED_LINK_CHAR: char = '.';
+#[allow(dead_code)]
+pub const UNIFIED_LINK_STR: &str = ".";
 
 pub fn compile_keywords_proximity_config(
     config: &ProximityKeywordsConfig,
@@ -276,26 +278,37 @@ fn get_char_type(c: &char) -> CharType {
     }
 }
 
-pub fn should_bypass_standardize_path(characters: &str) -> bool {
+#[derive(Debug, PartialEq)]
+pub enum BypassStandardizePathResult {
+    BypassAndAllLowercase,
+    BypassAndAllUppercase,
+    NoBypass,
+}
+
+pub fn should_bypass_standardize_path(characters: &str) -> BypassStandardizePathResult {
     let mut all_lower = true;
     let mut all_upper = true;
     for char in characters.chars() {
         let is_upper = char.is_ascii_uppercase();
         let is_lower = char.is_ascii_lowercase();
-        // If it's neither an uppercase character nor a lowercase character, return false
+        // If it's neither an uppercase character nor a lowercase character, return NoBypass
         if !is_lower && !is_upper {
-            return false;
+            return BypassStandardizePathResult::NoBypass;
         }
         all_lower = all_lower && is_lower;
         all_upper = all_upper && is_upper;
-        // If we realise that we don't have all uppercase nor all lowercase, return false
+        // If we realise that we don't have all uppercase nor all lowercase, return NoBypass
         if !all_lower && !all_upper {
-            return false;
+            return BypassStandardizePathResult::NoBypass;
         }
     }
 
-    // The characters contain only uppercase characters or only lowercase characters by now
-    true
+    // The characters contain only uppercase characters or only lowercase characters by now, so we can bypass
+    if all_lower {
+        BypassStandardizePathResult::BypassAndAllLowercase
+    } else {
+        BypassStandardizePathResult::BypassAndAllUppercase
+    }
 }
 
 /// Function that standardizes a list of characters, by pushing characters one by one in a standard way.
@@ -437,6 +450,9 @@ pub enum ProximityKeywordsValidationError {
 
 #[cfg(test)]
 mod test {
+    use crate::proximity_keywords::BypassStandardizePathResult::{
+        BypassAndAllLowercase, BypassAndAllUppercase, NoBypass,
+    };
     use crate::proximity_keywords::*;
 
     fn try_new_compiled_proximity_keyword(
@@ -869,11 +885,17 @@ mod test {
 
     #[test]
     fn test_should_bypass_standardize() {
-        assert_eq!(should_bypass_standardize_path("hello world"), false);
-        assert_eq!(should_bypass_standardize_path("helloWorld"), false);
-        assert_eq!(should_bypass_standardize_path("hello-world"), false);
-        assert_eq!(should_bypass_standardize_path("helloworld"), true);
-        assert_eq!(should_bypass_standardize_path("HELLOWORLD"), true);
+        assert_eq!(should_bypass_standardize_path("hello world"), NoBypass);
+        assert_eq!(should_bypass_standardize_path("helloWorld"), NoBypass);
+        assert_eq!(should_bypass_standardize_path("hello-world"), NoBypass);
+        assert_eq!(
+            should_bypass_standardize_path("helloworld"),
+            BypassAndAllLowercase
+        );
+        assert_eq!(
+            should_bypass_standardize_path("HELLOWORLD"),
+            BypassAndAllUppercase
+        );
     }
 
     #[test]

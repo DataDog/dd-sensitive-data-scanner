@@ -5,6 +5,7 @@ use crate::scanner::scope::Scope;
 use crate::scoped_ruleset::bool_set::BoolSet;
 use crate::{Event, Path, PathSegment};
 use ahash::AHashMap;
+use std::borrow::Cow;
 
 /// A `ScopedRuleSet` determines which rules will be used to scan each field of an event, and which
 /// paths are considered `excluded`.
@@ -69,6 +70,7 @@ impl ScopedRuleSet {
                 index_wildcard_match: false,
             }],
             true_positive_rule_idx: vec![],
+            sanitized_segments_until_node: vec![],
             active_node_counter: vec![NodeCounter {
                 active_tree_count: 1,
                 true_positive_rules_count: 0,
@@ -146,6 +148,9 @@ struct ScopedRuledSetEventVisitor<'a, C> {
     // This is a list of rule indices that have been detected as true positives for the current path.
     true_positive_rule_idx: Vec<usize>,
 
+    // This is a list of sanitized segments until the current node.
+    sanitized_segments_until_node: Vec<Option<Cow<'a, str>>>,
+
     // This is a counter that helps keep track of how many elements we have pushed
     // In the tree_nodes list and in the true_positive_rule_idx list
     active_node_counter: Vec<NodeCounter>,
@@ -190,6 +195,10 @@ where
                 });
             }
         }
+
+        // Sanitize the segment and push it
+        self.sanitized_segments_until_node.push(segment.sanitize());
+
         // The new number of active trees is the number of new trees pushed
         self.active_node_counter.push(NodeCounter {
             active_tree_count: self.tree_nodes.len() - tree_nodes_len,
@@ -205,6 +214,7 @@ where
             // The rules from the last node are no longer active, so remove them.
             let _popped = self.tree_nodes.pop();
         }
+        self.sanitized_segments_until_node.pop();
         self.path.segments.pop();
     }
 
