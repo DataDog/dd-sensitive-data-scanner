@@ -1,10 +1,12 @@
 mod bool_set;
 
 use crate::event::{EventVisitor, VisitStringResult};
+use crate::proximity_keywords::UNIFIED_LINK_STR;
 use crate::scanner::scope::Scope;
 use crate::scoped_ruleset::bool_set::BoolSet;
 use crate::{Event, Path, PathSegment};
 use ahash::AHashMap;
+use serde::Serialize;
 use std::borrow::Cow;
 
 /// A `ScopedRuleSet` determines which rules will be used to scan each field of an event, and which
@@ -81,7 +83,6 @@ impl ScopedRuleSet {
             active_node_counter: vec![NodeCounter {
                 active_tree_count: 1,
                 true_positive_rules_count: 0,
-                sanitized_segment_count: 0,
             }],
             path: Path::root(),
             bool_set,
@@ -122,12 +123,11 @@ pub trait ContentVisitor<'path> {
         content: &str,
         rules: RuleIndexVisitor,
         is_excluded: ExclusionCheck<'content_visitor>,
-        true_positive_rule_idx: &Vec<usize>,
     ) -> bool;
 
     fn find_true_positive_rules_from_current_path(
         &self,
-        sanitized_segments: &[Cow<str>],
+        sanitized_path: &str,
         current_true_positive_rule_idx: &mut Vec<usize>,
     ) -> usize;
 }
@@ -150,9 +150,6 @@ struct NodeCounter {
     // This counts how many rule indices we have pushed at the given node.
     // This helps remove the right number of elements when popping the segment.
     true_positive_rules_count: usize,
-
-    // Keeps track of whether we pushed a sanitized segment in the sanitized_segments_until_node or not
-    sanitized_segment_count: usize,
 }
 
 struct ScopedRuledSetEventVisitor<'a, C> {
@@ -216,19 +213,23 @@ where
             }
         }
 
-        // Sanitize the segment and push it if it's a field
-        let sanitized_segment_count = if !segment.is_index() {
-            self.sanitized_segments_until_node.push(segment.sanitize());
-            // println!("pushing segment: {}", segment.sanitize());
-            1
-        } else {
-            0
-        };
+        // Sanitize the segment and push it
+        self.sanitized_segments_until_node.push(segment.sanitize());
 
         let true_positive_rules_count = if self.should_keywords_match_event_paths {
+            let current_sanitized_path = self
+                .sanitized_segments_until_node
+                .iter()
+                .filter_map(|sanitized_segment| {
+                    sanitized_segment
+                        .as_ref()
+                        .map_or(None::<Cow<str>>, |x| Some(x.clone()))
+                })
+                .collect::<Vec<_>>()
+                .join(UNIFIED_LINK_STR);
             self.content_visitor
                 .find_true_positive_rules_from_current_path(
-                    self.sanitized_segments_until_node.as_slice(),
+                    current_sanitized_path.as_str(),
                     &mut self.true_positive_rule_idx,
                 )
         } else {
@@ -239,7 +240,6 @@ where
         self.active_node_counter.push(NodeCounter {
             active_tree_count: self.tree_nodes.len() - tree_nodes_len,
             true_positive_rules_count,
-            sanitized_segment_count,
         });
 
         self.path.segments.push(segment);
@@ -256,9 +256,6 @@ where
             let _popped = self.true_positive_rule_idx.pop();
         }
 
-        for _ in 0..node_counter.sanitized_segment_count {
-            let _popped = self.sanitized_segments_until_node.pop();
-        }
         self.path.segments.pop();
     }
 
@@ -430,7 +427,7 @@ mod test {
 
             fn find_true_positive_rules_from_current_path(
                 &self,
-                sanitized_segments: &[Cow<str>],
+                sanitized_path: &str,
                 current_true_positive_rule_idx: &mut Vec<usize>,
             ) -> usize {
                 0

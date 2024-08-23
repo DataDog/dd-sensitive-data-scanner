@@ -734,14 +734,13 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
     fn find_true_positive_rules_from_current_path(
         &self,
-        sanitized_segments: &[Cow<str>],
+        sanitized_path: &str,
         current_true_positive_rule_idx: &mut Vec<usize>,
     ) -> usize {
         let mut times_pushed = 0;
         for (idx, rule) in self.scanner.rules.iter().enumerate() {
             if !current_true_positive_rule_idx.contains(&idx) {
                 if let Some(keywords) = rule.get_included_keywords() {
-                    let sanitized_path = sanitized_segments.join(UNIFIED_LINK_STR);
                     if contains_keyword_in_path(&sanitized_path, &keywords.keywords_pattern) {
                         // The rule is found has a true positive for this path, push it
                         current_true_positive_rule_idx.push(idx);
