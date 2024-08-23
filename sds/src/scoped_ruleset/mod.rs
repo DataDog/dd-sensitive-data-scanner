@@ -1,7 +1,7 @@
 mod bool_set;
 
 use crate::event::{EventVisitor, VisitStringResult};
-use crate::proximity_keywords::UNIFIED_LINK_STR;
+use crate::proximity_keywords::UNIFIED_LINK_CHAR;
 use crate::scanner::scope::Scope;
 use crate::scoped_ruleset::bool_set::BoolSet;
 use crate::{Event, Path, PathSegment};
@@ -216,7 +216,7 @@ where
         self.sanitized_segments_until_node.push(segment.sanitize());
 
         let true_positive_rules_count = if self.should_keywords_match_event_paths {
-            let current_sanitized_path = self
+            let mut current_sanitized_path = self
                 .sanitized_segments_until_node
                 .iter()
                 .filter_map(|sanitized_segment| {
@@ -224,8 +224,14 @@ where
                         .as_ref()
                         .map_or(None::<Cow<str>>, |x| Some(x.clone()))
                 })
-                .collect::<Vec<_>>()
-                .join(UNIFIED_LINK_STR);
+                .fold(String::new(), |mut a, b| {
+                    a.reserve(b.len() + 1);
+                    a.push_str(&*b);
+                    a.push(UNIFIED_LINK_CHAR);
+                    a
+                });
+            // Remove the last `UNIFIED_LINK_CHAR` that has been put
+            current_sanitized_path.pop();
             self.content_visitor
                 .find_true_positive_rules_from_current_path(
                     current_sanitized_path.as_str(),
