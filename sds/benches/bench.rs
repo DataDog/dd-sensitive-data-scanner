@@ -70,7 +70,7 @@ mod benchmarks {
 
                     fn find_true_positive_rules_from_current_path(
                         &self,
-                        sanitized_segments: &[Cow<str>],
+                        sanitized_path: &str,
                         current_true_positive_rule_idx: &mut Vec<usize>,
                     ) -> usize {
                         0
