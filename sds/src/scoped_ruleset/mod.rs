@@ -6,7 +6,6 @@ use crate::scanner::scope::Scope;
 use crate::scoped_ruleset::bool_set::BoolSet;
 use crate::{Event, Path, PathSegment};
 use ahash::AHashMap;
-use serde::Serialize;
 use std::borrow::Cow;
 
 /// A `ScopedRuleSet` determines which rules will be used to scan each field of an event, and which
