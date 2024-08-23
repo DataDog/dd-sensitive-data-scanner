@@ -45,24 +45,22 @@ impl CompiledRule for RegexCompiledRule {
     fn get_string_matches(
         &self,
         content: &str,
-        path: &Path,
         caches: &mut CachePoolGuard<'_>,
         _group_data: &mut (),
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
+        true_positive_rule_idx: &Vec<usize>,
     ) {
         match self.included_keywords {
             Some(ref included_keywords) => {
                 self.get_string_matches_with_included_keywords(
                     content,
-                    path,
                     caches,
                     exclusion_check,
                     excluded_matches,
                     match_emitter,
-                    should_keywords_match_event_paths,
+                    true_positive_rule_idx,
                     included_keywords,
                 );
             }
@@ -96,33 +94,29 @@ impl RegexCompiledRule {
     fn get_string_matches_with_included_keywords(
         &self,
         content: &str,
-        path: &Path,
         caches: &mut CachePoolGuard<'_>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
+        true_positive_rule_idx: &Vec<usize>,
         included_keywords: &CompiledIncludedProximityKeywords,
     ) {
         let cache = &mut caches[self.rule_cache_index];
 
-        if should_keywords_match_event_paths {
-            let sanitized_path = path.sanitize();
-            if contains_keyword_in_path(&sanitized_path, &included_keywords.keywords_pattern) {
-                // since the path contains a match, we can skip future included keyword checks
-                let true_positive_search = self.true_positive_matches(
-                    content,
-                    0,
-                    &mut caches[self.rule_cache_index],
-                    false,
-                    exclusion_check,
-                    excluded_matches,
-                );
-                for string_match in true_positive_search {
-                    match_emitter.emit(string_match);
-                }
-                return;
+        if !true_positive_rule_idx.is_empty() && true_positive_rule_idx.contains(&self.rule_index) {
+            // since the path contains a match, we can skip future included keyword checks
+            let true_positive_search = self.true_positive_matches(
+                content,
+                0,
+                &mut caches[self.rule_cache_index],
+                false,
+                exclusion_check,
+                excluded_matches,
+            );
+            for string_match in true_positive_search {
+                match_emitter.emit(string_match);
             }
+            return;
         }
 
         let mut included_keyword_matches = included_keywords.keyword_matches(content);

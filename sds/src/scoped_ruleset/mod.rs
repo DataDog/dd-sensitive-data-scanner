@@ -275,6 +275,7 @@ where
             ExclusionCheck {
                 tree_nodes: &self.tree_nodes,
             },
+            &self.true_positive_rule_idx,
         );
         if let Some(bool_set) = &mut self.bool_set {
             bool_set.reset();
@@ -413,6 +414,7 @@ mod test {
                 content: &str,
                 mut rule_iter: RuleIndexVisitor,
                 exclusion_check: ExclusionCheck<'content_visitor>,
+                true_positive_rule_idx: &Vec<usize>,
             ) -> bool {
                 let mut rules = vec![];
                 rule_iter.visit_rule_indices(|rule_index| {
