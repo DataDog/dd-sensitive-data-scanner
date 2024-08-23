@@ -1,11 +1,12 @@
 mod bool_set;
 
 use crate::event::{EventVisitor, VisitStringResult};
-use crate::proximity_keywords::UNIFIED_LINK_CHAR;
+use crate::proximity_keywords::UNIFIED_LINK_STR;
 use crate::scanner::scope::Scope;
 use crate::scoped_ruleset::bool_set::BoolSet;
 use crate::{Event, Path, PathSegment};
 use ahash::AHashMap;
+use serde::Serialize;
 use std::borrow::Cow;
 
 /// A `ScopedRuleSet` determines which rules will be used to scan each field of an event, and which
@@ -126,11 +127,7 @@ pub trait ContentVisitor<'path> {
 
     fn find_true_positive_rules_from_current_path(
         &self,
-<<<<<<< HEAD
-        sanitized_path: &str,
-=======
         sanitized_segments: &[Cow<str>],
->>>>>>> a86af49 (Add find_true_positive_rules_from_current_path method to ContentVisitor trait)
         current_true_positive_rule_idx: &mut Vec<usize>,
     ) -> usize;
 }
@@ -220,23 +217,16 @@ where
         self.sanitized_segments_until_node.push(segment.sanitize());
 
         let true_positive_rules_count = if self.should_keywords_match_event_paths {
-            let mut current_sanitized_path = self
+            let current_sanitized_path = self
                 .sanitized_segments_until_node
                 .iter()
                 .filter_map(|sanitized_segment| {
-                    sanitized_segment.as_ref().map(|seg| Some(seg.clone()))
+                    sanitized_segment
+                        .as_ref()
+                        .map_or(None::<Cow<str>>, |x| Some(x.clone()))
                 })
-                .fold(String::new(), |mut a, b| {
-                    let b_str = b.expect(
-                        "In the filter_map above, we make sure to filter out the None variants",
-                    );
-                    a.reserve(b_str.len() + 1);
-                    a.push_str(&b_str);
-                    a.push(UNIFIED_LINK_CHAR);
-                    a
-                });
-            // Remove the last `UNIFIED_LINK_CHAR` that has been put
-            current_sanitized_path.pop();
+                .collect::<Vec<_>>()
+                .join(UNIFIED_LINK_STR);
             self.content_visitor
                 .find_true_positive_rules_from_current_path(
                     current_sanitized_path.as_str(),
@@ -438,13 +428,8 @@ mod test {
 
             fn find_true_positive_rules_from_current_path(
                 &self,
-<<<<<<< HEAD
-                _sanitized_path: &str,
-                _current_true_positive_rule_idx: &mut Vec<usize>,
-=======
                 sanitized_segments: &[Cow<str>],
                 current_true_positive_rule_idx: &mut Vec<usize>,
->>>>>>> a86af49 (Add find_true_positive_rules_from_current_path method to ContentVisitor trait)
             ) -> usize {
                 0
             }
