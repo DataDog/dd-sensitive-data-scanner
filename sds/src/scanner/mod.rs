@@ -738,7 +738,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         for (idx, rule) in self.scanner.rules.iter().enumerate() {
             if !current_true_positive_rule_idx.contains(&idx) {
                 if let Some(keywords) = rule.get_included_keywords() {
-                    if contains_keyword_in_path(&sanitized_path, &keywords.keywords_pattern) {
+                    if contains_keyword_in_path(sanitized_path, &keywords.keywords_pattern) {
                         // The rule is found has a true positive for this path, push it
                         current_true_positive_rule_idx.push(idx);
                         times_pushed += 1
