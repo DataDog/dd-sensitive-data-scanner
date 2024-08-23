@@ -61,6 +61,7 @@ mod benchmarks {
                         _content: &str,
                         mut rules: RuleIndexVisitor,
                         _check: ExclusionCheck,
+                        _true_positive_rule_idx: &Vec<usize>,
                     ) -> bool {
                         rules.visit_rule_indices(|_rule_index| {
                             *self.num_visited += 1;

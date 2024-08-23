@@ -1,6 +1,6 @@
 use crate::proximity_keywords::{
-    contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
-    CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
+    get_prefix_start, is_index_within_prefix, CompiledExcludedProximityKeywords,
+    CompiledIncludedProximityKeywords,
 };
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::scope::Scope;
