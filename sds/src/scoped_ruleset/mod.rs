@@ -81,6 +81,7 @@ impl ScopedRuleSet {
             active_node_counter: vec![NodeCounter {
                 active_tree_count: 1,
                 true_positive_rules_count: 0,
+                sanitized_segment_count: 0,
             }],
             path: Path::root(),
             bool_set,
@@ -121,6 +122,7 @@ pub trait ContentVisitor<'path> {
         content: &str,
         rules: RuleIndexVisitor,
         is_excluded: ExclusionCheck<'content_visitor>,
+        true_positive_rule_idx: &Vec<usize>,
     ) -> bool;
 
     fn find_true_positive_rules_from_current_path(
@@ -148,6 +150,9 @@ struct NodeCounter {
     // This counts how many rule indices we have pushed at the given node.
     // This helps remove the right number of elements when popping the segment.
     true_positive_rules_count: usize,
+
+    // Keeps track of whether we pushed a sanitized segment in the sanitized_segments_until_node or not
+    sanitized_segment_count: usize,
 }
 
 struct ScopedRuledSetEventVisitor<'a, C> {
@@ -211,8 +216,14 @@ where
             }
         }
 
-        // Sanitize the segment and push it
-        self.sanitized_segments_until_node.push(segment.sanitize());
+        // Sanitize the segment and push it if it's a field
+        let sanitized_segment_count = if !segment.is_index() {
+            self.sanitized_segments_until_node.push(segment.sanitize());
+            // println!("pushing segment: {}", segment.sanitize());
+            1
+        } else {
+            0
+        };
 
         let true_positive_rules_count = if self.should_keywords_match_event_paths {
             self.content_visitor
@@ -228,6 +239,7 @@ where
         self.active_node_counter.push(NodeCounter {
             active_tree_count: self.tree_nodes.len() - tree_nodes_len,
             true_positive_rules_count,
+            sanitized_segment_count,
         });
 
         self.path.segments.push(segment);
@@ -243,7 +255,10 @@ where
             // The true positive rule indices from the last node are no longer active, remove them.
             let _popped = self.true_positive_rule_idx.pop();
         }
-        self.sanitized_segments_until_node.pop();
+
+        for _ in 0..node_counter.sanitized_segment_count {
+            let _popped = self.sanitized_segments_until_node.pop();
+        }
         self.path.segments.pop();
     }
 
