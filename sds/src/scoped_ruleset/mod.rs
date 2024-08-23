@@ -220,13 +220,14 @@ where
                 .sanitized_segments_until_node
                 .iter()
                 .filter_map(|sanitized_segment| {
-                    sanitized_segment
-                        .as_ref()
-                        .map_or(None::<Cow<str>>, |x| Some(x.clone()))
+                    sanitized_segment.as_ref().map(|seg| Some(seg.clone()))
                 })
                 .fold(String::new(), |mut a, b| {
-                    a.reserve(b.len() + 1);
-                    a.push_str(&*b);
+                    let b_str = b.expect(
+                        "In the filter_map above, we make sure to filter out the None variants",
+                    );
+                    a.reserve(b_str.len() + 1);
+                    a.push_str(&b_str);
                     a.push(UNIFIED_LINK_CHAR);
                     a
                 });
