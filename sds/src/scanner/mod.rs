@@ -66,14 +66,12 @@ pub trait CompiledRuleDyn: Send + Sync {
     fn get_string_matches(
         &self,
         content: &str,
-        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
-        scanner_labels: &Labels,
+        true_positive_rule_idx: &Vec<usize>,
     );
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
@@ -111,14 +109,12 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
     fn get_string_matches(
         &self,
         content: &str,
-        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
-        scanner_labels: &Labels,
+        true_positive_rule_idx: &Vec<usize>,
     ) {
         let group_data_any = group_data
             .entry(TypeId::of::<T::GroupData>())
@@ -126,13 +122,12 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         let group_data: &mut T::GroupData = group_data_any.downcast_mut().unwrap();
         self.get_string_matches(
             content,
-            path,
             regex_caches,
             group_data,
             exclusion_check,
             excluded_matches,
             match_emitter,
-            should_keywords_match_event_paths,
+            true_positive_rule_idx,
         )
     }
 
@@ -170,13 +165,12 @@ pub trait CompiledRule: Send + Sync {
     fn get_string_matches(
         &self,
         content: &str,
-        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut Self::GroupData,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
+        true_positive_rule_idx: &Vec<usize>,
     );
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
@@ -662,6 +656,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         content: &str,
         mut rule_visitor: crate::scoped_ruleset::RuleIndexVisitor,
         exclusion_check: ExclusionCheck<'b>,
+        true_positive_rule_idx: &Vec<usize>,
     ) -> bool {
         // matches for a single path
         let mut path_rules_matches = vec![];
@@ -688,16 +683,12 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
                 rule.get_string_matches(
                     content,
-                    path,
-                    self.regex_caches,
+                    &mut self.regex_caches,
                     &mut group_data,
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
-                    self.scanner
-                        .scanner_features
-                        .should_keywords_match_event_paths,
-                    &self.scanner.labels,
+                    true_positive_rule_idx,
                 );
             }
         });
@@ -841,13 +832,12 @@ mod test {
         fn get_string_matches(
             &self,
             _content: &str,
-            _path: &Path,
             _regex_caches: &mut RegexCaches,
             _group_data: &mut Self::GroupData,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
-            _should_keywords_match_event_paths: bool,
+            _true_positive_rule_idx: &Vec<usize>,
         ) {
             match_emitter.emit(StringMatch { start: 10, end: 16 });
         }
