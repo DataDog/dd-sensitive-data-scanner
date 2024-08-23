@@ -1,7 +1,7 @@
 use crate::match_validation::config::{InternalMatchValidationType, MatchValidationType};
 use crate::proximity_keywords::{
-    contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
-    CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
+    get_prefix_start, is_index_within_prefix, CompiledExcludedProximityKeywords,
+    CompiledIncludedProximityKeywords,
 };
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::regex_store::SharedRegex;
@@ -9,7 +9,7 @@ use crate::scanner::regex_rule::RegexCaches;
 use crate::scanner::scope::Scope;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::secondary_validation::Validator;
-use crate::{CompiledRule, ExclusionCheck, Labels, MatchAction, MatchEmitter, Path, StringMatch};
+use crate::{CompiledRule, ExclusionCheck, Labels, MatchAction, MatchEmitter, StringMatch};
 use ahash::AHashSet;
 use regex_automata::meta::Cache;
 use regex_automata::Input;

@@ -72,6 +72,7 @@ pub trait CompiledRuleDyn: Send + Sync {
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &Vec<usize>,
+        scanner_labels: &Labels,
     );
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
@@ -115,6 +116,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &Vec<usize>,
+        scanner_labels: &Labels,
     ) {
         let group_data_any = group_data
             .entry(TypeId::of::<T::GroupData>())
@@ -689,6 +691,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     self.excluded_matches,
                     &mut emitter,
                     true_positive_rule_idx,
+                    &self.scanner.labels,
                 );
             }
         });
