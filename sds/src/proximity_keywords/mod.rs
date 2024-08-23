@@ -37,6 +37,7 @@ pub struct ProximityKeywordsRegex {
 pub const MULTI_WORD_KEYWORDS_LINK_CHARS: &[char] = &['-', '_', '.', ' ', '/'];
 
 pub const UNIFIED_LINK_CHAR: char = '.';
+#[allow(dead_code)]
 pub const UNIFIED_LINK_STR: &str = ".";
 
 pub fn compile_keywords_proximity_config(
