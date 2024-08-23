@@ -149,7 +149,7 @@ struct ScopedRuledSetEventVisitor<'a, C> {
     true_positive_rule_idx: Vec<usize>,
 
     // This is a list of sanitized segments until the current node.
-    sanitized_segments_until_node: Vec<Cow<'a, str>>,
+    sanitized_segments_until_node: Vec<Option<Cow<'a, str>>>,
 
     // This is a counter that helps keep track of how many elements we have pushed
     // In the tree_nodes list and in the true_positive_rule_idx list
