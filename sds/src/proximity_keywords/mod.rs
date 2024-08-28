@@ -285,30 +285,12 @@ pub enum BypassStandardizePathResult {
     NoBypass,
 }
 
-pub fn should_bypass_standardize_path(characters: &str) -> BypassStandardizePathResult {
-    let mut all_lower = true;
-    let mut all_upper = true;
-    for char in characters.chars() {
-        let is_upper = char.is_ascii_uppercase();
-        let is_lower = char.is_ascii_lowercase();
-        // If it's neither an uppercase character nor a lowercase character, return NoBypass
-        if !is_lower && !is_upper {
-            return BypassStandardizePathResult::NoBypass;
-        }
-        all_lower = all_lower && is_lower;
-        all_upper = all_upper && is_upper;
-        // If we realise that we don't have all uppercase nor all lowercase, return NoBypass
-        if !all_lower && !all_upper {
-            return BypassStandardizePathResult::NoBypass;
-        }
-    }
-
-    // The characters contain only uppercase characters or only lowercase characters by now, so we can bypass
-    if all_lower {
-        BypassStandardizePathResult::BypassAndAllLowercase
+pub fn should_bypass_standardize_path(s: &str) -> BypassStandardizePathResult {
+    return if s.chars().position(|c| !c.is_ascii_lowercase()).is_some() {
+        BypassStandardizePathResult::NoBypass
     } else {
-        BypassStandardizePathResult::BypassAndAllUppercase
-    }
+        BypassStandardizePathResult::BypassAndAllLowercase
+    };
 }
 
 /// Function that standardizes a list of characters, by pushing characters one by one in a standard way.
