@@ -7,14 +7,16 @@ pub use crate::secondary_validation::Validator;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Path};
 use regex_automata::meta::Regex as MetaRegex;
 use std::any::{Any, TypeId};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 use self::metrics::ScannerMetrics;
-use crate::scanner::config::RuleConfig;
+use crate::scanner::config::{RuleConfig, RuleConfigDyn};
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
+use crate::scanner::rule_cache::RuleCache;
 use crate::scanner::scope::Scope;
 use ahash::{AHashMap, AHashSet};
+use lazy_static::lazy_static;
 use regex_automata::Match;
 
 pub mod cache_pool;
@@ -22,7 +24,12 @@ pub mod config;
 pub mod error;
 pub mod metrics;
 pub mod regex_rule;
+mod rule_cache;
 pub mod scope;
+
+lazy_static! {
+    static ref RULE_CACHE: Arc<Mutex<RuleCache>> = Arc::new(Mutex::new(RuleCache::new()));
+}
 
 pub struct StringMatch {
     pub start: usize,
@@ -159,21 +166,6 @@ pub trait CompiledRule: Send + Sync {
     }
 }
 
-impl<T> RuleConfig for Box<T>
-where
-    T: RuleConfig + ?Sized,
-{
-    fn convert_to_compiled_rule(
-        &self,
-        rule_index: usize,
-        labels: Labels,
-        cache_pool_builder: &mut CachePoolBuilder,
-    ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
-        self.as_ref()
-            .convert_to_compiled_rule(rule_index, labels, cache_pool_builder)
-    }
-}
-
 #[derive(Debug, PartialEq)]
 struct ScannerFeatures {
     pub should_keywords_match_event_paths: bool,
@@ -200,7 +192,7 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn builder(rules: &[Arc<dyn RuleConfig>]) -> ScannerBuilder {
+    pub fn builder(rules: &[Arc<dyn RuleConfigDyn>]) -> ScannerBuilder {
         ScannerBuilder::new(rules)
     }
 
@@ -433,13 +425,13 @@ impl Scanner {
 
 #[derive(Default)]
 pub struct ScannerBuilder<'a> {
-    rules: &'a [Arc<dyn RuleConfig>],
+    rules: &'a [Arc<dyn RuleConfigDyn>],
     labels: Labels,
     scanner_features: ScannerFeatures,
 }
 
 impl ScannerBuilder<'_> {
-    pub fn new(rules: &[Arc<dyn RuleConfig>]) -> ScannerBuilder {
+    pub fn new(rules: &[Arc<dyn RuleConfigDyn>]) -> ScannerBuilder {
         ScannerBuilder {
             rules,
             labels: Labels::empty(),
@@ -645,6 +637,7 @@ mod test {
     use super::CompiledRule;
     use super::RuleConfig;
 
+    #[derive(PartialEq, Eq, Hash)]
     pub struct DumbRuleConfig {}
 
     pub struct DumbCompiledRule {

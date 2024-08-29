@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::rule_match::ReplacementType;
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Hash, Eq)]
 #[serde(tag = "type")]
 pub enum MatchAction {
     /// Do not modify the input.
@@ -32,7 +32,7 @@ pub enum MatchAction {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Hash, Eq)]
 pub enum PartialRedactDirection {
     FirstCharacters,
     LastCharacters,

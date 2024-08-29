@@ -1,7 +1,7 @@
 use crate::Path;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Hash, Eq)]
 #[serde(tag = "type", content = "paths")]
 pub enum Scope {
     // Only `include` fields are scanned,

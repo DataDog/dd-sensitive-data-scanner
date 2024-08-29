@@ -1,5 +1,5 @@
 use crate::proximity_keywords::compile_keywords_proximity_config;
-use crate::scanner::config::RuleConfig;
+use crate::scanner::config::{RuleConfig, RuleConfigDyn};
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::scope::Scope;
@@ -12,7 +12,7 @@ use serde_with::DefaultOnNull;
 use std::sync::Arc;
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Hash, Eq)]
 pub struct RegexRuleConfig {
     pub pattern: String,
     pub match_action: MatchAction,
@@ -59,7 +59,7 @@ impl RegexRuleConfig {
         self.mutate_clone(|x| x.labels = labels)
     }
 
-    pub fn build(&self) -> Arc<dyn RuleConfig> {
+    pub fn build(&self) -> Arc<dyn RuleConfigDyn> {
         Arc::new(RegexRuleConfig {
             pattern: self.pattern.clone(),
             match_action: self.match_action.clone(),
@@ -114,7 +114,7 @@ impl RuleConfig for RegexRuleConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Hash, Eq)]
 pub struct ProximityKeywordsConfig {
     pub look_ahead_character_count: usize,
 
@@ -127,7 +127,7 @@ pub struct ProximityKeywordsConfig {
     pub excluded_keywords: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Hash, Eq)]
 #[serde(tag = "type")]
 pub enum SecondaryValidator {
     LuhnChecksum,

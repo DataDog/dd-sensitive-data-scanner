@@ -6,7 +6,7 @@ use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize, Serializer};
 
 /// Holder of multiple [Label] providing some methods to easily clone and adds new labels in it.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Hash, Eq)]
 pub struct Labels(Vec<Label>);
 
 impl Labels {
