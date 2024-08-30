@@ -5,7 +5,7 @@ use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Path};
-use regex_automata::meta::Regex as MetaRegex;
+use regex_automata::meta::{Cache, Regex as MetaRegex};
 use std::any::{Any, TypeId};
 use std::sync::Arc;
 
@@ -14,6 +14,7 @@ use self::metrics::ScannerMetrics;
 use crate::scanner::config::RuleConfig;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::scope::Scope;
+use crate::stats::GLOBAL_STATS;
 use ahash::{AHashMap, AHashSet};
 use regex_automata::Match;
 
@@ -431,6 +432,14 @@ impl Scanner {
     }
 }
 
+impl Drop for Scanner {
+    fn drop(&mut self) {
+        let stats = &*GLOBAL_STATS;
+        stats.scanner_deletions.increment(1);
+        stats.total_scanners.decrement(1);
+    }
+}
+
 #[derive(Default)]
 pub struct ScannerBuilder<'a> {
     rules: &'a [Arc<dyn RuleConfig>],
@@ -494,10 +503,31 @@ impl ScannerBuilder<'_> {
         )
         .with_implicit_index_wildcards(self.scanner_features.add_implicit_index_wildcards);
 
+        let cache_pool = cache_pool_builder.build();
+
+        {
+            let stats = &*GLOBAL_STATS;
+
+            let caches = cache_pool.get();
+            let total_cache_size: usize = caches
+                .iter()
+                .map(|x| x.memory_usage() + std::mem::size_of::<Cache>())
+                .sum();
+
+            stats.scanner_creations.increment(1);
+            stats.total_scanners.increment(1);
+            stats
+                .regex_cache_per_scanner
+                .record(total_cache_size as f64);
+            stats
+                .number_of_rules_per_scanner
+                .record(self.rules.len() as f64);
+        }
+
         Ok(Scanner {
             rules: compiled_rules,
             scoped_ruleset,
-            cache_pool: cache_pool_builder.build(),
+            cache_pool,
             scanner_features: self.scanner_features,
             metrics: ScannerMetrics::new(&self.labels),
         })

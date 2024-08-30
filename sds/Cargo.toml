@@ -36,6 +36,7 @@ iban_validate = "4"
 
 # This is deprecated and may switch to `serde_yml` in the future. Waiting for it to mature a bit first.
 serde_yaml = "0.9.34"
+lazy_static = "1.5.0"
 
 [dev-dependencies]
 rand = "0.8.5"

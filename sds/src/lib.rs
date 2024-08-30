@@ -14,6 +14,7 @@ mod rule_match;
 mod scanner;
 mod scoped_ruleset;
 mod secondary_validation;
+mod stats;
 mod validation;
 
 #[cfg(any(test, feature = "testing", feature = "bench"))]
