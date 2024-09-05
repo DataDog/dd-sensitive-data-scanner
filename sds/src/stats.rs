@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 use metrics::{counter, gauge, histogram, Counter, Gauge, Histogram};
-use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicI64, Ordering};
 
 lazy_static! {
     pub static ref GLOBAL_STATS: Stats = Stats::new();
