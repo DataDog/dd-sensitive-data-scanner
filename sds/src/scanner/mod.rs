@@ -436,7 +436,7 @@ impl Drop for Scanner {
     fn drop(&mut self) {
         let stats = &*GLOBAL_STATS;
         stats.scanner_deletions.increment(1);
-        stats.total_scanners.decrement(1);
+        stats.decrement_total_scanners();
     }
 }
 
@@ -515,7 +515,7 @@ impl ScannerBuilder<'_> {
                 .sum();
 
             stats.scanner_creations.increment(1);
-            stats.total_scanners.increment(1);
+            stats.increment_total_scanners();
             stats
                 .regex_cache_per_scanner
                 .record(total_cache_size as f64);
