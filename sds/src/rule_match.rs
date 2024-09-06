@@ -1,3 +1,5 @@
+#[cfg(feature = "match_validation")]
+use crate::match_validation::match_status::MatchStatus;
 use crate::{encoding::Encoding, path::Path};
 use std::fmt::Debug;
 use std::fmt::{Display, Formatter};
@@ -28,6 +30,13 @@ pub struct RuleMatch {
     ///  **INPUT** string and the end (UTF8 byte index) of the match data applied to the new **OUTPUT** string after match actions
     ///  performed.
     pub shift_offset: isize,
+
+    #[cfg(feature = "match_validation")]
+    // matched string copied from content. If scanner has the return_matches set to true
+    pub matched_string: Option<String>,
+    #[cfg(feature = "match_validation")]
+    // match status updated by the validate_matches scanner method
+    pub match_status: MatchStatus,
 }
 
 pub struct InternalRuleMatch<E: Encoding> {
