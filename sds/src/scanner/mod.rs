@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 use self::metrics::ScannerMetrics;
+use crate::proximity_keywords::{contains_keyword_in_path, CompiledIncludedProximityKeywords};
 use crate::scanner::config::RuleConfig;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::scope::Scope;
@@ -52,6 +53,7 @@ where
 pub trait CompiledRuleDyn: Send + Sync {
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
+    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords>;
 
     #[allow(clippy::too_many_arguments)]
     fn get_string_matches(
@@ -88,6 +90,10 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
 
     fn get_scope(&self) -> &Scope {
         self.get_scope()
+    }
+
+    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
+        self.get_included_keywords()
     }
 
     fn get_string_matches(
@@ -134,6 +140,7 @@ pub trait CompiledRule: Send + Sync {
 
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
+    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords>;
 
     #[allow(clippy::too_many_arguments)]
     fn get_string_matches(
@@ -501,7 +508,10 @@ impl ScannerBuilder<'_> {
                 .map(|rule| rule.get_scope().clone())
                 .collect::<Vec<_>>(),
         )
-        .with_implicit_index_wildcards(self.scanner_features.add_implicit_index_wildcards);
+        .with_implicit_index_wildcards(self.scanner_features.add_implicit_index_wildcards)
+        .with_keywords_should_match_event_paths(
+            self.scanner_features.should_keywords_match_event_paths,
+        );
 
         let cache_pool = cache_pool_builder.build();
 
@@ -616,6 +626,26 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
         has_match
     }
+
+    fn find_true_positive_rules_from_current_path(
+        &self,
+        sanitized_path: &str,
+        current_true_positive_rule_idx: &mut Vec<usize>,
+    ) -> usize {
+        let mut times_pushed = 0;
+        for (idx, rule) in self.scanner.rules.iter().enumerate() {
+            if !current_true_positive_rule_idx.contains(&idx) {
+                if let Some(keywords) = rule.get_included_keywords() {
+                    if contains_keyword_in_path(sanitized_path, &keywords.keywords_pattern) {
+                        // The rule is found has a true positive for this path, push it
+                        current_true_positive_rule_idx.push(idx);
+                        times_pushed += 1
+                    }
+                }
+            }
+        }
+        times_pushed
+    }
 }
 
 // Calculates the next starting position for a regex match if a the previous match is a false positive
@@ -691,6 +721,11 @@ mod test {
         fn get_scope(&self) -> &Scope {
             &self.scope
         }
+
+        fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
+            None
+        }
+
         fn get_string_matches(
             &self,
             _content: &str,

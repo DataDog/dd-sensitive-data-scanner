@@ -1,6 +1,7 @@
 mod bool_set;
 
 use crate::event::{EventVisitor, VisitStringResult};
+use crate::proximity_keywords::UNIFIED_LINK_CHAR;
 use crate::scanner::scope::Scope;
 use crate::scoped_ruleset::bool_set::BoolSet;
 use crate::{Event, Path, PathSegment};
@@ -15,6 +16,7 @@ pub struct ScopedRuleSet {
     // The number of rules stored in this set
     num_rules: usize,
     add_implicit_index_wildcards: bool,
+    should_keywords_match_event_paths: bool,
 }
 
 impl ScopedRuleSet {
@@ -45,11 +47,17 @@ impl ScopedRuleSet {
             tree,
             num_rules: rules_scopes.len(),
             add_implicit_index_wildcards: false,
+            should_keywords_match_event_paths: false,
         }
     }
 
     pub fn with_implicit_index_wildcards(mut self, value: bool) -> Self {
         self.add_implicit_index_wildcards = value;
+        self
+    }
+
+    pub fn with_keywords_should_match_event_paths(mut self, value: bool) -> Self {
+        self.should_keywords_match_event_paths = value;
         self
     }
 
@@ -78,6 +86,7 @@ impl ScopedRuleSet {
             path: Path::root(),
             bool_set,
             add_implicit_index_wildcards: self.add_implicit_index_wildcards,
+            should_keywords_match_event_paths: self.should_keywords_match_event_paths,
         };
 
         event.visit_event(&mut visitor)
@@ -114,6 +123,12 @@ pub trait ContentVisitor<'path> {
         rules: RuleIndexVisitor,
         is_excluded: ExclusionCheck<'content_visitor>,
     ) -> bool;
+
+    fn find_true_positive_rules_from_current_path(
+        &self,
+        sanitized_path: &str,
+        current_true_positive_rule_idx: &mut Vec<usize>,
+    ) -> usize;
 }
 
 // This is just a reference to a RuleTree with some additional information
@@ -162,6 +177,7 @@ struct ScopedRuledSetEventVisitor<'a, C> {
     bool_set: Option<BoolSet>,
 
     add_implicit_index_wildcards: bool,
+    should_keywords_match_event_paths: bool,
 }
 
 impl<'path, C> EventVisitor<'path> for ScopedRuledSetEventVisitor<'path, C>
@@ -199,22 +215,53 @@ where
         // Sanitize the segment and push it
         self.sanitized_segments_until_node.push(segment.sanitize());
 
+        let true_positive_rules_count = if self.should_keywords_match_event_paths {
+            let mut current_sanitized_path = self
+                .sanitized_segments_until_node
+                .iter()
+                .filter_map(|sanitized_segment| {
+                    sanitized_segment.as_ref().map(|seg| Some(seg.clone()))
+                })
+                .fold(String::new(), |mut a, b| {
+                    let b_str = b.expect(
+                        "In the filter_map above, we make sure to filter out the None variants",
+                    );
+                    a.reserve(b_str.len() + 1);
+                    a.push_str(&b_str);
+                    a.push(UNIFIED_LINK_CHAR);
+                    a
+                });
+            // Remove the last `UNIFIED_LINK_CHAR` that has been put
+            current_sanitized_path.pop();
+            self.content_visitor
+                .find_true_positive_rules_from_current_path(
+                    current_sanitized_path.as_str(),
+                    &mut self.true_positive_rule_idx,
+                )
+        } else {
+            0
+        };
+
         // The new number of active trees is the number of new trees pushed
         self.active_node_counter.push(NodeCounter {
             active_tree_count: self.tree_nodes.len() - tree_nodes_len,
-            true_positive_rules_count: 0,
+            true_positive_rules_count,
         });
 
         self.path.segments.push(segment);
     }
 
     fn pop_segment(&mut self) {
-        let num_active_trees = self.active_node_counter.pop().unwrap().active_tree_count;
-        for _ in 0..num_active_trees {
+        let node_counter = self.active_node_counter.pop().unwrap();
+        for _ in 0..node_counter.active_tree_count {
             // The rules from the last node are no longer active, so remove them.
             let _popped = self.tree_nodes.pop();
         }
-        self.sanitized_segments_until_node.pop();
+        for _ in 0..node_counter.true_positive_rules_count {
+            // The true positive rule indices from the last node are no longer active, remove them.
+            let _popped = self.true_positive_rule_idx.pop();
+        }
+
         self.path.segments.pop();
     }
 
@@ -382,6 +429,14 @@ mod test {
                     rules,
                 });
                 true
+            }
+
+            fn find_true_positive_rules_from_current_path(
+                &self,
+                _sanitized_path: &str,
+                _current_true_positive_rule_idx: &mut Vec<usize>,
+            ) -> usize {
+                0
             }
         }
 
