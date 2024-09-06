@@ -361,6 +361,7 @@ dependencies = [
  "base62",
  "crc32fast",
  "criterion",
+ "dd-sds",
  "farmhash",
  "hyperscan",
  "iban_validate",
