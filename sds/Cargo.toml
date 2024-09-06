@@ -16,7 +16,6 @@ testing = []
 utf16_hash_match_action = []
 bench = []
 
-
 [dependencies]
 ahash = "0.8.7"
 # Overriding with fix repo due to: https://github.com/seiflotfy/rust-farmhash/pull/16
