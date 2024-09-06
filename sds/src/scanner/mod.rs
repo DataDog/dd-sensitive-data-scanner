@@ -1,5 +1,6 @@
 use crate::encoding::Encoding;
 use crate::event::Event;
+use crate::match_status::MatchStatus;
 use crate::observability::labels::Labels;
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
@@ -180,6 +181,7 @@ struct ScannerFeatures {
     pub should_keywords_match_event_paths: bool,
     pub add_implicit_index_wildcards: bool,
     pub multipass_v0_enabled: bool,
+    pub return_matches: bool,
 }
 
 impl Default for ScannerFeatures {
@@ -188,6 +190,7 @@ impl Default for ScannerFeatures {
             should_keywords_match_event_paths: false,
             add_implicit_index_wildcards: false,
             multipass_v0_enabled: true,
+            return_matches: false,
         }
     }
 }
@@ -327,7 +330,8 @@ impl Scanner {
             (<E>::get_index(&rule_match.custom_start, rule_match.utf8_start) as isize
                 + <E>::get_shift(custom_index_delta, *utf8_byte_delta)) as usize;
 
-        if rule.get_match_action().is_mutating() {
+        let mut matched_content_copy = None;
+        if rule.get_match_action().is_mutating() || self.scanner_features.return_matches {
             let mutated_utf8_match_start =
                 (rule_match.utf8_start as isize + *utf8_byte_delta) as usize;
             let mutated_utf8_match_end = (rule_match.utf8_end as isize + *utf8_byte_delta) as usize;
@@ -337,22 +341,31 @@ impl Scanner {
             debug_assert!(content.is_char_boundary(mutated_utf8_match_end));
 
             let matched_content = &content[mutated_utf8_match_start..mutated_utf8_match_end];
+            if self.scanner_features.return_matches {
+                matched_content_copy = Some(matched_content.to_string());
+            }
 
-            if let Some(replacement) = rule.get_match_action().get_replacement(matched_content) {
-                let before_replacement = &matched_content[replacement.start..replacement.end];
+            if rule.get_match_action().is_mutating() {
+                if let Some(replacement) = rule.get_match_action().get_replacement(matched_content)
+                {
+                    let before_replacement = &matched_content[replacement.start..replacement.end];
 
-                // update indices to match the new mutated content
-                <E>::adjust_shift(
-                    custom_index_delta,
-                    before_replacement,
-                    &replacement.replacement,
-                );
-                *utf8_byte_delta +=
-                    replacement.replacement.len() as isize - before_replacement.len() as isize;
+                    // update indices to match the new mutated content
+                    <E>::adjust_shift(
+                        custom_index_delta,
+                        before_replacement,
+                        &replacement.replacement,
+                    );
+                    *utf8_byte_delta +=
+                        replacement.replacement.len() as isize - before_replacement.len() as isize;
 
-                let replacement_start = mutated_utf8_match_start + replacement.start;
-                let replacement_end = mutated_utf8_match_start + replacement.end;
-                content.replace_range(replacement_start..replacement_end, &replacement.replacement);
+                    let replacement_start = mutated_utf8_match_start + replacement.start;
+                    let replacement_end = mutated_utf8_match_start + replacement.end;
+                    content.replace_range(
+                        replacement_start..replacement_end,
+                        &replacement.replacement,
+                    );
+                }
             }
         }
 
@@ -367,6 +380,9 @@ impl Scanner {
             start_index: custom_start,
             end_index_exclusive: custom_end,
             shift_offset,
+            matched_string: matched_content_copy,
+            // MatchStatus not supported yet
+            match_status: MatchStatus::NotChecked,
         }
     }
 
@@ -454,6 +470,11 @@ impl ScannerBuilder<'_> {
             labels: Labels::empty(),
             scanner_features: ScannerFeatures::default(),
         }
+    }
+
+    pub fn return_matches(mut self, return_matches: bool) -> Self {
+        self.scanner_features.return_matches = return_matches;
+        self
     }
 
     pub fn labels(mut self, labels: Labels) -> Self {
@@ -1352,6 +1373,8 @@ mod test {
                 start_index: 0,
                 end_index_exclusive: 3,
                 shift_offset: 0,
+                matched_string: None,
+                match_status: MatchStatus::NotChecked,
             }
         );
 
@@ -1364,6 +1387,8 @@ mod test {
                 start_index: 3,
                 end_index_exclusive: 6,
                 shift_offset: 0,
+                matched_string: None,
+                match_status: MatchStatus::NotChecked,
             }
         );
 
@@ -1376,6 +1401,8 @@ mod test {
                 start_index: 6,
                 end_index_exclusive: 9,
                 shift_offset: 0,
+                matched_string: None,
+                match_status: MatchStatus::NotChecked,
             }
         );
     }
@@ -1420,6 +1447,8 @@ mod test {
                 start_index: 0,
                 end_index_exclusive: 3,
                 shift_offset: 0,
+                matched_string: None,
+                match_status: MatchStatus::NotChecked,
             }
         );
 
@@ -1432,6 +1461,8 @@ mod test {
                 start_index: 3,
                 end_index_exclusive: 6,
                 shift_offset: 0,
+                matched_string: None,
+                match_status: MatchStatus::NotChecked,
             }
         );
 
@@ -1444,6 +1475,8 @@ mod test {
                 start_index: 6,
                 end_index_exclusive: 9,
                 shift_offset: 0,
+                matched_string: None,
+                match_status: MatchStatus::NotChecked,
             }
         );
     }
@@ -1482,6 +1515,8 @@ mod test {
                 start_index: 1,
                 end_index_exclusive: 4,
                 shift_offset: 0,
+                matched_string: None,
+                match_status: MatchStatus::NotChecked,
             }
         );
     }
@@ -1518,6 +1553,8 @@ mod test {
                 start_index: 0,
                 end_index_exclusive: 3,
                 shift_offset: 0,
+                matched_string: None,
+                match_status: MatchStatus::NotChecked,
             }
         );
     }
@@ -1554,6 +1591,8 @@ mod test {
                 start_index: 0,
                 end_index_exclusive: 4,
                 shift_offset: 0,
+                matched_string: None,
+                match_status: MatchStatus::NotChecked,
             }
         );
     }
@@ -1590,6 +1629,8 @@ mod test {
                 start_index: 0,
                 end_index_exclusive: 3,
                 shift_offset: 0,
+                matched_string: None,
+                match_status: MatchStatus::NotChecked,
             }
         );
     }
@@ -2049,6 +2090,25 @@ mod test {
         // included and excluded keywords are present
         let mut content = "hey, hello world".to_string();
         assert_eq!(scanner.scan(&mut content, vec![]).len(), 1);
+    }
+
+    #[test]
+    fn test_should_return_match() {
+        let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
+            .match_action(MatchAction::Redact {
+                replacement: "[REDACTED]".to_string(),
+            })
+            .build()])
+        .return_matches(true)
+        .build()
+        .unwrap();
+
+        // only the included keyword is present
+        let mut content = "hey world".to_string();
+        let rule_match = scanner.scan(&mut content, vec![]);
+        assert_eq!(rule_match.len(), 1);
+        assert_eq!(content, "hey [REDACTED]");
+        assert_eq!(rule_match[0].matched_string, Some("world".to_string()));
     }
 
     mod metrics_test {

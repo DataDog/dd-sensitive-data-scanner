@@ -1,4 +1,4 @@
-use crate::{encoding::Encoding, path::Path};
+use crate::{encoding::Encoding, match_status::MatchStatus, path::Path};
 use std::fmt::Debug;
 use std::fmt::{Display, Formatter};
 
@@ -28,6 +28,11 @@ pub struct RuleMatch {
     ///  **INPUT** string and the end (UTF8 byte index) of the match data applied to the new **OUTPUT** string after match actions
     ///  performed.
     pub shift_offset: isize,
+
+    // matched string copied from content. If scanner has the return_matches set to true
+    pub matched_string: Option<String>,
+    // match status updated by the validate_matches scanner method
+    pub match_status: MatchStatus,
 }
 
 pub struct InternalRuleMatch<E: Encoding> {

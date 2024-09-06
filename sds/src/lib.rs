@@ -5,6 +5,7 @@
 mod encoding;
 mod event;
 mod match_action;
+mod match_status;
 mod normalization;
 mod observability;
 mod parser;
