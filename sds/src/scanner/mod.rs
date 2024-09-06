@@ -722,12 +722,6 @@ mod test {
         }
     }
 
-    #[cfg(feature = "testtest")]
-    #[test]
-    fn test_test() {
-        panic!("FEATURE ENABLED");
-    }
-
     #[test]
     fn dumb_custom_rule() {
         let scanner = ScannerBuilder::new(&[Arc::new(DumbRuleConfig {})])
