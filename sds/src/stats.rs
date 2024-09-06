@@ -11,7 +11,7 @@ pub struct Stats {
     pub scanner_deletions: Counter,
 
     // Count of total scanners. The actual count is calculated with an atomic
-    // since some metrics exporters don't supporting incrementing gauges (e.g. statsd)
+    // since some metrics exporters don't support incrementing gauges (e.g. statsd)
     total_scanners_count: AtomicI64,
     total_scanners: Gauge,
 
