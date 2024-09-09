@@ -1,6 +1,11 @@
 use crate::encoding::Encoding;
 use crate::event::Event;
-use crate::match_status::MatchStatus;
+#[cfg(feature = "match_validation")]
+use crate::match_validation::{
+    config::MatchValidationType, match_status::MatchStatus, match_validator::MatchValidator,
+    match_validator::MatchValidatorOptions, validator_utils::new_match_validator_from_type,
+};
+
 use crate::observability::labels::Labels;
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
@@ -77,6 +82,9 @@ pub trait CompiledRuleDyn: Send + Sync {
     fn on_excluded_match_multipass_v0(&self) {
         // default is to do nothing
     }
+
+    #[cfg(feature = "match_validation")]
+    fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
 }
 
 // This is the "hidden" implementation of CompiledRuleDyn for any type that implements CompiledRule
@@ -125,6 +133,11 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
     fn on_excluded_match_multipass_v0(&self) {
         T::on_excluded_match_multipass_v0(self)
     }
+
+    #[cfg(feature = "match_validation")]
+    fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
+        T::get_match_validation_type(self)
+    }
 }
 
 // This is the public trait that is used to define the behavior of a compiled rule.
@@ -159,6 +172,9 @@ pub trait CompiledRule: Send + Sync {
     fn on_excluded_match_multipass_v0(&self) {
         // default is to do nothing
     }
+
+    #[cfg(feature = "match_validation")]
+    fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
 }
 
 impl<T> RuleConfig for Box<T>
@@ -174,6 +190,10 @@ where
         self.as_ref()
             .convert_to_compiled_rule(rule_index, labels, cache_pool_builder)
     }
+    #[cfg(feature = "match_validation")]
+    fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
+        self.as_ref().get_match_validation_type()
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -181,6 +201,7 @@ struct ScannerFeatures {
     pub should_keywords_match_event_paths: bool,
     pub add_implicit_index_wildcards: bool,
     pub multipass_v0_enabled: bool,
+    #[cfg(feature = "match_validation")]
     pub return_matches: bool,
 }
 
@@ -190,6 +211,7 @@ impl Default for ScannerFeatures {
             should_keywords_match_event_paths: false,
             add_implicit_index_wildcards: false,
             multipass_v0_enabled: true,
+            #[cfg(feature = "match_validation")]
             return_matches: false,
         }
     }
@@ -201,6 +223,8 @@ pub struct Scanner {
     cache_pool: CachePool,
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
+    #[cfg(feature = "match_validation")]
+    match_validators_per_type: AHashMap<MatchValidationType, Box<dyn MatchValidator>>,
 }
 
 impl Scanner {
@@ -289,6 +313,49 @@ impl Scanner {
         output_rule_matches
     }
 
+    #[cfg(feature = "match_validation")]
+    pub async fn validate_matches(&self, rule_matches: &mut Vec<RuleMatch>) {
+        if !self.scanner_features.return_matches {
+            return;
+        }
+        // Create MatchValidatorRuleMatch per match_validator_type to pass it to each match_validator
+        let mut match_validator_rule_match_per_type = AHashMap::new();
+        for rule_match in rule_matches.drain(..) {
+            let rule = &self.rules[rule_match.rule_index];
+            if let Some(match_validation_type) = rule.get_match_validation_type() {
+                if !match_validator_rule_match_per_type.contains_key(match_validation_type) {
+                    match_validator_rule_match_per_type.insert(match_validation_type, Vec::new());
+                }
+                match_validator_rule_match_per_type
+                    .get_mut(match_validation_type)
+                    .unwrap()
+                    .push(rule_match);
+            }
+        }
+
+        // Call the validate per match_validator_type with their matches and the RuleMatch list and collect the results
+        let futures = match_validator_rule_match_per_type
+            .iter_mut()
+            .map(|(match_validation_type, matches_per_type)| {
+                let match_validator = self
+                    .match_validators_per_type
+                    .get(match_validation_type)
+                    .unwrap_or_else(|| panic!("MatchValidator not found"));
+                match_validator.validate(matches_per_type, &self.rules)
+            })
+            .collect::<Vec<_>>();
+
+        // Wait for all result to complete
+        let _ = futures::future::join_all(futures).await;
+        // Refill the rule_matches with the validated matches
+        for (_, mut matches) in match_validator_rule_match_per_type {
+            rule_matches.extend(matches.drain(..));
+        }
+
+        // Sort rule_matches by start index
+        rule_matches.sort_by_key(|rule_match| rule_match.start_index);
+    }
+
     /// Apply mutations from actions, and shift indices to match the mutated values.
     /// This assumes the matches are all from the content given, and are sorted by start index.
     fn apply_match_actions<E: Encoding>(
@@ -330,8 +397,11 @@ impl Scanner {
             (<E>::get_index(&rule_match.custom_start, rule_match.utf8_start) as isize
                 + <E>::get_shift(custom_index_delta, *utf8_byte_delta)) as usize;
 
+        #[cfg(feature = "match_validation")]
         let mut matched_content_copy = None;
-        if rule.get_match_action().is_mutating() || self.scanner_features.return_matches {
+        #[cfg(feature = "match_validation")]
+        if self.scanner_features.return_matches {
+            // This copy part of the is_mutating block but is seperate since can't mix compilation condition and code condition
             let mutated_utf8_match_start =
                 (rule_match.utf8_start as isize + *utf8_byte_delta) as usize;
             let mutated_utf8_match_end = (rule_match.utf8_end as isize + *utf8_byte_delta) as usize;
@@ -341,9 +411,19 @@ impl Scanner {
             debug_assert!(content.is_char_boundary(mutated_utf8_match_end));
 
             let matched_content = &content[mutated_utf8_match_start..mutated_utf8_match_end];
-            if self.scanner_features.return_matches {
-                matched_content_copy = Some(matched_content.to_string());
-            }
+            matched_content_copy = Some(matched_content.to_string());
+        }
+
+        if rule.get_match_action().is_mutating() {
+            let mutated_utf8_match_start =
+                (rule_match.utf8_start as isize + *utf8_byte_delta) as usize;
+            let mutated_utf8_match_end = (rule_match.utf8_end as isize + *utf8_byte_delta) as usize;
+
+            // Matches for mutating rules must have valid indices
+            debug_assert!(content.is_char_boundary(mutated_utf8_match_start));
+            debug_assert!(content.is_char_boundary(mutated_utf8_match_end));
+
+            let matched_content = &content[mutated_utf8_match_start..mutated_utf8_match_end];
 
             if rule.get_match_action().is_mutating() {
                 if let Some(replacement) = rule.get_match_action().get_replacement(matched_content)
@@ -380,7 +460,9 @@ impl Scanner {
             start_index: custom_start,
             end_index_exclusive: custom_end,
             shift_offset,
+            #[cfg(feature = "match_validation")]
             matched_string: matched_content_copy,
+            #[cfg(feature = "match_validation")]
             // MatchStatus not supported yet
             match_status: MatchStatus::NotChecked,
         }
@@ -461,6 +543,8 @@ pub struct ScannerBuilder<'a> {
     rules: &'a [Arc<dyn RuleConfig>],
     labels: Labels,
     scanner_features: ScannerFeatures,
+    #[cfg(feature = "match_validation")]
+    match_validation_options: MatchValidatorOptions,
 }
 
 impl ScannerBuilder<'_> {
@@ -469,11 +553,23 @@ impl ScannerBuilder<'_> {
             rules,
             labels: Labels::empty(),
             scanner_features: ScannerFeatures::default(),
+            #[cfg(feature = "match_validation")]
+            match_validation_options: MatchValidatorOptions::default(),
         }
     }
 
+    #[cfg(feature = "match_validation")]
     pub fn return_matches(mut self, return_matches: bool) -> Self {
         self.scanner_features.return_matches = return_matches;
+        self
+    }
+
+    #[cfg(feature = "match_validation")]
+    pub fn match_validation_options(
+        mut self,
+        match_validation_options: MatchValidatorOptions,
+    ) -> Self {
+        self.match_validation_options = match_validation_options;
         self
     }
 
@@ -502,6 +598,23 @@ impl ScannerBuilder<'_> {
 
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
         let mut cache_pool_builder = CachePoolBuilder::new();
+
+        #[cfg(feature = "match_validation")]
+        let mut match_validators_per_type = AHashMap::new();
+        #[cfg(feature = "match_validation")]
+        for rule in self.rules.iter() {
+            if let Some(match_validation_type) = rule.get_match_validation_type() {
+                if !match_validators_per_type.contains_key(match_validation_type) {
+                    match_validators_per_type.insert(
+                        match_validation_type.clone(),
+                        new_match_validator_from_type(
+                            match_validation_type.clone(),
+                            &self.match_validation_options,
+                        ),
+                    );
+                }
+            }
+        }
 
         let compiled_rules = self
             .rules
@@ -551,6 +664,8 @@ impl ScannerBuilder<'_> {
             cache_pool,
             scanner_features: self.scanner_features,
             metrics: ScannerMetrics::new(&self.labels),
+            #[cfg(feature = "match_validation")]
+            match_validators_per_type: match_validators_per_type,
         })
     }
 }
@@ -679,6 +794,10 @@ mod test {
     use super::*;
     use super::{MatchEmitter, ScannerBuilder, StringMatch};
     use crate::match_action::{MatchAction, MatchActionValidationError};
+    use crate::match_validation::config::{
+        AwsType, HttpValidatorConfigBuilder, MatchValidationType,
+    };
+    use crate::match_validation::validator_utils::generate_aws_headers_and_body;
     use crate::observability::labels::Labels;
     use crate::scanner::regex_rule::config::{
         ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator, SecondaryValidator::*,
@@ -690,6 +809,7 @@ mod test {
     use crate::{simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch};
     use crate::{Encoding, Utf8Encoding};
     use ahash::AHashSet;
+    use httpmock::{Method::POST, MockServer};
     use regex_automata::Match;
     use std::collections::BTreeMap;
 
@@ -725,6 +845,10 @@ mod test {
         ) {
             match_emitter.emit(StringMatch { start: 10, end: 16 });
         }
+        #[cfg(feature = "match_validation")]
+        fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
+            None
+        }
     }
 
     impl RuleConfig for DumbRuleConfig {
@@ -740,6 +864,10 @@ mod test {
                 },
                 scope: Scope::default(),
             }))
+        }
+        #[cfg(feature = "match_validation")]
+        fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
+            None
         }
     }
 
@@ -1373,7 +1501,9 @@ mod test {
                 start_index: 0,
                 end_index_exclusive: 3,
                 shift_offset: 0,
+                #[cfg(feature = "match_validation")]
                 matched_string: None,
+                #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotChecked,
             }
         );
@@ -1387,7 +1517,9 @@ mod test {
                 start_index: 3,
                 end_index_exclusive: 6,
                 shift_offset: 0,
+                #[cfg(feature = "match_validation")]
                 matched_string: None,
+                #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotChecked,
             }
         );
@@ -1401,7 +1533,9 @@ mod test {
                 start_index: 6,
                 end_index_exclusive: 9,
                 shift_offset: 0,
+                #[cfg(feature = "match_validation")]
                 matched_string: None,
+                #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotChecked,
             }
         );
@@ -1447,7 +1581,9 @@ mod test {
                 start_index: 0,
                 end_index_exclusive: 3,
                 shift_offset: 0,
+                #[cfg(feature = "match_validation")]
                 matched_string: None,
+                #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotChecked,
             }
         );
@@ -1461,7 +1597,9 @@ mod test {
                 start_index: 3,
                 end_index_exclusive: 6,
                 shift_offset: 0,
+                #[cfg(feature = "match_validation")]
                 matched_string: None,
+                #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotChecked,
             }
         );
@@ -1475,7 +1613,9 @@ mod test {
                 start_index: 6,
                 end_index_exclusive: 9,
                 shift_offset: 0,
+                #[cfg(feature = "match_validation")]
                 matched_string: None,
+                #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotChecked,
             }
         );
@@ -1515,7 +1655,9 @@ mod test {
                 start_index: 1,
                 end_index_exclusive: 4,
                 shift_offset: 0,
+                #[cfg(feature = "match_validation")]
                 matched_string: None,
+                #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotChecked,
             }
         );
@@ -1553,7 +1695,9 @@ mod test {
                 start_index: 0,
                 end_index_exclusive: 3,
                 shift_offset: 0,
+                #[cfg(feature = "match_validation")]
                 matched_string: None,
+                #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotChecked,
             }
         );
@@ -1591,7 +1735,9 @@ mod test {
                 start_index: 0,
                 end_index_exclusive: 4,
                 shift_offset: 0,
+                #[cfg(feature = "match_validation")]
                 matched_string: None,
+                #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotChecked,
             }
         );
@@ -1629,7 +1775,9 @@ mod test {
                 start_index: 0,
                 end_index_exclusive: 3,
                 shift_offset: 0,
+                #[cfg(feature = "match_validation")]
                 matched_string: None,
+                #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotChecked,
             }
         );
@@ -2092,6 +2240,7 @@ mod test {
         assert_eq!(scanner.scan(&mut content, vec![]).len(), 1);
     }
 
+    #[cfg(feature = "match_validation")]
     #[test]
     fn test_should_return_match() {
         let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
@@ -2103,7 +2252,6 @@ mod test {
         .build()
         .unwrap();
 
-        // only the included keyword is present
         let mut content = "hey world".to_string();
         let rule_match = scanner.scan(&mut content, vec![]);
         assert_eq!(rule_match.len(), 1);
@@ -2111,6 +2259,219 @@ mod test {
         assert_eq!(rule_match[0].matched_string, Some("world".to_string()));
     }
 
+    #[cfg(feature = "match_validation")]
+    #[tokio::test]
+    async fn test_mock_same_validator_several_matches() {
+        use httpmock::{Method::GET, MockServer};
+        let server = MockServer::start();
+
+        // Create a mock on the server.
+        let mock_service_valid = server.mock(|when, then| {
+            when.method(GET)
+                .path("/")
+                .header("authorization", "Bearer valid_match");
+            then.status(200);
+        });
+        let mock_service_invalid = server.mock(|when, then| {
+            when.method(GET)
+                .path("/")
+                .header("authorization", "Bearer invalid_match");
+            then.status(404).header("content-type", "text/html");
+        });
+        let mock_service_error = server.mock(|when, then| {
+            when.method(GET)
+                .path("/")
+                .header("authorization", "Bearer error_match");
+            then.status(500).header("content-type", "text/html");
+        });
+
+        let rule_valid_match = RegexRuleConfig::new("\\bvalid_match\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[VALID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new(server.url("/").to_string()).build(),
+            ))
+            .build();
+
+        let rule_invalid_match = RegexRuleConfig::new("\\binvalid_match\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[INVALID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new(server.url("/").to_string()).build(),
+            ))
+            .build();
+
+        let rule_error_match = RegexRuleConfig::new("\\berror_match\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[ERROR]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new(server.url("/").to_string()).build(),
+            ))
+            .build();
+        let scanner =
+            ScannerBuilder::new(&[rule_valid_match, rule_invalid_match, rule_error_match])
+                .return_matches(true)
+                .build()
+                .unwrap();
+
+        let mut content =
+            "this is a content with a valid_match an invalid_match and an error_match".to_string();
+        let mut matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 3);
+        assert_eq!(
+            content,
+            "this is a content with a [VALID] an [INVALID] and an [ERROR]"
+        );
+        scanner.validate_matches(&mut matches).await;
+        mock_service_valid.assert();
+        mock_service_invalid.assert();
+        mock_service_error.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+        assert_eq!(matches[1].match_status, MatchStatus::Invalid);
+        assert_eq!(
+            matches[2].match_status,
+            MatchStatus::Error("Unexpected HTTP status code 500".to_string())
+        );
+    }
+
+    #[cfg(feature = "match_validation")]
+    #[tokio::test]
+    async fn test_mock_aws_validator() {
+        use std::fmt;
+
+        let server = MockServer::start();
+        let server_url = server.url("/").to_string();
+
+        // Compute signature for valid match
+        let datetime = chrono::Utc::now();
+
+        let aws_id_valid = "AKIAYYB64AB3GAW3WH79";
+        let aws_id_invalid = "AKIAYYB64AB3GAW3WH70";
+        let aws_id_error = "AKIAYYB64AB3GAW3WH71";
+        let aws_secret_1 = "uYd/WrqSWR6m7rkYsjqGnD3QsmO7hQjDFXPQHMVy";
+        let aws_secret_2 = "uYd/WrqSWR6m7rkYsjqGnD3QsmO7hQjDFXPZHMVy";
+
+        let (_, headers_valid) = generate_aws_headers_and_body(
+            &datetime,
+            server_url.as_str(),
+            &aws_id_valid,
+            &aws_secret_1,
+        );
+        let valid_authorization = headers_valid.get("authorization").unwrap();
+        let (_, headers_invalid) = generate_aws_headers_and_body(
+            &datetime,
+            server_url.as_str(),
+            &aws_id_invalid,
+            &aws_secret_1,
+        );
+        let invalid_authorization_1 = headers_invalid.get("authorization").unwrap();
+        let (_, headers_invalid) = generate_aws_headers_and_body(
+            &datetime,
+            server_url.as_str(),
+            &aws_id_valid,
+            &aws_secret_2,
+        );
+        let invalid_authorization_2 = headers_invalid.get("authorization").unwrap();
+        let (_, headers_error) = generate_aws_headers_and_body(
+            &datetime,
+            server_url.as_str(),
+            &aws_id_error,
+            &aws_secret_1,
+        );
+        let error_authorization_1 = headers_error.get("authorization").unwrap();
+        let (_, headers_error) = generate_aws_headers_and_body(
+            &datetime,
+            server_url.as_str(),
+            &aws_id_error,
+            &aws_secret_2,
+        );
+        let error_authorization_2 = headers_error.get("authorization").unwrap();
+        // Create a mock on the server.
+        let mock_service_valid = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", valid_authorization.to_str().unwrap());
+            then.status(200);
+        });
+        let mock_service_invalid_1 = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", invalid_authorization_1.to_str().unwrap());
+            then.status(403);
+        });
+        let mock_service_invalid_2 = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", invalid_authorization_2.to_str().unwrap());
+            then.status(403);
+        });
+        let mock_service_error_1 = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", error_authorization_1.to_str().unwrap());
+            then.status(500);
+        });
+        let mock_service_error_2 = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", error_authorization_2.to_str().unwrap());
+            then.status(500);
+        });
+        let rule_aws_id = RegexRuleConfig::new("AKIA[0-9A-Z]{16}")
+            .match_action(MatchAction::Redact {
+                replacement: "[AWS_ID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsId))
+            .build();
+
+        let rule_aws_secret = RegexRuleConfig::new("[A-Za-z0-9/+]{40}")
+            .match_action(MatchAction::Redact {
+                replacement: "[AWS_SECRET]".to_string(),
+            })
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["aws_secret".to_string()],
+                excluded_keywords: vec![],
+            })
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret))
+            .build();
+
+        let scanner = ScannerBuilder::new(&[rule_aws_id, rule_aws_secret])
+            .return_matches(true)
+            .match_validation_options(MatchValidatorOptions {
+                aws_sts_endpoint: server_url,
+                forced_datetime_utc: Some(datetime),
+            })
+            .build()
+            .unwrap();
+
+        let mut content = fmt::format(format_args!(
+                                "content with a valid aws_id {}, an invalid aws_id {}, an error aws_id {} and an aws_secret {} and an other aws_secret {}", aws_id_valid, aws_id_invalid, aws_id_error, aws_secret_1, aws_secret_2));
+        let mut matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 5);
+        assert_eq!(
+            content,
+            "content with a valid aws_id [AWS_ID], an invalid aws_id [AWS_ID], an error aws_id [AWS_ID] and an aws_secret [AWS_SECRET] and an other aws_secret [AWS_SECRET]"
+        );
+        scanner.validate_matches(&mut matches).await;
+        mock_service_valid.assert();
+        mock_service_invalid_1.assert();
+        mock_service_invalid_2.assert();
+        mock_service_error_1.assert();
+        mock_service_error_2.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+        assert_eq!(matches[1].match_status, MatchStatus::Invalid);
+        assert_eq!(
+            matches[2].match_status,
+            MatchStatus::Error("Unexpected HTTP status code 500".to_string())
+        );
+        assert_eq!(matches[3].match_status, MatchStatus::Valid);
+        // ID1 + SECRET2 should be invalid so it should contain invalid and not error
+        assert_eq!(matches[4].match_status, MatchStatus::Invalid);
+    }
     mod metrics_test {
         use crate::match_action::MatchAction;
         use crate::scanner::regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig};

@@ -5,7 +5,8 @@
 mod encoding;
 mod event;
 mod match_action;
-mod match_status;
+#[cfg(feature = "match_validation")]
+mod match_validation;
 mod normalization;
 mod observability;
 mod parser;
@@ -25,6 +26,11 @@ mod simple_event;
 pub use encoding::{EncodeIndices, Encoding, Utf8Encoding};
 pub use event::{Event, EventVisitor, VisitStringResult};
 pub use match_action::{MatchAction, PartialRedactDirection};
+#[cfg(feature = "match_validation")]
+pub use match_validation::{
+    config::AwsType, config::HttpValidatorConfigBuilder, config::HttpValidatorHelper,
+    config::MatchValidationType, match_status::MatchStatus,
+};
 pub use observability::labels::Labels;
 pub use path::{Path, PathSegment};
 pub use rule_match::{ReplacementType, RuleMatch};
