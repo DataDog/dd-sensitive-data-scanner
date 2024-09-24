@@ -85,6 +85,7 @@ impl MatchValidator for AwsValidator {
                         .post(self.config.aws_sts_endpoint.as_str())
                         .headers(headers)
                         .body(body)
+                        .timeout(self.config.timeout)
                         .send()
                         .await;
                     match res {

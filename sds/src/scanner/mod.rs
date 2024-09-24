@@ -2397,6 +2397,8 @@ mod test {
     #[cfg(feature = "match_validation")]
     #[tokio::test]
     async fn test_mock_multiple_match_validators() {
+        use std::time::Duration;
+
         use httpmock::{Method::GET, MockServer};
 
         use crate::match_validation::config::AwsConfig;
@@ -2435,6 +2437,7 @@ mod test {
             .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
                 aws_sts_endpoint: server.url("/aws-service").to_string(),
                 forced_datetime_utc: None,
+                timeout: Duration::from_secs(1),
             })))
             .build();
 
@@ -2562,7 +2565,7 @@ mod test {
     #[cfg(feature = "match_validation")]
     #[tokio::test]
     async fn test_mock_aws_validator() {
-        use std::fmt;
+        use std::{fmt, time::Duration};
 
         use crate::match_validation::config::AwsConfig;
 
@@ -2663,6 +2666,7 @@ mod test {
             .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
                 aws_sts_endpoint: server_url.clone(),
                 forced_datetime_utc: Some(datetime),
+                timeout: Duration::from_secs(5),
             })))
             .build();
 

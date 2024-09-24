@@ -9,8 +9,11 @@ use std::{
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AwsConfig {
+    // Override default AWS STS endpoint for testing
     pub aws_sts_endpoint: String,
+    // Override default datetime for testing
     pub forced_datetime_utc: Option<DateTime<Utc>>,
+    pub timeout: Duration,
 }
 
 impl Default for AwsConfig {
@@ -18,6 +21,7 @@ impl Default for AwsConfig {
         AwsConfig {
             aws_sts_endpoint: "https://sts.amazonaws.com".to_string(),
             forced_datetime_utc: None,
+            timeout: Duration::from_secs(5),
         }
     }
 }
@@ -241,10 +245,7 @@ mod tests {
     #[test]
     fn test_match_validation_type_hash() {
         let aws_validator1 = MatchValidationType::Aws(AwsType::AwsId);
-        let aws_validator2 = MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
-            aws_sts_endpoint: "https://sts.amazonaws.com".to_string(),
-            forced_datetime_utc: None,
-        }));
+        let aws_validator2 = MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig::default()));
         let custom_http_validator1 = MatchValidationType::CustomHttp(
             HttpValidatorConfigBuilder::new("https://example.com".to_string()).build(),
         );
