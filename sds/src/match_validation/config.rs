@@ -113,16 +113,12 @@ pub struct HttpValidatorOption {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct HttpValidatorConfig {
-    // see https://semgrep.dev/docs/semgrep-secrets/validators
-    // this is a generic structure designed to describe generic http endpoint that
-    // validate a single token
     pub endpoint: String,
     pub method: HttpMethod,
     pub request_header: Vec<RequestHeader>,
     pub valid_http_status_code: Vec<Range<u16>>,
     pub invalid_http_status_code: Vec<Range<u16>>,
     pub options: HttpValidatorOption,
-    // option: ValidatorOption,
 }
 
 pub struct HttpValidatorConfigBuilder {
