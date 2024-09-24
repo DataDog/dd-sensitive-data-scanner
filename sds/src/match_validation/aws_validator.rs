@@ -88,6 +88,7 @@ impl MatchValidator for AwsValidator {
                         .timeout(self.config.timeout)
                         .send()
                         .await;
+
                     match res {
                         Ok(val) => {
                             // If status is 200-299, then it's valid we can safely update the match status
@@ -132,7 +133,7 @@ impl MatchValidator for AwsValidator {
         let _ = join_all(futures).await;
 
         // Now let's update the matches with the match_status
-        // Order is MatchStatus::Valid, MatchStatus::Invalid, MatchStatus::Error
+        // Order is (from higest to lowest) MatchStatus::Valid, MatchStatus::Invalid, MatchStatus::Error
         // Let's walk through all result and update the matches only if the new match_status has higher priority
         for ((id_index, secret_index), match_status) in match_status_per_pairs_of_matches_idx {
             {
