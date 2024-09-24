@@ -5,6 +5,7 @@ use crate::match_validation::{
     config::MatchValidationType, match_status::MatchStatus, match_validator::MatchValidator,
     validator_utils::new_match_validator_from_type,
 };
+#[cfg(feature = "match_validation")]
 use error::MatchValidationError;
 
 use crate::observability::labels::Labels;
@@ -599,7 +600,11 @@ impl ScannerBuilder<'_> {
     }
 
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
+        #[cfg(feature = "match_validation")]
         let mut scanner_features = self.scanner_features.clone();
+        #[cfg(not(feature = "match_validation"))]
+        let scanner_features = self.scanner_features.clone();
+
         let mut cache_pool_builder = CachePoolBuilder::new();
         #[cfg(feature = "match_validation")]
         let mut match_validators_per_type = AHashMap::new();
@@ -665,7 +670,7 @@ impl ScannerBuilder<'_> {
             rules: compiled_rules,
             scoped_ruleset,
             cache_pool,
-            scanner_features: scanner_features,
+            scanner_features,
             metrics: ScannerMetrics::new(&self.labels),
             #[cfg(feature = "match_validation")]
             match_validators_per_type: match_validators_per_type,
