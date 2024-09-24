@@ -1515,7 +1515,7 @@ mod test {
                 #[cfg(feature = "match_validation")]
                 matched_string: None,
                 #[cfg(feature = "match_validation")]
-                match_status: MatchStatus::NotChecked,
+                match_status: MatchStatus::NotAvailable,
             }
         );
 
@@ -1531,7 +1531,7 @@ mod test {
                 #[cfg(feature = "match_validation")]
                 matched_string: None,
                 #[cfg(feature = "match_validation")]
-                match_status: MatchStatus::NotChecked,
+                match_status: MatchStatus::NotAvailable,
             }
         );
 
@@ -1547,7 +1547,7 @@ mod test {
                 #[cfg(feature = "match_validation")]
                 matched_string: None,
                 #[cfg(feature = "match_validation")]
-                match_status: MatchStatus::NotChecked,
+                match_status: MatchStatus::NotAvailable,
             }
         );
     }
@@ -1595,7 +1595,7 @@ mod test {
                 #[cfg(feature = "match_validation")]
                 matched_string: None,
                 #[cfg(feature = "match_validation")]
-                match_status: MatchStatus::NotChecked,
+                match_status: MatchStatus::NotAvailable,
             }
         );
 
@@ -1611,7 +1611,7 @@ mod test {
                 #[cfg(feature = "match_validation")]
                 matched_string: None,
                 #[cfg(feature = "match_validation")]
-                match_status: MatchStatus::NotChecked,
+                match_status: MatchStatus::NotAvailable,
             }
         );
 
@@ -1627,7 +1627,7 @@ mod test {
                 #[cfg(feature = "match_validation")]
                 matched_string: None,
                 #[cfg(feature = "match_validation")]
-                match_status: MatchStatus::NotChecked,
+                match_status: MatchStatus::NotAvailable,
             }
         );
     }
@@ -1669,7 +1669,7 @@ mod test {
                 #[cfg(feature = "match_validation")]
                 matched_string: None,
                 #[cfg(feature = "match_validation")]
-                match_status: MatchStatus::NotChecked,
+                match_status: MatchStatus::NotAvailable,
             }
         );
     }
@@ -1709,7 +1709,7 @@ mod test {
                 #[cfg(feature = "match_validation")]
                 matched_string: None,
                 #[cfg(feature = "match_validation")]
-                match_status: MatchStatus::NotChecked,
+                match_status: MatchStatus::NotAvailable,
             }
         );
     }
@@ -1749,7 +1749,7 @@ mod test {
                 #[cfg(feature = "match_validation")]
                 matched_string: None,
                 #[cfg(feature = "match_validation")]
-                match_status: MatchStatus::NotChecked,
+                match_status: MatchStatus::NotAvailable,
             }
         );
     }
@@ -1789,7 +1789,7 @@ mod test {
                 #[cfg(feature = "match_validation")]
                 matched_string: None,
                 #[cfg(feature = "match_validation")]
-                match_status: MatchStatus::NotChecked,
+                match_status: MatchStatus::NotAvailable,
             }
         );
     }
