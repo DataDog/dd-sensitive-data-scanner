@@ -5,6 +5,7 @@ use crate::match_validation::{
     config::MatchValidationType, match_status::MatchStatus, match_validator::MatchValidator,
     validator_utils::new_match_validator_from_type,
 };
+use error::MatchValidationError;
 
 use crate::observability::labels::Labels;
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
@@ -314,9 +315,12 @@ impl Scanner {
     }
 
     #[cfg(feature = "match_validation")]
-    pub async fn validate_matches(&self, rule_matches: &mut Vec<RuleMatch>) {
+    pub async fn validate_matches(
+        &self,
+        rule_matches: &mut Vec<RuleMatch>,
+    ) -> Result<(), MatchValidationError> {
         if !self.scanner_features.return_matches {
-            return;
+            return Err(MatchValidationError::NoMatchValidationType);
         }
         // Create MatchValidatorRuleMatch per match_validator_type to pass it to each match_validator
         let mut match_validator_rule_match_per_type = AHashMap::new();
@@ -359,6 +363,7 @@ impl Scanner {
 
         // Sort rule_matches by start index
         rule_matches.sort_by_key(|rule_match| rule_match.start_index);
+        Ok(())
     }
 
     /// Apply mutations from actions, and shift indices to match the mutated values.
@@ -2260,6 +2265,27 @@ mod test {
     }
 
     #[cfg(feature = "match_validation")]
+    #[tokio::test]
+    async fn test_should_error_if_no_match_validation() {
+        let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
+            .match_action(MatchAction::Redact {
+                replacement: "[REDACTED]".to_string(),
+            })
+            .build()])
+        .build()
+        .unwrap();
+
+        let mut content = "hey world".to_string();
+        let mut rule_match = scanner.scan(&mut content, vec![]);
+        assert_eq!(rule_match.len(), 1);
+        assert_eq!(content, "hey [REDACTED]");
+        assert_eq!(rule_match[0].matched_string, None);
+        // Let's call validate and check that it panics
+        let err = scanner.validate_matches(&mut rule_match).await;
+        assert!(err.is_err());
+    }
+
+    #[cfg(feature = "match_validation")]
     #[test]
     fn test_should_allocate_match_validator_depending_on_match_type() {
         use crate::match_validation::config::AwsConfig;
@@ -2378,7 +2404,7 @@ mod test {
         let mut matches = scanner.scan(&mut content, vec![]);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "this is a content with a [VALID]");
-        scanner.validate_matches(&mut matches).await;
+        assert!(scanner.validate_matches(&mut matches).await.is_ok());
         // This will be in the form "Error making HTTP request: "
         match &matches[0].match_status {
             MatchStatus::Error(val) => {
@@ -2447,7 +2473,7 @@ mod test {
             content,
             "this is a content with a [VALID] an [AWS_ID] and an [AWS_SECRET]"
         );
-        scanner.validate_matches(&mut matches).await;
+        assert!(scanner.validate_matches(&mut matches).await.is_ok());
         mock_http_service_valid.assert();
         mock_aws_service_valid.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -2520,7 +2546,7 @@ mod test {
             content,
             "this is a content with a [VALID] an [INVALID] and an [ERROR]"
         );
-        scanner.validate_matches(&mut matches).await;
+        assert!(scanner.validate_matches(&mut matches).await.is_ok());
         mock_service_valid.assert();
         mock_service_invalid.assert();
         mock_service_error.assert();
@@ -2547,7 +2573,7 @@ mod test {
         let mut matches = scanner.scan(&mut content, vec![]);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "this is an [AWS_ID]");
-        scanner.validate_matches(&mut matches).await;
+        assert!(scanner.validate_matches(&mut matches).await.is_err());
         assert_eq!(matches[0].match_status, MatchStatus::NotChecked);
     }
 
@@ -2671,7 +2697,7 @@ mod test {
             content,
             "content with a valid aws_id [AWS_ID], an invalid aws_id [AWS_ID], an error aws_id [AWS_ID] and an aws_secret [AWS_SECRET] and an other aws_secret [AWS_SECRET]"
         );
-        scanner.validate_matches(&mut matches).await;
+        assert!(scanner.validate_matches(&mut matches).await.is_ok());
         mock_service_valid.assert();
         mock_service_invalid_1.assert();
         mock_service_invalid_2.assert();
