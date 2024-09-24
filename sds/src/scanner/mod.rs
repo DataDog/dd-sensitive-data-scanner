@@ -401,7 +401,7 @@ impl Scanner {
         let mut matched_content_copy = None;
         #[cfg(feature = "match_validation")]
         if self.scanner_features.return_matches {
-            // This copy part of the is_mutating block but is seperate since can't mix compilation condition and code condition
+            // This copies part of the is_mutating block but is seperate since can't mix compilation condition and code condition
             let mutated_utf8_match_start =
                 (rule_match.utf8_start as isize + *utf8_byte_delta) as usize;
             let mutated_utf8_match_end = (rule_match.utf8_end as isize + *utf8_byte_delta) as usize;
@@ -453,6 +453,17 @@ impl Scanner {
         let custom_end = (<E>::get_index(&rule_match.custom_end, rule_match.utf8_end) as isize
             + shift_offset) as usize;
 
+        #[cfg(feature = "match_validation")]
+        let rule = &self.rules[rule_match.rule_index];
+        #[cfg(feature = "match_validation")]
+        let match_status: MatchStatus;
+        #[cfg(feature = "match_validation")]
+        if rule.get_match_validation_type().is_some() {
+            match_status = MatchStatus::NotChecked;
+        } else {
+            match_status = MatchStatus::NotAvailable;
+        }
+
         RuleMatch {
             rule_index: rule_match.rule_index,
             path,
@@ -464,7 +475,7 @@ impl Scanner {
             matched_string: matched_content_copy,
             #[cfg(feature = "match_validation")]
             // MatchStatus not supported yet
-            match_status: MatchStatus::NotChecked,
+            match_status: match_status,
         }
     }
 
@@ -2257,6 +2268,197 @@ mod test {
         assert_eq!(rule_match.len(), 1);
         assert_eq!(content, "hey [REDACTED]");
         assert_eq!(rule_match[0].matched_string, Some("world".to_string()));
+    }
+
+    #[cfg(feature = "match_validation")]
+    #[test]
+    fn test_should_allocate_match_validator_depending_on_match_type() {
+        let rule_aws_id = RegexRuleConfig::new("aws-id")
+            .match_action(MatchAction::Redact {
+                replacement: "[AWS ID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsId))
+            .build();
+        let rule_aws_secret = RegexRuleConfig::new("aws-secret")
+            .match_action(MatchAction::Redact {
+                replacement: "[AWS SECRET]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret))
+            .build();
+
+        let rule_custom_http_1_domain_1 = RegexRuleConfig::new("custom-http1")
+            .match_action(MatchAction::Redact {
+                replacement: "[CUSTOM HTTP1]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string()).build(),
+            ))
+            .build();
+
+        let rule_custom_http_2_domain_1 = RegexRuleConfig::new("custom-http2")
+            .match_action(MatchAction::Redact {
+                replacement: "[CUSTOM HTTP2]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string()).build(),
+            ))
+            .build();
+
+        let rule_custom_http_domain_2 = RegexRuleConfig::new("custom-http3")
+            .match_action(MatchAction::Redact {
+                replacement: "[CUSTOM HTTP2]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8081".to_string()).build(),
+            ))
+            .build();
+
+        let scanner = ScannerBuilder::new(&[
+            rule_aws_id,
+            rule_aws_secret,
+            rule_custom_http_1_domain_1,
+            rule_custom_http_2_domain_1,
+            rule_custom_http_domain_2,
+        ])
+        .return_matches(true)
+        .build()
+        .unwrap();
+
+        // Let's check the number of entries in the match validator map
+        let match_validator_map = &scanner.match_validators_per_type;
+        assert_eq!(match_validator_map.len(), 3);
+        // Custom assertion to check if the validators are the same
+        let aws_secret_validator = match_validator_map
+            .get(&MatchValidationType::Aws(AwsType::AwsSecret))
+            .unwrap();
+        let aws_id_validator = match_validator_map
+            .get(&MatchValidationType::Aws(AwsType::AwsId))
+            .unwrap();
+        assert!(std::ptr::eq(
+            aws_secret_validator.as_ref(),
+            aws_id_validator.as_ref()
+        ));
+        let http_2_validator = match_validator_map
+            .get(&MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string()).build(),
+            ))
+            .unwrap();
+        let http_1_validator = match_validator_map
+            .get(&MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8081".to_string()).build(),
+            ))
+            .unwrap();
+        assert!(!std::ptr::eq(
+            http_1_validator.as_ref(),
+            http_2_validator.as_ref()
+        ));
+    }
+
+    #[cfg(feature = "match_validation")]
+    #[tokio::test]
+    async fn test_mock_http_timeout() {
+        use std::time::Duration;
+
+        use httpmock::{Method::GET, MockServer};
+        let server = MockServer::start();
+        let _ = server.mock(|when, then| {
+            when.method(GET)
+                .path("/")
+                .header("authorization", "Bearer valid_match");
+            then.status(200);
+        });
+        let rule_valid_match = RegexRuleConfig::new("\\bvalid_match\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[VALID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new(server.url("/").to_string())
+                    .set_timeout(Duration::from_micros(0))
+                    .build(),
+            ))
+            .build();
+
+        let scanner = ScannerBuilder::new(&[rule_valid_match])
+            .return_matches(true)
+            .build()
+            .unwrap();
+
+        let mut content = "this is a content with a valid_match".to_string();
+        let mut matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "this is a content with a [VALID]");
+        scanner.validate_matches(&mut matches).await;
+        // This will be in the form "Error making HTTP request: "
+        match &matches[0].match_status {
+            MatchStatus::Error(val) => {
+                assert!(val.starts_with("Error making HTTP request:"));
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[cfg(feature = "match_validation")]
+    #[tokio::test]
+    async fn test_mock_multiple_match_validators() {
+        use httpmock::{Method::GET, MockServer};
+        let server = MockServer::start();
+
+        // Create a mock on the server.
+        let mock_http_service_valid = server.mock(|when, then| {
+            when.method(GET).path("/http-service");
+            then.status(200);
+        });
+        let mock_aws_service_valid = server.mock(|when, then| {
+            when.method(POST).path("/aws-service");
+            then.status(200);
+        });
+
+        let rule_valid_match = RegexRuleConfig::new("\\bvalid_match\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[VALID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new(server.url("/http-service").to_string()).build(),
+            ))
+            .build();
+
+        let rule_aws_id = RegexRuleConfig::new("\\baws_id\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[AWS_ID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsId))
+            .build();
+
+        let rule_aws_secret = RegexRuleConfig::new("\\baws_secret\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[AWS_SECRET]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret))
+            .build();
+
+        let scanner = ScannerBuilder::new(&[rule_valid_match, rule_aws_id, rule_aws_secret])
+            .return_matches(true)
+            .match_validation_options(MatchValidatorOptions {
+                aws_sts_endpoint: server.url("/aws-service").to_string(),
+                forced_datetime_utc: None,
+            })
+            .build()
+            .unwrap();
+
+        let mut content =
+            "this is a content with a valid_match an aws_id and an aws_secret".to_string();
+        let mut matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 3);
+        assert_eq!(
+            content,
+            "this is a content with a [VALID] an [AWS_ID] and an [AWS_SECRET]"
+        );
+        scanner.validate_matches(&mut matches).await;
+        mock_http_service_valid.assert();
+        mock_aws_service_valid.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+        assert_eq!(matches[1].match_status, MatchStatus::Valid);
+        assert_eq!(matches[2].match_status, MatchStatus::Valid);
     }
 
     #[cfg(feature = "match_validation")]
