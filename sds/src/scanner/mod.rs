@@ -196,7 +196,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct ScannerFeatures {
     pub should_keywords_match_event_paths: bool,
     pub add_implicit_index_wildcards: bool,
@@ -570,12 +570,6 @@ impl ScannerBuilder<'_> {
         }
     }
 
-    #[cfg(feature = "match_validation")]
-    pub fn return_matches(mut self, return_matches: bool) -> Self {
-        self.scanner_features.return_matches = return_matches;
-        self
-    }
-
     pub fn labels(mut self, labels: Labels) -> Self {
         self.labels = labels;
         self
@@ -600,8 +594,8 @@ impl ScannerBuilder<'_> {
     }
 
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
+        let mut scanner_features = self.scanner_features.clone();
         let mut cache_pool_builder = CachePoolBuilder::new();
-
         #[cfg(feature = "match_validation")]
         let mut match_validators_per_type = AHashMap::new();
         #[cfg(feature = "match_validation")]
@@ -613,6 +607,8 @@ impl ScannerBuilder<'_> {
                             match_validation_type.clone(),
                             new_match_validator_from_type(match_validation_type.clone()),
                         );
+                        // Let's add return_matches to the scanner features
+                        scanner_features.return_matches = true;
                     }
                 }
             }
@@ -664,7 +660,7 @@ impl ScannerBuilder<'_> {
             rules: compiled_rules,
             scoped_ruleset,
             cache_pool,
-            scanner_features: self.scanner_features,
+            scanner_features: scanner_features,
             metrics: ScannerMetrics::new(&self.labels),
             #[cfg(feature = "match_validation")]
             match_validators_per_type: match_validators_per_type,
@@ -2244,13 +2240,15 @@ mod test {
 
     #[cfg(feature = "match_validation")]
     #[test]
-    fn test_should_return_match() {
+    fn test_should_return_match_with_match_validation() {
         let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
             })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string()).build(),
+            ))
             .build()])
-        .return_matches(true)
         .build()
         .unwrap();
 
@@ -2315,7 +2313,6 @@ mod test {
             rule_custom_http_2_domain_1,
             rule_custom_http_domain_2,
         ])
-        .return_matches(true)
         .build()
         .unwrap();
 
@@ -2375,10 +2372,7 @@ mod test {
             ))
             .build();
 
-        let scanner = ScannerBuilder::new(&[rule_valid_match])
-            .return_matches(true)
-            .build()
-            .unwrap();
+        let scanner = ScannerBuilder::new(&[rule_valid_match]).build().unwrap();
 
         let mut content = "this is a content with a valid_match".to_string();
         let mut matches = scanner.scan(&mut content, vec![]);
@@ -2442,7 +2436,6 @@ mod test {
             .build();
 
         let scanner = ScannerBuilder::new(&[rule_valid_match, rule_aws_id, rule_aws_secret])
-            .return_matches(true)
             .build()
             .unwrap();
 
@@ -2516,7 +2509,6 @@ mod test {
             .build();
         let scanner =
             ScannerBuilder::new(&[rule_valid_match, rule_invalid_match, rule_error_match])
-                .return_matches(true)
                 .build()
                 .unwrap();
 
@@ -2550,10 +2542,7 @@ mod test {
             .match_validation_type(MatchValidationType::Aws(AwsType::AwsId))
             .build();
 
-        let scanner = ScannerBuilder::new(&[rule_aws_id])
-            .return_matches(true)
-            .build()
-            .unwrap();
+        let scanner = ScannerBuilder::new(&[rule_aws_id]).build().unwrap();
         let mut content = "this is an aws_id".to_string();
         let mut matches = scanner.scan(&mut content, vec![]);
         assert_eq!(matches.len(), 1);
@@ -2671,7 +2660,6 @@ mod test {
             .build();
 
         let scanner = ScannerBuilder::new(&[rule_aws_id, rule_aws_secret])
-            .return_matches(true)
             .build()
             .unwrap();
 
