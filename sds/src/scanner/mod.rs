@@ -3,7 +3,7 @@ use crate::event::Event;
 #[cfg(feature = "match_validation")]
 use crate::match_validation::{
     config::MatchValidationType, match_status::MatchStatus, match_validator::MatchValidator,
-    match_validator::MatchValidatorOptions, validator_utils::new_match_validator_from_type,
+    validator_utils::new_match_validator_from_type,
 };
 
 use crate::observability::labels::Labels;
@@ -336,12 +336,17 @@ impl Scanner {
         // Call the validate per match_validator_type with their matches and the RuleMatch list and collect the results
         let futures = match_validator_rule_match_per_type
             .iter_mut()
-            .map(|(match_validation_type, matches_per_type)| {
-                let match_validator = self
-                    .match_validators_per_type
-                    .get(match_validation_type)
-                    .unwrap_or_else(|| panic!("MatchValidator not found"));
-                match_validator.validate(matches_per_type, &self.rules)
+            .filter_map(|(match_validation_type, matches_per_type)| {
+                let match_validator = self.match_validators_per_type.get(match_validation_type);
+                if let Some(match_validator) = match_validator {
+                    Some(
+                        match_validator
+                            .as_ref()
+                            .validate(matches_per_type, &self.rules),
+                    )
+                } else {
+                    None
+                }
             })
             .collect::<Vec<_>>();
 
@@ -554,8 +559,6 @@ pub struct ScannerBuilder<'a> {
     rules: &'a [Arc<dyn RuleConfig>],
     labels: Labels,
     scanner_features: ScannerFeatures,
-    #[cfg(feature = "match_validation")]
-    match_validation_options: MatchValidatorOptions,
 }
 
 impl ScannerBuilder<'_> {
@@ -564,23 +567,12 @@ impl ScannerBuilder<'_> {
             rules,
             labels: Labels::empty(),
             scanner_features: ScannerFeatures::default(),
-            #[cfg(feature = "match_validation")]
-            match_validation_options: MatchValidatorOptions::default(),
         }
     }
 
     #[cfg(feature = "match_validation")]
     pub fn return_matches(mut self, return_matches: bool) -> Self {
         self.scanner_features.return_matches = return_matches;
-        self
-    }
-
-    #[cfg(feature = "match_validation")]
-    pub fn match_validation_options(
-        mut self,
-        match_validation_options: MatchValidatorOptions,
-    ) -> Self {
-        self.match_validation_options = match_validation_options;
         self
     }
 
@@ -615,14 +607,13 @@ impl ScannerBuilder<'_> {
         #[cfg(feature = "match_validation")]
         for rule in self.rules.iter() {
             if let Some(match_validation_type) = rule.get_match_validation_type() {
-                if !match_validators_per_type.contains_key(match_validation_type) {
-                    match_validators_per_type.insert(
-                        match_validation_type.clone(),
-                        new_match_validator_from_type(
+                if match_validation_type.can_create_match_validator() {
+                    if !match_validators_per_type.contains_key(match_validation_type) {
+                        match_validators_per_type.insert(
                             match_validation_type.clone(),
-                            &self.match_validation_options,
-                        ),
-                    );
+                            new_match_validator_from_type(match_validation_type.clone()),
+                        );
+                    }
                 }
             }
         }
@@ -2273,6 +2264,8 @@ mod test {
     #[cfg(feature = "match_validation")]
     #[test]
     fn test_should_allocate_match_validator_depending_on_match_type() {
+        use crate::match_validation::config::AwsConfig;
+
         let rule_aws_id = RegexRuleConfig::new("aws-id")
             .match_action(MatchAction::Redact {
                 replacement: "[AWS ID]".to_string(),
@@ -2283,7 +2276,9 @@ mod test {
             .match_action(MatchAction::Redact {
                 replacement: "[AWS SECRET]".to_string(),
             })
-            .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret))
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret(
+                AwsConfig::default(),
+            )))
             .build();
 
         let rule_custom_http_1_domain_1 = RegexRuleConfig::new("custom-http1")
@@ -2329,7 +2324,9 @@ mod test {
         assert_eq!(match_validator_map.len(), 3);
         // Custom assertion to check if the validators are the same
         let aws_secret_validator = match_validator_map
-            .get(&MatchValidationType::Aws(AwsType::AwsSecret))
+            .get(&MatchValidationType::Aws(AwsType::AwsSecret(
+                AwsConfig::default(),
+            )))
             .unwrap();
         let aws_id_validator = match_validator_map
             .get(&MatchValidationType::Aws(AwsType::AwsId))
@@ -2401,6 +2398,8 @@ mod test {
     #[tokio::test]
     async fn test_mock_multiple_match_validators() {
         use httpmock::{Method::GET, MockServer};
+
+        use crate::match_validation::config::AwsConfig;
         let server = MockServer::start();
 
         // Create a mock on the server.
@@ -2433,15 +2432,14 @@ mod test {
             .match_action(MatchAction::Redact {
                 replacement: "[AWS_SECRET]".to_string(),
             })
-            .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret))
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
+                aws_sts_endpoint: server.url("/aws-service").to_string(),
+                forced_datetime_utc: None,
+            })))
             .build();
 
         let scanner = ScannerBuilder::new(&[rule_valid_match, rule_aws_id, rule_aws_secret])
             .return_matches(true)
-            .match_validation_options(MatchValidatorOptions {
-                aws_sts_endpoint: server.url("/aws-service").to_string(),
-                forced_datetime_utc: None,
-            })
             .build()
             .unwrap();
 
@@ -2541,8 +2539,32 @@ mod test {
 
     #[cfg(feature = "match_validation")]
     #[tokio::test]
+    async fn test_aws_id_only_shall_not_validate() {
+        let rule_aws_id = RegexRuleConfig::new("aws_id")
+            .match_action(MatchAction::Redact {
+                replacement: "[AWS_ID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsId))
+            .build();
+
+        let scanner = ScannerBuilder::new(&[rule_aws_id])
+            .return_matches(true)
+            .build()
+            .unwrap();
+        let mut content = "this is an aws_id".to_string();
+        let mut matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "this is an [AWS_ID]");
+        scanner.validate_matches(&mut matches).await;
+        assert_eq!(matches[0].match_status, MatchStatus::NotChecked);
+    }
+
+    #[cfg(feature = "match_validation")]
+    #[tokio::test]
     async fn test_mock_aws_validator() {
         use std::fmt;
+
+        use crate::match_validation::config::AwsConfig;
 
         let server = MockServer::start();
         let server_url = server.url("/").to_string();
@@ -2638,15 +2660,14 @@ mod test {
                 included_keywords: vec!["aws_secret".to_string()],
                 excluded_keywords: vec![],
             })
-            .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret))
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
+                aws_sts_endpoint: server_url.clone(),
+                forced_datetime_utc: Some(datetime),
+            })))
             .build();
 
         let scanner = ScannerBuilder::new(&[rule_aws_id, rule_aws_secret])
             .return_matches(true)
-            .match_validation_options(MatchValidatorOptions {
-                aws_sts_endpoint: server_url,
-                forced_datetime_utc: Some(datetime),
-            })
             .build()
             .unwrap();
 

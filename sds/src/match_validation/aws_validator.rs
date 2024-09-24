@@ -2,29 +2,24 @@ use std::fmt;
 
 use ahash::AHashMap;
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use futures::future::join_all;
 use reqwest::Client;
 
 use crate::{CompiledRuleDyn, MatchStatus, RuleMatch};
 
 use super::{
-    config::{AwsType, MatchValidationType},
+    config::{AwsConfig, AwsType, MatchValidationType},
     match_validator::MatchValidator,
     validator_utils::generate_aws_headers_and_body,
 };
 
 pub struct AwsValidator {
-    pub aws_sts_endpoint: String,
-    pub forced_datetime_utc: Option<DateTime<Utc>>,
+    pub config: AwsConfig,
 }
 
 impl AwsValidator {
-    pub fn new(endpoint: String, forced_dateime_utc: Option<DateTime<Utc>>) -> Self {
-        AwsValidator {
-            aws_sts_endpoint: endpoint,
-            forced_datetime_utc: forced_dateime_utc,
-        }
+    pub fn new(config: AwsConfig) -> Self {
+        AwsValidator { config }
     }
 }
 
@@ -45,7 +40,7 @@ impl MatchValidator for AwsValidator {
                 Some(MatchValidationType::Aws(AwsType::AwsId)) => {
                     aws_id_matches_idx.push(idx);
                 }
-                Some(MatchValidationType::Aws(AwsType::AwsSecret)) => {
+                Some(MatchValidationType::Aws(AwsType::AwsSecret(_))) => {
                     aws_secret_matches_idx.push(idx);
                 }
                 _ => {}
@@ -77,17 +72,17 @@ impl MatchValidator for AwsValidator {
                 async move {
                     // Let's reqwest the HTTP API endpoint to validate the matches
                     let mut datetime = chrono::Utc::now();
-                    if !self.forced_datetime_utc.is_none() {
-                        datetime = self.forced_datetime_utc.unwrap()
+                    if !self.config.forced_datetime_utc.is_none() {
+                        datetime = self.config.forced_datetime_utc.unwrap()
                     }
                     let (body, headers) = generate_aws_headers_and_body(
                         &datetime,
-                        &self.aws_sts_endpoint,
+                        &self.config.aws_sts_endpoint,
                         &match_id.matched_string.as_ref().unwrap(),
                         &match_secret.matched_string.as_ref().unwrap(),
                     );
                     let res = client
-                        .post(self.aws_sts_endpoint.as_str())
+                        .post(self.config.aws_sts_endpoint.as_str())
                         .headers(headers)
                         .body(body)
                         .send()

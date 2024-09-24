@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{
     hash::{Hash, Hasher},
@@ -7,9 +8,24 @@ use std::{
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct AwsConfig {
+    pub aws_sts_endpoint: String,
+    pub forced_datetime_utc: Option<DateTime<Utc>>,
+}
+
+impl Default for AwsConfig {
+    fn default() -> Self {
+        AwsConfig {
+            aws_sts_endpoint: "https://sts.amazonaws.com".to_string(),
+            forced_datetime_utc: None,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum AwsType {
     AwsId,
-    AwsSecret,
+    AwsSecret(AwsConfig),
     AwsSession,
 }
 
@@ -178,6 +194,19 @@ pub enum MatchValidationType {
     CustomHttp(HttpValidatorConfig),
 }
 
+impl MatchValidationType {
+    // Method used to check if the validator can be created based on this type
+    pub fn can_create_match_validator(&self) -> bool {
+        match self {
+            MatchValidationType::Aws(aws_type) => match aws_type {
+                AwsType::AwsSecret(_) => true,
+                _ => false,
+            },
+            MatchValidationType::CustomHttp(_) => true,
+        }
+    }
+}
+
 // Implement PartialEq and Eq to compare the variant type
 impl PartialEq for MatchValidationType {
     fn eq(&self, other: &Self) -> bool {
@@ -216,7 +245,10 @@ mod tests {
     #[test]
     fn test_match_validation_type_hash() {
         let aws_validator1 = MatchValidationType::Aws(AwsType::AwsId);
-        let aws_validator2 = MatchValidationType::Aws(AwsType::AwsSecret);
+        let aws_validator2 = MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
+            aws_sts_endpoint: "https://sts.amazonaws.com".to_string(),
+            forced_datetime_utc: None,
+        }));
         let custom_http_validator1 = MatchValidationType::CustomHttp(
             HttpValidatorConfigBuilder::new("https://example.com".to_string()).build(),
         );
