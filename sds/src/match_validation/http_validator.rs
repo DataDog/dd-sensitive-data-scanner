@@ -161,7 +161,7 @@ impl MatchValidator for HttpValidator {
                     for header in &self.config.request_header {
                         request_builder = request_builder.header(
                             &header.key,
-                            &header.get_value_with_match(m.matched_string.as_ref().unwrap()),
+                            &header.get_value_with_match(m.match_value.as_ref().unwrap()),
                         );
                     }
                     let res = request_builder.send().await;
