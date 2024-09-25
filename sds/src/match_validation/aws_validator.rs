@@ -78,8 +78,8 @@ impl MatchValidator for AwsValidator {
                     let (body, headers) = generate_aws_headers_and_body(
                         &datetime,
                         &self.config.aws_sts_endpoint,
-                        &match_id.matched_string.as_ref().unwrap(),
-                        &match_secret.matched_string.as_ref().unwrap(),
+                        &match_id.match_value.as_ref().unwrap(),
+                        &match_secret.match_value.as_ref().unwrap(),
                     );
                     let res = client
                         .post(self.config.aws_sts_endpoint.as_str())
@@ -137,16 +137,10 @@ impl MatchValidator for AwsValidator {
         // Let's walk through all result and update the matches only if the new match_status has higher priority
         for ((id_index, secret_index), match_status) in match_status_per_pairs_of_matches_idx {
             {
-                let id_match = &mut matches[id_index];
-                if match_status > id_match.match_status {
-                    id_match.match_status = match_status.clone();
-                }
-            }
-            {
-                let secret_match = &mut matches[secret_index];
-                if match_status > secret_match.match_status {
-                    secret_match.match_status = match_status.clone();
-                }
+                matches[id_index].match_status.merge(match_status.clone());
+                matches[secret_index]
+                    .match_status
+                    .merge(match_status.clone());
             }
         }
     }
