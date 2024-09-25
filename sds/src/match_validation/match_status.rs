@@ -36,6 +36,7 @@ mod tests {
         status.merge(MatchStatus::Valid);
         assert_eq!(status, MatchStatus::Valid);
     }
+    #[test]
     fn test_merge_lower_prio() {
         let mut status = MatchStatus::Valid;
         status.merge(MatchStatus::NotChecked);
