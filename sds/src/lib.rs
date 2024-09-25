@@ -29,7 +29,7 @@ pub use match_action::{MatchAction, PartialRedactDirection};
 #[cfg(feature = "match_validation")]
 pub use match_validation::{
     config::AwsConfig, config::AwsType, config::HttpValidatorConfigBuilder,
-    config::MatchValidationType, match_status::MatchStatus,
+    config::HttpValidatorHelper, config::MatchValidationType, match_status::MatchStatus,
 };
 pub use observability::labels::Labels;
 pub use path::{Path, PathSegment};
