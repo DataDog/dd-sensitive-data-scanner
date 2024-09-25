@@ -802,9 +802,12 @@ mod test {
     use super::*;
     use super::{MatchEmitter, ScannerBuilder, StringMatch};
     use crate::match_action::{MatchAction, MatchActionValidationError};
+    #[cfg(feature = "match_validation")]
     use crate::match_validation::config::{
-        AwsType, HttpValidatorConfigBuilder, MatchValidationType,
+        AwsConfig, AwsType, HttpValidatorConfigBuilder, MatchValidationType,
     };
+    #[cfg(feature = "match_validation")]
+    use crate::match_validation::validator_utils::generate_aws_headers_and_body;
     use crate::observability::labels::Labels;
     use crate::scanner::regex_rule::config::{
         ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator, SecondaryValidator::*,
@@ -816,8 +819,14 @@ mod test {
     use crate::{simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch};
     use crate::{Encoding, Utf8Encoding};
     use ahash::AHashSet;
+    #[cfg(feature = "match_validation")]
+    use httpmock::{
+        Method::{GET, POST},
+        MockServer,
+    };
     use regex_automata::Match;
     use std::collections::BTreeMap;
+    use std::{fmt, time::Duration};
 
     use super::CompiledRule;
     use super::RuleConfig;
@@ -2512,7 +2521,199 @@ mod test {
             _ => assert!(false),
         }
     }
+    #[cfg(feature = "match_validation")]
+    #[tokio::test]
+    async fn test_mock_multiple_match_validators() {
+        let server = MockServer::start();
 
+        // Create a mock on the server.
+        let mock_http_service_valid = server.mock(|when, then| {
+            when.method(GET).path("/http-service");
+            then.status(200);
+        });
+        let mock_aws_service_valid = server.mock(|when, then| {
+            when.method(POST).path("/aws-service");
+            then.status(200);
+        });
+
+        let rule_valid_match = RegexRuleConfig::new("\\bvalid_match\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[VALID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new(server.url("/http-service").to_string()).build(),
+            ))
+            .build();
+
+        let rule_aws_id = RegexRuleConfig::new("\\baws_id\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[AWS_ID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsId))
+            .build();
+
+        let rule_aws_secret = RegexRuleConfig::new("\\baws_secret\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[AWS_SECRET]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
+                aws_sts_endpoint: server.url("/aws-service").to_string(),
+                forced_datetime_utc: None,
+                timeout: Duration::from_secs(1),
+            })))
+            .build();
+
+        let scanner = ScannerBuilder::new(&[rule_valid_match, rule_aws_id, rule_aws_secret])
+            .build()
+            .unwrap();
+
+        let mut content =
+            "this is a content with a valid_match an aws_id and an aws_secret".to_string();
+        let mut matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 3);
+        assert_eq!(
+            content,
+            "this is a content with a [VALID] an [AWS_ID] and an [AWS_SECRET]"
+        );
+        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        mock_http_service_valid.assert();
+        mock_aws_service_valid.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+        assert_eq!(matches[1].match_status, MatchStatus::Valid);
+        assert_eq!(matches[2].match_status, MatchStatus::Valid);
+    }
+    #[cfg(feature = "match_validation")]
+    #[tokio::test]
+    async fn test_mock_aws_validator() {
+        let server = MockServer::start();
+        let server_url = server.url("/").to_string();
+
+        // Compute signature for valid match
+        let datetime = chrono::Utc::now();
+
+        let aws_id_valid = "AKIAYYB64AB3GAW3WH79";
+        let aws_id_invalid = "AKIAYYB64AB3GAW3WH70";
+        let aws_id_error = "AKIAYYB64AB3GAW3WH71";
+        let aws_secret_1 = "uYd/WrqSWR6m7rkYsjqGnD3QsmO7hQjDFXPQHMVy";
+        let aws_secret_2 = "uYd/WrqSWR6m7rkYsjqGnD3QsmO7hQjDFXPZHMVy";
+
+        let (_, headers_valid) = generate_aws_headers_and_body(
+            &datetime,
+            server_url.as_str(),
+            &aws_id_valid,
+            &aws_secret_1,
+        );
+        let valid_authorization = headers_valid.get("authorization").unwrap();
+        let (_, headers_invalid) = generate_aws_headers_and_body(
+            &datetime,
+            server_url.as_str(),
+            &aws_id_invalid,
+            &aws_secret_1,
+        );
+        let invalid_authorization_1 = headers_invalid.get("authorization").unwrap();
+        let (_, headers_invalid) = generate_aws_headers_and_body(
+            &datetime,
+            server_url.as_str(),
+            &aws_id_valid,
+            &aws_secret_2,
+        );
+        let invalid_authorization_2 = headers_invalid.get("authorization").unwrap();
+        let (_, headers_error) = generate_aws_headers_and_body(
+            &datetime,
+            server_url.as_str(),
+            &aws_id_error,
+            &aws_secret_1,
+        );
+        let error_authorization_1 = headers_error.get("authorization").unwrap();
+        let (_, headers_error) = generate_aws_headers_and_body(
+            &datetime,
+            server_url.as_str(),
+            &aws_id_error,
+            &aws_secret_2,
+        );
+        let error_authorization_2 = headers_error.get("authorization").unwrap();
+        // Create a mock on the server.
+        let mock_service_valid = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", valid_authorization.to_str().unwrap());
+            then.status(200);
+        });
+        let mock_service_invalid_1 = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", invalid_authorization_1.to_str().unwrap());
+            then.status(403);
+        });
+        let mock_service_invalid_2 = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", invalid_authorization_2.to_str().unwrap());
+            then.status(403);
+        });
+        let mock_service_error_1 = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", error_authorization_1.to_str().unwrap());
+            then.status(500);
+        });
+        let mock_service_error_2 = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", error_authorization_2.to_str().unwrap());
+            then.status(500);
+        });
+        let rule_aws_id = RegexRuleConfig::new("AKIA[0-9A-Z]{16}")
+            .match_action(MatchAction::Redact {
+                replacement: "[AWS_ID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsId))
+            .build();
+
+        let rule_aws_secret = RegexRuleConfig::new("[A-Za-z0-9/+]{40}")
+            .match_action(MatchAction::Redact {
+                replacement: "[AWS_SECRET]".to_string(),
+            })
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["aws_secret".to_string()],
+                excluded_keywords: vec![],
+            })
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
+                aws_sts_endpoint: server_url.clone(),
+                forced_datetime_utc: Some(datetime),
+                timeout: Duration::from_secs(5),
+            })))
+            .build();
+
+        let scanner = ScannerBuilder::new(&[rule_aws_id, rule_aws_secret])
+            .build()
+            .unwrap();
+
+        let mut content = fmt::format(format_args!(
+                                "content with a valid aws_id {}, an invalid aws_id {}, an error aws_id {} and an aws_secret {} and an other aws_secret {}", aws_id_valid, aws_id_invalid, aws_id_error, aws_secret_1, aws_secret_2));
+        let mut matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 5);
+        assert_eq!(
+            content,
+            "content with a valid aws_id [AWS_ID], an invalid aws_id [AWS_ID], an error aws_id [AWS_ID] and an aws_secret [AWS_SECRET] and an other aws_secret [AWS_SECRET]"
+        );
+        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        mock_service_valid.assert();
+        mock_service_invalid_1.assert();
+        mock_service_invalid_2.assert();
+        mock_service_error_1.assert();
+        mock_service_error_2.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+        assert_eq!(matches[1].match_status, MatchStatus::Invalid);
+        assert_eq!(
+            matches[2].match_status,
+            MatchStatus::Error("Unexpected HTTP status code 500".to_string())
+        );
+        assert_eq!(matches[3].match_status, MatchStatus::Valid);
+        // ID1 + SECRET2 should be invalid so it should contain invalid and not error
+        assert_eq!(matches[4].match_status, MatchStatus::Invalid);
+    }
     mod metrics_test {
         use crate::match_action::MatchAction;
         use crate::scanner::regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig};
