@@ -6,7 +6,7 @@ use std::{
     time::Duration,
     vec,
 };
-const DEFAULT_HTTPS_TIMEOUT_SEC: u64 = 3;
+pub const DEFAULT_HTTPS_TIMEOUT_SEC: u64 = 3;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AwsConfig {
