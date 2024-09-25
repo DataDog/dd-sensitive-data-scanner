@@ -25,6 +25,22 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
+  # Run the integration tests. This job is protected and is trigger in the merge
+  # as it requires access to protected environment variables.
+  sds-integration-test:
+    environment: protected
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: "Install Hyperscan"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libhyperscan-dev
+      - name: "Run the integration tests"
+        run: |
+          cd sds
+          cargo test -- --ignored
   sds:
     runs-on: ubuntu-latest
     defaults:
