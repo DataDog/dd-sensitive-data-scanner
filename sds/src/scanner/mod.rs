@@ -802,9 +802,7 @@ mod test {
     use super::*;
     use super::{MatchEmitter, ScannerBuilder, StringMatch};
     use crate::match_action::{MatchAction, MatchActionValidationError};
-    use crate::match_validation::config::{
-        AwsType, HttpValidatorConfigBuilder, MatchValidationType,
-    };
+    use crate::match_validation::config::{AwsType, MatchValidationType};
     use crate::observability::labels::Labels;
     use crate::scanner::regex_rule::config::{
         ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator, SecondaryValidator::*,
@@ -2249,13 +2247,15 @@ mod test {
     #[cfg(feature = "match_validation")]
     #[test]
     fn test_should_return_match_with_match_validation() {
+        use crate::match_validation::config::HttpValidatorConfig;
+
         let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string()).build(),
-            ))
+            .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
+                "http://localhost:8080",
+            )))
             .build()])
         .build()
         .unwrap();
@@ -2291,7 +2291,7 @@ mod test {
     #[cfg(feature = "match_validation")]
     #[test]
     fn test_should_allocate_match_validator_depending_on_match_type() {
-        use crate::match_validation::config::AwsConfig;
+        use crate::match_validation::config::{AwsConfig, HttpValidatorConfig};
 
         let rule_aws_id = RegexRuleConfig::new("aws-id")
             .match_action(MatchAction::Redact {
@@ -2312,27 +2312,27 @@ mod test {
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP1]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string()).build(),
-            ))
+            .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
+                "http://localhost:8080",
+            )))
             .build();
 
         let rule_custom_http_2_domain_1 = RegexRuleConfig::new("custom-http2")
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP2]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string()).build(),
-            ))
+            .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
+                "http://localhost:8080",
+            )))
             .build();
 
         let rule_custom_http_domain_2 = RegexRuleConfig::new("custom-http3")
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP2]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new("http://localhost:8081".to_string()).build(),
-            ))
+            .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
+                "http://localhost:8081",
+            )))
             .build();
 
         let scanner = ScannerBuilder::new(&[
@@ -2362,14 +2362,14 @@ mod test {
             aws_id_validator.as_ref()
         ));
         let http_2_validator = match_validator_map
-            .get(&MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string()).build(),
-            ))
+            .get(&MatchValidationType::CustomHttp(HttpValidatorConfig::new(
+                "http://localhost:8080",
+            )))
             .unwrap();
         let http_1_validator = match_validator_map
-            .get(&MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new("http://localhost:8081".to_string()).build(),
-            ))
+            .get(&MatchValidationType::CustomHttp(HttpValidatorConfig::new(
+                "http://localhost:8081",
+            )))
             .unwrap();
         assert!(!std::ptr::eq(
             http_1_validator.as_ref(),
