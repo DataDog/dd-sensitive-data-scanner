@@ -435,28 +435,21 @@ impl Scanner {
             debug_assert!(content.is_char_boundary(mutated_utf8_match_end));
 
             let matched_content = &content[mutated_utf8_match_start..mutated_utf8_match_end];
+            if let Some(replacement) = rule.get_match_action().get_replacement(matched_content) {
+                let before_replacement = &matched_content[replacement.start..replacement.end];
 
-            if rule.get_match_action().is_mutating() {
-                if let Some(replacement) = rule.get_match_action().get_replacement(matched_content)
-                {
-                    let before_replacement = &matched_content[replacement.start..replacement.end];
+                // update indices to match the new mutated content
+                <E>::adjust_shift(
+                    custom_index_delta,
+                    before_replacement,
+                    &replacement.replacement,
+                );
+                *utf8_byte_delta +=
+                    replacement.replacement.len() as isize - before_replacement.len() as isize;
 
-                    // update indices to match the new mutated content
-                    <E>::adjust_shift(
-                        custom_index_delta,
-                        before_replacement,
-                        &replacement.replacement,
-                    );
-                    *utf8_byte_delta +=
-                        replacement.replacement.len() as isize - before_replacement.len() as isize;
-
-                    let replacement_start = mutated_utf8_match_start + replacement.start;
-                    let replacement_end = mutated_utf8_match_start + replacement.end;
-                    content.replace_range(
-                        replacement_start..replacement_end,
-                        &replacement.replacement,
-                    );
-                }
+                let replacement_start = mutated_utf8_match_start + replacement.start;
+                let replacement_end = mutated_utf8_match_start + replacement.end;
+                content.replace_range(replacement_start..replacement_end, &replacement.replacement);
             }
         }
 
@@ -483,7 +476,7 @@ impl Scanner {
             end_index_exclusive: custom_end,
             shift_offset,
             #[cfg(feature = "match_validation")]
-            matched_string: matched_content_copy,
+            match_value: matched_content_copy,
             #[cfg(feature = "match_validation")]
             // MatchStatus not supported yet
             match_status: match_status,
@@ -1518,7 +1511,7 @@ mod test {
                 end_index_exclusive: 3,
                 shift_offset: 0,
                 #[cfg(feature = "match_validation")]
-                matched_string: None,
+                match_value: None,
                 #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotAvailable,
             }
@@ -1534,7 +1527,7 @@ mod test {
                 end_index_exclusive: 6,
                 shift_offset: 0,
                 #[cfg(feature = "match_validation")]
-                matched_string: None,
+                match_value: None,
                 #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotAvailable,
             }
@@ -1550,7 +1543,7 @@ mod test {
                 end_index_exclusive: 9,
                 shift_offset: 0,
                 #[cfg(feature = "match_validation")]
-                matched_string: None,
+                match_value: None,
                 #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotAvailable,
             }
@@ -1598,7 +1591,7 @@ mod test {
                 end_index_exclusive: 3,
                 shift_offset: 0,
                 #[cfg(feature = "match_validation")]
-                matched_string: None,
+                match_value: None,
                 #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotAvailable,
             }
@@ -1614,7 +1607,7 @@ mod test {
                 end_index_exclusive: 6,
                 shift_offset: 0,
                 #[cfg(feature = "match_validation")]
-                matched_string: None,
+                match_value: None,
                 #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotAvailable,
             }
@@ -1630,7 +1623,7 @@ mod test {
                 end_index_exclusive: 9,
                 shift_offset: 0,
                 #[cfg(feature = "match_validation")]
-                matched_string: None,
+                match_value: None,
                 #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotAvailable,
             }
@@ -1672,7 +1665,7 @@ mod test {
                 end_index_exclusive: 4,
                 shift_offset: 0,
                 #[cfg(feature = "match_validation")]
-                matched_string: None,
+                match_value: None,
                 #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotAvailable,
             }
@@ -1712,7 +1705,7 @@ mod test {
                 end_index_exclusive: 3,
                 shift_offset: 0,
                 #[cfg(feature = "match_validation")]
-                matched_string: None,
+                match_value: None,
                 #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotAvailable,
             }
@@ -1752,7 +1745,7 @@ mod test {
                 end_index_exclusive: 4,
                 shift_offset: 0,
                 #[cfg(feature = "match_validation")]
-                matched_string: None,
+                match_value: None,
                 #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotAvailable,
             }
@@ -1792,7 +1785,7 @@ mod test {
                 end_index_exclusive: 3,
                 shift_offset: 0,
                 #[cfg(feature = "match_validation")]
-                matched_string: None,
+                match_value: None,
                 #[cfg(feature = "match_validation")]
                 match_status: MatchStatus::NotAvailable,
             }
@@ -2276,7 +2269,7 @@ mod test {
         let rule_match = scanner.scan(&mut content, vec![]);
         assert_eq!(rule_match.len(), 1);
         assert_eq!(content, "hey [REDACTED]");
-        assert_eq!(rule_match[0].matched_string, Some("world".to_string()));
+        assert_eq!(rule_match[0].match_value, Some("world".to_string()));
     }
 
     #[cfg(feature = "match_validation")]
@@ -2294,7 +2287,7 @@ mod test {
         let mut rule_match = scanner.scan(&mut content, vec![]);
         assert_eq!(rule_match.len(), 1);
         assert_eq!(content, "hey [REDACTED]");
-        assert_eq!(rule_match[0].matched_string, None);
+        assert_eq!(rule_match[0].match_value, None);
         // Let's call validate and check that it panics
         let err = scanner.validate_matches(&mut rule_match).await;
         assert!(err.is_err());
