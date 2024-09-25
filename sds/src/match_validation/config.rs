@@ -59,11 +59,9 @@ impl RequestHeader {
     }
 }
 
-#[allow(dead_code)]
 pub struct HttpValidatorHelper;
 
 impl HttpValidatorHelper {
-    #[allow(dead_code)]
     pub fn new_github_config_builder() -> HttpValidatorConfigBuilder {
         let mut builder =
             HttpValidatorConfigBuilder::new("https://api.github.com/octocat".to_string());
@@ -84,7 +82,6 @@ impl HttpValidatorHelper {
         builder
     }
 
-    #[allow(dead_code)]
     pub fn new_datadog_config_builder() -> HttpValidatorConfigBuilder {
         let mut builder = HttpValidatorConfigBuilder::new(
             "https://api.datadoghq.com/api/v1/validate".to_string(),
