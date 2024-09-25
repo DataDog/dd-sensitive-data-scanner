@@ -6,6 +6,7 @@ use std::{
     time::Duration,
     vec,
 };
+const DEFAULT_HTTPS_TIMEOUT_SEC: u64 = 3;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AwsConfig {
@@ -21,7 +22,7 @@ impl Default for AwsConfig {
         AwsConfig {
             aws_sts_endpoint: "https://sts.amazonaws.com".to_string(),
             forced_datetime_utc: None,
-            timeout: Duration::from_secs(5),
+            timeout: Duration::from_secs(DEFAULT_HTTPS_TIMEOUT_SEC),
         }
     }
 }
@@ -146,7 +147,7 @@ impl HttpValidatorConfigBuilder {
             valid_http_status_code: vec![200..300],
             invalid_http_status_code: vec![400..500],
             options: HttpValidatorOption {
-                timeout: Duration::from_secs(3),
+                timeout: Duration::from_secs(DEFAULT_HTTPS_TIMEOUT_SEC),
             },
         }
     }
