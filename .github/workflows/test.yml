@@ -40,7 +40,7 @@ jobs:
       - name: "Run the integration tests"
         run: |
           cd sds
-          export KEYS_FOR_END_2_END_TEST=${{secrets.KEYS_FOR_END_2_END_TEST}} & cargo test -- --ignored
+          export KEYS_FOR_END_2_END_TEST=${{ secrets.KEYS_FOR_END_2_END_TEST }} & cargo test -- --ignored
   sds:
     runs-on: ubuntu-latest
     defaults:
