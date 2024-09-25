@@ -33,7 +33,7 @@ pub struct RuleMatch {
 
     #[cfg(feature = "match_validation")]
     // matched string copied from content. If scanner has the return_matches set to true
-    pub matched_string: Option<String>,
+    pub match_value: Option<String>,
     #[cfg(feature = "match_validation")]
     // match status updated by the validate_matches scanner method
     pub match_status: MatchStatus,
