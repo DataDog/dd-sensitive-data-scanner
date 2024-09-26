@@ -1,11 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::{
-    hash::{Hash, Hasher},
-    ops::Range,
-    time::Duration,
-    vec,
-};
+use std::{hash::Hash, ops::Range, time::Duration, vec};
 pub const DEFAULT_HTTPS_TIMEOUT_SEC: u64 = 3;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -93,7 +88,7 @@ impl HttpValidatorConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum MatchValidationType {
     Aws(AwsType),
     CustomHttp(HttpValidatorConfig),
@@ -110,63 +105,21 @@ impl MatchValidationType {
             MatchValidationType::CustomHttp(_) => true,
         }
     }
-}
-
-// Implement PartialEq and Eq to compare the variant type
-impl PartialEq for MatchValidationType {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (MatchValidationType::Aws(_), MatchValidationType::Aws(_)) => true,
-            (MatchValidationType::CustomHttp(a), MatchValidationType::CustomHttp(b)) => {
-                a.endpoint == b.endpoint
-            }
-            _ => std::mem::discriminant(self) == std::mem::discriminant(other),
-        }
-    }
-}
-
-impl Eq for MatchValidationType {}
-
-// Implement Hash to hash only the variant type
-// For Split Keys (like aws) we want the same validator for all aws types
-impl Hash for MatchValidationType {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+    pub fn get_internal_match_validation_type(&self) -> InternalMatchValidationType {
         match self {
-            MatchValidationType::Aws(_) => {
-                std::mem::discriminant(self).hash(state);
-            }
-            MatchValidationType::CustomHttp(a) => {
-                a.endpoint.hash(state);
+            MatchValidationType::Aws(_) => InternalMatchValidationType::Aws,
+            MatchValidationType::CustomHttp(http_config) => {
+                InternalMatchValidationType::CustomHttp(http_config.endpoint.clone())
             }
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::HashMap;
-
-    #[test]
-    fn test_match_validation_type_hash() {
-        let aws_validator1 = MatchValidationType::Aws(AwsType::AwsId);
-        let aws_validator2 = MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig::default()));
-        let custom_http_validator1 =
-            MatchValidationType::CustomHttp(HttpValidatorConfig::new("https://example.com"));
-        let custom_http_validator2 =
-            MatchValidationType::CustomHttp(HttpValidatorConfig::new("https://example2.com"));
-
-        let mut map: HashMap<MatchValidationType, String> = HashMap::new();
-
-        map.insert(aws_validator1, "Secret".to_string());
-        assert_eq!(
-            map.get(&aws_validator2),
-            Some("Secret".to_string()).as_ref()
-        );
-        map.insert(custom_http_validator1, "value".to_string());
-        assert_eq!(map.len(), 2);
-
-        map.insert(custom_http_validator2, "value".to_string());
-        assert_eq!(map.len(), 3);
-    }
+// This is the match validation type stored in the compiled rule
+// It is used to retrieve the MatchValidator. We don't need the full configuration for that purpose
+// as it would be heavy to compute hash and compare the full configuration.
+#[derive(PartialEq, Eq, Hash)]
+pub enum InternalMatchValidationType {
+    Aws,
+    CustomHttp(String),
 }
