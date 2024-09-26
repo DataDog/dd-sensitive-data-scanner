@@ -30,6 +30,8 @@ jobs:
   sds-integration-test:
     environment: protected
     runs-on: ubuntu-latest
+    env: # Set secret as env variable
+      KEYS_FOR_END_2_END_TEST: ${{ secrets.KEYS_FOR_END_2_END_TEST }}
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
@@ -40,7 +42,7 @@ jobs:
       - name: "Run the integration tests"
         run: |
           cd sds
-          export KEYS_FOR_END_2_END_TEST=${{ secrets.KEYS_FOR_END_2_END_TEST }} & cargo test -- --ignored
+          cargo test -- --ignored
   sds:
     runs-on: ubuntu-latest
     defaults:
