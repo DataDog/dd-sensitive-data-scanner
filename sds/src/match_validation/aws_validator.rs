@@ -63,9 +63,8 @@ impl MatchValidator for AwsValidator {
 
         let client = Client::new();
         // Let's try all combination of aws_id and aws_secret
-        let futures = match_status_per_pairs_of_matches_idx
-            .iter_mut()
-            .map(|((id_index, secret_index), match_status)| {
+        let futures = match_status_per_pairs_of_matches_idx.iter_mut().map(
+            |((id_index, secret_index), match_status)| {
                 let client = client.clone();
                 let match_id = &matches[*id_index];
                 let match_secret = &matches[*secret_index];
@@ -126,9 +125,8 @@ impl MatchValidator for AwsValidator {
                         }
                     }
                 }
-            })
-            .collect::<Vec<_>>();
-
+            },
+        );
         // Wait for all result to complete
         let _ = join_all(futures).await;
 
