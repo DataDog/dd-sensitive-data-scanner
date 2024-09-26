@@ -28,7 +28,7 @@ jobs:
   # Run the integration tests. This job is protected and is trigger in the merge
   # as it requires access to protected environment variables.
   sds-integration-test:
-    environment: protected
+    environment: main
     runs-on: ubuntu-latest
     env: # Set secret as env variable
       KEYS_FOR_END_2_END_TEST: ${{ secrets.KEYS_FOR_END_2_END_TEST }}

@@ -7,7 +7,7 @@ on:
 jobs:
   trigger:
     runs-on: ubuntu-latest
-    environment: protected
+    environment: main
     steps:
       - name: Extract PR information from github
         id: extract-pr-info
