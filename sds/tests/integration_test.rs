@@ -25,6 +25,7 @@ mod e2e_integration_test {
         // env_var shall contain a json string with the secrets
         // let's retrieve its content form the env
         let env_var_content = std::env::var(&env_var)?;
+        println!("Secrets loaded from env var {}: ", env_var_content);
         // let's deserialize the json content
         let secrets: E2ETestSecrets =
             serde_json::from_str(&env_var_content).expect("Failed to deserialize the secrets");
