@@ -339,9 +339,8 @@ impl Scanner {
         }
 
         // Call the validate per match_validator_type with their matches and the RuleMatch list and collect the results
-        let futures = match_validator_rule_match_per_type
-            .iter_mut()
-            .filter_map(|(match_validation_type, matches_per_type)| {
+        let futures = match_validator_rule_match_per_type.iter_mut().filter_map(
+            |(match_validation_type, matches_per_type)| {
                 let match_validator = self.match_validators_per_type.get(match_validation_type);
                 if let Some(match_validator) = match_validator {
                     Some(
@@ -352,8 +351,8 @@ impl Scanner {
                 } else {
                     None
                 }
-            })
-            .collect::<Vec<_>>();
+            },
+        );
 
         // Wait for all result to complete
         let _ = futures::future::join_all(futures).await;
