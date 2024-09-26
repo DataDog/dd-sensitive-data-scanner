@@ -592,7 +592,10 @@ impl ScannerBuilder<'_> {
     }
 
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
+        #[cfg(feature = "match_validation")]
         let mut scanner_features = self.scanner_features.clone();
+        #[cfg(not(feature = "match_validation"))]
+        let scanner_features = self.scanner_features.clone();
 
         let mut cache_pool_builder = CachePoolBuilder::new();
         #[cfg(feature = "match_validation")]
