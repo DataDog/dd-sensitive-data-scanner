@@ -28,17 +28,15 @@ jobs:
   # Run the integration tests. This job is protected and is trigger in the merge
   # as it requires access to protected environment variables.
   sds-integration-test:
-    environment: main
+    environment: protected
     runs-on: ubuntu-latest
     env: # Set secret as env variable
       KEYS_FOR_END_2_END_TEST: ${{ secrets.KEYS_FOR_END_2_END_TEST }}
-      TEST_FAKE: ${{ vars.TEST_FAKE }}
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
       - name: "Install Hyperscan"
         run: |
-          echo $TEST_FAKE
           sudo apt-get update
           sudo apt-get install -y libhyperscan-dev
       - name: "Run the integration tests"
