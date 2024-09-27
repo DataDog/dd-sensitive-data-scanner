@@ -1,4 +1,4 @@
 [overrides]
 # These crates do not specify a homepage in their metadata.
 "openssl-macros" = { origin = "https://github.com/sfackler/rust-openssl" }
-"ring" = { origin = "https://github.com/briansmith/ring", license = "Apache License v2"}
+"ring" = { origin = "https://github.com/briansmith/ring", license = "ISC/Apache License v2"}
