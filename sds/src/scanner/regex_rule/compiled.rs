@@ -1,6 +1,5 @@
-use crate::match_validation::config::InternalMatchValidationType;
 #[cfg(feature = "match_validation")]
-use crate::match_validation::config::MatchValidationType;
+use crate::match_validation::config::{InternalMatchValidationType, MatchValidationType};
 use crate::proximity_keywords::{
     contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
     CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,

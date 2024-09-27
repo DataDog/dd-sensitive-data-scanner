@@ -124,6 +124,7 @@ impl RuleConfig for RegexRuleConfig {
             metrics: RuleMetrics::new(&rule_labels),
             #[cfg(feature = "match_validation")]
             match_validation_type: self.get_match_validation_type().cloned(),
+            #[cfg(feature = "match_validation")]
             internal_match_validation_type: self
                 .get_match_validation_type()
                 .map(|x| x.get_internal_match_validation_type()),
