@@ -816,13 +816,9 @@ mod test {
     use crate::{Encoding, Utf8Encoding};
     use ahash::AHashSet;
     #[cfg(feature = "match_validation")]
-    use httpmock::{
-        Method::{GET, POST},
-        MockServer,
-    };
+    use httpmock::{Method::GET, MockServer};
     use regex_automata::Match;
     use std::collections::BTreeMap;
-    use std::fmt;
 
     use super::CompiledRule;
     use super::RuleConfig;
