@@ -800,11 +800,18 @@ mod test {
     use crate::scanner::regex_rule::config::{
         ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator, SecondaryValidator::*,
     };
+    #[cfg(feature = "match_validation")]
+    use std::time::Duration;
+
+    #[cfg(feature = "match_validation")]
+    use httpmock::{Method::GET, MockServer};
 
     use crate::scanner::scope::Scope;
     use crate::scanner::{get_next_regex_start, CreateScannerError, Scanner};
     use crate::scoped_ruleset::ExclusionCheck;
     use crate::validation::RegexValidationError;
+    #[cfg(feature = "match_validation")]
+    use crate::HttpValidatorConfigBuilder;
     use crate::{simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch};
     use crate::{Encoding, Utf8Encoding};
     use ahash::AHashSet;
@@ -2387,6 +2394,119 @@ mod test {
         assert_eq!(content, "this is an [AWS_ID]");
         assert!(scanner.validate_matches(&mut matches).await.is_err());
         assert_eq!(matches[0].match_status, MatchStatus::NotChecked);
+    }
+
+    #[cfg(feature = "match_validation")]
+    #[tokio::test]
+    async fn test_mock_same_http_validator_several_matches() {
+        let server = MockServer::start();
+
+        // Create a mock on the server.
+        let mock_service_valid = server.mock(|when, then| {
+            when.method(GET)
+                .path("/")
+                .header("authorization", "Bearer valid_match");
+            then.status(200);
+        });
+        let mock_service_invalid = server.mock(|when, then| {
+            when.method(GET)
+                .path("/")
+                .header("authorization", "Bearer invalid_match");
+            then.status(404).header("content-type", "text/html");
+        });
+        let mock_service_error = server.mock(|when, then| {
+            when.method(GET)
+                .path("/")
+                .header("authorization", "Bearer error_match");
+            then.status(500).header("content-type", "text/html");
+        });
+
+        let rule_valid_match = RegexRuleConfig::new("\\bvalid_match\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[VALID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new(server.url("/").to_string()).build(),
+            ))
+            .build();
+
+        let rule_invalid_match = RegexRuleConfig::new("\\binvalid_match\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[INVALID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new(server.url("/").to_string()).build(),
+            ))
+            .build();
+
+        let rule_error_match = RegexRuleConfig::new("\\berror_match\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[ERROR]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new(server.url("/").to_string()).build(),
+            ))
+            .build();
+        let scanner =
+            ScannerBuilder::new(&[rule_valid_match, rule_invalid_match, rule_error_match])
+                .build()
+                .unwrap();
+
+        let mut content =
+            "this is a content with a valid_match an invalid_match and an error_match".to_string();
+        let mut matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 3);
+        assert_eq!(
+            content,
+            "this is a content with a [VALID] an [INVALID] and an [ERROR]"
+        );
+        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        mock_service_valid.assert();
+        mock_service_invalid.assert();
+        mock_service_error.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+        assert_eq!(matches[1].match_status, MatchStatus::Invalid);
+        assert_eq!(
+            matches[2].match_status,
+            MatchStatus::Error("Unexpected HTTP status code 500".to_string())
+        );
+    }
+
+    #[cfg(feature = "match_validation")]
+    #[tokio::test]
+    async fn test_mock_http_timeout() {
+        let server = MockServer::start();
+        let _ = server.mock(|when, then| {
+            when.method(GET)
+                .path("/")
+                .header("authorization", "Bearer valid_match");
+            then.status(200);
+        });
+        let rule_valid_match = RegexRuleConfig::new("\\bvalid_match\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[VALID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new(server.url("/").to_string())
+                    .set_timeout(Duration::from_micros(0))
+                    .build(),
+            ))
+            .build();
+
+        let scanner = ScannerBuilder::new(&[rule_valid_match]).build().unwrap();
+
+        let mut content = "this is a content with a valid_match".to_string();
+        let mut matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "this is a content with a [VALID]");
+        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        // This will be in the form "Error making HTTP request: "
+        match &matches[0].match_status {
+            MatchStatus::Error(val) => {
+                assert!(val.starts_with("Error making HTTP request:"));
+            }
+            _ => assert!(false),
+        }
     }
 
     mod metrics_test {
