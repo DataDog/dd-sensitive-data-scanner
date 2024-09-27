@@ -2,8 +2,8 @@ use crate::encoding::Encoding;
 use crate::event::Event;
 #[cfg(feature = "match_validation")]
 use crate::match_validation::{
-    config::MatchValidationType, match_status::MatchStatus, match_validator::MatchValidator,
-    validator_utils::new_match_validator_from_type,
+    config::InternalMatchValidationType, config::MatchValidationType, match_status::MatchStatus,
+    match_validator::MatchValidator, validator_utils::new_match_validator_from_type,
 };
 #[cfg(feature = "match_validation")]
 use error::MatchValidationError;
@@ -87,6 +87,9 @@ pub trait CompiledRuleDyn: Send + Sync {
 
     #[cfg(feature = "match_validation")]
     fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
+
+    #[cfg(feature = "match_validation")]
+    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
 }
 
 // This is the "hidden" implementation of CompiledRuleDyn for any type that implements CompiledRule
@@ -140,6 +143,11 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
     fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
         T::get_match_validation_type(self)
     }
+
+    #[cfg(feature = "match_validation")]
+    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
+        T::get_internal_match_validation_type(self)
+    }
 }
 
 // This is the public trait that is used to define the behavior of a compiled rule.
@@ -177,6 +185,9 @@ pub trait CompiledRule: Send + Sync {
 
     #[cfg(feature = "match_validation")]
     fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
+    #[cfg(feature = "match_validation")]
+    // This is the match validation type key used in the match_validators_per_type map
+    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
 }
 
 impl<T> RuleConfig for Box<T>
@@ -226,7 +237,7 @@ pub struct Scanner {
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
     #[cfg(feature = "match_validation")]
-    match_validators_per_type: AHashMap<MatchValidationType, Box<dyn MatchValidator>>,
+    match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
 }
 
 impl Scanner {
@@ -327,7 +338,7 @@ impl Scanner {
         let mut match_validator_rule_match_per_type = AHashMap::new();
         for rule_match in rule_matches.drain(..) {
             let rule = &self.rules[rule_match.rule_index];
-            if let Some(match_validation_type) = rule.get_match_validation_type() {
+            if let Some(match_validation_type) = rule.get_internal_match_validation_type() {
                 if !match_validator_rule_match_per_type.contains_key(match_validation_type) {
                     match_validator_rule_match_per_type.insert(match_validation_type, Vec::new());
                 }
@@ -604,9 +615,10 @@ impl ScannerBuilder<'_> {
         for rule in self.rules.iter() {
             if let Some(match_validation_type) = rule.get_match_validation_type() {
                 if match_validation_type.can_create_match_validator() {
-                    if !match_validators_per_type.contains_key(match_validation_type) {
+                    let internal_type = match_validation_type.get_internal_match_validation_type();
+                    if !match_validators_per_type.contains_key(&internal_type) {
                         match_validators_per_type.insert(
-                            match_validation_type.clone(),
+                            internal_type,
                             new_match_validator_from_type(match_validation_type),
                         );
                         // Let's add return_matches to the scanner features
@@ -855,6 +867,10 @@ mod test {
         }
         #[cfg(feature = "match_validation")]
         fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
+            None
+        }
+        #[cfg(feature = "match_validation")]
+        fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
             None
         }
     }
@@ -2353,31 +2369,30 @@ mod test {
         let match_validator_map = &scanner.match_validators_per_type;
         assert_eq!(match_validator_map.len(), 3);
         // Custom assertion to check if the validators are the same
-        let aws_secret_validator = match_validator_map
-            .get(&MatchValidationType::Aws(AwsType::AwsSecret(
-                AwsConfig::default(),
-            )))
+        let aws_validator = match_validator_map
+            .get(&InternalMatchValidationType::Aws)
             .unwrap();
-        let aws_id_validator = match_validator_map
-            .get(&MatchValidationType::Aws(AwsType::AwsId))
-            .unwrap();
-        assert!(std::ptr::eq(
-            aws_secret_validator.as_ref(),
-            aws_id_validator.as_ref()
-        ));
         let http_2_validator = match_validator_map
-            .get(&MatchValidationType::CustomHttp(HttpValidatorConfig::new(
-                "http://localhost:8080",
-            )))
+            .get(&InternalMatchValidationType::CustomHttp(
+                "http://localhost:8080".to_string(),
+            ))
             .unwrap();
         let http_1_validator = match_validator_map
-            .get(&MatchValidationType::CustomHttp(HttpValidatorConfig::new(
-                "http://localhost:8081",
-            )))
+            .get(&InternalMatchValidationType::CustomHttp(
+                "http://localhost:8081".to_string(),
+            ))
             .unwrap();
         assert!(!std::ptr::eq(
             http_1_validator.as_ref(),
             http_2_validator.as_ref()
+        ));
+        assert!(!std::ptr::eq(
+            aws_validator.as_ref(),
+            http_2_validator.as_ref()
+        ));
+        assert!(!std::ptr::eq(
+            aws_validator.as_ref(),
+            http_1_validator.as_ref()
         ));
     }
 

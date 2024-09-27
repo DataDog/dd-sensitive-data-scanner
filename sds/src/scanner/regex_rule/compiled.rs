@@ -1,3 +1,4 @@
+use crate::match_validation::config::InternalMatchValidationType;
 #[cfg(feature = "match_validation")]
 use crate::match_validation::config::MatchValidationType;
 use crate::proximity_keywords::{
@@ -30,6 +31,8 @@ pub struct RegexCompiledRule {
     pub metrics: RuleMetrics,
     #[cfg(feature = "match_validation")]
     pub match_validation_type: Option<MatchValidationType>,
+    #[cfg(feature = "match_validation")]
+    pub internal_match_validation_type: Option<InternalMatchValidationType>,
 }
 
 impl CompiledRule for RegexCompiledRule {
@@ -95,6 +98,14 @@ impl CompiledRule for RegexCompiledRule {
     fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
         match &self.match_validation_type {
             Some(match_validation_type) => Some(&match_validation_type),
+            None => None,
+        }
+    }
+
+    #[cfg(feature = "match_validation")]
+    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
+        match &self.internal_match_validation_type {
+            Some(internal_match_validation_type) => Some(internal_match_validation_type),
             None => None,
         }
     }
