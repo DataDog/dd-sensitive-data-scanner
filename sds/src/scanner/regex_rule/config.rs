@@ -1,3 +1,5 @@
+#[cfg(feature = "match_validation")]
+use crate::match_validation::config::MatchValidationType;
 use crate::proximity_keywords::compile_keywords_proximity_config;
 use crate::scanner::config::RuleConfig;
 use crate::scanner::metrics::RuleMetrics;
@@ -23,6 +25,8 @@ pub struct RegexRuleConfig {
     #[serde_as(deserialize_as = "DefaultOnNull")]
     #[serde(default)]
     pub labels: Labels,
+    #[cfg(feature = "match_validation")]
+    pub match_validation_type: Option<MatchValidationType>,
 }
 
 impl RegexRuleConfig {
@@ -34,6 +38,8 @@ impl RegexRuleConfig {
             proximity_keywords: None,
             validator: None,
             labels: Labels::default(),
+            #[cfg(feature = "match_validation")]
+            match_validation_type: None,
         }
     }
 
@@ -59,6 +65,11 @@ impl RegexRuleConfig {
         self.mutate_clone(|x| x.labels = labels)
     }
 
+    #[cfg(feature = "match_validation")]
+    pub fn match_validation_type(&self, match_validation_type: MatchValidationType) -> Self {
+        return self.mutate_clone(|x| x.match_validation_type = Some(match_validation_type));
+    }
+
     pub fn build(&self) -> Arc<dyn RuleConfig> {
         Arc::new(RegexRuleConfig {
             pattern: self.pattern.clone(),
@@ -67,6 +78,8 @@ impl RegexRuleConfig {
             proximity_keywords: self.proximity_keywords.clone(),
             validator: self.validator.clone(),
             labels: self.labels.clone(),
+            #[cfg(feature = "match_validation")]
+            match_validation_type: self.match_validation_type.clone(),
         })
     }
 
@@ -109,7 +122,16 @@ impl RuleConfig for RegexRuleConfig {
                 .map(|x| Arc::new(x) as Arc<dyn Validator>),
             rule_cache_index: cache_index,
             metrics: RuleMetrics::new(&rule_labels),
+            #[cfg(feature = "match_validation")]
+            match_validation_type: self.get_internal_match_validation_type(),
         }))
+    }
+    #[cfg(feature = "match_validation")]
+    fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
+        match &self.match_validation_type {
+            Some(match_validation_type) => Some(&match_validation_type),
+            None => None,
+        }
     }
 }
 
@@ -160,6 +182,8 @@ mod test {
                 proximity_keywords: None,
                 validator: None,
                 labels: Labels::empty(),
+                #[cfg(feature = "match_validation")]
+                match_validation_type: None,
             }
         );
     }
