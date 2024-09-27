@@ -123,7 +123,10 @@ impl RuleConfig for RegexRuleConfig {
             rule_cache_index: cache_index,
             metrics: RuleMetrics::new(&rule_labels),
             #[cfg(feature = "match_validation")]
-            match_validation_type: self.get_internal_match_validation_type(),
+            match_validation_type: self.get_match_validation_type().cloned(),
+            internal_match_validation_type: self
+                .get_match_validation_type()
+                .map(|x| x.get_internal_match_validation_type()),
         }))
     }
     #[cfg(feature = "match_validation")]

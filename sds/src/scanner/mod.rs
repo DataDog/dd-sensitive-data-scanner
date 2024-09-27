@@ -86,7 +86,10 @@ pub trait CompiledRuleDyn: Send + Sync {
     }
 
     #[cfg(feature = "match_validation")]
-    fn get_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
+    fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
+
+    #[cfg(feature = "match_validation")]
+    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
 }
 
 // This is the "hidden" implementation of CompiledRuleDyn for any type that implements CompiledRule
@@ -137,8 +140,13 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
     }
 
     #[cfg(feature = "match_validation")]
-    fn get_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
+    fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
         T::get_match_validation_type(self)
+    }
+
+    #[cfg(feature = "match_validation")]
+    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
+        T::get_internal_match_validation_type(self)
     }
 }
 
@@ -176,7 +184,10 @@ pub trait CompiledRule: Send + Sync {
     }
 
     #[cfg(feature = "match_validation")]
-    fn get_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
+    fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
+    #[cfg(feature = "match_validation")]
+    // This is the match validation type key used in the match_validators_per_type map
+    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
 }
 
 impl<T> RuleConfig for Box<T>
@@ -327,7 +338,7 @@ impl Scanner {
         let mut match_validator_rule_match_per_type = AHashMap::new();
         for rule_match in rule_matches.drain(..) {
             let rule = &self.rules[rule_match.rule_index];
-            if let Some(match_validation_type) = rule.get_match_validation_type() {
+            if let Some(match_validation_type) = rule.get_internal_match_validation_type() {
                 if !match_validator_rule_match_per_type.contains_key(match_validation_type) {
                     match_validator_rule_match_per_type.insert(match_validation_type, Vec::new());
                 }
@@ -853,7 +864,11 @@ mod test {
             match_emitter.emit(StringMatch { start: 10, end: 16 });
         }
         #[cfg(feature = "match_validation")]
-        fn get_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
+        fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
+            None
+        }
+        #[cfg(feature = "match_validation")]
+        fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
             None
         }
     }
