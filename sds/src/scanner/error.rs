@@ -29,7 +29,7 @@ pub enum CreateScannerError {
     InvalidMatchAction(#[from] MatchActionValidationError),
 }
 
-#[cfg(feature = "match_validation")]
+
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum MatchValidationError {
     #[error("No MatchValidationType provided")]
