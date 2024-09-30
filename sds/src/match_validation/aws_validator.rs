@@ -41,14 +41,18 @@ impl MatchValidator for AwsValidator {
 
         for (idx, m) in matches.iter().enumerate() {
             let rule = &scanner_rules[m.rule_index];
-            match rule.get_match_validation_type() {
-                Some(MatchValidationType::Aws(AwsType::AwsId)) => {
-                    aws_id_matches_idx.push(idx);
+            if let Some(MatchValidationType::Aws(aws_type)) = rule.get_match_validation_type() {
+                match aws_type {
+                    AwsType::AwsId => {
+                        aws_id_matches_idx.push(idx);
+                    }
+                    AwsType::AwsSecret(_) => {
+                        aws_secret_matches_idx.push(idx);
+                    }
+                    AwsType::AwsSession => {
+                        // We don't support session for now
+                    }
                 }
-                Some(MatchValidationType::Aws(AwsType::AwsSecret(_))) => {
-                    aws_secret_matches_idx.push(idx);
-                }
-                _ => {}
             }
         }
 
