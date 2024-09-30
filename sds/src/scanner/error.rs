@@ -29,7 +29,6 @@ pub enum CreateScannerError {
     InvalidMatchAction(#[from] MatchActionValidationError),
 }
 
-
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum MatchValidationError {
     #[error("No MatchValidationType provided")]

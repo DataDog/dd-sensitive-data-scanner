@@ -1,4 +1,3 @@
-
 #[cfg(test)]
 mod e2e_integration_test {
     use dd_sds::AwsConfig;
