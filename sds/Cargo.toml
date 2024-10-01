@@ -43,6 +43,7 @@ async-std = "1.13.0"
 reqwest = "0.12"
 aws-sign-v4 = "0.3.0"
 chrono = { version = "0.4", features = ["serde"] }
+slotmap = "1.0.7"
 
 [dev-dependencies]
 rand = "0.8.5"
@@ -54,10 +55,15 @@ serde_test = "1.0.176"
 dd-sds = { path = ".", features = ["bench", "match_validation"] }
 httpmock = "0.7.0"
 tokio = {version = "1", features = ["full"]}
+threadpool = "1.8.1"
 
 [target.'cfg(target_arch = "x86_64")'.dev-dependencies]
 hyperscan = { version = "0.3.2", features = ["static"] }
 
 [[bench]]
 name = "bench"
+harness = false
+
+[[bench]]
+name = "multithreaded_scanning"
 harness = false

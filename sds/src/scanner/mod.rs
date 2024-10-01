@@ -25,6 +25,7 @@ use crate::scanner::scope::Scope;
 use crate::stats::GLOBAL_STATS;
 use ahash::{AHashMap, AHashSet};
 use regex_automata::Match;
+use crate::scanner::regex_rule::get_regex_cache;
 
 pub mod cache_pool;
 pub mod config;
@@ -66,7 +67,7 @@ pub trait CompiledRuleDyn: Send + Sync {
         &self,
         content: &str,
         path: &Path,
-        caches: &mut CachePoolGuard<'_>,
+        // caches: &mut CachePoolGuard<'_>,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -105,7 +106,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         &self,
         content: &str,
         path: &Path,
-        caches: &mut CachePoolGuard<'_>,
+        // caches: &mut CachePoolGuard<'_>,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -119,7 +120,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         self.get_string_matches(
             content,
             path,
-            caches,
+            // caches,
             group_data,
             exclusion_check,
             excluded_matches,
@@ -156,7 +157,7 @@ pub trait CompiledRule: Send + Sync {
         &self,
         content: &str,
         path: &Path,
-        caches: &mut CachePoolGuard<'_>,
+        // caches: &mut CachePoolGuard<'_>,
         group_data: &mut Self::GroupData,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -242,11 +243,13 @@ impl Scanner {
     pub fn scan<E: Event>(&self, event: &mut E, blocked_rules_idx: Vec<usize>) -> Vec<RuleMatch> {
         // This is a set of caches (1 for each rule) that can be used for scanning. This is obtained once per scan to reduce
         // lock contention. (Normally it has to be obtained for each regex scan individually)
-        let caches: regex_automata::util::pool::PoolGuard<
-            '_,
-            Vec<regex_automata::meta::Cache>,
-            Box<dyn Fn() -> Vec<regex_automata::meta::Cache> + Send + Sync>,
-        > = self.cache_pool.get();
+        // let caches: regex_automata::util::pool::PoolGuard<
+        //     '_,
+        //     Vec<regex_automata::meta::Cache>,
+        //     Box<dyn Fn() -> Vec<regex_automata::meta::Cache> + Send + Sync>,
+        // > = self.cache_pool.get();
+
+        let regex_cache = get_regex_cache();
 
         // All matches, after some (but not all) false-positives have been removed.
         // This is a vec of vecs, where each inner vec is a set of matches for a single path.
@@ -260,7 +263,7 @@ impl Scanner {
             event,
             ScannerContentVisitor {
                 scanner: self,
-                caches,
+                // caches,
                 rule_matches: &mut rule_matches_list,
                 blocked_rules: &blocked_rules_idx,
                 excluded_matches: &mut excluded_matches,
@@ -673,7 +676,7 @@ impl ScannerBuilder<'_> {
 
 struct ScannerContentVisitor<'a, E: Encoding> {
     scanner: &'a Scanner,
-    caches: CachePoolGuard<'a>,
+    // caches: CachePoolGuard<'a>,
     rule_matches: &'a mut Vec<(crate::Path<'static>, Vec<InternalRuleMatch<E>>)>,
     // Rules that shall be skipped for this scan
     // This list shall be small (<10), so a linear search is acceptable
@@ -715,7 +718,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 rule.get_string_matches(
                     content,
                     path,
-                    &mut self.caches,
+                    // &mut self.caches,
                     &mut group_data,
                     &exclusion_check,
                     self.excluded_matches,
@@ -833,7 +836,7 @@ mod test {
             &self,
             _content: &str,
             _path: &Path,
-            _caches: &mut CachePoolGuard<'_>,
+            // _caches: &mut CachePoolGuard<'_>,
             _group_data: &mut Self::GroupData,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,

@@ -1,0 +1,108 @@
+These are generated logs. They contain no real information.
+2024-09-27 10:12:34,567 INFO  [main] com.example.Main - Application started successfully.
+2024-09-27 10:12:35,678 DEBUG [Thread-1] com.example.service.AuthService - User login attempt: username=johndoe, ip=192.168.0.101
+2024-09-27 10:12:35,910 WARN  [Thread-2] com.example.service.DataFetcher - Data fetch timeout for service: ServiceA
+2024-09-27 10:12:36,003 ERROR [Thread-2] com.example.service.DataFetcher - Failed to retrieve data from ServiceA: java.net.ConnectException: Connection timed out
+2024-09-27 10:12:37,102 INFO  [Thread-3] com.example.service.AuthService - User login successful: username=johndoe
+2024-09-27 10:12:40,450 INFO  [Thread-4] com.example.service.FileProcessor - File upload started: filename=document.pdf, size=4.3MB
+2024-09-27 10:12:40,789 INFO  [Thread-4] com.example.service.FileProcessor - File upload completed: filename=document.pdf, duration=0.34s
+2024-09-27 10:12:41,123 DEBUG [Thread-1] com.example.cache.CacheService - Cache miss for key=user_123
+2024-09-27 10:12:41,150 INFO  [Thread-1] com.example.cache.CacheService - Loading data from DB for user_123
+2024-09-27 10:12:42,505 ERROR [Thread-3] com.example.api.PaymentService - Payment failed: user_id=12345, error_code=INSUFFICIENT_FUNDS
+2024-09-27 10:12:43,001 INFO  [Thread-1] com.example.service.OrderService - Order placed successfully: order_id=AB123456789
+2024-09-27 10:12:44,765 WARN  [Thread-5] com.example.monitoring.HealthCheck - Disk space low: remaining=2.5GB
+Sep 27 10:12:45 server kernel: [14450.512345] eth0: link down
+Sep 27 10:12:45 server kernel: [14450.512546] eth0: link up
+Sep 27 10:12:46 server sshd[1010]: Accepted password for user john from 192.168.0.105 port 51124 ssh2
+Sep 27 10:12:46 server sshd[1010]: Received disconnect from 192.168.0.105 port 51124:11: disconnected by user
+Sep 27 10:12:46 server sshd[1010]: Disconnected from user john 192.168.0.105 port 51124
+[2024-09-27T10:12:50.001Z] [INFO] - Service 'email' started on port 8080
+[2024-09-27T10:12:51.123Z] [DEBUG] - Connection pool established, max=20
+[2024-09-27T10:12:53.456Z] [ERROR] - Email sending failed: to=user@example.com, subject="Welcome", error=SMTP_TIMEOUT
+[2024-09-27T10:12:53.789Z] [INFO] - Retrying email: to=user@example.com
+[2024-09-27T10:12:55.012Z] [INFO] - Email sent successfully: to=user@example.com
+2024-09-27 10:13:01,512 INFO  PaymentProcessor [orderId=ORD987654321] - Processing payment for order: amount=$149.99
+2024-09-27 10:13:01,876 DEBUG PaymentProcessor [orderId=ORD987654321] - Validating payment details
+2024-09-27 10:13:02,230 ERROR PaymentProcessor [orderId=ORD987654321] - Payment validation failed: reason=CARD_EXPIRED
+2024-09-27 10:13:02,501 WARN  PaymentProcessor [orderId=ORD987654321] - Payment process aborted due to validation failure
+2024-09-27 10:13:05.001 [http-nio-8080-exec-5] INFO  c.e.ApiController - Received GET request: /api/v1/users
+2024-09-27 10:13:05.302 [http-nio-8080-exec-5] DEBUG c.e.ApiController - Fetching users from database
+2024-09-27 10:13:06.123 [http-nio-8080-exec-5] INFO  c.e.ApiController - Returned 250 users in 0.821s
+2024-09-27T10:13:10Z app[web.1]: Starting application in production mode
+2024-09-27T10:13:11Z app[web.1]: Listening on port 3000 (pid: 3245)
+2024-09-27T10:13:12Z app[web.1]: GET /api/users 200 132.456ms
+2024-09-27T10:13:13Z app[web.1]: POST /api/login 401 27.345ms
+2024-09-27T10:13:14Z app[web.1]: PUT /api/users/123 500 45.001ms
+09/27/2024 10:13:20 AM - SYSTEM - User login: User=johndoe IP=192.168.0.103 Status=Success
+09/27/2024 10:13:21 AM - SYSTEM - User logout: User=johndoe IP=192.168.0.103 Status=Success
+Sep 27 10:13:30 app systemd[1]: Starting backup service...
+Sep 27 10:13:30 app systemd[1]: backup.service: Started successfully
+Sep 27 10:13:31 app systemd[1]: Stopping backup service...
+Sep 27 10:13:31 app systemd[1]: backup.service: Stopped successfully
+2024-09-27 10:13:40.987 [main] WARN  LogWatcher - Detected unusual traffic: 192.168.0.105 -> 10.0.0.1
+2024-09-27 10:13:41.123 [main] INFO  LogWatcher - Traffic back to normal: 192.168.0.105 -> 10.0.0.1
+127.0.0.1 - - [27/Sep/2024:10:13:50 +0000] "GET /index.html HTTP/1.1" 200 1024 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+127.0.0.1 - - [27/Sep/2024:10:13:51 +0000] "POST /api/login HTTP/1.1" 401 512 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+2024-09-27 10:14:00,001 INFO  UserSessionManager - Session created for user_id=45678
+2024-09-27 10:14:00,452 DEBUG UserSessionManager - Session data loaded from cache for user_id=45678
+2024-09-27 10:14:01,123 ERROR UserSessionManager - Session timeout: user_id=45678, ip=192.168.0.110
+2024-09-27 10:14:01,567 WARN  UserSessionManager - Attempt to access after session expiration: user_id=45678
+2024-09-27 10:14:02,890 INFO  UserSessionManager - Session ended for user_id=45678
+Sep 27 10:14:05 mailserver postfix/smtp[1009]: 50DA01AB2D: to=<recipient@example.com>, relay=mail.example.com[192.168.1.1]:25, delay=0.52, delays=0.12/0.03/0.02/0.35, dsn=2.0.0, status=sent (250 OK)
+Sep 27 10:14:06 mailserver postfix/smtp[1009]: 50DA01AB2E: to=<admin@example.com>, relay=mail.example.com[192.168.1.1]:25, delay=0.55, delays=0.13/0.04/0.03/0.35, dsn=2.0.0, status=sent (250 OK)
+2024-09-27T10:14:10Z app[worker.1]: Worker job started: job_id=J12345
+2024-09-27T10:14:11Z app[worker.1]: Processing job: job_id=J12345
+2024-09-27T10:14:12Z app[worker.1]: Job completed successfully: job_id=J12345
+2024-09-27 10:15:00.123 [INFO] {event="USER_LOGIN", user_id="12345", username="johndoe", ip="192.168.0.102", device="Chrome 93", location={"city": "New York", "country": "USA"}, status="SUCCESS"}
+2024-09-27 10:15:02.567 [DEBUG] {module="UserProfileService", action="FETCH_PROFILE", user_id="12345", duration="0.321s", db_query={"query": "SELECT * FROM users WHERE id=12345", "rows_fetched": 1}}
+2024-09-27 10:15:05.981 [ERROR] {event="PAYMENT_FAILURE", user_id="67890", order_id="ORD987654", error="CARD_DECLINED", retry_attempts=3, payment_method={"type": "credit_card", "card_last4": "1234"}, response={"error_code": "402", "message": "Insufficient Funds"}}
+2024-09-27 10:15:08.345 [INFO] {action="EMAIL_SENT", recipient="user@example.com", email_type="WELCOME_EMAIL", smtp_server="smtp.example.com", delivery_status="SUCCESS", duration="0.254s"}
+2024-09-27 10:15:10.999 [WARN] {module="AuthService", event="INVALID_LOGIN_ATTEMPT", ip="192.168.0.200", username="unknown_user", location={"city": "San Francisco", "country": "USA"}, reason="INVALID_CREDENTIALS", attempt_number=4, lockout_threshold=5}
+2024-09-27 10:15:15.001 | AUDIT | {"timestamp":"2024-09-27T10:15:15.001Z", "user_id":"admin123", "action":"DELETE_USER", "target_user_id":"56789", "status":"SUCCESS", "additional_info":{"ip":"192.168.1.5", "admin_level":5, "reason":"User requested deletion", "deleted_assets":["profile.jpg", "docs.zip"]}}
+2024-09-27 10:15:17.234 | TRACE | {request_id="6F7E8A", user_id="12345", action="API_CALL", endpoint="/api/v1/orders", method="GET", response_code=200, response_time="128ms", query_params={"page":1,"limit":50}, headers={"Authorization":"Bearer token123", "User-Agent":"Mozilla/5.0"}, data={"orders":[{"id":"ORD001","status":"SHIPPED"},{"id":"ORD002","status":"PENDING"}]}}
+2024-09-27 10:15:19.456 | ERROR | {"event":"FILE_UPLOAD_FAILURE", "file_name":"large_video.mp4", "user_id":"98765", "error_code":"FILE_TOO_LARGE", "max_size":"50MB", "file_size":"120MB", "upload_attempts":2, "server":"file-upload-node-02"}
+[2024-09-27 10:15:25] [INFO] Event: {"user_id": "abc123", "action": "password_change", "method": "self_service", "duration_ms": 512, "status": "success"}
+[2024-09-27 10:15:30] [DEBUG] System Info: {"cpu_usage": "73%", "memory": {"total": "16GB", "used": "12.5GB", "free": "3.5GB"}, "disk_io": {"read": "120MB/s", "write": "45MB/s"}, "network_io": {"inbound": "240KB/s", "outbound": "180KB/s"}}
+2024-09-27 10:15:35.789 INFO [user-analytics] {"event":"page_view","user_id":"a1b2c3","page_url":"/home","referrer":"/login","device":{"os":"Windows 10","browser":"Firefox"},"location":{"country":"Germany","city":"Berlin"},"duration":345}
+2024-09-27 10:15:38.123 ALERT - [Security] AlertID: 10012 | Timestamp: 2024-09-27T10:15:38.123Z | AlertType: LOGIN_BRUTE_FORCE | SourceIP: 192.168.0.5 | UserAgent: Mozilla/5.0 | User: jane_doe | Attempts: 10 | ActionTaken: ACCOUNT_LOCKED | Reason: Multiple failed login attempts detected within short interval.
+Sep 27 10:15:40 api-gateway [INFO] {"request_id":"XYZ7890","path":"/api/v2/products","method":"POST","client_ip":"203.0.113.45","auth":{"type":"JWT","user":"supplier_001","roles":["admin","supplier"]},"payload":{"product":{"id":"P123","name":"Gadget","price":99.99}},"response":{"status_code":201,"duration":"456ms"}}
+2024-09-27T10:15:42Z db-query [DEBUG] SQL: {"query":"INSERT INTO transactions (user_id, amount, status) VALUES (?, ?, ?)","params":["12345", "$49.99", "PENDING"],"duration":"12ms"}
+2024-09-27T10:15:44Z [TransactionProcessor] ERROR: {"transaction_id":"tx_001","user_id":"user_789","error":"PAYMENT_TIMEOUT","retry_count":1,"timeout_duration":"5s","backend_response":"No response from payment gateway"}
+2024-09-27 10:16:00.123 [INFO] {event="USER_REGISTRATION", user_id="abc12345", username="newuser2024", email="newuser2024@example.com", ip="192.168.0.105", device={"os": "Windows 10", "browser": "Chrome 85", "screen_resolution": "1920x1080", "language": "en-US"}, referrer="https://socialmedia.com", sign_up_method="social_login", location={"city": "Los Angeles", "region": "CA", "country": "USA"}, email_verification_status="PENDING", additional_info={"interests": ["tech", "gaming", "music"], "marketing_opt_in": true, "preferred_contact_time": "afternoon"}, timestamp="2024-09-27T10:16:00.123Z"}
+2024-09-27 10:16:10.456 [DEBUG] {module="OrderProcessingService", action="PROCESS_ORDER", order_id="ORD998877", user_id="cust001122", order_details={"items": [{"product_id": "P123", "quantity": 2, "price": 19.99, "name": "Wireless Mouse"}, {"product_id": "P456", "quantity": 1, "price": 199.99, "name": "Mechanical Keyboard"}], "total_amount": 239.97, "currency": "USD", "payment_method": {"type": "credit_card", "last4": "6789", "expiry": "12/26"}}, shipping_address={"street": "1234 Elm St", "city": "Metropolis", "region": "NY", "country": "USA", "postal_code": "10001"}, billing_address={"street": "456 Oak St", "city": "Gotham", "region": "NJ", "country": "USA", "postal_code": "07030"}, tracking_number="TRK1234567890", estimated_delivery="2024-09-30", status="SHIPPED", timestamp="2024-09-27T10:16:10.456Z", additional_notes="Gift wrap requested."}
+2024-09-27 10:17:00.001 [INFO] User logged in: email=john.doe123@example.com
+2024-09-27 10:17:02.542 [WARN] Invalid SSN format: 123-45-6789
+2024-09-27 10:17:05.123 [INFO] Issued passport: code=GB123456A
+2024-09-27 10:17:07.213 [ERROR] Invalid phone number: (555) 123-4567
+2024-09-27 10:17:10.457 [DEBUG] Parsed date: 12/31/2024
+2024-09-27 10:17:12.676 [INFO] Credit card masked: ****-****-****-1234
+2024-09-27 10:17:15.321 [ERROR] Invalid passport ID: 123456789
+2024-09-27 10:17:18.001 [DEBUG] Transaction ID: 98765432123456789
+2024-09-27 10:17:20.543 [INFO] UK national insurance number: AB123456C
+2024-09-27 10:17:22.889 [WARN] Invalid company ID: ABC1234567
+2024-09-27 10:17:25.102 [INFO] EIN generated: 12-3456789
+2024-09-27 10:17:27.789 [INFO] SSN found: 123-45-6789
+2024-09-27 10:17:30.123 [DEBUG] Expiry date: 01/24
+2024-09-27 10:17:32.555 [INFO] Username valid: user_123
+2024-09-27 10:17:35.001 [ERROR] Password does not meet complexity: Pass123
+2024-09-27 10:17:37.879 [INFO] IP address logged: 192.168.1.1
+2024-09-27 10:17:40.333 [DEBUG] MAC address: 00:1A:2B:3C:4D:5E
+2024-09-27 10:17:43.001 [INFO] URL accessed: https://example.com/resource
+2024-09-27 10:17:45.764 [WARN] Hex color found: #a3c113
+2024-09-27 10:17:48.209 [INFO] UUID generated: 123e4567-e89b-12d3-a456-426614174000
+2024-09-27 10:17:51.001 [DEBUG] VIN number: 1HGCM82633A123456
+2024-09-27 10:17:53.102 [INFO] CVV entered: 123
+2024-09-27 10:17:55.788 [INFO] Bank account detected: 12-3456789
+2024-09-27 10:17:58.111 [ERROR] Invalid Bitcoin address: 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
+2024-09-27 10:18:01.001 [DEBUG] File uploaded: example.docx
+2024-09-27 10:18:03.502 [INFO] Security code entered: 123456
+2024-09-27 10:18:06.342 [DEBUG] Asset ID: ABC-123456
+2024-09-27 10:18:08.999 [ERROR] Confidential keyword detected: sensitive note
+2024-09-27 10:18:11.001 [INFO] Phone number validated: +44 123 456789
+2024-09-27 10:18:13.442 [INFO] Document type detected: file.pdf
+2024-09-27 10:18:15.555 [DEBUG] API key detected: Abc123_XYZ789_PQR456
+2024-09-27 10:18:18.124 [INFO] Session token: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+2024-09-27 10:18:20.001 [WARN] SHA-256 hash: 1a79a4d60de6718e8e5b326e338ae533a12d5c0f
+2024-09-27 10:18:22.999 [INFO] FTP login successful: ftp://user:pass@ftp.example.com
+2024-09-27 10:18:25.001 [DEBUG] Masked credit card: 1234 5678 9012 3456
+2024-09-27 10:18:27.555 [ERROR] Confidential data leak: private information

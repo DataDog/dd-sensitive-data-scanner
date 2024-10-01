@@ -9,24 +9,25 @@ use crate::scanner::scope::Scope;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::secondary_validation::Validator;
 use crate::{
-    CachePoolGuard, CompiledRule, ExclusionCheck, MatchAction, MatchEmitter, Path, StringMatch,
+    CompiledRule, ExclusionCheck, MatchAction, MatchEmitter, Path, StringMatch,
 };
 use ahash::AHashSet;
-use regex_automata::meta::Cache;
-use regex_automata::meta::Regex as MetaRegex;
 use regex_automata::Input;
 use std::sync::Arc;
+use slotmap::new_key_type;
+use crate::scanner::regex_rule::regex_store::SharedRegex;
+
 
 /// This is the internal representation of a rule after it has been validated / compiled.
 pub struct RegexCompiledRule {
     pub rule_index: usize,
-    pub regex: MetaRegex,
+    pub regex: SharedRegex,
     pub match_action: MatchAction,
     pub scope: Scope,
     pub included_keywords: Option<CompiledIncludedProximityKeywords>,
     pub excluded_keywords: Option<CompiledExcludedProximityKeywords>,
     pub validator: Option<Arc<dyn Validator>>,
-    pub rule_cache_index: usize,
+    // pub rule_cache_index: usize,
     pub metrics: RuleMetrics,
     #[cfg(feature = "match_validation")]
     pub match_validation_type: Option<InternalMatchValidationType>,
@@ -47,7 +48,7 @@ impl CompiledRule for RegexCompiledRule {
         &self,
         content: &str,
         path: &Path,
-        caches: &mut CachePoolGuard<'_>,
+        // caches: &mut CachePoolGuard<'_>,
         _group_data: &mut (),
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -59,7 +60,7 @@ impl CompiledRule for RegexCompiledRule {
                 self.get_string_matches_with_included_keywords(
                     content,
                     path,
-                    caches,
+                    // caches,
                     exclusion_check,
                     excluded_matches,
                     match_emitter,
@@ -71,7 +72,7 @@ impl CompiledRule for RegexCompiledRule {
                 let true_positive_search = self.true_positive_matches(
                     content,
                     0,
-                    &mut caches[self.rule_cache_index],
+                    // &mut caches[self.rule_cache_index],
                     true,
                     exclusion_check,
                     excluded_matches,
@@ -106,14 +107,14 @@ impl RegexCompiledRule {
         &self,
         content: &str,
         path: &Path,
-        caches: &mut CachePoolGuard<'_>,
+        // caches: &mut CachePoolGuard<'_>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
         included_keywords: &CompiledIncludedProximityKeywords,
     ) {
-        let cache = &mut caches[self.rule_cache_index];
+        // let cache = &mut caches[self.rule_cache_index];
 
         if should_keywords_match_event_paths {
             let sanitized_path = path.sanitize();
@@ -122,7 +123,7 @@ impl RegexCompiledRule {
                 let true_positive_search = self.true_positive_matches(
                     content,
                     0,
-                    &mut caches[self.rule_cache_index],
+                    // &mut caches[self.rule_cache_index],
                     false,
                     exclusion_check,
                     excluded_matches,
@@ -142,7 +143,7 @@ impl RegexCompiledRule {
             let true_positive_search = self.true_positive_matches(
                 content,
                 included_keyword_match_start,
-                cache,
+                // cache,
                 false,
                 exclusion_check,
                 excluded_matches,
@@ -188,7 +189,7 @@ impl RegexCompiledRule {
         &'a self,
         content: &'a str,
         start: usize,
-        cache: &'a mut Cache,
+        // cache: &'a mut Cache,
         check_excluded_keywords: bool,
         exclusion_check: &'a ExclusionCheck<'a>,
         excluded_matches: &'a mut AHashSet<String>,
@@ -197,7 +198,7 @@ impl RegexCompiledRule {
             rule: self,
             content,
             start,
-            cache,
+            // cache,
             check_excluded_keywords,
             exclusion_check,
             excluded_matches,
@@ -209,7 +210,7 @@ pub struct TruePositiveSearch<'a> {
     rule: &'a RegexCompiledRule,
     content: &'a str,
     start: usize,
-    cache: &'a mut Cache,
+    // cache: &'a mut Cache,
     check_excluded_keywords: bool,
     exclusion_check: &'a ExclusionCheck<'a>,
     excluded_matches: &'a mut AHashSet<String>,
@@ -222,7 +223,8 @@ impl<'a> Iterator for TruePositiveSearch<'a> {
         loop {
             let input = Input::new(self.content).range(self.start..);
 
-            if let Some(regex_match) = self.rule.regex.search_with(self.cache, &input) {
+            // TODO: implement improved regex cache pool strategy
+            if let Some(regex_match) = self.rule.regex.search(&input) {
                 // this is only checking extra validators (e.g. checksums)
                 let is_false_positive_match = is_false_positive_match(
                     &regex_match,
