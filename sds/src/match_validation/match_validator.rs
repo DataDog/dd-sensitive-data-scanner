@@ -9,6 +9,6 @@ pub trait MatchValidator: Send + Sync {
     async fn validate(
         &self,
         matches: &mut Vec<RuleMatch>,
-        scanner_rules: &Vec<Box<dyn CompiledRuleDyn>>,
+        scanner_rules: &[Box<dyn CompiledRuleDyn>],
     );
 }

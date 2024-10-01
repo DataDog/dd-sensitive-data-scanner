@@ -1,5 +1,4 @@
-#[cfg(feature = "match_validation")]
-use crate::match_validation::config::InternalMatchValidationType;
+use crate::match_validation::config::{InternalMatchValidationType, MatchValidationType};
 use crate::proximity_keywords::{
     contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
     CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
@@ -29,8 +28,10 @@ pub struct RegexCompiledRule {
     pub validator: Option<Arc<dyn Validator>>,
     // pub rule_cache_index: usize,
     pub metrics: RuleMetrics,
-    #[cfg(feature = "match_validation")]
-    pub match_validation_type: Option<InternalMatchValidationType>,
+
+    pub match_validation_type: Option<MatchValidationType>,
+
+    pub internal_match_validation_type: Option<InternalMatchValidationType>,
 }
 
 impl CompiledRule for RegexCompiledRule {
@@ -92,10 +93,16 @@ impl CompiledRule for RegexCompiledRule {
         self.metrics.false_positive_excluded_attributes.increment(1);
     }
 
-    #[cfg(feature = "match_validation")]
-    fn get_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
+    fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
         match &self.match_validation_type {
-            Some(match_validation_type) => Some(&match_validation_type),
+            Some(match_validation_type) => Some(match_validation_type),
+            None => None,
+        }
+    }
+
+    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
+        match &self.internal_match_validation_type {
+            Some(internal_match_validation_type) => Some(internal_match_validation_type),
             None => None,
         }
     }
