@@ -62,3 +62,7 @@ hyperscan = { version = "0.3.2", features = ["static"] }
 [[bench]]
 name = "bench"
 harness = false
+
+[[bench]]
+name = "multithreaded_scanning"
+harness = false
