@@ -818,16 +818,16 @@ mod test {
     #[cfg(feature = "match_validation")]
     use std::time::Duration;
 
+    #[cfg(feature = "match_validation")]
+    use httpmock::{Method::GET, MockServer};
+
     use crate::scanner::scope::Scope;
     use crate::scanner::{get_next_regex_start, CreateScannerError, Scanner};
     use crate::scoped_ruleset::ExclusionCheck;
     use crate::validation::RegexValidationError;
-
     use crate::{simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch};
     use crate::{Encoding, Utf8Encoding};
     use ahash::AHashSet;
-    #[cfg(feature = "match_validation")]
-    use httpmock::{Method::GET, MockServer};
     use regex_automata::Match;
     use std::collections::BTreeMap;
 
