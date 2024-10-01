@@ -79,7 +79,9 @@ impl HttpValidatorConfig {
             endpoint: endpoint.to_string(),
             method: HttpMethod::Get,
             request_header: vec![],
+            #[allow(clippy::single_range_in_vec_init)]
             valid_http_status_code: vec![200..300],
+            #[allow(clippy::single_range_in_vec_init)]
             invalid_http_status_code: vec![400..500],
             options: HttpValidatorOption {
                 timeout: Duration::from_secs(DEFAULT_HTTPS_TIMEOUT_SEC),
@@ -98,10 +100,7 @@ impl MatchValidationType {
     // Method used to check if the validator can be created based on this type
     pub fn can_create_match_validator(&self) -> bool {
         match self {
-            MatchValidationType::Aws(aws_type) => match aws_type {
-                AwsType::AwsSecret(_) => true,
-                _ => false,
-            },
+            MatchValidationType::Aws(aws_type) => matches!(aws_type, AwsType::AwsSecret(_)),
             MatchValidationType::CustomHttp(_) => true,
         }
     }

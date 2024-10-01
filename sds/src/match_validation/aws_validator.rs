@@ -33,7 +33,7 @@ impl MatchValidator for AwsValidator {
     async fn validate(
         &self,
         matches: &mut Vec<RuleMatch>,
-        scanner_rules: &Vec<Box<dyn CompiledRuleDyn>>,
+        scanner_rules: &[Box<dyn CompiledRuleDyn>],
     ) {
         // Let's regroup matches per type
         let mut aws_id_matches_idx = vec![];

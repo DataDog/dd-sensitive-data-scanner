@@ -686,7 +686,6 @@ dependencies = [
  "chrono",
  "crc32fast",
  "criterion",
- "dd-sds",
  "farmhash",
  "futures",
  "httpmock",

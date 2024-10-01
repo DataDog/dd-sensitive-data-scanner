@@ -41,7 +41,9 @@ impl HttpValidatorConfigBuilder {
                 key: "Authorization".to_string(),
                 value: "Bearer $MATCH".to_string(),
             }],
+            #[allow(clippy::single_range_in_vec_init)]
             valid_http_status_code: vec![200..300],
+            #[allow(clippy::single_range_in_vec_init)]
             invalid_http_status_code: vec![400..500],
             options: HttpValidatorOption {
                 timeout: Duration::from_secs(config::DEFAULT_HTTPS_TIMEOUT_SEC),
@@ -133,7 +135,7 @@ impl HttpValidatorHelper {
 
 #[async_trait]
 impl MatchValidator for HttpValidator {
-    async fn validate(&self, matches: &mut Vec<RuleMatch>, _: &Vec<Box<dyn CompiledRuleDyn>>) {
+    async fn validate(&self, matches: &mut Vec<RuleMatch>, _: &[Box<dyn CompiledRuleDyn>]) {
         // Let's reqwest the HTTP API endpoint to validate the matches
         let futures = matches.iter_mut().map(|m| {
             async move {

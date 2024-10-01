@@ -41,7 +41,7 @@ pub fn generate_aws_headers_and_body(
     let s = aws_sign_v4::AwsSign::new(
         "POST",
         endpoint,
-        &datetime,
+        datetime,
         &headers,
         "us-east-1", // default region
         aws_id,
