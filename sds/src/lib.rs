@@ -28,9 +28,9 @@ pub use event::{Event, EventVisitor, VisitStringResult};
 pub use match_action::{MatchAction, PartialRedactDirection};
 
 pub use match_validation::{
-    config::AwsConfig, config::AwsType, config::MatchValidationType,
-    http_validator::HttpValidatorConfigBuilder, http_validator::HttpValidatorHelper,
-    match_status::MatchStatus,
+    config::AwsConfig, config::AwsType, config::InternalMatchValidationType,
+    config::MatchValidationType, http_validator::HttpValidatorConfigBuilder,
+    http_validator::HttpValidatorHelper, match_status::MatchStatus,
 };
 pub use observability::labels::Labels;
 pub use path::{Path, PathSegment};
