@@ -791,11 +791,11 @@ mod test {
     use crate::scanner::regex_rule::config::{
         ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator, SecondaryValidator::*,
     };
-    use std::{fmt, time::Duration};
     use crate::scanner::scope::Scope;
     use crate::scanner::{get_next_regex_start, CreateScannerError, Scanner};
     use crate::scoped_ruleset::ExclusionCheck;
     use crate::validation::RegexValidationError;
+    use std::{fmt, time::Duration};
 
     use crate::{simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch};
     use crate::{Encoding, Utf8Encoding};
@@ -2493,7 +2493,6 @@ mod test {
             _ => assert!(false),
         }
     }
-
     #[tokio::test]
     async fn test_mock_multiple_match_validators() {
         let server = MockServer::start();
@@ -2554,7 +2553,6 @@ mod test {
         assert_eq!(matches[1].match_status, MatchStatus::Valid);
         assert_eq!(matches[2].match_status, MatchStatus::Valid);
     }
-
     #[tokio::test]
     async fn test_mock_aws_validator() {
         let server = MockServer::start();
