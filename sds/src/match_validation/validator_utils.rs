@@ -11,6 +11,8 @@ pub fn new_match_validator_from_type(config: &MatchValidationType) -> Box<dyn Ma
             AwsType::AwsSecret(_) => Box::new(AwsValidator::new()),
             _ => panic!("This aws type shall not be used to create a validator"),
         },
-        MatchValidationType::CustomHttp(_) => Box::new(HttpValidator::new()),
+        MatchValidationType::CustomHttp(http_config) => {
+            Box::new(HttpValidator::new(http_config.clone()))
+        }
     }
 }
