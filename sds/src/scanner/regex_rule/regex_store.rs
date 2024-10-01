@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use ahash::AHashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::Weak;
@@ -7,6 +8,20 @@ use slotmap::{new_key_type, SlotMap};
 
 pub type SharedRegex = Arc<MetaRegex>;
 type WeakSharedRegex = Weak<MetaRegex>;
+
+
+pub struct SharedRegex2 {
+    pub(super) regex: Arc<MetaRegex>,
+    pub(super) cache_key: RegexCacheKey
+}
+
+impl Deref for SharedRegex2 {
+    type Target = MetaRegex;
+
+    fn deref(&self) -> &Self::Target {
+        &self.regex.deref()
+    }
+}
 
 // A GC of the regex store happens every N insertions
 // This is needed to occasionally clean out Weak references that have been dropped.
@@ -46,10 +61,17 @@ impl RegexStore {
     }
 
     /// Check if a regex for this pattern already exists, and returns a copy if it does
-    pub fn get(&self, pattern: &str) -> Option<SharedRegex> {
+    pub fn get(&self, pattern: &str) -> Option<SharedRegex2> {
         self.pattern_index.get(pattern)
-            .and_then(|k|self.key_map.get(*k))
-            .and_then(Weak::upgrade)
+            .and_then(|cache_key|{
+                self.key_map.get(*cache_key)
+                    .and_then(Weak::upgrade)
+                    .map(|regex| SharedRegex2 {
+                        regex,
+                        cache_key: *cache_key
+                    })
+            })
+            
     }
 
     /// Inserts a new rule into the cache. The "memoized" rule is returned and should be
@@ -59,7 +81,7 @@ impl RegexStore {
         &mut self,
         pattern: &str,
         regex: MetaRegex,
-    ) -> SharedRegex {
+    ) -> SharedRegex2 {
         self.gc_counter += 1;
         if self.gc_counter >= GC_FREQUENCY {
             self.gc();
@@ -75,7 +97,11 @@ impl RegexStore {
                     debug_assert!(weak_ref.strong_count() == 0)
                 }
             }
-            shared_regex
+            
+            SharedRegex2 {
+                regex: shared_regex,
+                cache_key
+            }
         }
     }
 }

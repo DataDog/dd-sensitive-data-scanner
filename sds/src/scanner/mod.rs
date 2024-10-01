@@ -25,7 +25,7 @@ use crate::scanner::scope::Scope;
 use crate::stats::GLOBAL_STATS;
 use ahash::{AHashMap, AHashSet};
 use regex_automata::Match;
-use crate::scanner::regex_rule::get_regex_cache;
+use crate::scanner::regex_rule::{take_regex_caches, RegexCaches};
 
 pub mod cache_pool;
 pub mod config;
@@ -67,7 +67,7 @@ pub trait CompiledRuleDyn: Send + Sync {
         &self,
         content: &str,
         path: &Path,
-        // caches: &mut CachePoolGuard<'_>,
+        regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -107,7 +107,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         &self,
         content: &str,
         path: &Path,
-        // caches: &mut CachePoolGuard<'_>,
+        regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -121,7 +121,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         self.get_string_matches(
             content,
             path,
-            // caches,
+            regex_caches,
             group_data,
             exclusion_check,
             excluded_matches,
@@ -161,6 +161,7 @@ pub trait CompiledRule: Send + Sync {
         &self,
         content: &str,
         path: &Path,
+        regex_caches: &mut RegexCaches,
         // caches: &mut CachePoolGuard<'_>,
         group_data: &mut Self::GroupData,
         exclusion_check: &ExclusionCheck<'_>,
@@ -254,7 +255,7 @@ impl Scanner {
         //     Box<dyn Fn() -> Vec<regex_automata::meta::Cache> + Send + Sync>,
         // > = self.cache_pool.get();
 
-        let regex_cache = get_regex_cache();
+        let mut regex_caches = take_regex_caches();
 
         // All matches, after some (but not all) false-positives have been removed.
         // This is a vec of vecs, where each inner vec is a set of matches for a single path.
@@ -268,7 +269,7 @@ impl Scanner {
             event,
             ScannerContentVisitor {
                 scanner: self,
-                // caches,
+                regex_caches: &mut regex_caches,
                 rule_matches: &mut rule_matches_list,
                 blocked_rules: &blocked_rules_idx,
                 excluded_matches: &mut excluded_matches,
@@ -663,7 +664,7 @@ impl ScannerBuilder<'_> {
 
 struct ScannerContentVisitor<'a, E: Encoding> {
     scanner: &'a Scanner,
-    // caches: CachePoolGuard<'a>,
+    regex_caches: &'a mut RegexCaches,
     rule_matches: &'a mut Vec<(crate::Path<'static>, Vec<InternalRuleMatch<E>>)>,
     // Rules that shall be skipped for this scan
     // This list shall be small (<10), so a linear search is acceptable
@@ -674,7 +675,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
 impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
     fn visit_content<'b>(
         &'b mut self,
-        path: &crate::Path<'a>,
+        path: &Path<'a>,
         content: &str,
         mut rule_visitor: crate::scoped_ruleset::RuleIndexVisitor,
         exclusion_check: ExclusionCheck<'b>,
@@ -705,7 +706,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 rule.get_string_matches(
                     content,
                     path,
-                    // &mut self.caches,
+                    &mut self.regex_caches,
                     &mut group_data,
                     &exclusion_check,
                     self.excluded_matches,
@@ -831,6 +832,7 @@ mod test {
             &self,
             _content: &str,
             _path: &Path,
+            _regex_caches: &mut RegexCaches,
             // _caches: &mut CachePoolGuard<'_>,
             _group_data: &mut Self::GroupData,
             _exclusion_check: &ExclusionCheck<'_>,

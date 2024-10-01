@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DefaultOnNull;
 use std::sync::Arc;
-use crate::scanner::regex_rule::regex_store::{SharedRegex, REGEX_STORE};
+use crate::scanner::regex_rule::regex_store::{SharedRegex, SharedRegex2, REGEX_STORE};
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -136,7 +136,7 @@ impl RuleConfig for RegexRuleConfig {
     }
 }
 
-fn get_memoized_regex(pattern: &str) -> Result<SharedRegex, CreateScannerError> {
+fn get_memoized_regex(pattern: &str) -> Result<SharedRegex2, CreateScannerError> {
     {
         let regex_store = REGEX_STORE.lock().unwrap();
         if let Some(regex) = regex_store.get(pattern) {

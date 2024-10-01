@@ -13,14 +13,14 @@ use crate::{
 use ahash::AHashSet;
 use regex_automata::Input;
 use std::sync::Arc;
-use slotmap::new_key_type;
-use crate::scanner::regex_rule::regex_store::SharedRegex;
-
+use regex_automata::meta::Cache;
+use crate::scanner::regex_rule::regex_store::{SharedRegex2};
+use crate::scanner::regex_rule::RegexCaches;
 
 /// This is the internal representation of a rule after it has been validated / compiled.
 pub struct RegexCompiledRule {
     pub rule_index: usize,
-    pub regex: SharedRegex,
+    pub regex: SharedRegex2,
     pub match_action: MatchAction,
     pub scope: Scope,
     pub included_keywords: Option<CompiledIncludedProximityKeywords>,
@@ -49,7 +49,7 @@ impl CompiledRule for RegexCompiledRule {
         &self,
         content: &str,
         path: &Path,
-        // caches: &mut CachePoolGuard<'_>,
+        regex_caches: &mut RegexCaches,
         _group_data: &mut (),
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -61,6 +61,7 @@ impl CompiledRule for RegexCompiledRule {
                 self.get_string_matches_with_included_keywords(
                     content,
                     path,
+                    regex_caches,
                     // caches,
                     exclusion_check,
                     excluded_matches,
@@ -73,6 +74,7 @@ impl CompiledRule for RegexCompiledRule {
                 let true_positive_search = self.true_positive_matches(
                     content,
                     0,
+                    regex_caches.get(&self.regex),
                     // &mut caches[self.rule_cache_index],
                     true,
                     exclusion_check,
@@ -114,7 +116,7 @@ impl RegexCompiledRule {
         &self,
         content: &str,
         path: &Path,
-        // caches: &mut CachePoolGuard<'_>,
+        regex_caches: &mut RegexCaches,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -130,6 +132,7 @@ impl RegexCompiledRule {
                 let true_positive_search = self.true_positive_matches(
                     content,
                     0,
+                    regex_caches.get(&self.regex),
                     // &mut caches[self.rule_cache_index],
                     false,
                     exclusion_check,
@@ -150,6 +153,7 @@ impl RegexCompiledRule {
             let true_positive_search = self.true_positive_matches(
                 content,
                 included_keyword_match_start,
+                regex_caches.get(&self.regex),
                 // cache,
                 false,
                 exclusion_check,
@@ -196,7 +200,7 @@ impl RegexCompiledRule {
         &'a self,
         content: &'a str,
         start: usize,
-        // cache: &'a mut Cache,
+        cache: &'a mut Cache,
         check_excluded_keywords: bool,
         exclusion_check: &'a ExclusionCheck<'a>,
         excluded_matches: &'a mut AHashSet<String>,
@@ -205,7 +209,7 @@ impl RegexCompiledRule {
             rule: self,
             content,
             start,
-            // cache,
+            cache,
             check_excluded_keywords,
             exclusion_check,
             excluded_matches,
@@ -217,7 +221,7 @@ pub struct TruePositiveSearch<'a> {
     rule: &'a RegexCompiledRule,
     content: &'a str,
     start: usize,
-    // cache: &'a mut Cache,
+    cache: &'a mut Cache,
     check_excluded_keywords: bool,
     exclusion_check: &'a ExclusionCheck<'a>,
     excluded_matches: &'a mut AHashSet<String>,
@@ -229,9 +233,8 @@ impl<'a> Iterator for TruePositiveSearch<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let input = Input::new(self.content).range(self.start..);
-
-            // TODO: implement improved regex cache pool strategy
-            if let Some(regex_match) = self.rule.regex.search(&input) {
+            
+            if let Some(regex_match) = self.rule.regex.search_with(self.cache, &input) {
                 // this is only checking extra validators (e.g. checksums)
                 let is_false_positive_match = is_false_positive_match(
                     &regex_match,
