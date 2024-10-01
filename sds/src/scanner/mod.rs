@@ -786,16 +786,12 @@ mod test {
     use crate::match_validation::config::{AwsConfig, AwsType, MatchValidationType};
 
     use crate::match_validation::http_validator::HttpValidatorConfigBuilder;
-
     use crate::match_validation::validator_utils::generate_aws_headers_and_body;
-
     use crate::observability::labels::Labels;
     use crate::scanner::regex_rule::config::{
         ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator, SecondaryValidator::*,
     };
-
     use std::{fmt, time::Duration};
-
     use crate::scanner::scope::Scope;
     use crate::scanner::{get_next_regex_start, CreateScannerError, Scanner};
     use crate::scoped_ruleset::ExclusionCheck;
@@ -804,8 +800,8 @@ mod test {
     use crate::{simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch};
     use crate::{Encoding, Utf8Encoding};
     use ahash::AHashSet;
-
     use httpmock::{Method::GET, Method::POST, MockServer};
+
     use regex_automata::Match;
     use std::collections::BTreeMap;
 

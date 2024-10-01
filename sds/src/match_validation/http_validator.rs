@@ -5,8 +5,13 @@ use super::{
 use crate::{match_validation::config::HttpMethod, CompiledRuleDyn, MatchStatus, RuleMatch};
 use async_trait::async_trait;
 use futures::future::join_all;
+use lazy_static::lazy_static;
 use reqwest::Client;
 use std::{fmt, ops::Range, time::Duration};
+
+lazy_static! {
+    static ref HTTP_CLIENT: Client = Client::new();
+}
 
 pub struct HttpValidator {
     config: HttpValidatorConfig,
@@ -132,26 +137,24 @@ impl HttpValidatorHelper {
 impl MatchValidator for HttpValidator {
     async fn validate(&self, matches: &mut Vec<RuleMatch>, _: &[Box<dyn CompiledRuleDyn>]) {
         // Let's reqwest the HTTP API endpoint to validate the matches
-        let client = Client::new();
         let futures = matches.iter_mut().map(|m| {
-            let client = client.clone();
             async move {
                 let mut request_builder: reqwest::RequestBuilder;
                 match self.config.method {
                     HttpMethod::Get => {
-                        request_builder = client.get(&self.config.endpoint);
+                        request_builder = HTTP_CLIENT.get(&self.config.endpoint);
                     }
                     HttpMethod::Post => {
-                        request_builder = client.post(&self.config.endpoint);
+                        request_builder = HTTP_CLIENT.post(&self.config.endpoint);
                     }
                     HttpMethod::Put => {
-                        request_builder = client.put(&self.config.endpoint);
+                        request_builder = HTTP_CLIENT.put(&self.config.endpoint);
                     }
                     HttpMethod::Delete => {
-                        request_builder = client.delete(&self.config.endpoint);
+                        request_builder = HTTP_CLIENT.delete(&self.config.endpoint);
                     }
                     HttpMethod::Patch => {
-                        request_builder = client.patch(&self.config.endpoint);
+                        request_builder = HTTP_CLIENT.patch(&self.config.endpoint);
                     }
                 }
                 // Set timeout
