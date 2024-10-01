@@ -1,15 +1,11 @@
 use criterion::Criterion;
-use dd_sds::{ContentVisitor, Event, EventVisitor, ExclusionCheck, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig, RuleIndexVisitor, Scope, ScopedRuleSet, Utf8Encoding};
-use dd_sds::{LuhnChecksum, Validator};
-use dd_sds::{Scanner, SimpleEvent};
-use std::collections::BTreeMap;
+use dd_sds::{Event, EventVisitor, Path, PathSegment, RegexRuleConfig, Utf8Encoding};
+use dd_sds::Scanner;
 use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
 use ahash::AHashMap;
-use futures::future::join_all;
 use threadpool::ThreadPool;
-use tokio::task::JoinHandle;
 
 pub fn multithread_scanning(c: &mut Criterion) {
     let rules: Vec<_> = sample_regexes().into_iter().map(|regex|{
