@@ -147,7 +147,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
     });
 
     c.bench_function(
-        "scan single strings single-threaded, with included keywords)",
+        "scan single strings (single-threaded, with included keywords)",
         |b| {
             b.iter(|| {
                 for _ in 0..num_jobs {
