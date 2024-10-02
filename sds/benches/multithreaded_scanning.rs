@@ -37,7 +37,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
     let thread_pool = ThreadPool::new(num_threads);
 
     c.bench_function(
-        "scan single strings", |b| {
+        "scan single strings (multi-threaded)", |b| {
             b.iter(|| {
                 for _ in 0..num_jobs {
                     let sample_inputs = sample_inputs.clone();
@@ -58,7 +58,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
     );
 
     c.bench_function(
-        "scan large event", |b| {
+        "scan large event (multi-threaded)", |b| {
             b.iter(|| {
                 for _ in 0..num_jobs {
                     let sample_event = sample_event.clone();
@@ -75,7 +75,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
     );
 
     c.bench_function(
-        "scan single strings (with included keywords)", |b| {
+        "scan single strings (multi-threaded, with included keywords)", |b| {
             b.iter(|| {
                 for _ in 0..num_jobs {
                     let sample_inputs = sample_inputs.clone();
@@ -96,7 +96,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
     );
 
     c.bench_function(
-        "scan large event (with included keywords)", |b| {
+        "scan large event (multi-threaded, with included keywords)", |b| {
             b.iter(|| {
                 for _ in 0..num_jobs {
                     let sample_event = sample_event.clone();
@@ -108,6 +108,74 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     });
                 }
                 thread_pool.join()
+            })
+        },
+    );
+
+    c.bench_function(
+        "scan single strings (single-threaded)", |b| {
+            b.iter(|| {
+                for _ in 0..num_jobs {
+                    // The clones aren't required here, but are kept to be more comparable to the multi-threaded versions
+                    let sample_inputs = sample_inputs.clone();
+                    let scanner = Arc::clone(&scanner);
+                    let mut sample_inputs = sample_inputs.clone();
+                    let mut matches = 0;
+                    for input in &mut sample_inputs {
+                        let results = scanner.scan(input, vec![]);
+                        matches += results.len();
+                    }
+                    assert_eq!(matches, 65);
+                }
+            })
+        },
+    );
+
+    c.bench_function(
+        "scan large event (single-threaded)", |b| {
+            b.iter(|| {
+                for _ in 0..num_jobs {
+                    // The clones aren't required here, but are kept to be more comparable to the multi-threaded versions
+                    let sample_event = sample_event.clone();
+                    let scanner = Arc::clone(&scanner);
+                    let mut sample_event = sample_event.clone();
+                    let results = scanner.scan(&mut sample_event, vec![]);
+                    assert_eq!(results.len(), 65);
+                }
+            })
+        },
+    );
+
+    c.bench_function(
+        "scan single strings single-threaded, with included keywords)", |b| {
+            b.iter(|| {
+                for _ in 0..num_jobs {
+                    // The clones aren't required here, but are kept to be more comparable to the multi-threaded versions
+                    let sample_inputs = sample_inputs.clone();
+                    let scanner = Arc::clone(&scanner_with_keywords);
+                    let mut sample_inputs = sample_inputs.clone();
+                    let mut matches = 0;
+                    for input in &mut sample_inputs {
+                        let results = scanner.scan(input, vec![]);
+                        matches += results.len();
+                    }
+                    assert_eq!(matches, 35);
+                }
+            })
+        },
+    );
+
+    c.bench_function(
+        "scan large event (single-threaded, with included keywords)", |b| {
+            b.iter(|| {
+                for _ in 0..num_jobs {
+                    // The clones aren't required here, but are kept to be more comparable to the multi-threaded versions
+                    let sample_event = sample_event.clone();
+                    let scanner = Arc::clone(&scanner_with_keywords);
+                    let mut sample_event = sample_event.clone();
+                    let results = scanner.scan(&mut sample_event, vec![]);
+                    assert_eq!(results.len(), 35);
+                }
             })
         },
     );
