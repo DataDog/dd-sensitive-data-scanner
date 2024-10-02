@@ -600,11 +600,7 @@ impl ScannerBuilder<'_> {
             .iter()
             .enumerate()
             .map(|(rule_index, config)| {
-                config.convert_to_compiled_rule(
-                    rule_index,
-                    self.labels.clone(),
-                    // &mut cache_pool_builder,
-                )
+                config.convert_to_compiled_rule(rule_index, self.labels.clone())
             })
             .collect::<Result<Vec<Box<dyn CompiledRuleDyn>>, CreateScannerError>>()?;
 
@@ -752,7 +748,6 @@ fn is_false_positive_match(
 
 #[cfg(test)]
 mod test {
-    // use super::cache_pool::{CacheP};
     use super::CompiledRuleDyn;
     use super::*;
     use super::{MatchEmitter, ScannerBuilder, StringMatch};
@@ -804,7 +799,6 @@ mod test {
             _content: &str,
             _path: &Path,
             _regex_caches: &mut RegexCaches,
-            // _caches: &mut CachePoolGuard<'_>,
             _group_data: &mut Self::GroupData,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
@@ -828,7 +822,6 @@ mod test {
             &self,
             _content: usize,
             _: Labels,
-            // _: &mut CachePoolBuilder,
         ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
             Ok(Box::new(DumbCompiledRule {
                 match_action: MatchAction::Redact {
