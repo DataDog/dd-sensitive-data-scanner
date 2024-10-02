@@ -35,7 +35,7 @@ pub use match_validation::{
 pub use observability::labels::Labels;
 pub use path::{Path, PathSegment};
 pub use rule_match::{ReplacementType, RuleMatch};
-pub use scanner::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
+pub use scanner::cache_pool::{SharedPool, SharedPoolGuard};
 
 pub use scanner::error::MatchValidationError;
 pub use scanner::{

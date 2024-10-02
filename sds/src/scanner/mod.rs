@@ -13,11 +13,11 @@ use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Path};
-use regex_automata::meta::{Cache, Regex as MetaRegex};
+use regex_automata::meta::{Regex as MetaRegex};
 use std::any::{Any, TypeId};
 use std::sync::Arc;
 
-use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
+// use self::cache_pool::{};
 use self::metrics::ScannerMetrics;
 use crate::scanner::config::RuleConfig;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
@@ -25,7 +25,7 @@ use crate::scanner::scope::Scope;
 use crate::stats::GLOBAL_STATS;
 use ahash::{AHashMap, AHashSet};
 use regex_automata::Match;
-use crate::scanner::regex_rule::{take_regex_caches, RegexCaches};
+use crate::scanner::regex_rule::{access_regex_caches, RegexCaches, SharedRegex2};
 
 pub mod cache_pool;
 pub mod config;
@@ -195,10 +195,10 @@ where
         &self,
         rule_index: usize,
         labels: Labels,
-        cache_pool_builder: &mut CachePoolBuilder,
+        // cache_pool_builder: &mut CachePoolBuilder,
     ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
         self.as_ref()
-            .convert_to_compiled_rule(rule_index, labels, cache_pool_builder)
+            .convert_to_compiled_rule(rule_index, labels)
     }
 
     fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
@@ -229,7 +229,7 @@ impl Default for ScannerFeatures {
 pub struct Scanner {
     rules: Vec<Box<dyn CompiledRuleDyn>>,
     scoped_ruleset: ScopedRuleSet,
-    cache_pool: CachePool,
+    // cache_pool: SharedPool<Box<SharedRegex2>>,
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
 
@@ -255,7 +255,7 @@ impl Scanner {
         //     Box<dyn Fn() -> Vec<regex_automata::meta::Cache> + Send + Sync>,
         // > = self.cache_pool.get();
 
-        let mut regex_caches = take_regex_caches();
+        // let mut regex_caches = take_regex_caches();
 
         // All matches, after some (but not all) false-positives have been removed.
         // This is a vec of vecs, where each inner vec is a set of matches for a single path.
@@ -265,16 +265,19 @@ impl Scanner {
 
         // Measure detection time
         let start = std::time::Instant::now();
-        self.scoped_ruleset.visit_string_rule_combinations(
-            event,
-            ScannerContentVisitor {
-                scanner: self,
-                regex_caches: &mut regex_caches,
-                rule_matches: &mut rule_matches_list,
-                blocked_rules: &blocked_rules_idx,
-                excluded_matches: &mut excluded_matches,
-            },
-        );
+        access_regex_caches(|regex_caches| {
+            self.scoped_ruleset.visit_string_rule_combinations(
+                event,
+                ScannerContentVisitor {
+                    scanner: self,
+                    regex_caches,
+                    rule_matches: &mut rule_matches_list,
+                    blocked_rules: &blocked_rules_idx,
+                    excluded_matches: &mut excluded_matches,
+                },
+            );
+        });
+
         let mut output_rule_matches = vec![];
 
         for (path, rule_matches) in &mut rule_matches_list {
@@ -590,7 +593,7 @@ impl ScannerBuilder<'_> {
 
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
         let mut scanner_features = self.scanner_features.clone();
-        let mut cache_pool_builder = CachePoolBuilder::new();
+        // let mut cache_pool_builder = CachePoolBuilder::new();
         let mut match_validators_per_type = AHashMap::new();
 
         for rule in self.rules.iter() {
@@ -617,7 +620,7 @@ impl ScannerBuilder<'_> {
                 config.convert_to_compiled_rule(
                     rule_index,
                     self.labels.clone(),
-                    &mut cache_pool_builder,
+                    // &mut cache_pool_builder,
                 )
             })
             .collect::<Result<Vec<Box<dyn CompiledRuleDyn>>, CreateScannerError>>()?;
@@ -630,22 +633,22 @@ impl ScannerBuilder<'_> {
         )
         .with_implicit_index_wildcards(self.scanner_features.add_implicit_index_wildcards);
 
-        let cache_pool = cache_pool_builder.build();
+        // let cache_pool = cache_pool_builder.build();
 
         {
             let stats = &*GLOBAL_STATS;
 
-            let caches = cache_pool.get();
-            let total_cache_size: usize = caches
-                .iter()
-                .map(|x| x.memory_usage() + std::mem::size_of::<Cache>())
-                .sum();
+            // let caches = cache_pool.get();
+            // let total_cache_size: usize = caches
+            //     .iter()
+            //     .map(|x| x.memory_usage() + std::mem::size_of::<Cache>())
+            //     .sum();
 
             stats.scanner_creations.increment(1);
             stats.increment_total_scanners();
-            stats
-                .regex_cache_per_scanner
-                .record(total_cache_size as f64);
+            // stats
+            //     .regex_cache_per_scanner
+            //     .record(total_cache_size as f64);
             stats
                 .number_of_rules_per_scanner
                 .record(self.rules.len() as f64);
@@ -654,7 +657,7 @@ impl ScannerBuilder<'_> {
         Ok(Scanner {
             rules: compiled_rules,
             scoped_ruleset,
-            cache_pool,
+            // cache_pool,
             scanner_features,
             metrics: ScannerMetrics::new(&self.labels),
             match_validators_per_type,
@@ -781,7 +784,7 @@ fn is_false_positive_match(
 
 #[cfg(test)]
 mod test {
-    use super::cache_pool::{CachePoolBuilder, CachePoolGuard};
+    // use super::cache_pool::{CacheP};
     use super::CompiledRuleDyn;
     use super::*;
     use super::{MatchEmitter, ScannerBuilder, StringMatch};
@@ -857,7 +860,7 @@ mod test {
             &self,
             _content: usize,
             _: Labels,
-            _: &mut CachePoolBuilder,
+            // _: &mut CachePoolBuilder,
         ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
             Ok(Box::new(DumbCompiledRule {
                 match_action: MatchAction::Redact {
