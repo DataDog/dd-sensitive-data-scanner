@@ -5,11 +5,13 @@ use std::sync::Weak;
 use lazy_static::lazy_static;
 use regex_automata::meta::Regex as MetaRegex;
 use slotmap::{new_key_type, SlotMap};
+use crate::RegexValidationError;
+use crate::validation::validate_and_create_regex;
 
 pub type SharedRegex = Arc<MetaRegex>;
 type WeakSharedRegex = Weak<MetaRegex>;
 
-
+#[derive(Debug)]
 pub struct SharedRegex2 {
     pub(super) regex: Arc<MetaRegex>,
     pub(super) cache_key: RegexCacheKey
@@ -21,6 +23,21 @@ impl Deref for SharedRegex2 {
     fn deref(&self) -> &Self::Target {
         &self.regex.deref()
     }
+}
+
+pub fn get_memoized_regex<T>(pattern: &str, regex_factory: impl FnOnce(&str) -> Result<regex_automata::meta::Regex, T>) -> Result<SharedRegex2, T> {
+    {
+        let regex_store = REGEX_STORE.lock().unwrap();
+        if let Some(exiting_regex) = regex_store.get(pattern) {
+            return Ok(exiting_regex);
+        }
+    }
+
+    // Create the new regex after the RegexStore lock is released, since this can be slow
+    let regex = regex_factory(pattern)?;
+
+    let mut regex_store = REGEX_STORE.lock().unwrap();
+    Ok(regex_store.insert(pattern, regex))
 }
 
 // A GC of the regex store happens every N insertions
@@ -71,7 +88,7 @@ impl RegexStore {
                         cache_key: *cache_key
                     })
             })
-            
+
     }
 
     /// Inserts a new rule into the cache. The "memoized" rule is returned and should be
@@ -97,7 +114,7 @@ impl RegexStore {
                     debug_assert!(weak_ref.strong_count() == 0)
                 }
             }
-            
+
             SharedRegex2 {
                 regex: shared_regex,
                 cache_key

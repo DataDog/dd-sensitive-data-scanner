@@ -147,14 +147,23 @@ impl RegexCompiledRule {
 
         let mut included_keyword_matches = included_keywords.keyword_matches(content);
 
+        
+        // loop {
+        //     let included_keyword_search = included_keyword_matches.next(regex_caches);
+        //     
+        //     if let Some(included_keyword_match_start)
+        //     
+        //     break;
+        // }
+        
+        
         'included_keyword_search: while let Some(included_keyword_match_start) =
-            included_keyword_matches.next()
+            included_keyword_matches.next(regex_caches)
         {
             let true_positive_search = self.true_positive_matches(
                 content,
                 included_keyword_match_start,
                 regex_caches.get(&self.regex),
-                // cache,
                 false,
                 exclusion_check,
                 excluded_matches,
@@ -233,7 +242,7 @@ impl<'a> Iterator for TruePositiveSearch<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let input = Input::new(self.content).range(self.start..);
-            
+
             if let Some(regex_match) = self.rule.regex.search_with(self.cache, &input) {
                 // this is only checking extra validators (e.g. checksums)
                 let is_false_positive_match = is_false_positive_match(
