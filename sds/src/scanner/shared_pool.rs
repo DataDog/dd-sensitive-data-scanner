@@ -11,7 +11,7 @@ pub struct SharedPool<T> {
 impl<T: Send> SharedPool<T> {
     pub fn new(factory: impl Fn() -> T + Send + Sync + 'static) -> Self {
         Self {
-            pool: Pool::new(Box::new(move || factory())),
+            pool: Pool::new(Box::new(factory)),
         }
     }
 

@@ -31,8 +31,16 @@ pub fn get_memoized_regex<T>(
     pattern: &str,
     regex_factory: impl FnOnce(&str) -> Result<regex_automata::meta::Regex, T>,
 ) -> Result<SharedRegex, T> {
+    get_memoized_regex_with_custom_store(pattern, regex_factory, &REGEX_STORE)
+}
+
+fn get_memoized_regex_with_custom_store<T>(
+    pattern: &str,
+    regex_factory: impl FnOnce(&str) -> Result<regex_automata::meta::Regex, T>,
+    store: &Mutex<RegexStore>,
+) -> Result<SharedRegex, T> {
     {
-        let regex_store = REGEX_STORE.lock().unwrap();
+        let regex_store = store.lock().unwrap();
         if let Some(exiting_regex) = regex_store.get(pattern) {
             return Ok(exiting_regex);
         }
@@ -41,7 +49,7 @@ pub fn get_memoized_regex<T>(
     // Create the new regex after the RegexStore lock is released, since this can be slow
     let regex = regex_factory(pattern)?;
 
-    let mut regex_store = REGEX_STORE.lock().unwrap();
+    let mut regex_store = store.lock().unwrap();
     Ok(regex_store.insert(pattern, regex))
 }
 
@@ -99,6 +107,12 @@ impl RegexStore {
         })
     }
 
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        debug_assert_eq!(self.pattern_index.len(), self.key_map.len());
+        self.key_map.len()
+    }
+
     /// Inserts a new rule into the cache. The "memoized" rule is returned and should be
     /// used instead of the one passed in. This ensures that if there were duplicates of
     /// a rule being created at the same time, only one is kept.
@@ -132,5 +146,53 @@ impl RegexStore {
                 cache_key,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::scanner::regex_rule::regex_store::{
+        get_memoized_regex_with_custom_store, RegexStore, GC_FREQUENCY,
+    };
+    use regex_automata::meta::Regex;
+    use std::sync::Mutex;
+
+    #[test]
+    fn dropped_regexes_should_be_removed_from_global_store() {
+        let store = Mutex::new(RegexStore::new());
+
+        let regex =
+            get_memoized_regex_with_custom_store("test", |x| Regex::new(x), &store).unwrap();
+
+        assert_eq!(store.lock().unwrap().len(), 1);
+
+        drop(regex);
+
+        // force an early GC
+        store.lock().unwrap().gc();
+
+        assert_eq!(store.lock().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_automatic_gc() {
+        let store = Mutex::new(RegexStore::new());
+
+        let regex =
+            get_memoized_regex_with_custom_store("test", |x| Regex::new(x), &store).unwrap();
+        drop(regex);
+
+        // insert enough new patterns to trigger a GC
+        for i in 0..(GC_FREQUENCY - 1) {
+            let regex = get_memoized_regex_with_custom_store(
+                &format!("test-{}", i),
+                |x| Regex::new(x),
+                &store,
+            )
+            .unwrap();
+            drop(regex)
+        }
+        // The insertion that triggered the GC is itself not cleaned up yet, but everything else is
+        assert_eq!(store.lock().unwrap().len(), 1);
     }
 }
