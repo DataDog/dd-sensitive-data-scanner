@@ -3,18 +3,28 @@ use ahash::AHashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::Weak;
 use lazy_static::lazy_static;
-use regex_automata::meta::Regex as MetaRegex;
+use regex_automata::meta::{Cache, Regex as MetaRegex};
 use slotmap::{new_key_type, SlotMap};
 use crate::RegexValidationError;
+use crate::scanner::regex_rule::access_regex_caches;
+use crate::stats::GLOBAL_STATS;
 use crate::validation::validate_and_create_regex;
 
 pub type SharedRegex = Arc<MetaRegex>;
-type WeakSharedRegex = Weak<MetaRegex>;
+// type WeakSharedRegex = Weak<MetaRegex>;
+
+struct WeakSharedRegex {
+    regex: Weak<MetaRegex>,
+    // number of bytes used for the cache. Just used for metrics.
+    cache_size: usize
+}
 
 #[derive(Debug)]
 pub struct SharedRegex2 {
     pub(super) regex: Arc<MetaRegex>,
-    pub(super) cache_key: RegexCacheKey
+    pub(super) cache_key: RegexCacheKey,
+    // // number of bytes used for the cache. Just used for metrics.
+    // cache_size: usize
 }
 
 impl Deref for SharedRegex2 {
@@ -45,13 +55,14 @@ pub fn get_memoized_regex<T>(pattern: &str, regex_factory: impl FnOnce(&str) -> 
 const GC_FREQUENCY: u64 = 1_000;
 
 lazy_static! {
-    pub static ref REGEX_STORE: Arc<Mutex<RegexStore>> = Arc::new(Mutex::new(RegexStore::new()));
+    static ref REGEX_STORE: Arc<Mutex<RegexStore>> = Arc::new(Mutex::new(RegexStore::new()));
 }
 new_key_type! { pub struct RegexCacheKey; }
 
-pub struct RegexStore {
+struct RegexStore {
     pattern_index: AHashMap<String, RegexCacheKey>,
     key_map: SlotMap<RegexCacheKey, WeakSharedRegex>,
+    // used to decide when to GC. Counts up to `GC_FREQUENCY` and is reset to 0 when a GC happens
     gc_counter: u64
 }
 
@@ -68,13 +79,16 @@ impl RegexStore {
     fn gc(&mut self) {
         self.gc_counter = 0;
         self.pattern_index.retain(|pattern, cache_key|{
-           if self.key_map.get(*cache_key).unwrap().strong_count() == 0 {
-               self.key_map.remove(*cache_key);
+           if self.key_map.get(*cache_key).unwrap().regex.strong_count() == 0 {
+               if let Some(old_regex) = self.key_map.remove(*cache_key) {
+                   GLOBAL_STATS.add_total_regex_cache(-(old_regex.cache_size as i64));
+               }
                false
            } else {
                true
            }
         });
+        GLOBAL_STATS.set_total_regexes(self.key_map.len());
     }
 
     /// Check if a regex for this pattern already exists, and returns a copy if it does
@@ -82,7 +96,7 @@ impl RegexStore {
         self.pattern_index.get(pattern)
             .and_then(|cache_key|{
                 self.key_map.get(*cache_key)
-                    .and_then(Weak::upgrade)
+                    .and_then(|x| x.regex.upgrade())
                     .map(|regex| SharedRegex2 {
                         regex,
                         cache_key: *cache_key
@@ -107,17 +121,26 @@ impl RegexStore {
             existing_regex
         } else {
             let shared_regex = Arc::new(regex);
-            let cache_key = self.key_map.insert(Arc::downgrade(&shared_regex));
+            
+            let regex_cache = shared_regex.create_cache();
+            let cache_key = self.key_map.insert(WeakSharedRegex {
+                regex: Arc::downgrade(&shared_regex),
+                cache_size: regex_cache.memory_usage() + size_of::<Cache>()
+            });
             if let Some(old_cache_key) = self.pattern_index.insert(pattern.to_owned(), cache_key) {
-                // cleanup old value (which must be a "dead" reference)
+                
+                // cleanup old value (which must be a "dead" reference since `get` returned None)
                 if let Some(weak_ref) = self.key_map.remove(old_cache_key) {
-                    debug_assert!(weak_ref.strong_count() == 0)
+                    GLOBAL_STATS.add_total_regex_cache(-(weak_ref.cache_size as i64));
+                    debug_assert!(weak_ref.regex.strong_count() == 0)
                 }
             }
 
+            GLOBAL_STATS.set_total_regexes(self.key_map.len());
+
             SharedRegex2 {
                 regex: shared_regex,
-                cache_key
+                cache_key,
             }
         }
     }

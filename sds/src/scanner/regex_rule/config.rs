@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DefaultOnNull;
 use std::sync::Arc;
-use crate::scanner::regex_rule::regex_store::{get_memoized_regex, SharedRegex, SharedRegex2, REGEX_STORE};
+use crate::scanner::regex_rule::regex_store::{get_memoized_regex, SharedRegex, SharedRegex2};
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

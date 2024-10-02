@@ -6,6 +6,7 @@ use slotmap::SecondaryMap;
 use treiber_stack::TreiberStack;
 use crate::scanner::regex_rule::regex_store::{RegexCacheKey, SharedRegex2};
 use crate::{SharedPool, SharedPoolGuard};
+use regex_automata::meta::{Regex as MetaRegex};
 
 lazy_static! {
     static ref REGEX_CACHE_STORE: Arc<RegexCacheStore> = Arc::new(RegexCacheStore::new());
@@ -14,6 +15,8 @@ lazy_static! {
 // pub fn take_regex_caches() -> RegexCacheGuard {
 //     REGEX_CACHE_STORE.take()
 // }
+
+
 
 pub fn access_regex_caches<T>(func: impl FnOnce(&mut RegexCaches) -> T) -> T {
     let mut caches = REGEX_CACHE_STORE.take();
@@ -86,7 +89,11 @@ impl RegexCaches {
     }
     
     pub fn get(&mut self, shared_regex: &SharedRegex2) -> &mut regex_automata::meta::Cache {
-        self.map.entry(shared_regex.cache_key).unwrap()
-            .or_insert_with(|| shared_regex.regex.create_cache())
+        self.raw_get(shared_regex.cache_key, &shared_regex.regex)
+    }
+
+    pub(super) fn raw_get(&mut self, key: RegexCacheKey, regex: &MetaRegex) -> &mut regex_automata::meta::Cache {
+        self.map.entry(key).unwrap()
+            .or_insert_with(|| regex.create_cache())
     }
 }

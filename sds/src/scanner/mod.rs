@@ -27,7 +27,7 @@ use ahash::{AHashMap, AHashSet};
 use regex_automata::Match;
 use crate::scanner::regex_rule::{access_regex_caches, RegexCaches, SharedRegex2};
 
-pub mod cache_pool;
+pub mod shared_pool;
 pub mod config;
 pub mod error;
 pub mod metrics;
@@ -649,9 +649,9 @@ impl ScannerBuilder<'_> {
             // stats
             //     .regex_cache_per_scanner
             //     .record(total_cache_size as f64);
-            stats
-                .number_of_rules_per_scanner
-                .record(self.rules.len() as f64);
+            // stats
+            //     .number_of_rules_per_scanner
+            //     .record(self.rules.len() as f64);
         }
 
         Ok(Scanner {
