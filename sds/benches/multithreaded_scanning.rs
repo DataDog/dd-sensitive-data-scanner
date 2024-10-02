@@ -1,29 +1,35 @@
+use ahash::AHashMap;
 use criterion::Criterion;
-use dd_sds::{Event, EventVisitor, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig, Utf8Encoding};
 use dd_sds::Scanner;
+use dd_sds::{
+    Event, EventVisitor, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig, Utf8Encoding,
+};
 use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
-use ahash::AHashMap;
 use threadpool::ThreadPool;
 
 pub fn multithread_scanning(c: &mut Criterion) {
-    let rules: Vec<_> = sample_regexes().into_iter().map(|regex|{
-        RegexRuleConfig::new(&regex).build()
-    }).collect();
+    let rules: Vec<_> = sample_regexes()
+        .into_iter()
+        .map(|regex| RegexRuleConfig::new(&regex).build())
+        .collect();
 
     let scanner = Arc::new(Scanner::builder(&rules).build().unwrap());
 
     let regex_with_keywords = sample_regexes_with_keywords();
-    let rules_with_keywords: Vec<_> = regex_with_keywords.into_iter().map(|(keywords, regex)|{
-        RegexRuleConfig::new(&regex)
-            .proximity_keywords(ProximityKeywordsConfig {
-                look_ahead_character_count: 30,
-                included_keywords: keywords,
-                excluded_keywords: vec![],
-            })
-            .build()
-    }).collect();
+    let rules_with_keywords: Vec<_> = regex_with_keywords
+        .into_iter()
+        .map(|(keywords, regex)| {
+            RegexRuleConfig::new(&regex)
+                .proximity_keywords(ProximityKeywordsConfig {
+                    look_ahead_character_count: 30,
+                    included_keywords: keywords,
+                    excluded_keywords: vec![],
+                })
+                .build()
+        })
+        .collect();
 
     let scanner_with_keywords = Arc::new(Scanner::builder(&rules_with_keywords).build().unwrap());
 
@@ -36,51 +42,48 @@ pub fn multithread_scanning(c: &mut Criterion) {
     let num_jobs = 256;
     let thread_pool = ThreadPool::new(num_threads);
 
-    c.bench_function(
-        "scan single strings (multi-threaded)", |b| {
-            b.iter(|| {
-                for _ in 0..num_jobs {
-                    let sample_inputs = sample_inputs.clone();
-                    let scanner = Arc::clone(&scanner);
-                    thread_pool.execute(move ||{
-                        let mut sample_inputs = sample_inputs.clone();
-                        let mut matches = 0;
-                        for input in &mut sample_inputs {
-                            let results = scanner.scan(input, vec![]);
-                            matches += results.len();
-                        }
-                        assert_eq!(matches, 65);
-                    });
-                }
-                thread_pool.join();
-            })
-        },
-    );
+    c.bench_function("scan single strings (multi-threaded)", |b| {
+        b.iter(|| {
+            for _ in 0..num_jobs {
+                let sample_inputs = sample_inputs.clone();
+                let scanner = Arc::clone(&scanner);
+                thread_pool.execute(move || {
+                    let mut sample_inputs = sample_inputs.clone();
+                    let mut matches = 0;
+                    for input in &mut sample_inputs {
+                        let results = scanner.scan(input, vec![]);
+                        matches += results.len();
+                    }
+                    assert_eq!(matches, 65);
+                });
+            }
+            thread_pool.join();
+        })
+    });
+
+    c.bench_function("scan large event (multi-threaded)", |b| {
+        b.iter(|| {
+            for _ in 0..num_jobs {
+                let sample_event = sample_event.clone();
+                let scanner = Arc::clone(&scanner);
+                thread_pool.execute(move || {
+                    let mut sample_event = sample_event.clone();
+                    let results = scanner.scan(&mut sample_event, vec![]);
+                    assert_eq!(results.len(), 65);
+                });
+            }
+            thread_pool.join()
+        })
+    });
 
     c.bench_function(
-        "scan large event (multi-threaded)", |b| {
-            b.iter(|| {
-                for _ in 0..num_jobs {
-                    let sample_event = sample_event.clone();
-                    let scanner = Arc::clone(&scanner);
-                    thread_pool.execute(move ||{
-                        let mut sample_event = sample_event.clone();
-                        let results = scanner.scan(&mut sample_event, vec![]);
-                        assert_eq!(results.len(), 65);
-                    });
-                }
-                thread_pool.join()
-            })
-        },
-    );
-
-    c.bench_function(
-        "scan single strings (multi-threaded, with included keywords)", |b| {
+        "scan single strings (multi-threaded, with included keywords)",
+        |b| {
             b.iter(|| {
                 for _ in 0..num_jobs {
                     let sample_inputs = sample_inputs.clone();
                     let scanner = Arc::clone(&scanner_with_keywords);
-                    thread_pool.execute(move ||{
+                    thread_pool.execute(move || {
                         let mut sample_inputs = sample_inputs.clone();
                         let mut matches = 0;
                         for input in &mut sample_inputs {
@@ -96,12 +99,13 @@ pub fn multithread_scanning(c: &mut Criterion) {
     );
 
     c.bench_function(
-        "scan large event (multi-threaded, with included keywords)", |b| {
+        "scan large event (multi-threaded, with included keywords)",
+        |b| {
             b.iter(|| {
                 for _ in 0..num_jobs {
                     let sample_event = sample_event.clone();
                     let scanner = Arc::clone(&scanner_with_keywords);
-                    thread_pool.execute(move ||{
+                    thread_pool.execute(move || {
                         let mut sample_event = sample_event.clone();
                         let results = scanner.scan(&mut sample_event, vec![]);
                         assert_eq!(results.len(), 35);
@@ -112,42 +116,39 @@ pub fn multithread_scanning(c: &mut Criterion) {
         },
     );
 
-    c.bench_function(
-        "scan single strings (single-threaded)", |b| {
-            b.iter(|| {
-                for _ in 0..num_jobs {
-                    // The clones aren't required here, but are kept to be more comparable to the multi-threaded versions
-                    let sample_inputs = sample_inputs.clone();
-                    let scanner = Arc::clone(&scanner);
-                    let mut sample_inputs = sample_inputs.clone();
-                    let mut matches = 0;
-                    for input in &mut sample_inputs {
-                        let results = scanner.scan(input, vec![]);
-                        matches += results.len();
-                    }
-                    assert_eq!(matches, 65);
+    c.bench_function("scan single strings (single-threaded)", |b| {
+        b.iter(|| {
+            for _ in 0..num_jobs {
+                // The clones aren't required here, but are kept to be more comparable to the multi-threaded versions
+                let sample_inputs = sample_inputs.clone();
+                let scanner = Arc::clone(&scanner);
+                let mut sample_inputs = sample_inputs.clone();
+                let mut matches = 0;
+                for input in &mut sample_inputs {
+                    let results = scanner.scan(input, vec![]);
+                    matches += results.len();
                 }
-            })
-        },
-    );
+                assert_eq!(matches, 65);
+            }
+        })
+    });
+
+    c.bench_function("scan large event (single-threaded)", |b| {
+        b.iter(|| {
+            for _ in 0..num_jobs {
+                // The clones aren't required here, but are kept to be more comparable to the multi-threaded versions
+                let sample_event = sample_event.clone();
+                let scanner = Arc::clone(&scanner);
+                let mut sample_event = sample_event.clone();
+                let results = scanner.scan(&mut sample_event, vec![]);
+                assert_eq!(results.len(), 65);
+            }
+        })
+    });
 
     c.bench_function(
-        "scan large event (single-threaded)", |b| {
-            b.iter(|| {
-                for _ in 0..num_jobs {
-                    // The clones aren't required here, but are kept to be more comparable to the multi-threaded versions
-                    let sample_event = sample_event.clone();
-                    let scanner = Arc::clone(&scanner);
-                    let mut sample_event = sample_event.clone();
-                    let results = scanner.scan(&mut sample_event, vec![]);
-                    assert_eq!(results.len(), 65);
-                }
-            })
-        },
-    );
-
-    c.bench_function(
-        "scan single strings single-threaded, with included keywords)", |b| {
+        "scan single strings single-threaded, with included keywords)",
+        |b| {
             b.iter(|| {
                 for _ in 0..num_jobs {
                     // The clones aren't required here, but are kept to be more comparable to the multi-threaded versions
@@ -166,7 +167,8 @@ pub fn multithread_scanning(c: &mut Criterion) {
     );
 
     c.bench_function(
-        "scan large event (single-threaded, with included keywords)", |b| {
+        "scan large event (single-threaded, with included keywords)",
+        |b| {
             b.iter(|| {
                 for _ in 0..num_jobs {
                     // The clones aren't required here, but are kept to be more comparable to the multi-threaded versions
@@ -179,13 +181,13 @@ pub fn multithread_scanning(c: &mut Criterion) {
             })
         },
     );
-
 }
 
 // Arbitrary regexes patterns for testing.
 fn sample_regexes() -> Vec<String> {
-    sample_regexes_with_keywords().into_iter()
-        .map(|(keywords, pattern)|pattern)
+    sample_regexes_with_keywords()
+        .into_iter()
+        .map(|(keywords, pattern)| pattern)
         .collect()
 }
 
@@ -257,7 +259,7 @@ impl Event for BenchEvent {
                 PathSegment::Field(key) => {
                     value = value.as_map_mut().unwrap().get_mut(key.as_ref()).unwrap();
                 }
-                PathSegment::Index(i) => {/* indices not supported here */}
+                PathSegment::Index(i) => { /* indices not supported here */ }
             }
         }
         (visit)(value.as_string_mut().unwrap());
@@ -282,7 +284,6 @@ impl BenchEvent {
     }
 }
 
-
 fn sample_inputs() -> Vec<String> {
     let mut file = File::open("data/sample_logs.txt").unwrap();
     let mut data = String::new();
@@ -301,10 +302,6 @@ fn sample_large_event() -> BenchEvent {
     BenchEvent::Map(map)
 }
 
-
-criterion::criterion_group!(
-    benches,
-    multithread_scanning
-);
+criterion::criterion_group!(benches, multithread_scanning);
 
 criterion::criterion_main!(benches);

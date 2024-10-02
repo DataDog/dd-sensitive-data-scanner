@@ -4,33 +4,28 @@ use crate::proximity_keywords::{
     CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
 };
 use crate::scanner::metrics::RuleMetrics;
+use crate::scanner::regex_rule::regex_store::SharedRegex;
+use crate::scanner::regex_rule::RegexCaches;
 use crate::scanner::scope::Scope;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::secondary_validation::Validator;
-use crate::{
-    CompiledRule, ExclusionCheck, MatchAction, MatchEmitter, Path, StringMatch,
-};
+use crate::{CompiledRule, ExclusionCheck, MatchAction, MatchEmitter, Path, StringMatch};
 use ahash::AHashSet;
+use regex_automata::meta::Cache;
 use regex_automata::Input;
 use std::sync::Arc;
-use regex_automata::meta::Cache;
-use crate::scanner::regex_rule::regex_store::{SharedRegex2};
-use crate::scanner::regex_rule::RegexCaches;
 
 /// This is the internal representation of a rule after it has been validated / compiled.
 pub struct RegexCompiledRule {
     pub rule_index: usize,
-    pub regex: SharedRegex2,
+    pub regex: SharedRegex,
     pub match_action: MatchAction,
     pub scope: Scope,
     pub included_keywords: Option<CompiledIncludedProximityKeywords>,
     pub excluded_keywords: Option<CompiledExcludedProximityKeywords>,
     pub validator: Option<Arc<dyn Validator>>,
-    // pub rule_cache_index: usize,
     pub metrics: RuleMetrics,
-
     pub match_validation_type: Option<MatchValidationType>,
-
     pub internal_match_validation_type: Option<InternalMatchValidationType>,
 }
 
@@ -123,8 +118,6 @@ impl RegexCompiledRule {
         should_keywords_match_event_paths: bool,
         included_keywords: &CompiledIncludedProximityKeywords,
     ) {
-        // let cache = &mut caches[self.rule_cache_index];
-
         if should_keywords_match_event_paths {
             let sanitized_path = path.sanitize();
             if contains_keyword_in_path(&sanitized_path, &included_keywords.keywords_pattern) {
@@ -133,7 +126,6 @@ impl RegexCompiledRule {
                     content,
                     0,
                     regex_caches.get(&self.regex),
-                    // &mut caches[self.rule_cache_index],
                     false,
                     exclusion_check,
                     excluded_matches,
@@ -147,16 +139,6 @@ impl RegexCompiledRule {
 
         let mut included_keyword_matches = included_keywords.keyword_matches(content);
 
-        
-        // loop {
-        //     let included_keyword_search = included_keyword_matches.next(regex_caches);
-        //     
-        //     if let Some(included_keyword_match_start)
-        //     
-        //     break;
-        // }
-        
-        
         'included_keyword_search: while let Some(included_keyword_match_start) =
             included_keyword_matches.next(regex_caches)
         {

@@ -8,7 +8,6 @@ pub trait RuleConfig: Send + Sync {
         &self,
         rule_index: usize,
         label: Labels,
-        // cache_pool_builder: &mut CachePoolBuilder,
     ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError>;
 
     fn get_match_validation_type(&self) -> Option<&MatchValidationType>;

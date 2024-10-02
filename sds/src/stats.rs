@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use metrics::{counter, gauge, histogram, Counter, Gauge, Histogram};
+use metrics::{counter, gauge, Counter, Gauge};
 use std::sync::atomic::{AtomicI64, Ordering};
 
 lazy_static! {
@@ -14,7 +14,7 @@ pub struct Stats {
     // since some metrics exporters don't support incrementing gauges (e.g. statsd)
     total_scanners_count: AtomicI64,
     total_scanners: Gauge,
-    
+
     total_regexes: Gauge,
 
     total_regex_cache_size_count: AtomicI64,
@@ -43,16 +43,20 @@ impl Stats {
     }
 
     fn update_total_scanners(&self, delta: i64) {
-        let prev_value = self.total_scanners_count.fetch_add(delta, Ordering::Relaxed);
+        let prev_value = self
+            .total_scanners_count
+            .fetch_add(delta, Ordering::Relaxed);
         self.total_scanners.set((prev_value + delta) as f64);
     }
-    
+
     pub fn set_total_regexes(&self, total_regexes: usize) {
         self.total_regexes.set(total_regexes as f64)
     }
-    
+
     pub fn add_total_regex_cache(&self, delta: i64) {
-        let prev_value = self.total_regex_cache_size_count.fetch_add(delta, Ordering::Relaxed);
+        let prev_value = self
+            .total_regex_cache_size_count
+            .fetch_add(delta, Ordering::Relaxed);
         self.total_regex_cache_size.set((prev_value + delta) as f64);
     }
 }

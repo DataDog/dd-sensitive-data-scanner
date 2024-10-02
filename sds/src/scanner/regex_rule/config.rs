@@ -3,15 +3,15 @@ use crate::proximity_keywords::compile_keywords_proximity_config;
 use crate::scanner::config::RuleConfig;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
+use crate::scanner::regex_rule::regex_store::get_memoized_regex;
 use crate::scanner::scope::Scope;
 use crate::secondary_validation::Validator;
 use crate::validation::validate_and_create_regex;
-use crate::{CompiledRuleDyn, CreateScannerError, Labels, MatchAction, RegexValidationError};
+use crate::{CompiledRuleDyn, CreateScannerError, Labels, MatchAction};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DefaultOnNull;
 use std::sync::Arc;
-use crate::scanner::regex_rule::regex_store::{get_memoized_regex, SharedRegex, SharedRegex2};
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -94,9 +94,8 @@ impl RuleConfig for RegexRuleConfig {
         &self,
         rule_index: usize,
         scanner_labels: Labels,
-        // cache_pool_builder: &mut CachePoolBuilder,
     ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
-        let regex = get_memoized_regex(&self.pattern, |pattern| validate_and_create_regex(pattern))?;
+        let regex = get_memoized_regex(&self.pattern, validate_and_create_regex)?;
         self.match_action.validate()?;
 
         let rule_labels = scanner_labels.clone_with_labels(self.labels.clone());
@@ -107,7 +106,6 @@ impl RuleConfig for RegexRuleConfig {
             .map(|config| compile_keywords_proximity_config(config, &rule_labels))
             .unwrap_or(Ok((None, None)))?;
 
-        // let cache_index = cache_pool_builder.push(regex.clone());
         Ok(Box::new(RegexCompiledRule {
             rule_index,
             regex,
@@ -119,7 +117,6 @@ impl RuleConfig for RegexRuleConfig {
                 .validator
                 .clone()
                 .map(|x| Arc::new(x) as Arc<dyn Validator>),
-            // rule_cache_index: cache_index,
             metrics: RuleMetrics::new(&rule_labels),
             match_validation_type: self.get_match_validation_type().cloned(),
             internal_match_validation_type: self
@@ -135,21 +132,6 @@ impl RuleConfig for RegexRuleConfig {
         }
     }
 }
-
-// fn get_memoized_regex(pattern: &str) -> Result<SharedRegex2, RegexValidationError> {
-//     {
-//         let regex_store = REGEX_STORE.lock().unwrap();
-//         if let Some(regex) = regex_store.get(pattern) {
-//             return Ok(regex);
-//         }
-//     }
-// 
-//     // Create the new regex after the RegexStore lock is released, since this can be slow
-//     let regex = validate_and_create_regex(pattern)?;
-//     
-//     let mut regex_store = REGEX_STORE.lock().unwrap();
-//     Ok(regex_store.insert(pattern, regex))
-// }
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

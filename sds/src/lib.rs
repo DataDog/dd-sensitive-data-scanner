@@ -1,6 +1,7 @@
 // This blocks accidental use of `println`. If one is actually needed, you can
 // override with `#[allow(clippy::print_stdout)]`.
 #![deny(clippy::print_stdout)]
+#![allow(clippy::new_without_default)]
 
 mod encoding;
 mod event;

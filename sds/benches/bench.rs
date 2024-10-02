@@ -133,8 +133,8 @@ pub fn included_keywords(c: &mut Criterion) {
             excluded_keywords: vec![],
         })
         .build()])
-        .build()
-        .unwrap();
+    .build()
+    .unwrap();
 
     let mut message = "a".repeat(1_000_000);
 
@@ -188,9 +188,9 @@ pub fn included_keywords_on_path(c: &mut Criterion) {
             excluded_keywords: vec![],
         })
         .build()])
-        .with_keywords_should_match_event_paths(false)
-        .build()
-        .unwrap();
+    .with_keywords_should_match_event_paths(false)
+    .build()
+    .unwrap();
 
     c.bench_function("included_keywords_on_path_off", |b| {
         b.iter(|| {
@@ -206,9 +206,9 @@ pub fn included_keywords_on_path(c: &mut Criterion) {
             excluded_keywords: vec![],
         })
         .build()])
-        .with_keywords_should_match_event_paths(true)
-        .build()
-        .unwrap();
+    .with_keywords_should_match_event_paths(true)
+    .build()
+    .unwrap();
 
     c.bench_function("included_keywords_on_path_on", |b| {
         b.iter(|| {
