@@ -7,6 +7,7 @@ pub use crate::proximity_keywords::included_keywords::*;
 use crate::proximity_keywords::ProximityKeywordsValidationError::{
     EmptyKeyword, InvalidLookAheadCharacterCount, KeywordTooLong, TooManyKeywords,
 };
+use crate::scanner::regex_rule::{get_memoized_regex, SharedRegex};
 use crate::{Labels, ProximityKeywordsConfig};
 use metrics::counter;
 use regex_automata::{meta, Input};
@@ -26,8 +27,8 @@ const EXCLUDED_KEYWORDS_REMOVED_CHARS: &[char] = &['-', '_'];
 
 #[derive(Debug)]
 pub struct ProximityKeywordsRegex {
-    pub content_regex: meta::Regex,
-    pub path_regex: meta::Regex,
+    pub content_regex: SharedRegex,
+    pub path_regex: SharedRegex,
 }
 
 /// Characters that are considered to be links between keyword words.
@@ -210,7 +211,7 @@ fn compile_keywords(
     keywords: Vec<String>,
     look_ahead_character_count: usize,
     remove_chars: &[char],
-) -> Result<Option<(meta::Regex, meta::Regex)>, ProximityKeywordsValidationError> {
+) -> Result<Option<(SharedRegex, SharedRegex)>, ProximityKeywordsValidationError> {
     let (content_pattern, path_pattern) =
         match compile_keywords_to_ast(&keywords, look_ahead_character_count, remove_chars) {
             Ok(Some((content_ast, path_ast))) => (content_ast.to_string(), path_ast.to_string()),
@@ -229,8 +230,8 @@ fn compile_keywords(
         .syntax(regex_automata::util::syntax::Config::default().case_insensitive(true));
 
     Ok(Some((
-        regex_builder.build(&content_pattern).unwrap(),
-        regex_builder.build(&path_pattern).unwrap(),
+        get_memoized_regex(&content_pattern, |p| regex_builder.build(p)).unwrap(),
+        get_memoized_regex(&path_pattern, |p| regex_builder.build(p)).unwrap(),
     )))
 }
 

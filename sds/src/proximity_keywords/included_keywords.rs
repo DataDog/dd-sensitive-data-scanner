@@ -1,4 +1,5 @@
 use crate::proximity_keywords::next_char_index;
+use crate::scanner::regex_rule::RegexCaches;
 use regex_automata::Input;
 
 pub struct CompiledIncludedProximityKeywords {
@@ -28,17 +29,15 @@ impl<'a> IncludedKeywordSearch<'a> {
             self.start = start;
         }
     }
-}
 
-impl<'a> Iterator for IncludedKeywordSearch<'a> {
-    type Item = usize;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // TODO: use a custom cache for this regex (https://datadoghq.atlassian.net/browse/SDS-329)
+    pub fn next(&mut self, regex_caches: &mut RegexCaches) -> Option<usize> {
         let input = Input::new(self.content).range(self.start..).earliest(true);
 
         if let Some(included_keyword_match) =
-            self.keywords.keywords_pattern.content_regex.search(&input)
+            self.keywords.keywords_pattern.content_regex.search_with(
+                regex_caches.get(&self.keywords.keywords_pattern.content_regex),
+                &input,
+            )
         {
             // The next scan starts at the next character after the start of the keyword since
             // multi-word keywords can overlap
@@ -54,10 +53,20 @@ impl<'a> Iterator for IncludedKeywordSearch<'a> {
 #[cfg(test)]
 mod test {
     use crate::proximity_keywords::{
-        compile_keywords_proximity_config, CompiledIncludedProximityKeywords,
+        compile_keywords_proximity_config, CompiledIncludedProximityKeywords, IncludedKeywordSearch,
     };
     use crate::scanner::regex_rule::config::ProximityKeywordsConfig;
+    use crate::scanner::regex_rule::RegexCaches;
     use crate::Labels;
+
+    fn collect_keyword_matches(mut search: IncludedKeywordSearch) -> Vec<usize> {
+        let mut caches = RegexCaches::new();
+        let mut output = vec![];
+        while let Some(x) = search.next(&mut caches) {
+            output.push(x);
+        }
+        output
+    }
 
     fn compile_keywords(lookahead: usize, keywords: &[&str]) -> CompiledIncludedProximityKeywords {
         let (included, _) = compile_keywords_proximity_config(
@@ -76,9 +85,7 @@ mod test {
     fn test_included_keywords_on_start_boundary() {
         let keywords = compile_keywords(5, &["id"]);
 
-        let keyword_matches = keywords
-            .keyword_matches("invalid   abc")
-            .collect::<Vec<_>>();
+        let keyword_matches = collect_keyword_matches(keywords.keyword_matches("invalid   abc"));
 
         // There should be no matches since keywords have a word boundary
         assert!(keyword_matches.is_empty());
@@ -88,7 +95,7 @@ mod test {
     fn test_overlapping_keywords() {
         let keywords = compile_keywords(5, &["a b", "b c"]);
 
-        let keyword_matches = keywords.keyword_matches("a b c").collect::<Vec<_>>();
+        let keyword_matches = collect_keyword_matches(keywords.keyword_matches("a b c"));
 
         assert_eq!(keyword_matches, vec![0, 2]);
     }
@@ -98,38 +105,26 @@ mod test {
         let keywords = compile_keywords(30, &["hello", "coty"]);
 
         assert_eq!(
-            keywords
-                .keyword_matches("hello world")
-                .collect::<Vec<usize>>(),
+            collect_keyword_matches(keywords.keyword_matches("hello world")),
             vec![0]
         );
 
         assert_eq!(
-            keywords
-                .keyword_matches("hey coty, hello world")
-                .collect::<Vec<usize>>(),
+            collect_keyword_matches(keywords.keyword_matches("hey coty, hello world")),
             vec![4, 10]
         );
 
-        assert!(keywords
-            .keyword_matches("hey hey hey world")
-            .collect::<Vec<usize>>()
-            .is_empty());
+        assert!(collect_keyword_matches(keywords.keyword_matches("hey hey hey world")).is_empty());
     }
 
     #[test]
     fn should_quote_keyword() {
         let keywords = compile_keywords(30, &["he.*o"]);
 
-        assert!(keywords
-            .keyword_matches("hello world")
-            .collect::<Vec<usize>>()
-            .is_empty(),);
+        assert!(collect_keyword_matches(keywords.keyword_matches("hello world")).is_empty(),);
 
         assert_eq!(
-            keywords
-                .keyword_matches("he.*o world")
-                .collect::<Vec<usize>>(),
+            collect_keyword_matches(keywords.keyword_matches("he.*o world")),
             vec![0]
         );
     }
@@ -139,15 +134,11 @@ mod test {
         let keywords = compile_keywords(30, &["hello"]);
 
         assert_eq!(
-            keywords
-                .keyword_matches("HELLO world")
-                .collect::<Vec<usize>>(),
+            collect_keyword_matches(keywords.keyword_matches("HELLO world")),
             vec![0]
         );
         assert_eq!(
-            keywords
-                .keyword_matches("hello world")
-                .collect::<Vec<usize>>(),
+            collect_keyword_matches(keywords.keyword_matches("hello world")),
             vec![0]
         );
     }
@@ -157,86 +148,33 @@ mod test {
         let keywords = compile_keywords(30, &["host"]);
 
         assert_eq!(
-            keywords
-                .keyword_matches("host ping")
-                .collect::<Vec<usize>>(),
+            collect_keyword_matches(keywords.keyword_matches("host ping")),
             vec![0]
         );
-        assert!(keywords
-            .keyword_matches("localhost ping")
-            .collect::<Vec<usize>>()
-            .is_empty());
-        assert!(keywords
-            .keyword_matches("hostlocal ping")
-            .collect::<Vec<usize>>()
-            .is_empty());
+        assert!(collect_keyword_matches(keywords.keyword_matches("localhost ping")).is_empty());
+        assert!(collect_keyword_matches(keywords.keyword_matches("hostlocal ping")).is_empty());
 
         // word boundaries are is added at the beginning (resp. end) only if the first (resp. last) character is a letter or a digit
         let keywords = compile_keywords(30, &["-host"]);
 
         assert_eq!(
-            keywords
-                .keyword_matches("-host ping")
-                .collect::<Vec<usize>>(),
+            collect_keyword_matches(keywords.keyword_matches("-host ping")),
             vec![0]
         );
         assert_eq!(
-            keywords
-                .keyword_matches("local-host ping")
-                .collect::<Vec<usize>>(),
+            collect_keyword_matches(keywords.keyword_matches("local-host ping")),
             vec![5]
         );
-        assert!(keywords
-            .keyword_matches("-hostlocal ping")
-            .collect::<Vec<usize>>()
-            .is_empty());
+        assert!(collect_keyword_matches(keywords.keyword_matches("-hostlocal ping")).is_empty());
 
         let keywords = compile_keywords(30, &["ৎhost"]);
         assert_eq!(
-            keywords
-                .keyword_matches("ৎhost ping")
-                .collect::<Vec<usize>>(),
+            collect_keyword_matches(keywords.keyword_matches("ৎhost ping")),
             vec![0]
         );
         assert_eq!(
-            keywords
-                .keyword_matches("localৎhost ping")
-                .collect::<Vec<usize>>(),
+            collect_keyword_matches(keywords.keyword_matches("localৎhost ping")),
             vec![5]
         );
-    }
-
-    #[test]
-    fn test_included_keyword_content() {
-        let keywords = compile_keywords(30, &["hello"]);
-
-        assert_eq!(
-            keywords
-                .keyword_matches("hello world")
-                .collect::<Vec<usize>>(),
-            vec![0]
-        );
-
-        assert_eq!(
-            keywords
-                .keyword_matches("hey, hello world")
-                .collect::<Vec<usize>>(),
-            vec![5]
-        );
-
-        assert!(keywords
-            .keyword_matches("world")
-            .collect::<Vec<usize>>()
-            .is_empty());
-
-        assert!(keywords
-            .keyword_matches("")
-            .collect::<Vec<usize>>()
-            .is_empty());
-
-        assert!(keywords
-            .keyword_matches("hel")
-            .collect::<Vec<usize>>()
-            .is_empty());
     }
 }

@@ -143,6 +143,7 @@ sha2,https://github.com/RustCrypto/hashes,MIT OR Apache-2.0,RustCrypto Developer
 sha256,https://github.com/baoyachi/sha256-rs,MIT OR Apache-2.0,baoyachi <liaoymxsdl@gmail.com>
 sketches-ddsketch,https://github.com/mheffner/rust-sketches-ddsketch,Apache-2.0,Mike Heffner <mikeh@fesnel.com>
 slab,https://github.com/tokio-rs/slab,MIT,Carl Lerche <me@carllerche.com>
+slotmap,https://github.com/orlp/slotmap,Zlib,Orson Peters <orsonpeters@gmail.com>
 smallvec,https://github.com/servo/rust-smallvec,MIT OR Apache-2.0,The Servo Project Developers
 socket2,https://github.com/rust-lang/socket2,MIT OR Apache-2.0,"Alex Crichton <alex@alexcrichton.com>, Thomas de Zeeuw <thomasdezeeuw@gmail.com>"
 spin,https://github.com/mvdnes/spin-rs,MIT,"Mathijs van de Nes <git@mathijs.vd-nes.nl>, John Ericson <git@JohnEricson.me>, Joshua Barretto <joshua.s.barretto@gmail.com>"

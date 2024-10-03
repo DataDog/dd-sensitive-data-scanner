@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use metrics::{counter, gauge, histogram, Counter, Gauge, Histogram};
+use metrics::{counter, gauge, Counter, Gauge};
 use std::sync::atomic::{AtomicI64, Ordering};
 
 lazy_static! {
@@ -15,11 +15,10 @@ pub struct Stats {
     total_scanners_count: AtomicI64,
     total_scanners: Gauge,
 
-    // The total number of rules in a scanner
-    pub number_of_rules_per_scanner: Histogram,
+    total_regexes: Gauge,
 
-    // The total amount of memory used for a single set of regex caches for a single scanner
-    pub regex_cache_per_scanner: Histogram,
+    total_regex_cache_size_count: AtomicI64,
+    total_regex_cache_size: Gauge,
 }
 
 impl Stats {
@@ -29,8 +28,9 @@ impl Stats {
             scanner_deletions: counter!("scanner.deletions"),
             total_scanners_count: AtomicI64::new(0),
             total_scanners: gauge!("scanner.total_count"),
-            number_of_rules_per_scanner: histogram!("scanner.num_rules"),
-            regex_cache_per_scanner: histogram!("scanner.regex_cache_size"),
+            total_regexes: gauge!("scanner.total_regexes"),
+            total_regex_cache_size_count: AtomicI64::new(0),
+            total_regex_cache_size: gauge!("scanner.total_regex_cache_size"),
         }
     }
 
@@ -43,7 +43,20 @@ impl Stats {
     }
 
     fn update_total_scanners(&self, delta: i64) {
-        let prev_value = self.total_scanners_count.fetch_add(delta, Ordering::SeqCst);
+        let prev_value = self
+            .total_scanners_count
+            .fetch_add(delta, Ordering::Relaxed);
         self.total_scanners.set((prev_value + delta) as f64);
+    }
+
+    pub fn set_total_regexes(&self, total_regexes: usize) {
+        self.total_regexes.set(total_regexes as f64)
+    }
+
+    pub fn add_total_regex_cache(&self, delta: i64) {
+        let prev_value = self
+            .total_regex_cache_size_count
+            .fetch_add(delta, Ordering::Relaxed);
+        self.total_regex_cache_size.set((prev_value + delta) as f64);
     }
 }

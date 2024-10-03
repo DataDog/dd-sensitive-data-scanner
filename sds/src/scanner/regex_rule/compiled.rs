@@ -4,32 +4,28 @@ use crate::proximity_keywords::{
     CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
 };
 use crate::scanner::metrics::RuleMetrics;
+use crate::scanner::regex_rule::regex_store::SharedRegex;
+use crate::scanner::regex_rule::RegexCaches;
 use crate::scanner::scope::Scope;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::secondary_validation::Validator;
-use crate::{
-    CachePoolGuard, CompiledRule, ExclusionCheck, MatchAction, MatchEmitter, Path, StringMatch,
-};
+use crate::{CompiledRule, ExclusionCheck, MatchAction, MatchEmitter, Path, StringMatch};
 use ahash::AHashSet;
 use regex_automata::meta::Cache;
-use regex_automata::meta::Regex as MetaRegex;
 use regex_automata::Input;
 use std::sync::Arc;
 
 /// This is the internal representation of a rule after it has been validated / compiled.
 pub struct RegexCompiledRule {
     pub rule_index: usize,
-    pub regex: MetaRegex,
+    pub regex: SharedRegex,
     pub match_action: MatchAction,
     pub scope: Scope,
     pub included_keywords: Option<CompiledIncludedProximityKeywords>,
     pub excluded_keywords: Option<CompiledExcludedProximityKeywords>,
     pub validator: Option<Arc<dyn Validator>>,
-    pub rule_cache_index: usize,
     pub metrics: RuleMetrics,
-
     pub match_validation_type: Option<MatchValidationType>,
-
     pub internal_match_validation_type: Option<InternalMatchValidationType>,
 }
 
@@ -48,7 +44,7 @@ impl CompiledRule for RegexCompiledRule {
         &self,
         content: &str,
         path: &Path,
-        caches: &mut CachePoolGuard<'_>,
+        regex_caches: &mut RegexCaches,
         _group_data: &mut (),
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -60,7 +56,7 @@ impl CompiledRule for RegexCompiledRule {
                 self.get_string_matches_with_included_keywords(
                     content,
                     path,
-                    caches,
+                    regex_caches,
                     exclusion_check,
                     excluded_matches,
                     match_emitter,
@@ -72,7 +68,7 @@ impl CompiledRule for RegexCompiledRule {
                 let true_positive_search = self.true_positive_matches(
                     content,
                     0,
-                    &mut caches[self.rule_cache_index],
+                    regex_caches.get(&self.regex),
                     true,
                     exclusion_check,
                     excluded_matches,
@@ -113,15 +109,13 @@ impl RegexCompiledRule {
         &self,
         content: &str,
         path: &Path,
-        caches: &mut CachePoolGuard<'_>,
+        regex_caches: &mut RegexCaches,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
         included_keywords: &CompiledIncludedProximityKeywords,
     ) {
-        let cache = &mut caches[self.rule_cache_index];
-
         if should_keywords_match_event_paths {
             let sanitized_path = path.sanitize();
             if contains_keyword_in_path(&sanitized_path, &included_keywords.keywords_pattern) {
@@ -129,7 +123,7 @@ impl RegexCompiledRule {
                 let true_positive_search = self.true_positive_matches(
                     content,
                     0,
-                    &mut caches[self.rule_cache_index],
+                    regex_caches.get(&self.regex),
                     false,
                     exclusion_check,
                     excluded_matches,
@@ -144,12 +138,12 @@ impl RegexCompiledRule {
         let mut included_keyword_matches = included_keywords.keyword_matches(content);
 
         'included_keyword_search: while let Some(included_keyword_match_start) =
-            included_keyword_matches.next()
+            included_keyword_matches.next(regex_caches)
         {
             let true_positive_search = self.true_positive_matches(
                 content,
                 included_keyword_match_start,
-                cache,
+                regex_caches.get(&self.regex),
                 false,
                 exclusion_check,
                 excluded_matches,

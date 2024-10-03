@@ -3,10 +3,11 @@ use crate::proximity_keywords::compile_keywords_proximity_config;
 use crate::scanner::config::RuleConfig;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
+use crate::scanner::regex_rule::regex_store::get_memoized_regex;
 use crate::scanner::scope::Scope;
 use crate::secondary_validation::Validator;
 use crate::validation::validate_and_create_regex;
-use crate::{CachePoolBuilder, CompiledRuleDyn, CreateScannerError, Labels, MatchAction};
+use crate::{CompiledRuleDyn, CreateScannerError, Labels, MatchAction};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DefaultOnNull;
@@ -93,9 +94,8 @@ impl RuleConfig for RegexRuleConfig {
         &self,
         rule_index: usize,
         scanner_labels: Labels,
-        cache_pool_builder: &mut CachePoolBuilder,
     ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
-        let regex = validate_and_create_regex(&self.pattern)?;
+        let regex = get_memoized_regex(&self.pattern, validate_and_create_regex)?;
         self.match_action.validate()?;
 
         let rule_labels = scanner_labels.clone_with_labels(self.labels.clone());
@@ -106,7 +106,6 @@ impl RuleConfig for RegexRuleConfig {
             .map(|config| compile_keywords_proximity_config(config, &rule_labels))
             .unwrap_or(Ok((None, None)))?;
 
-        let cache_index = cache_pool_builder.push(regex.clone());
         Ok(Box::new(RegexCompiledRule {
             rule_index,
             regex,
@@ -118,7 +117,6 @@ impl RuleConfig for RegexRuleConfig {
                 .validator
                 .clone()
                 .map(|x| Arc::new(x) as Arc<dyn Validator>),
-            rule_cache_index: cache_index,
             metrics: RuleMetrics::new(&rule_labels),
             match_validation_type: self.get_match_validation_type().cloned(),
             internal_match_validation_type: self

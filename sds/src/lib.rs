@@ -1,6 +1,7 @@
 // This blocks accidental use of `println`. If one is actually needed, you can
 // override with `#[allow(clippy::print_stdout)]`.
 #![deny(clippy::print_stdout)]
+#![allow(clippy::new_without_default)]
 
 mod encoding;
 mod event;
@@ -35,14 +36,14 @@ pub use match_validation::{
 pub use observability::labels::Labels;
 pub use path::{Path, PathSegment};
 pub use rule_match::{ReplacementType, RuleMatch};
-pub use scanner::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
+pub use scanner::shared_pool::{SharedPool, SharedPoolGuard};
 
 pub use scanner::error::MatchValidationError;
 pub use scanner::{
     config::RuleConfig,
     error::CreateScannerError,
-    regex_rule::config::SecondaryValidator,
-    regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig},
+    regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator},
+    regex_rule::RegexCaches,
     scope::Scope,
     CompiledRule, CompiledRuleDyn, MatchEmitter, Scanner, ScannerBuilder, StringMatch,
 };
