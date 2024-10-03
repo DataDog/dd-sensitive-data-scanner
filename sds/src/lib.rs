@@ -42,8 +42,8 @@ pub use scanner::error::MatchValidationError;
 pub use scanner::{
     config::RuleConfig,
     error::CreateScannerError,
-    regex_rule::config::SecondaryValidator,
-    regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig},
+    regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator},
+    regex_rule::RegexCaches,
     scope::Scope,
     CompiledRule, CompiledRuleDyn, MatchEmitter, Scanner, ScannerBuilder, StringMatch,
 };
