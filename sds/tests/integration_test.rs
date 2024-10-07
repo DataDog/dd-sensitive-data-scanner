@@ -1,4 +1,3 @@
-#[cfg(feature = "match_validation")]
 #[cfg(test)]
 mod e2e_integration_test {
     use dd_sds::AwsConfig;
