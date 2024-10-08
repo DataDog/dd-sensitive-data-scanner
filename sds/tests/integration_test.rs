@@ -31,18 +31,6 @@ mod e2e_integration_test {
         Ok(secrets)
     }
 
-    // #[ignore]
-    // #[tokio::test]
-    // async fn test_loop_mixed() {
-    //     thread::spawn(|| {
-    //         for _ in 0..40 {
-    //             test_mixed_http_validators();
-    //         }
-    //     })
-    //     .join()
-    //     .expect("Thread panicked");
-    // }
-
     #[ignore]
     #[tokio::test]
     async fn test_datadog_match_validation_invalid_match() {
