@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod e2e_integration_test {
+    use std::thread;
+
     use dd_sds::AwsConfig;
     use dd_sds::AwsType;
     use dd_sds::HttpValidatorHelper;
@@ -30,6 +32,18 @@ mod e2e_integration_test {
             serde_json::from_str(&env_var_content).expect("Failed to deserialize the secrets");
         Ok(secrets)
     }
+
+    // #[ignore]
+    // #[tokio::test]
+    // async fn test_loop_mixed() {
+    //     thread::spawn(|| {
+    //         for _ in 0..40 {
+    //             test_mixed_http_validators();
+    //         }
+    //     })
+    //     .join()
+    //     .expect("Thread panicked");
+    // }
 
     #[ignore]
     #[tokio::test]

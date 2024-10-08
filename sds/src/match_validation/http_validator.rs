@@ -191,6 +191,7 @@ impl MatchValidator for HttpValidator {
                         )));
                     }
                     Err(err) => {
+                        println!("Error : {:?}", err);
                         // TODO(trosenblatt) emit a metrics for this
                         m.match_status = MatchStatus::Error(fmt::format(format_args!(
                             "Error making HTTP request: {}",
