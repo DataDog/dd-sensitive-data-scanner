@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod e2e_integration_test {
-    use std::thread;
-
     use dd_sds::AwsConfig;
     use dd_sds::AwsType;
     use dd_sds::HttpValidatorHelper;
