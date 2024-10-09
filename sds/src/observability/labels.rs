@@ -21,7 +21,7 @@ impl Labels {
     where
         Label: for<'a> From<&'a T>,
     {
-        Labels(labels.into_iter().map(Label::from).collect())
+        Labels(labels.iter().map(Label::from).collect())
     }
 
     pub const fn empty() -> Self {
