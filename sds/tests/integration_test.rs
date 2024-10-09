@@ -32,7 +32,7 @@ mod e2e_integration_test {
     }
 
     #[ignore]
-    #[tokio::test]
+    #[tokio_shared_rt::test(shared)]
     async fn test_datadog_match_validation_invalid_match() {
         use std::vec;
 
@@ -70,7 +70,7 @@ mod e2e_integration_test {
     }
 
     #[ignore]
-    #[tokio::test]
+    #[tokio_shared_rt::test(shared)]
     async fn test_datadog_match_validation_valid_and_invalid_match() {
         use std::vec;
         let secrets = load_env_secret("KEYS_FOR_END_2_END_TEST".to_string()).unwrap();
@@ -111,7 +111,7 @@ mod e2e_integration_test {
     }
 
     #[ignore]
-    #[tokio::test]
+    #[tokio_shared_rt::test(shared)]
     async fn test_github_invalid_match() {
         let rule_ghp = RegexRuleConfig::new("\\bgh[opsu]_[0-9a-zA-Z]{36}\\b")
             .match_action(MatchAction::Redact {
@@ -140,7 +140,7 @@ mod e2e_integration_test {
     }
 
     #[ignore]
-    #[tokio::test]
+    #[tokio_shared_rt::test(shared)]
     async fn test_github_valid_match() {
         let secrets = load_env_secret("KEYS_FOR_END_2_END_TEST".to_string()).unwrap();
         let rule_ghp = RegexRuleConfig::new("\\bgh[opsu]_[0-9a-zA-Z]{36}\\b")
@@ -170,7 +170,7 @@ mod e2e_integration_test {
     }
 
     #[ignore]
-    #[tokio::test]
+    #[tokio_shared_rt::test(shared)]
     async fn test_mixed_http_validators() {
         let secrets = load_env_secret("KEYS_FOR_END_2_END_TEST".to_string()).unwrap();
         let rule_ghp = RegexRuleConfig::new("\\bgh[opsu]_[0-9a-zA-Z]{36}\\b")
@@ -220,7 +220,7 @@ mod e2e_integration_test {
     }
 
     #[ignore]
-    #[tokio::test]
+    #[tokio_shared_rt::test(shared)]
     async fn test_aws_simple_validation() {
         let secrets = load_env_secret("KEYS_FOR_END_2_END_TEST".to_string()).unwrap();
         let rule_aws_id = RegexRuleConfig::new("AKIA[0-9A-Z]{16}")

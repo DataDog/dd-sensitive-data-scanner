@@ -44,6 +44,7 @@ reqwest = { version = "0.12", default-features = false, features = ["charset", "
 aws-sign-v4 = "0.3.0"
 chrono = { version = "0.4", features = ["serde"] }
 slotmap = "1.0.7"
+tokio-shared-rt = "0.1.0"
 
 [dev-dependencies]
 rand = "0.8.5"
