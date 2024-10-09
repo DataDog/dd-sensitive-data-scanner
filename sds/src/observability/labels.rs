@@ -1,4 +1,4 @@
-use metrics::{IntoLabels, Label, SharedString};
+use metrics::{IntoLabels, Label};
 use std::fmt;
 
 use serde::de::{Deserializer, Error, SeqAccess, Visitor};
@@ -17,13 +17,11 @@ impl Labels {
         Labels(tags)
     }
 
-    pub fn new(
-        labels: &[(
-            impl Into<SharedString> + Clone,
-            impl Into<SharedString> + Clone,
-        )],
-    ) -> Self {
-        Labels(labels.iter().map(Label::from).collect())
+    pub fn new<T>(labels: &[T]) -> Self
+    where
+        Label: for<'a> From<&'a T>,
+    {
+        Labels(labels.into_iter().map(Label::from).collect())
     }
 
     pub const fn empty() -> Self {
