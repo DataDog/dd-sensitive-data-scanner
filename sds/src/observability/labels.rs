@@ -17,11 +17,11 @@ impl Labels {
         Labels(tags)
     }
 
-    pub fn new<T>(labels: &[T]) -> Self
+    pub fn new<'a, T: 'a>(labels: impl IntoIterator<Item = &'a T>) -> Self
     where
-        Label: for<'a> From<&'a T>,
+        Label: From<&'a T>,
     {
-        Labels(labels.iter().map(Label::from).collect())
+        Labels(labels.into_iter().map(Label::from).collect())
     }
 
     pub const fn empty() -> Self {
