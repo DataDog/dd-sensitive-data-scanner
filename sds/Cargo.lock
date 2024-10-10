@@ -690,7 +690,6 @@ dependencies = [
  "farmhash",
  "futures",
  "httpmock",
- "hyperscan",
  "iban_validate",
  "lazy_static",
  "luhn",
