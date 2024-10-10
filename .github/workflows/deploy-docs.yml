@@ -16,11 +16,12 @@ jobs:
       - name: Install Rust
         run: rustup update stable
       - name: Generate docs
+        working-directory: sds
         run: cargo doc --no-deps
       - name: Upload Rust docs
         uses: actions/upload-pages-artifact@v1
         with:
-          path: ./target/doc
+          path: ./sds/target/doc
   deploy:
     runs-on: ubuntu-latest
     needs: build
