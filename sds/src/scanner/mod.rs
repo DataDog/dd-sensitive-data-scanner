@@ -71,6 +71,7 @@ pub trait CompiledRuleDyn: Send + Sync {
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
+        scanner_labels: &Labels,
     );
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
@@ -111,10 +112,11 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         should_keywords_match_event_paths: bool,
+        scanner_labels: &Labels,
     ) {
         let group_data_any = group_data
             .entry(TypeId::of::<T::GroupData>())
-            .or_insert_with(|| Box::new(T::GroupData::default()));
+            .or_insert_with(|| Box::new(T::create_group_data(scanner_labels)));
         let group_data: &mut T::GroupData = group_data_any.downcast_mut().unwrap();
         self.get_string_matches(
             content,
@@ -149,7 +151,10 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
 pub trait CompiledRule: Send + Sync {
     /// Data that is instantiated once per string being scanned, and shared with all rules that
     /// have the same `GroupData` type. `Default` will be used to initialize this data.
-    type GroupData: Default + 'static;
+    type GroupData: 'static;
+
+    /// Create a new instance of GroupData with the given scanner.
+    fn create_group_data(labels: &Labels) -> Self::GroupData;
 
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
@@ -226,7 +231,7 @@ pub struct Scanner {
     scoped_ruleset: ScopedRuleSet,
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
-
+    labels: Labels,
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
 }
 
@@ -625,6 +630,7 @@ impl ScannerBuilder<'_> {
             scanner_features,
             metrics: ScannerMetrics::new(&self.labels),
             match_validators_per_type,
+            labels: self.labels,
         })
     }
 }
@@ -681,6 +687,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     self.scanner
                         .scanner_features
                         .should_keywords_match_event_paths,
+                    &self.scanner.labels,
                 );
             }
         });
@@ -793,6 +800,9 @@ mod test {
         }
         fn get_scope(&self) -> &Scope {
             &self.scope
+        }
+        fn create_group_data(_: &Labels) -> () {
+            ()
         }
         fn get_string_matches(
             &self,
