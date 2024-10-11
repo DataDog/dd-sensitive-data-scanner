@@ -801,8 +801,8 @@ mod test {
         fn get_scope(&self) -> &Scope {
             &self.scope
         }
-        fn create_group_data(_: &Labels) -> () {
-            ()
+        fn create_group_data(_: &Labels) {
+            
         }
         fn get_string_matches(
             &self,
@@ -2549,36 +2549,36 @@ mod test {
         let (_, headers_valid) = generate_aws_headers_and_body(
             &datetime,
             server_url.as_str(),
-            &aws_id_valid,
-            &aws_secret_1,
+            aws_id_valid,
+            aws_secret_1,
         );
         let valid_authorization = headers_valid.get("authorization").unwrap();
         let (_, headers_invalid) = generate_aws_headers_and_body(
             &datetime,
             server_url.as_str(),
-            &aws_id_invalid,
-            &aws_secret_1,
+            aws_id_invalid,
+            aws_secret_1,
         );
         let invalid_authorization_1 = headers_invalid.get("authorization").unwrap();
         let (_, headers_invalid) = generate_aws_headers_and_body(
             &datetime,
             server_url.as_str(),
-            &aws_id_valid,
-            &aws_secret_2,
+            aws_id_valid,
+            aws_secret_2,
         );
         let invalid_authorization_2 = headers_invalid.get("authorization").unwrap();
         let (_, headers_error) = generate_aws_headers_and_body(
             &datetime,
             server_url.as_str(),
-            &aws_id_error,
-            &aws_secret_1,
+            aws_id_error,
+            aws_secret_1,
         );
         let error_authorization_1 = headers_error.get("authorization").unwrap();
         let (_, headers_error) = generate_aws_headers_and_body(
             &datetime,
             server_url.as_str(),
-            &aws_id_error,
-            &aws_secret_2,
+            aws_id_error,
+            aws_secret_2,
         );
         let error_authorization_2 = headers_error.get("authorization").unwrap();
         // Create a mock on the server.
