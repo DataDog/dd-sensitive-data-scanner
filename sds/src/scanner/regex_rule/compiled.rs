@@ -39,9 +39,7 @@ impl CompiledRule for RegexCompiledRule {
     fn get_scope(&self) -> &Scope {
         &self.scope
     }
-    fn create_group_data(_: &Labels) {
-        
-    }
+    fn create_group_data(_: &Labels) {}
     fn get_string_matches(
         &self,
         content: &str,
