@@ -110,10 +110,10 @@ impl<'a> PathSegment<'a> {
         }
     }
 
-    pub fn sanitize(&self) -> Option<Cow<'a, str>> {
+    pub fn sanitize(&'a self) -> Option<Cow<'a, str>> {
         if let PathSegment::Field(field) = self {
             match should_bypass_standardize_path(field) {
-                BypassStandardizePathResult::BypassAndAllLowercase => Some(field.clone()),
+                BypassStandardizePathResult::BypassAndAllLowercase => Some(Cow::Borrowed(field)),
                 BypassStandardizePathResult::BypassAndAllUppercase => {
                     Some(Cow::Owned(field.to_ascii_lowercase()))
                 }
