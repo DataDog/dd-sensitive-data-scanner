@@ -261,7 +261,8 @@ where
             // The true positive rule indices from the last node are no longer active, remove them.
             let _popped = self.true_positive_rule_idx.pop();
         }
-
+        // Pop the sanitized segment
+        self.sanitized_segments_until_node.pop();
         self.path.segments.pop();
     }
 
