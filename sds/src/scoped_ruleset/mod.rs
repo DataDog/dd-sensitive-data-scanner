@@ -216,23 +216,30 @@ where
         self.sanitized_segments_until_node.push(segment.sanitize());
 
         let true_positive_rules_count = if self.should_keywords_match_event_paths {
-            let mut current_sanitized_path = self
+            let mut total_len: usize = self
                 .sanitized_segments_until_node
                 .iter()
-                .filter_map(|sanitized_segment| {
-                    sanitized_segment.as_ref().map(|seg| Some(seg.clone()))
-                })
-                .fold(String::new(), |mut a, b| {
-                    let b_str = b.expect(
-                        "In the filter_map above, we make sure to filter out the None variants",
-                    );
-                    a.reserve(b_str.len() + 1);
-                    a.push_str(&b_str);
-                    a.push(UNIFIED_LINK_CHAR);
-                    a
-                });
-            // Remove the last `UNIFIED_LINK_CHAR` that has been put
-            current_sanitized_path.pop();
+                .flatten()
+                .map(|x| x.len() + 1)
+                .sum();
+            if total_len > 0 {
+                // subtract the len of the last link char that isn't needed
+                total_len -= 1;
+            }
+
+            let mut current_sanitized_path = String::with_capacity(total_len);
+            for (i, segment) in self
+                .sanitized_segments_until_node
+                .iter()
+                .cloned()
+                .flatten()
+                .enumerate()
+            {
+                if i != 0 {
+                    current_sanitized_path.push(UNIFIED_LINK_CHAR);
+                }
+                current_sanitized_path.push_str(segment.as_ref());
+            }
             self.content_visitor
                 .find_true_positive_rules_from_current_path(
                     current_sanitized_path.as_str(),
