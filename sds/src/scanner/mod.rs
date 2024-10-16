@@ -72,7 +72,7 @@ pub trait CompiledRuleDyn: Send + Sync {
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
+        true_positive_rule_idx: &[usize],
         scanner_labels: &Labels,
     );
 
@@ -117,7 +117,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
+        true_positive_rule_idx: &[usize],
         scanner_labels: &Labels,
     ) {
         let group_data_any = group_data
@@ -132,7 +132,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
             exclusion_check,
             excluded_matches,
             match_emitter,
-            should_keywords_match_event_paths,
+            true_positive_rule_idx,
         )
     }
 
@@ -176,7 +176,7 @@ pub trait CompiledRule: Send + Sync {
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
+        true_positive_rule_idx: &[usize],
     );
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
@@ -662,6 +662,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         content: &str,
         mut rule_visitor: crate::scoped_ruleset::RuleIndexVisitor,
         exclusion_check: ExclusionCheck<'b>,
+        true_positive_rule_idx: &[usize],
     ) -> bool {
         // matches for a single path
         let mut path_rules_matches = vec![];
@@ -694,9 +695,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
-                    self.scanner
-                        .scanner_features
-                        .should_keywords_match_event_paths,
+                    true_positive_rule_idx,
                     &self.scanner.labels,
                 );
             }
@@ -847,7 +846,7 @@ mod test {
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
-            _should_keywords_match_event_paths: bool,
+            _true_positive_rule_idx: &[usize],
         ) {
             match_emitter.emit(StringMatch { start: 10, end: 16 });
         }
