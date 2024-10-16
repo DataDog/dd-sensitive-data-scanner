@@ -60,7 +60,9 @@ where
 pub trait CompiledRuleDyn: Send + Sync {
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
-    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords>;
+    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
+        None
+    }
 
     #[allow(clippy::too_many_arguments)]
     fn get_string_matches(
@@ -161,7 +163,9 @@ pub trait CompiledRule: Send + Sync {
 
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
-    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords>;
+    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
+        None
+    }
 
     #[allow(clippy::too_many_arguments)]
     fn get_string_matches(
@@ -827,10 +831,6 @@ mod test {
         }
 
         fn create_group_data(_: &Labels) {}
-
-        fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
-            None
-        }
 
         fn get_string_matches(
             &self,
