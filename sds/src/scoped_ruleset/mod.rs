@@ -223,16 +223,14 @@ where
                 .flatten()
                 .map(|x| x.len() + 1)
                 .sum();
-            if total_len > 0 {
-                // subtract the len of the last link char that isn't needed
-                total_len -= 1;
-            }
+
+            // This will remove 1 to the total_len only if the result is >= 0
+            total_len = total_len.saturating_sub(1);
 
             let mut current_sanitized_path = String::with_capacity(total_len);
             for (i, segment) in self
                 .sanitized_segments_until_node
                 .iter()
-                .cloned()
                 .flatten()
                 .enumerate()
             {
