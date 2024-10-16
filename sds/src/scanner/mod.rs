@@ -66,7 +66,6 @@ pub trait CompiledRuleDyn: Send + Sync {
     fn get_string_matches(
         &self,
         content: &str,
-        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
@@ -111,7 +110,6 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
     fn get_string_matches(
         &self,
         content: &str,
-        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
@@ -126,7 +124,6 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         let group_data: &mut T::GroupData = group_data_any.downcast_mut().unwrap();
         self.get_string_matches(
             content,
-            path,
             regex_caches,
             group_data,
             exclusion_check,
@@ -170,7 +167,6 @@ pub trait CompiledRule: Send + Sync {
     fn get_string_matches(
         &self,
         content: &str,
-        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut Self::GroupData,
         exclusion_check: &ExclusionCheck<'_>,
@@ -689,7 +685,6 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
                 rule.get_string_matches(
                     content,
-                    path,
                     self.regex_caches,
                     &mut group_data,
                     &exclusion_check,
@@ -840,7 +835,6 @@ mod test {
         fn get_string_matches(
             &self,
             _content: &str,
-            _path: &Path,
             _regex_caches: &mut RegexCaches,
             _group_data: &mut Self::GroupData,
             _exclusion_check: &ExclusionCheck<'_>,

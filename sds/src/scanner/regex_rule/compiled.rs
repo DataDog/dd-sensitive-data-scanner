@@ -9,7 +9,7 @@ use crate::scanner::regex_rule::RegexCaches;
 use crate::scanner::scope::Scope;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::secondary_validation::Validator;
-use crate::{CompiledRule, ExclusionCheck, Labels, MatchAction, MatchEmitter, Path, StringMatch};
+use crate::{CompiledRule, ExclusionCheck, Labels, MatchAction, MatchEmitter, StringMatch};
 use ahash::AHashSet;
 use regex_automata::meta::Cache;
 use regex_automata::Input;
@@ -47,7 +47,6 @@ impl CompiledRule for RegexCompiledRule {
     fn get_string_matches(
         &self,
         content: &str,
-        path: &Path,
         regex_caches: &mut RegexCaches,
         _group_data: &mut (),
         exclusion_check: &ExclusionCheck<'_>,
@@ -59,7 +58,6 @@ impl CompiledRule for RegexCompiledRule {
             Some(ref included_keywords) => {
                 self.get_string_matches_with_included_keywords(
                     content,
-                    path,
                     regex_caches,
                     exclusion_check,
                     excluded_matches,
@@ -112,7 +110,6 @@ impl RegexCompiledRule {
     fn get_string_matches_with_included_keywords(
         &self,
         content: &str,
-        path: &Path,
         regex_caches: &mut RegexCaches,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
