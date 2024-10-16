@@ -164,6 +164,7 @@ struct ScopedRuledSetEventVisitor<'a, C> {
     true_positive_rule_idx: Vec<usize>,
 
     // This is a list of sanitized segments until the current node.
+    // It contains Options because the segments can be Indexes, not Fields. Fields have a path, Index don't and will result in None instead.
     sanitized_segments_until_node: Vec<Option<Cow<'a, str>>>,
 
     // This is a counter that helps keep track of how many elements we have pushed
@@ -212,7 +213,7 @@ where
             }
         }
 
-        // Sanitize the segment and push it
+        // Sanitize the segment and push it. If the segment is an Index, it will push None.
         self.sanitized_segments_until_node.push(segment.sanitize());
 
         let true_positive_rules_count = if self.should_keywords_match_event_paths {
