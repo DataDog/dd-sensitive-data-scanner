@@ -117,7 +117,7 @@ impl RegexCompiledRule {
         true_positive_rule_idx: &[usize],
         included_keywords: &CompiledIncludedProximityKeywords,
     ) {
-        if !true_positive_rule_idx.is_empty() && true_positive_rule_idx.contains(&self.rule_index) {
+        if true_positive_rule_idx.contains(&self.rule_index) {
             // since the path contains a match, we can skip future included keyword checks
             let true_positive_search = self.true_positive_matches(
                 content,
