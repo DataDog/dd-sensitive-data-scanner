@@ -1,7 +1,7 @@
 use crate::match_validation::config::{InternalMatchValidationType, MatchValidationType};
 use crate::proximity_keywords::{
-    contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
-    CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
+    get_prefix_start, is_index_within_prefix, CompiledExcludedProximityKeywords,
+    CompiledIncludedProximityKeywords,
 };
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::regex_store::SharedRegex;
@@ -9,7 +9,7 @@ use crate::scanner::regex_rule::RegexCaches;
 use crate::scanner::scope::Scope;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::secondary_validation::Validator;
-use crate::{CompiledRule, ExclusionCheck, Labels, MatchAction, MatchEmitter, Path, StringMatch};
+use crate::{CompiledRule, ExclusionCheck, Labels, MatchAction, MatchEmitter, StringMatch};
 use ahash::AHashSet;
 use regex_automata::meta::Cache;
 use regex_automata::Input;
@@ -40,27 +40,29 @@ impl CompiledRule for RegexCompiledRule {
         &self.scope
     }
     fn create_group_data(_: &Labels) {}
+    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
+        self.included_keywords.as_ref()
+    }
+
     fn get_string_matches(
         &self,
         content: &str,
-        path: &Path,
         regex_caches: &mut RegexCaches,
         _group_data: &mut (),
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
+        true_positive_rule_idx: &[usize],
     ) {
         match self.included_keywords {
             Some(ref included_keywords) => {
                 self.get_string_matches_with_included_keywords(
                     content,
-                    path,
                     regex_caches,
                     exclusion_check,
                     excluded_matches,
                     match_emitter,
-                    should_keywords_match_event_paths,
+                    true_positive_rule_idx,
                     included_keywords,
                 );
             }
@@ -108,31 +110,27 @@ impl RegexCompiledRule {
     fn get_string_matches_with_included_keywords(
         &self,
         content: &str,
-        path: &Path,
         regex_caches: &mut RegexCaches,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
+        true_positive_rule_idx: &[usize],
         included_keywords: &CompiledIncludedProximityKeywords,
     ) {
-        if should_keywords_match_event_paths {
-            let sanitized_path = path.sanitize();
-            if contains_keyword_in_path(&sanitized_path, &included_keywords.keywords_pattern) {
-                // since the path contains a match, we can skip future included keyword checks
-                let true_positive_search = self.true_positive_matches(
-                    content,
-                    0,
-                    regex_caches.get(&self.regex),
-                    false,
-                    exclusion_check,
-                    excluded_matches,
-                );
-                for string_match in true_positive_search {
-                    match_emitter.emit(string_match);
-                }
-                return;
+        if true_positive_rule_idx.contains(&self.rule_index) {
+            // since the path contains a match, we can skip future included keyword checks
+            let true_positive_search = self.true_positive_matches(
+                content,
+                0,
+                regex_caches.get(&self.regex),
+                false,
+                exclusion_check,
+                excluded_matches,
+            );
+            for string_match in true_positive_search {
+                match_emitter.emit(string_match);
             }
+            return;
         }
 
         let mut included_keyword_matches = included_keywords.keyword_matches(content);
