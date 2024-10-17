@@ -53,6 +53,7 @@ pub fn scoped_ruleset(c: &mut Criterion) {
                     _content: &str,
                     mut rules: RuleIndexVisitor,
                     _check: ExclusionCheck,
+                    _current: &[usize],
                 ) -> bool {
                     rules.visit_rule_indices(|_rule_index| {
                         *self.num_visited += 1;

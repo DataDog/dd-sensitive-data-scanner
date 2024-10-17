@@ -122,6 +122,7 @@ pub trait ContentVisitor<'path> {
         content: &str,
         rules: RuleIndexVisitor,
         is_excluded: ExclusionCheck<'content_visitor>,
+        true_positive_rule_idx: &[usize],
     ) -> bool;
 
     fn find_true_positive_rules_from_current_path(
@@ -239,6 +240,7 @@ where
                 }
                 current_sanitized_path.push_str(segment.as_ref());
             }
+
             self.content_visitor
                 .find_true_positive_rules_from_current_path(
                     current_sanitized_path.as_str(),
@@ -283,6 +285,7 @@ where
             ExclusionCheck {
                 tree_nodes: &self.tree_nodes,
             },
+            &self.true_positive_rule_idx,
         );
         if let Some(bool_set) = &mut self.bool_set {
             bool_set.reset();
@@ -421,6 +424,7 @@ mod test {
                 content: &str,
                 mut rule_iter: RuleIndexVisitor,
                 exclusion_check: ExclusionCheck<'content_visitor>,
+                _true_positive_rule_idx: &[usize],
             ) -> bool {
                 let mut rules = vec![];
                 rule_iter.visit_rule_indices(|rule_index| {

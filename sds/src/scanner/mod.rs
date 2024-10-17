@@ -60,19 +60,20 @@ where
 pub trait CompiledRuleDyn: Send + Sync {
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
-    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords>;
+    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
+        None
+    }
 
     #[allow(clippy::too_many_arguments)]
     fn get_string_matches(
         &self,
         content: &str,
-        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
+        true_positive_rule_idx: &[usize],
         scanner_labels: &Labels,
     );
 
@@ -111,13 +112,12 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
     fn get_string_matches(
         &self,
         content: &str,
-        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
+        true_positive_rule_idx: &[usize],
         scanner_labels: &Labels,
     ) {
         let group_data_any = group_data
@@ -126,13 +126,12 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         let group_data: &mut T::GroupData = group_data_any.downcast_mut().unwrap();
         self.get_string_matches(
             content,
-            path,
             regex_caches,
             group_data,
             exclusion_check,
             excluded_matches,
             match_emitter,
-            should_keywords_match_event_paths,
+            true_positive_rule_idx,
         )
     }
 
@@ -164,19 +163,20 @@ pub trait CompiledRule: Send + Sync {
 
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
-    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords>;
+    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
+        None
+    }
 
     #[allow(clippy::too_many_arguments)]
     fn get_string_matches(
         &self,
         content: &str,
-        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut Self::GroupData,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_keywords_match_event_paths: bool,
+        true_positive_rule_idx: &[usize],
     );
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
@@ -662,6 +662,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         content: &str,
         mut rule_visitor: crate::scoped_ruleset::RuleIndexVisitor,
         exclusion_check: ExclusionCheck<'b>,
+        true_positive_rule_idx: &[usize],
     ) -> bool {
         // matches for a single path
         let mut path_rules_matches = vec![];
@@ -688,15 +689,12 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
                 rule.get_string_matches(
                     content,
-                    path,
                     self.regex_caches,
                     &mut group_data,
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
-                    self.scanner
-                        .scanner_features
-                        .should_keywords_match_event_paths,
+                    true_positive_rule_idx,
                     &self.scanner.labels,
                 );
             }
@@ -834,20 +832,15 @@ mod test {
 
         fn create_group_data(_: &Labels) {}
 
-        fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
-            None
-        }
-
         fn get_string_matches(
             &self,
             _content: &str,
-            _path: &Path,
             _regex_caches: &mut RegexCaches,
             _group_data: &mut Self::GroupData,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
-            _should_keywords_match_event_paths: bool,
+            _true_positive_rule_idx: &[usize],
         ) {
             match_emitter.emit(StringMatch { start: 10, end: 16 });
         }
