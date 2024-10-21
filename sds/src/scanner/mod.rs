@@ -2252,6 +2252,7 @@ mod test {
             })
             .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
                 "http://localhost:8080",
+                vec![],
             )))
             .build()])
         .build()
@@ -2309,6 +2310,7 @@ mod test {
             })
             .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
                 "http://localhost:8080",
+                vec![],
             )))
             .build();
 
@@ -2318,6 +2320,7 @@ mod test {
             })
             .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
                 "http://localhost:8080",
+                vec![],
             )))
             .build();
 
@@ -2327,6 +2330,7 @@ mod test {
             })
             .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
                 "http://localhost:8081",
+                vec![],
             )))
             .build();
 
@@ -2348,14 +2352,14 @@ mod test {
             .get(&InternalMatchValidationType::Aws)
             .unwrap();
         let http_2_validator = match_validator_map
-            .get(&InternalMatchValidationType::CustomHttp(
+            .get(&InternalMatchValidationType::CustomHttp(vec![
                 "http://localhost:8080".to_string(),
-            ))
+            ]))
             .unwrap();
         let http_1_validator = match_validator_map
-            .get(&InternalMatchValidationType::CustomHttp(
+            .get(&InternalMatchValidationType::CustomHttp(vec![
                 "http://localhost:8081".to_string(),
-            ))
+            ]))
             .unwrap();
         assert!(!std::ptr::eq(
             http_1_validator.as_ref(),
@@ -2559,6 +2563,44 @@ mod test {
         assert_eq!(matches[1].match_status, MatchStatus::Valid);
         assert_eq!(matches[2].match_status, MatchStatus::Valid);
     }
+
+    #[tokio::test]
+    async fn test_mock_endpoint_with_multiple_hosts() {
+        let server = MockServer::start();
+        // Create a mock on the server.
+        let mock_http_service_us = server.mock(|when, then| {
+            when.method(GET).path("/us-service");
+            then.status(200);
+        });
+        let mock_http_service_eu = server.mock(|when, then| {
+            when.method(GET).path("/eu-service");
+            then.status(403);
+        });
+        let rule_valid_match = RegexRuleConfig::new("\\bvalid_match\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[VALID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new(server.url("/$HOSTS-service").to_string())
+                    .set_hosts(vec!["us".to_string(), "eu".to_string()])
+                    .build(),
+            ))
+            .build();
+
+        let scanner = ScannerBuilder::new(&[rule_valid_match]).build().unwrap();
+        let mut content = "this is a content with a valid_match on multiple hosts".to_string();
+        let mut matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(
+            content,
+            "this is a content with a [VALID] on multiple hosts"
+        );
+        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        mock_http_service_us.assert();
+        mock_http_service_eu.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+    }
+
     #[tokio::test]
     async fn test_mock_aws_validator() {
         let server = MockServer::start();

@@ -3,6 +3,7 @@ use super::{
     match_validator::MatchValidator,
 };
 use crate::{match_validation::config::HttpMethod, CompiledRuleDyn, MatchStatus, RuleMatch};
+use ahash::AHashMap;
 use async_trait::async_trait;
 use futures::future::join_all;
 use lazy_static::lazy_static;
@@ -25,6 +26,7 @@ impl HttpValidator {
 
 pub struct HttpValidatorConfigBuilder {
     endpoint: String,
+    hosts: Vec<String>,
     method: HttpMethod,
     request_header: Vec<RequestHeader>,
     valid_http_status_code: Vec<Range<u16>>,
@@ -36,6 +38,7 @@ impl HttpValidatorConfigBuilder {
     pub fn new(endpoint: String) -> Self {
         HttpValidatorConfigBuilder {
             endpoint,
+            hosts: vec![],
             method: HttpMethod::Get,
             request_header: vec![RequestHeader {
                 key: "Authorization".to_string(),
@@ -52,6 +55,10 @@ impl HttpValidatorConfigBuilder {
     }
     pub fn set_request_header(&mut self, request_header: Vec<RequestHeader>) -> &mut Self {
         self.request_header = request_header;
+        self
+    }
+    pub fn set_hosts(&mut self, hosts: Vec<String>) -> &mut Self {
+        self.hosts = hosts;
         self
     }
     pub fn set_method(&mut self, method: HttpMethod) -> &mut Self {
@@ -77,14 +84,14 @@ impl HttpValidatorConfigBuilder {
         self
     }
     pub fn build(&self) -> HttpValidatorConfig {
-        HttpValidatorConfig {
-            endpoint: self.endpoint.clone(),
-            method: self.method.clone(),
-            request_header: self.request_header.clone(),
-            valid_http_status_code: self.valid_http_status_code.clone(),
-            invalid_http_status_code: self.invalid_http_status_code.clone(),
-            options: self.options.clone(),
-        }
+        let mut config = HttpValidatorConfig::new(self.endpoint.as_str(), self.hosts.clone());
+        config.invalid_http_status_code = self.invalid_http_status_code.clone();
+        config.method = self.method.clone();
+        config.request_header = self.request_header.clone();
+        config.valid_http_status_code = self.valid_http_status_code.clone();
+        config.options = self.options.clone();
+        config.invalid_http_status_code = self.invalid_http_status_code.clone();
+        config
     }
 }
 
@@ -112,9 +119,18 @@ impl HttpValidatorHelper {
     }
 
     pub fn new_datadog_config_builder() -> HttpValidatorConfigBuilder {
-        let mut builder = HttpValidatorConfigBuilder::new(
-            "https://api.datadoghq.com/api/v1/validate".to_string(),
-        );
+        let mut builder =
+            HttpValidatorConfigBuilder::new("https://$HOSTS/api/v1/validate".to_string());
+        builder.set_hosts(vec![
+            "api.datadoghq.com".to_string(),
+            "api.datadoghq.eu".to_string(),
+            "api.us3.datadoghq.com".to_string(),
+            "api.us5.datadoghq.com".to_string(),
+            "api.ddog-gov.com".to_string(),
+            "api.ap1.datadoghq.com".to_string(),
+        ]);
+        #[allow(clippy::single_range_in_vec_init)]
+        builder.set_invalid_http_status_code(vec![403..404]);
         builder.set_request_header(vec![
             RequestHeader {
                 key: "DD-API-KEY".to_string(),
@@ -136,71 +152,86 @@ impl HttpValidatorHelper {
 #[async_trait]
 impl MatchValidator for HttpValidator {
     async fn validate(&self, matches: &mut Vec<RuleMatch>, _: &[Box<dyn CompiledRuleDyn>]) {
-        // Let's reqwest the HTTP API endpoint to validate the matches
-        let futures = matches.iter_mut().map(|m| {
-            async move {
-                let mut request_builder: reqwest::RequestBuilder;
-                match self.config.method {
-                    HttpMethod::Get => {
-                        request_builder = HTTP_CLIENT.get(&self.config.endpoint);
-                    }
-                    HttpMethod::Post => {
-                        request_builder = HTTP_CLIENT.post(&self.config.endpoint);
-                    }
-                    HttpMethod::Put => {
-                        request_builder = HTTP_CLIENT.put(&self.config.endpoint);
-                    }
-                    HttpMethod::Delete => {
-                        request_builder = HTTP_CLIENT.delete(&self.config.endpoint);
-                    }
-                    HttpMethod::Patch => {
-                        request_builder = HTTP_CLIENT.patch(&self.config.endpoint);
-                    }
-                }
-                // Set timeout
-                request_builder = request_builder.timeout(self.config.options.timeout);
-
-                // Add headers
-                for header in &self.config.request_header {
-                    request_builder = request_builder.header(
-                        &header.key,
-                        &header.get_value_with_match(m.match_value.as_ref().unwrap()),
-                    );
-                }
-                let res = request_builder.send().await;
-                match res {
-                    Ok(val) => {
-                        // First check if this is in the valid status ranges
-                        for valid_range in &self.config.valid_http_status_code {
-                            if valid_range.contains(&val.status().as_u16()) {
-                                m.match_status = MatchStatus::Valid;
-                                return;
-                            }
-                        }
-                        // Next check if this is in the invalid status ranges
-                        for invalid_range in &self.config.invalid_http_status_code {
-                            if invalid_range.contains(&val.status().as_u16()) {
-                                m.match_status = MatchStatus::Invalid;
-                                return;
-                            }
-                        }
-                        // If it's not in either, then it's not available
-                        m.match_status = MatchStatus::Error(fmt::format(format_args!(
-                            "Unexpected HTTP status code {}",
-                            val.status().as_u16()
-                        )));
-                    }
-                    Err(err) => {
-                        // TODO(trosenblatt) emit a metrics for this
-                        m.match_status = MatchStatus::Error(fmt::format(format_args!(
-                            "Error making HTTP request: {}",
-                            err
-                        )));
-                    }
-                }
+        // let's build a map of match status per endpoint and per match_idx
+        let mut match_status_per_endpoint_and_match = AHashMap::new();
+        for (idx, _) in matches.iter().enumerate() {
+            for endpoint in &self.config.endpoints {
+                match_status_per_endpoint_and_match
+                    .entry((idx, endpoint))
+                    .or_insert_with(|| MatchStatus::NotChecked);
             }
-        });
+        }
+
+        let futures = match_status_per_endpoint_and_match.iter_mut().map(
+            |((match_idx, endpoint), match_status)| {
+                let match_value = matches[*match_idx].match_value.as_ref().unwrap();
+                async move {
+                    let mut request_builder: reqwest::RequestBuilder;
+                    match self.config.method {
+                        HttpMethod::Get => {
+                            request_builder = HTTP_CLIENT.get(*endpoint);
+                        }
+                        HttpMethod::Post => {
+                            request_builder = HTTP_CLIENT.post(*endpoint);
+                        }
+                        HttpMethod::Put => {
+                            request_builder = HTTP_CLIENT.put(*endpoint);
+                        }
+                        HttpMethod::Delete => {
+                            request_builder = HTTP_CLIENT.delete(*endpoint);
+                        }
+                        HttpMethod::Patch => {
+                            request_builder = HTTP_CLIENT.patch(*endpoint);
+                        }
+                    }
+                    // Set timeout
+                    request_builder = request_builder.timeout(self.config.options.timeout);
+
+                    // Add headers
+                    for header in &self.config.request_header {
+                        request_builder = request_builder
+                            .header(&header.key, &header.get_value_with_match(match_value));
+                    }
+                    let res = request_builder.send().await;
+                    match res {
+                        Ok(val) => {
+                            // First check if this is in the valid status ranges
+                            for valid_range in &self.config.valid_http_status_code {
+                                if valid_range.contains(&val.status().as_u16()) {
+                                    *match_status = MatchStatus::Valid;
+                                    return;
+                                }
+                            }
+                            // Next check if this is in the invalid status ranges
+                            for invalid_range in &self.config.invalid_http_status_code {
+                                if invalid_range.contains(&val.status().as_u16()) {
+                                    *match_status = MatchStatus::Invalid;
+                                    return;
+                                }
+                            }
+                            // If it's not in either, then it's not available
+                            *match_status = MatchStatus::Error(fmt::format(format_args!(
+                                "Unexpected HTTP status code {}",
+                                val.status().as_u16()
+                            )));
+                        }
+                        Err(err) => {
+                            // TODO(trosenblatt) emit a metrics for this
+                            *match_status = MatchStatus::Error(fmt::format(format_args!(
+                                "Error making HTTP request: {}",
+                                err
+                            )));
+                        }
+                    }
+                }
+            },
+        );
         // Wait for all result to complete
         let _ = join_all(futures).await;
+
+        // Update the match status
+        for ((match_idx, _), status) in match_status_per_endpoint_and_match {
+            matches[match_idx].match_status.merge(status.clone());
+        }
     }
 }

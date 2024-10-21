@@ -65,7 +65,7 @@ pub struct HttpValidatorOption {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct HttpValidatorConfig {
-    pub endpoint: String,
+    pub endpoints: Vec<String>,
     pub method: HttpMethod,
     pub request_header: Vec<RequestHeader>,
     pub valid_http_status_code: Vec<Range<u16>>,
@@ -74,9 +74,18 @@ pub struct HttpValidatorConfig {
 }
 
 impl HttpValidatorConfig {
-    pub fn new(endpoint: &str) -> Self {
+    pub fn new(endpoint: &str, hosts: Vec<String>) -> Self {
+        // Replace $HOSTS in endpoint and build the endpoints vector
+        let mut endpoints = vec![];
+        for host in hosts {
+            endpoints.push(endpoint.replace("$HOSTS", &host));
+        }
+        if endpoints.is_empty() {
+            // If no hosts are provided, use the endpoint as is
+            endpoints.push(endpoint.to_string());
+        }
         HttpValidatorConfig {
-            endpoint: endpoint.to_string(),
+            endpoints,
             method: HttpMethod::Get,
             request_header: vec![],
             #[allow(clippy::single_range_in_vec_init)]
@@ -108,7 +117,7 @@ impl MatchValidationType {
         match self {
             MatchValidationType::Aws(_) => InternalMatchValidationType::Aws,
             MatchValidationType::CustomHttp(http_config) => {
-                InternalMatchValidationType::CustomHttp(http_config.endpoint.clone())
+                InternalMatchValidationType::CustomHttp(http_config.endpoints.clone())
             }
         }
     }
@@ -120,5 +129,28 @@ impl MatchValidationType {
 #[derive(PartialEq, Eq, Hash)]
 pub enum InternalMatchValidationType {
     Aws,
-    CustomHttp(String),
+    CustomHttp(Vec<String>),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_http_validator_config_no_hosts() {
+        let config = HttpValidatorConfig::new("http://localhost/test", vec![]);
+        assert_eq!(config.endpoints, vec!["http://localhost/test"]);
+    }
+
+    #[test]
+    fn test_http_validator_config_with_hosts() {
+        let config = HttpValidatorConfig::new(
+            "http://localhost/$HOSTS",
+            vec!["us".to_string(), "eu".to_string()],
+        );
+        assert_eq!(
+            config.endpoints,
+            vec!["http://localhost/us", "http://localhost/eu"]
+        );
+    }
 }
