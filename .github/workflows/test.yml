@@ -3,7 +3,7 @@ name: Test Suite
 on:
   pull_request:
   merge_group:
-    types: [ checks_requested ]
+    types: [checks_requested]
   push:
     branches:
       - main
@@ -54,7 +54,7 @@ jobs:
       - name: "Run the Go linter"
         run: |
           cd go
-          go install honnef.co/go/tools/cmd/staticcheck@v0.4.7
+          go install honnef.co/go/tools/cmd/staticcheck@v0.5.1
           export PATH=$PATH:$(go env GOPATH)/bin
           LD_LIBRARY_PATH=../rust/target/release staticcheck ./...
       - name: "Run the Go unit tests"
