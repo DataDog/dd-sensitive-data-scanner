@@ -229,7 +229,7 @@ impl MatchValidator for HttpValidator {
         // Wait for all result to complete
         let _ = join_all(futures).await;
 
-        // Update the match status
+        // Update the match status with this highest priority returned
         for ((match_idx, _), status) in match_status_per_endpoint_and_match {
             matches[match_idx].match_status.merge(status.clone());
         }
