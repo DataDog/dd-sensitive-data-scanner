@@ -161,8 +161,7 @@ mod test {
     fn dropped_regexes_should_be_removed_from_global_store() {
         let store = Mutex::new(RegexStore::new());
 
-        let regex =
-            get_memoized_regex_with_custom_store("test", Regex::new, &store).unwrap();
+        let regex = get_memoized_regex_with_custom_store("test", Regex::new, &store).unwrap();
 
         assert_eq!(store.lock().unwrap().len(), 1);
 
@@ -178,18 +177,14 @@ mod test {
     fn test_automatic_gc() {
         let store = Mutex::new(RegexStore::new());
 
-        let regex =
-            get_memoized_regex_with_custom_store("test", Regex::new, &store).unwrap();
+        let regex = get_memoized_regex_with_custom_store("test", Regex::new, &store).unwrap();
         drop(regex);
 
         // insert enough new patterns to trigger a GC
         for i in 0..(GC_FREQUENCY - 1) {
-            let regex = get_memoized_regex_with_custom_store(
-                &format!("test-{}", i),
-                Regex::new,
-                &store,
-            )
-            .unwrap();
+            let regex =
+                get_memoized_regex_with_custom_store(&format!("test-{}", i), Regex::new, &store)
+                    .unwrap();
             drop(regex)
         }
         // The insertion that triggered the GC is itself not cleaned up yet, but everything else is

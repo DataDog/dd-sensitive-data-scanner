@@ -764,10 +764,12 @@ mod test {
     #[test]
     fn test_compile_keywords_pattern() {
         let (content_pattern, path_pattern) = match compile_keywords_to_ast(
-            &["hello".to_string(),
+            &[
+                "hello".to_string(),
                 "world*".to_string(),
                 "_aws".to_string(),
-                "aws-access".to_string()],
+                "aws-access".to_string(),
+            ],
             10,
             &[],
         ) {
@@ -922,9 +924,10 @@ mod test {
 
         // Should match
         for path in should_match {
-            assert!(
-                contains_keyword_in_path(path, &included_keywords.keywords_pattern)
-            );
+            assert!(contains_keyword_in_path(
+                path,
+                &included_keywords.keywords_pattern
+            ));
         }
 
         let should_not_match = vec![
@@ -937,9 +940,10 @@ mod test {
         ];
 
         for path in should_not_match {
-            assert!(
-                !contains_keyword_in_path(path, &included_keywords.keywords_pattern)
-            );
+            assert!(!contains_keyword_in_path(
+                path,
+                &included_keywords.keywords_pattern
+            ));
         }
     }
 }
