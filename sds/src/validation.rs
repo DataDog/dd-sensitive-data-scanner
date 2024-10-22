@@ -162,7 +162,7 @@ mod test {
     #[test]
     fn dot_new_line() {
         let regex = validate_and_create_regex(".").unwrap();
-        assert_eq!(regex.is_match("\n"), false);
+        assert!(!regex.is_match("\n"));
     }
 
     #[test]
