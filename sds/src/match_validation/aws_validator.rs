@@ -36,7 +36,7 @@ fn extract_aws_secret_from_match(match_value: &str) -> String {
     if let Some(caps) = caps {
         return caps[1].to_string();
     }
-    return "".to_string();
+    "".to_string()
 }
 
 #[async_trait]
@@ -86,12 +86,12 @@ impl MatchValidator for AwsValidator {
                 async move {
                     if match_secret.is_none() {
                         *match_status =
-                            MatchStatus::Error(format!("Missing match value for aws_secret"));
+                            MatchStatus::Error("Missing match value for aws_secret".to_string());
                         return;
                     }
                     if match_id.is_none() {
                         *match_status =
-                            MatchStatus::Error(format!("Missing match value for aws_id"));
+                            MatchStatus::Error("Missing match value for aws_id".to_string());
                         return;
                     }
                     let match_secret =
