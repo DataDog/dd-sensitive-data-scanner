@@ -480,26 +480,26 @@ mod test {
     #[test]
     fn test_is_index_within_prefix_ascii() {
         let content = "abcdefghijklmnopqrstuvwxyz0123456789";
-        assert_eq!(is_index_within_prefix(content, 0, 1, 10), true);
-        assert_eq!(is_index_within_prefix(content, 0, 5, 10), true);
-        assert_eq!(is_index_within_prefix(content, 0, 9, 10), true);
-        assert_eq!(is_index_within_prefix(content, 0, 10, 10), true);
-        assert_eq!(is_index_within_prefix(content, 0, 11, 10), false);
+        assert!(is_index_within_prefix(content, 0, 1, 10));
+        assert!(is_index_within_prefix(content, 0, 5, 10));
+        assert!(is_index_within_prefix(content, 0, 9, 10));
+        assert!(is_index_within_prefix(content, 0, 10, 10));
+        assert!(!is_index_within_prefix(content, 0, 11, 10));
 
-        assert_eq!(is_index_within_prefix(content, 5, 6, 10), true);
-        assert_eq!(is_index_within_prefix(content, 5, 10, 10), true);
-        assert_eq!(is_index_within_prefix(content, 5, 14, 10), true);
-        assert_eq!(is_index_within_prefix(content, 5, 15, 10), true);
-        assert_eq!(is_index_within_prefix(content, 5, 16, 10), false);
+        assert!(is_index_within_prefix(content, 5, 6, 10));
+        assert!(is_index_within_prefix(content, 5, 10, 10));
+        assert!(is_index_within_prefix(content, 5, 14, 10));
+        assert!(is_index_within_prefix(content, 5, 15, 10));
+        assert!(!is_index_within_prefix(content, 5, 16, 10));
     }
 
     #[test]
     fn test_is_index_within_prefix_multi_byte_unicode() {
         // each char is 2 bytes
         let content = "éèéèéèéèéèéèéèéè";
-        assert_eq!(is_index_within_prefix(content, 0, 2, 10), true);
-        assert_eq!(is_index_within_prefix(content, 2, 6, 3), true);
-        assert_eq!(is_index_within_prefix(content, 2, 6, 1), false);
+        assert!(is_index_within_prefix(content, 0, 2, 10));
+        assert!(is_index_within_prefix(content, 2, 6, 3));
+        assert!(!is_index_within_prefix(content, 2, 6, 1));
     }
 
     #[test]
@@ -705,7 +705,7 @@ mod test {
         // "id" only fits in the match prefix (5 chars) if the "-" char isn't counted towards the 5 chars
         let is_false_positive = excluded.is_false_positive_match("users i-d   ab", 12);
 
-        assert_eq!(is_false_positive, false);
+        assert!(!is_false_positive);
     }
 
     #[test]
@@ -716,7 +716,7 @@ mod test {
         // The entire string is in the prefix, but "-" is stripped, so "userid" don't match "id" due to the word boundary
         let is_false_positive = excluded.is_false_positive_match("user-id ab", 8);
 
-        assert_eq!(is_false_positive, false);
+        assert!(!is_false_positive);
     }
 
     #[test]
@@ -726,7 +726,7 @@ mod test {
         let excluded = excluded.unwrap();
         let is_false_positive = excluded.is_false_positive_match("invalid   abc", 10);
 
-        assert_eq!(is_false_positive, false);
+        assert!(!is_false_positive);
     }
 
     #[test]
@@ -736,7 +736,7 @@ mod test {
 
         let excluded = excluded.unwrap();
         let is_false_positive = excluded.is_false_positive_match("foo idabc", 6);
-        assert_eq!(is_false_positive, false);
+        assert!(!is_false_positive);
     }
 
     #[test]
@@ -745,16 +745,16 @@ mod test {
             compile_keywords(vec!["hello".to_string(), "awsAccess".to_string()], 20, &[])
                 .unwrap()
                 .unwrap();
-        assert_eq!(content_regex.is_match("hello"), true);
-        assert_eq!(content_regex.is_match("he-l_lo"), false);
+        assert!(content_regex.is_match("hello"));
+        assert!(!content_regex.is_match("he-l_lo"));
         assert_eq!(
             content_regex.search(&Input::new("I want to say hello to my dear friend")),
             Some(regex_automata::Match::must(0, 14..19))
         );
 
-        assert_eq!(path_regex.is_match("awsAccess"), false);
-        assert_eq!(path_regex.is_match("aws.access"), true);
-        assert_eq!(path_regex.is_match("aws.accessible"), false);
+        assert!(!path_regex.is_match("awsAccess"));
+        assert!(path_regex.is_match("aws.access"));
+        assert!(!path_regex.is_match("aws.accessible"));
         assert_eq!(
             path_regex.search(&Input::new("my.path.to.aws.access")),
             Some(regex_automata::Match::must(0, 11..21))
@@ -764,12 +764,10 @@ mod test {
     #[test]
     fn test_compile_keywords_pattern() {
         let (content_pattern, path_pattern) = match compile_keywords_to_ast(
-            &&vec![
-                "hello".to_string(),
+            &["hello".to_string(),
                 "world*".to_string(),
                 "_aws".to_string(),
-                "aws-access".to_string(),
-            ],
+                "aws-access".to_string()],
             10,
             &[],
         ) {
@@ -924,9 +922,8 @@ mod test {
 
         // Should match
         for path in should_match {
-            assert_eq!(
-                contains_keyword_in_path(path, &included_keywords.keywords_pattern),
-                true
+            assert!(
+                contains_keyword_in_path(path, &included_keywords.keywords_pattern)
             );
         }
 
@@ -940,9 +937,8 @@ mod test {
         ];
 
         for path in should_not_match {
-            assert_eq!(
-                contains_keyword_in_path(path, &included_keywords.keywords_pattern),
-                false
+            assert!(
+                !contains_keyword_in_path(path, &included_keywords.keywords_pattern)
             );
         }
     }

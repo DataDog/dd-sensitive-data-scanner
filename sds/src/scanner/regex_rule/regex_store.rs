@@ -162,7 +162,7 @@ mod test {
         let store = Mutex::new(RegexStore::new());
 
         let regex =
-            get_memoized_regex_with_custom_store("test", |x| Regex::new(x), &store).unwrap();
+            get_memoized_regex_with_custom_store("test", Regex::new, &store).unwrap();
 
         assert_eq!(store.lock().unwrap().len(), 1);
 
@@ -179,14 +179,14 @@ mod test {
         let store = Mutex::new(RegexStore::new());
 
         let regex =
-            get_memoized_regex_with_custom_store("test", |x| Regex::new(x), &store).unwrap();
+            get_memoized_regex_with_custom_store("test", Regex::new, &store).unwrap();
         drop(regex);
 
         // insert enough new patterns to trigger a GC
         for i in 0..(GC_FREQUENCY - 1) {
             let regex = get_memoized_regex_with_custom_store(
                 &format!("test-{}", i),
-                |x| Regex::new(x),
+                Regex::new,
                 &store,
             )
             .unwrap();
