@@ -152,7 +152,7 @@ impl HttpValidatorHelper {
 #[async_trait]
 impl MatchValidator for HttpValidator {
     async fn validate(&self, matches: &mut Vec<RuleMatch>, _: &[Box<dyn CompiledRuleDyn>]) {
-        // let's build a map of match status per endpoint and per match_idx
+        // build a map of match status per endpoint and per match_idx
         let mut match_status_per_endpoint_and_match = AHashMap::new();
         for (idx, _) in matches.iter().enumerate() {
             for endpoint in &self.config.endpoints {
