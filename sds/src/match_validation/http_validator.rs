@@ -184,7 +184,6 @@ impl MatchValidator for HttpValidator {
                             request_builder = HTTP_CLIENT.patch(*endpoint);
                         }
                     }
-                    // Set timeout
                     request_builder = request_builder.timeout(self.config.options.timeout);
 
                     // Add headers
