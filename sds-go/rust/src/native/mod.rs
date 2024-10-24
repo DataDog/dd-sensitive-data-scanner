@@ -17,7 +17,7 @@ pub type RuleDoublePtr = Arc<RulePtr>;
 pub type RuleList = Arc<Mutex<Vec<RulePtr>>>;
 
 /// Safety: The pointer passed in must be a valid cstr pointer.
-unsafe fn read_json<T: DeserializeOwned>(raw_value: *const c_char) -> Result<T, serde_json::Error> {
+pub unsafe fn read_json<T: DeserializeOwned>(raw_value: *const c_char) -> Result<T, serde_json::Error> {
     let c_str = unsafe { CStr::from_ptr(raw_value) };
     let val = c_str.to_string_lossy();
     serde_json::from_str(&val)
