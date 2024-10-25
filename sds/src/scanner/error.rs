@@ -52,15 +52,15 @@ pub enum MatchValidationError {
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum ScannerMetadataError {
     #[error("ID is too short, must be at least {0} characters long")]
-    IdTooShort,
+    IdTooShort(usize),
     #[error("`name` field must not be trim empty")]
     NameTrimEmpty,
     #[error("`name` field is too long, at most {0} characters are allowed, the current name has {1} characters")]
-    NameTooLong,
+    NameTooLong(usize, usize),
     #[error("`description` field must not be trim empty")]
     DescriptionTrimEmpty,
     #[error("`description` field is too long, at most {0} characters are allowed, the current description has {1} characters")]
-    DescriptionTooLong,
+    DescriptionTooLong(usize, usize),
     #[error("`description` field is not correctly formatted, description should follow the template:
               ```
               [DESCRIPTION OF THE SENSITIVE DATA FORMAT]
