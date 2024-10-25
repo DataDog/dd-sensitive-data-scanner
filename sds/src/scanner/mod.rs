@@ -6,7 +6,7 @@ use crate::match_validation::{
     match_validator::MatchValidator,
 };
 
-use error::MatchValidationError;
+use error::{MatchValidationError, MatchValidatorCreationError};
 
 use crate::observability::labels::Labels;
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
@@ -595,11 +595,17 @@ impl ScannerBuilder<'_> {
             if let Some(match_validation_type) = rule.get_match_validation_type() {
                 if match_validation_type.can_create_match_validator() {
                     let internal_type = match_validation_type.get_internal_match_validation_type();
-                    if !match_validators_per_type.contains_key(&internal_type) {
-                        match_validators_per_type
-                            .insert(internal_type, match_validation_type.into_match_validator());
-                        // Let's add return_matches to the scanner features
-                        scanner_features.return_matches = true;
+                    let match_validator = match_validation_type.into_match_validator();
+                    if let Ok(match_validator) = match_validator {
+                        if !match_validators_per_type.contains_key(&internal_type) {
+                            match_validators_per_type.insert(internal_type, match_validator);
+                            // Let's add return_matches to the scanner features
+                            scanner_features.return_matches = true;
+                        }
+                    } else {
+                        return Err(CreateScannerError::InvalidMatchValidator(
+                            MatchValidatorCreationError::InternalError,
+                        ));
                     }
                 }
             }

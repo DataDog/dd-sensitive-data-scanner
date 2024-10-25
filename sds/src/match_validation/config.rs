@@ -207,15 +207,17 @@ impl MatchValidationType {
             }
         }
     }
-    pub fn into_match_validator(&self) -> Box<dyn MatchValidator> {
+    pub fn into_match_validator(&self) -> Result<Box<dyn MatchValidator>, String> {
         match self {
             MatchValidationType::Aws(aws_type) => match aws_type {
-                AwsType::AwsSecret(aws_config) => Box::new(AwsValidator::new(aws_config.clone())),
-                _ => panic!("This aws type shall not be used to create a validator"),
+                AwsType::AwsSecret(aws_config) => {
+                    Ok(Box::new(AwsValidator::new(aws_config.clone())))
+                }
+                _ => Err("This aws type shall not be used to create a validator".to_string()),
             },
-            MatchValidationType::CustomHttp(http_config) => {
-                Box::new(HttpValidator::new_from_config(http_config.clone()))
-            }
+            MatchValidationType::CustomHttp(http_config) => Ok(Box::new(
+                HttpValidator::new_from_config(http_config.clone()),
+            )),
         }
     }
 }
