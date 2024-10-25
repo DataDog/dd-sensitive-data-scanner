@@ -2286,7 +2286,7 @@ mod test {
 
     #[test]
     fn test_should_allocate_match_validator_depending_on_match_type() {
-        use crate::match_validation::config::{AwsConfig, HttpValidatorConfig};
+        use crate::match_validation::config::AwsConfig;
 
         let rule_aws_id = RegexRuleConfig::new("aws-id")
             .match_action(MatchAction::Redact {
