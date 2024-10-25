@@ -19,8 +19,10 @@ pub struct HttpValidator {
 }
 
 impl HttpValidator {
-    pub fn new(config: HttpValidatorConfig) -> Self {
-        HttpValidator { config }
+    pub fn new_clone_config(config: &HttpValidatorConfig) -> Self {
+        HttpValidator {
+            config: config.clone(),
+        }
     }
 }
 
@@ -83,15 +85,15 @@ impl HttpValidatorConfigBuilder {
         self.options.timeout = timeout;
         self
     }
-    pub fn build(&self) -> HttpValidatorConfig {
-        let mut config = HttpValidatorConfig::new(self.endpoint.as_str(), self.hosts.clone());
+    pub fn build(&self) -> Result<HttpValidatorConfig, String> {
+        let mut config = HttpValidatorConfig::new(self.endpoint.as_str(), self.hosts.clone())?;
         config.invalid_http_status_code = self.invalid_http_status_code.clone();
         config.method = self.method.clone();
         config.request_header = self.request_header.clone();
         config.valid_http_status_code = self.valid_http_status_code.clone();
         config.options = self.options.clone();
         config.invalid_http_status_code = self.invalid_http_status_code.clone();
-        config
+        Ok(config)
     }
 }
 
@@ -120,7 +122,7 @@ impl HttpValidatorHelper {
 
     pub fn new_datadog_config_builder() -> HttpValidatorConfigBuilder {
         let mut builder =
-            HttpValidatorConfigBuilder::new("https://$HOSTS/api/v1/validate".to_string());
+            HttpValidatorConfigBuilder::new("https://$HOST/api/v1/validate".to_string());
         builder.set_hosts(vec![
             "api.datadoghq.com".to_string(),
             "api.datadoghq.eu".to_string(),
@@ -153,37 +155,29 @@ impl HttpValidatorHelper {
 impl MatchValidator for HttpValidator {
     async fn validate(&self, matches: &mut Vec<RuleMatch>, _: &[Box<dyn CompiledRuleDyn>]) {
         // build a map of match status per endpoint and per match_idx
-        let mut match_status_per_endpoint_and_match = AHashMap::new();
-        for (idx, _) in matches.iter().enumerate() {
-            for endpoint in &self.config.endpoints {
-                match_status_per_endpoint_and_match
-                    .entry((idx, endpoint))
-                    .or_insert_with(|| MatchStatus::NotChecked);
-            }
-        }
+        let mut match_status_per_endpoint_and_match: AHashMap<_, _> = matches
+            .iter()
+            .enumerate()
+            .flat_map(|(idx, _)| {
+                self.config
+                    .endpoints
+                    .iter()
+                    .map(move |endpoint| ((idx, endpoint), MatchStatus::NotChecked))
+            })
+            .collect();
 
         let futures = match_status_per_endpoint_and_match.iter_mut().map(
             |((match_idx, endpoint), match_status)| {
                 let match_value = matches[*match_idx].match_value.as_ref().unwrap();
                 async move {
                     let mut request_builder: reqwest::RequestBuilder;
-                    match self.config.method {
-                        HttpMethod::Get => {
-                            request_builder = HTTP_CLIENT.get(*endpoint);
-                        }
-                        HttpMethod::Post => {
-                            request_builder = HTTP_CLIENT.post(*endpoint);
-                        }
-                        HttpMethod::Put => {
-                            request_builder = HTTP_CLIENT.put(*endpoint);
-                        }
-                        HttpMethod::Delete => {
-                            request_builder = HTTP_CLIENT.delete(*endpoint);
-                        }
-                        HttpMethod::Patch => {
-                            request_builder = HTTP_CLIENT.patch(*endpoint);
-                        }
-                    }
+                    request_builder = match self.config.method {
+                        HttpMethod::Get => HTTP_CLIENT.get(*endpoint),
+                        HttpMethod::Post => HTTP_CLIENT.post(*endpoint),
+                        HttpMethod::Put => HTTP_CLIENT.put(*endpoint),
+                        HttpMethod::Delete => HTTP_CLIENT.delete(*endpoint),
+                        HttpMethod::Patch => HTTP_CLIENT.patch(*endpoint),
+                    };
                     request_builder = request_builder.timeout(self.config.options.timeout);
 
                     // Add headers
@@ -232,5 +226,30 @@ impl MatchValidator for HttpValidator {
         for ((match_idx, _), status) in match_status_per_endpoint_and_match {
             matches[match_idx].match_status.merge(status.clone());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_http_validator_builder_config_no_hosts() {
+        let config = HttpValidatorConfigBuilder::new("http://localhost/test".to_string())
+            .build()
+            .unwrap();
+        assert_eq!(config.endpoints, vec!["http://localhost/test"]);
+    }
+
+    #[test]
+    fn test_http_validator_builder_config_with_hosts() {
+        let config = HttpValidatorConfigBuilder::new("http://localhost/$HOST".to_string())
+            .set_hosts(vec!["us".to_string(), "eu".to_string()])
+            .build()
+            .unwrap();
+        assert_eq!(
+            config.endpoints,
+            vec!["http://localhost/us", "http://localhost/eu"]
+        );
     }
 }

@@ -74,17 +74,27 @@ pub struct HttpValidatorConfig {
 }
 
 impl HttpValidatorConfig {
-    pub fn new(endpoint: &str, hosts: Vec<String>) -> Self {
-        // Replace $HOSTS in endpoint and build the endpoints vector
+    pub fn new(endpoint: &str, hosts: Vec<String>) -> Result<Self, String> {
+        // Handle errors cases
+        // - endpoint contains $HOST but no hosts are provided
+        // - endpoint does not contain $HOST but hosts are provided
+        if endpoint.contains("$HOST") && hosts.is_empty() {
+            return Err("Endpoint contains $HOST but no hosts are provided".to_string());
+        }
+        if !endpoint.contains("$HOST") && !hosts.is_empty() {
+            return Err("Endpoint does not contain $HOST but hosts are provided".to_string());
+        }
+
+        // Replace $HOST in endpoint and build the endpoints vector
         let mut endpoints = vec![];
         for host in hosts {
-            endpoints.push(endpoint.replace("$HOSTS", &host));
+            endpoints.push(endpoint.replace("$HOST", &host));
         }
         if endpoints.is_empty() {
             // If no hosts are provided, use the endpoint as is
             endpoints.push(endpoint.to_string());
         }
-        HttpValidatorConfig {
+        Ok(HttpValidatorConfig {
             endpoints,
             method: HttpMethod::Get,
             request_header: vec![],
@@ -95,7 +105,7 @@ impl HttpValidatorConfig {
             options: HttpValidatorOption {
                 timeout: Duration::from_secs(DEFAULT_HTTPS_TIMEOUT_SEC),
             },
-        }
+        })
     }
 }
 
@@ -138,19 +148,39 @@ mod tests {
 
     #[test]
     fn test_http_validator_config_no_hosts() {
-        let config = HttpValidatorConfig::new("http://localhost/test", vec![]);
+        let config = HttpValidatorConfig::new("http://localhost/test", vec![]).unwrap();
         assert_eq!(config.endpoints, vec!["http://localhost/test"]);
     }
 
     #[test]
     fn test_http_validator_config_with_hosts() {
         let config = HttpValidatorConfig::new(
-            "http://localhost/$HOSTS",
+            "http://localhost/$HOST",
             vec!["us".to_string(), "eu".to_string()],
-        );
+        )
+        .unwrap();
         assert_eq!(
             config.endpoints,
             vec!["http://localhost/us", "http://localhost/eu"]
+        );
+    }
+
+    #[test]
+    fn test_http_validator_config_error_cases() {
+        let config = HttpValidatorConfig::new("http://localhost/$HOST", vec![]).unwrap_err();
+        assert_eq!(
+            config,
+            "Endpoint contains $HOST but no hosts are provided".to_string()
+        );
+    }
+
+    #[test]
+    fn test_http_validator_config_error_cases_with_hosts() {
+        let config =
+            HttpValidatorConfig::new("http://localhost/test", vec!["us".to_string()]).unwrap_err();
+        assert_eq!(
+            config,
+            "Endpoint does not contain $HOST but hosts are provided".to_string()
         );
     }
 }

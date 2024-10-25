@@ -14,7 +14,7 @@ pub fn new_match_validator_from_type(config: &MatchValidationType) -> Box<dyn Ma
             _ => panic!("This aws type shall not be used to create a validator"),
         },
         MatchValidationType::CustomHttp(http_config) => {
-            Box::new(HttpValidator::new(http_config.clone()))
+            Box::new(HttpValidator::new_clone_config(http_config))
         }
     }
 }

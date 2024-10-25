@@ -2244,16 +2244,15 @@ mod test {
 
     #[test]
     fn test_should_return_match_with_match_validation() {
-        use crate::match_validation::config::HttpValidatorConfig;
-
         let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
-                "http://localhost:8080",
-                vec![],
-            )))
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
+                    .build()
+                    .unwrap(),
+            ))
             .build()])
         .build()
         .unwrap();
@@ -2308,30 +2307,33 @@ mod test {
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP1]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
-                "http://localhost:8080",
-                vec![],
-            )))
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
+                    .build()
+                    .unwrap(),
+            ))
             .build();
 
         let rule_custom_http_2_domain_1 = RegexRuleConfig::new("custom-http2")
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP2]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
-                "http://localhost:8080",
-                vec![],
-            )))
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
+                    .build()
+                    .unwrap(),
+            ))
             .build();
 
         let rule_custom_http_domain_2 = RegexRuleConfig::new("custom-http3")
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP2]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
-                "http://localhost:8081",
-                vec![],
-            )))
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8081".to_string())
+                    .build()
+                    .unwrap(),
+            ))
             .build();
 
         let scanner = ScannerBuilder::new(&[
@@ -2422,7 +2424,9 @@ mod test {
                 replacement: "[VALID]".to_string(),
             })
             .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new(server.url("/").to_string()).build(),
+                HttpValidatorConfigBuilder::new(server.url("/").to_string())
+                    .build()
+                    .unwrap(),
             ))
             .build();
 
@@ -2431,7 +2435,9 @@ mod test {
                 replacement: "[INVALID]".to_string(),
             })
             .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new(server.url("/").to_string()).build(),
+                HttpValidatorConfigBuilder::new(server.url("/").to_string())
+                    .build()
+                    .unwrap(),
             ))
             .build();
 
@@ -2440,7 +2446,9 @@ mod test {
                 replacement: "[ERROR]".to_string(),
             })
             .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new(server.url("/").to_string()).build(),
+                HttpValidatorConfigBuilder::new(server.url("/").to_string())
+                    .build()
+                    .unwrap(),
             ))
             .build();
         let scanner =
@@ -2484,7 +2492,8 @@ mod test {
             .match_validation_type(MatchValidationType::CustomHttp(
                 HttpValidatorConfigBuilder::new(server.url("/").to_string())
                     .set_timeout(Duration::from_micros(0))
-                    .build(),
+                    .build()
+                    .unwrap(),
             ))
             .build();
 
@@ -2522,7 +2531,9 @@ mod test {
                 replacement: "[VALID]".to_string(),
             })
             .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new(server.url("/http-service").to_string()).build(),
+                HttpValidatorConfigBuilder::new(server.url("/http-service").to_string())
+                    .build()
+                    .unwrap(),
             ))
             .build();
 
@@ -2581,9 +2592,10 @@ mod test {
                 replacement: "[VALID]".to_string(),
             })
             .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new(server.url("/$HOSTS-service").to_string())
+                HttpValidatorConfigBuilder::new(server.url("/$HOST-service").to_string())
                     .set_hosts(vec!["us".to_string(), "eu".to_string()])
-                    .build(),
+                    .build()
+                    .unwrap(),
             ))
             .build();
 
