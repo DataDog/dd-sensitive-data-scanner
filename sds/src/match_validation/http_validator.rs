@@ -19,10 +19,8 @@ pub struct HttpValidator {
 }
 
 impl HttpValidator {
-    pub fn new_clone_config(config: &HttpValidatorConfig) -> Self {
-        HttpValidator {
-            config: config.clone(),
-        }
+    pub fn new_from_config(config: HttpValidatorConfig) -> Self {
+        HttpValidator { config }
     }
 }
 

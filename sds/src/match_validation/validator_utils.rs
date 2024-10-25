@@ -1,24 +1,5 @@
 use chrono::{DateTime, Utc};
 
-use crate::AwsType;
-
-use super::{
-    aws_validator::AwsValidator, config::MatchValidationType, http_validator::HttpValidator,
-    match_validator::MatchValidator,
-};
-
-pub fn new_match_validator_from_type(config: &MatchValidationType) -> Box<dyn MatchValidator> {
-    match config {
-        MatchValidationType::Aws(aws_config) => match aws_config {
-            AwsType::AwsSecret(aws_config) => Box::new(AwsValidator::new(aws_config.clone())),
-            _ => panic!("This aws type shall not be used to create a validator"),
-        },
-        MatchValidationType::CustomHttp(http_config) => {
-            Box::new(HttpValidator::new_clone_config(http_config))
-        }
-    }
-}
-
 pub fn generate_aws_headers_and_body(
     datetime: &DateTime<Utc>,
     endpoint: &str,

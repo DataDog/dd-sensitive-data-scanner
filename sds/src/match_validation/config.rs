@@ -1,6 +1,11 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{hash::Hash, ops::Range, time::Duration, vec};
+
+use super::aws_validator::AwsValidator;
+use super::http_validator::HttpValidator;
+use super::match_validator::MatchValidator;
+
 pub const DEFAULT_HTTPS_TIMEOUT_SEC: u64 = 3;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -199,6 +204,17 @@ impl MatchValidationType {
             MatchValidationType::Aws(_) => InternalMatchValidationType::Aws,
             MatchValidationType::CustomHttp(http_config) => {
                 InternalMatchValidationType::CustomHttp(http_config.endpoints.clone())
+            }
+        }
+    }
+    pub fn into_match_validator(&self) -> Box<dyn MatchValidator> {
+        match self {
+            MatchValidationType::Aws(aws_type) => match aws_type {
+                AwsType::AwsSecret(aws_config) => Box::new(AwsValidator::new(aws_config.clone())),
+                _ => panic!("This aws type shall not be used to create a validator"),
+            },
+            MatchValidationType::CustomHttp(http_config) => {
+                Box::new(HttpValidator::new_from_config(http_config.clone()))
             }
         }
     }

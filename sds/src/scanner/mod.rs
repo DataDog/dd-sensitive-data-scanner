@@ -3,7 +3,7 @@ use crate::event::Event;
 
 use crate::match_validation::{
     config::InternalMatchValidationType, config::MatchValidationType, match_status::MatchStatus,
-    match_validator::MatchValidator, validator_utils::new_match_validator_from_type,
+    match_validator::MatchValidator,
 };
 
 use error::MatchValidationError;
@@ -596,10 +596,8 @@ impl ScannerBuilder<'_> {
                 if match_validation_type.can_create_match_validator() {
                     let internal_type = match_validation_type.get_internal_match_validation_type();
                     if !match_validators_per_type.contains_key(&internal_type) {
-                        match_validators_per_type.insert(
-                            internal_type,
-                            new_match_validator_from_type(match_validation_type),
-                        );
+                        match_validators_per_type
+                            .insert(internal_type, match_validation_type.into_match_validator());
                         // Let's add return_matches to the scanner features
                         scanner_features.return_matches = true;
                     }
