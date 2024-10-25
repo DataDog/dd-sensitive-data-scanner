@@ -170,8 +170,7 @@ impl MatchValidator for HttpValidator {
             |((match_idx, endpoint), match_status)| {
                 let match_value = matches[*match_idx].match_value.as_ref().unwrap();
                 async move {
-                    let mut request_builder: reqwest::RequestBuilder;
-                    request_builder = match self.config.method {
+                    let mut request_builder = match self.config.method {
                         HttpMethod::Get => HTTP_CLIENT.get(*endpoint),
                         HttpMethod::Post => HTTP_CLIENT.post(*endpoint),
                         HttpMethod::Put => HTTP_CLIENT.put(*endpoint),
