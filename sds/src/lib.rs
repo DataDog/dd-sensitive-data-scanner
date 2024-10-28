@@ -38,6 +38,7 @@ pub use path::{Path, PathSegment};
 pub use rule_match::{ReplacementType, RuleMatch};
 pub use scanner::shared_pool::{SharedPool, SharedPoolGuard};
 
+pub use proximity_keywords::ProximityKeywordsValidationError;
 pub use scanner::error::{MatchValidationError, ScannerMetadataError};
 pub use scanner::{
     config::RuleConfig,
