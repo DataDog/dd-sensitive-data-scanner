@@ -20,6 +20,7 @@ var (
 	ErrInvalidRegex       error = fmt.Errorf("invalid regex")
 	ErrInvalidKeywords    error = fmt.Errorf("invalid keywords")
 	ErrInvalidMatchAction error = fmt.Errorf("invalid match action")
+	ErrInvalidMetadata    error = fmt.Errorf("invalid metadata")
 )
 
 // Scanner wraps an SDS scanner.
@@ -80,8 +81,8 @@ func CreateScanner(ruleConfigs []RuleConfig) (*Scanner, error) {
 			return nil, ErrInvalidKeywords
 		case -4: // rust: CreateScannerError::InvalidMatchAction
 			return nil, ErrInvalidMatchAction
-		case -5: // rust: InvalidMetadata::
-			return nil, ErrInvalidMatchAction
+		case -5: // rust: CreateScannerError::InvalidMetadata
+			return nil, ErrInvalidMetadata
 		case -6: // rust panic
 			if errorString != nil {
 				defer C.free_string(errorString)
