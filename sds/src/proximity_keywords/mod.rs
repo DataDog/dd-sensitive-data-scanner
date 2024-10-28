@@ -442,8 +442,17 @@ pub enum ProximityKeywordsValidationError {
     #[error("Duplicate keywords are not allowed ({0})")]
     DuplicateKeyword(String),
 
+    #[error("`{0}` keyword starts or ends with a whitespace - spaces are only authorized in the middle of the keyword")]
+    KeywordStartsOrEndsWithSpace(String),
+
+    #[error("`{0}` keyword contains uppercase characters - matching is case-insensitive so using lower cased characters yields the same results")]
+    KeywordHasUppercase(String),
+
     #[error("Keywords cannot be longer than the look ahead character count ({0})")]
     KeywordTooLong(usize),
+
+    #[error("`{0}` keyword contains invalid characters - only alphanumeric characters and the following ones (` `, `@`, `.`, `\\`, `/`, `#`, `&`, `+`, `-`)")]
+    KeywordInvalidCharacters(String),
 
     #[error(
         "Look ahead character count should be bigger than 0 and cannot be longer than {}",
