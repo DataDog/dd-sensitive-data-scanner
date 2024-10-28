@@ -80,7 +80,9 @@ func CreateScanner(ruleConfigs []RuleConfig) (*Scanner, error) {
 			return nil, ErrInvalidKeywords
 		case -4: // rust: CreateScannerError::InvalidMatchAction
 			return nil, ErrInvalidMatchAction
-		case -5: // rust panic
+		case -5: // rust: InvalidMetadata::
+			return nil, ErrInvalidMatchAction
+		case -6: // rust panic
 			if errorString != nil {
 				defer C.free_string(errorString)
 				return nil, fmt.Errorf("internal panic: %v", C.GoString(errorString))
