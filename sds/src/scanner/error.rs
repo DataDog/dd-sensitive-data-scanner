@@ -74,6 +74,8 @@ pub enum ScannerMetadataError {
               %s
               ```")]
     DescriptionFormatInvalid,
+    #[error("`description` example {0} does not match the rule's pattern")]
+    DescriptionExampleDoesNotMatch(String),
     #[error("`priority` field should between 1 and 5")]
     PriorityInvalidValue,
 }
