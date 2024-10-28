@@ -439,6 +439,9 @@ pub enum ProximityKeywordsValidationError {
     #[error("Empty keywords are not allowed")]
     EmptyKeyword,
 
+    #[error("Duplicate keywords are not allowed ({0})")]
+    DuplicateKeyword(String),
+
     #[error("Keywords cannot be longer than the look ahead character count ({0})")]
     KeywordTooLong(usize),
 
