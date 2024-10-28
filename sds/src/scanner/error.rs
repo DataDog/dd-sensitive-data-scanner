@@ -12,8 +12,15 @@ impl From<CreateScannerError> for i64 {
             CreateScannerError::InvalidRegex(_) => -2,
             CreateScannerError::InvalidKeywords(_) => -3,
             CreateScannerError::InvalidMatchAction(_) => -4,
+            CreateScannerError::InvalidMatchValidator(_) => -5,
         }
     }
+}
+
+#[derive(Debug, PartialEq, Eq, Error)]
+pub enum MatchValidatorCreationError {
+    #[error("Internal error while creating the match validator")]
+    InternalError,
 }
 
 #[derive(Debug, PartialEq, Eq, Error)]
@@ -27,6 +34,9 @@ pub enum CreateScannerError {
     /// Invalid configuration of a match action
     #[error(transparent)]
     InvalidMatchAction(#[from] MatchActionValidationError),
+    /// The match validator cannot be created
+    #[error(transparent)]
+    InvalidMatchValidator(#[from] MatchValidatorCreationError),
 }
 
 #[derive(Debug, PartialEq, Eq, Error)]

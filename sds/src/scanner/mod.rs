@@ -3,10 +3,10 @@ use crate::event::Event;
 
 use crate::match_validation::{
     config::InternalMatchValidationType, config::MatchValidationType, match_status::MatchStatus,
-    match_validator::MatchValidator, validator_utils::new_match_validator_from_type,
+    match_validator::MatchValidator,
 };
 
-use error::MatchValidationError;
+use error::{MatchValidationError, MatchValidatorCreationError};
 
 use crate::observability::labels::Labels;
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
@@ -595,13 +595,17 @@ impl ScannerBuilder<'_> {
             if let Some(match_validation_type) = rule.get_match_validation_type() {
                 if match_validation_type.can_create_match_validator() {
                     let internal_type = match_validation_type.get_internal_match_validation_type();
-                    if !match_validators_per_type.contains_key(&internal_type) {
-                        match_validators_per_type.insert(
-                            internal_type,
-                            new_match_validator_from_type(match_validation_type),
-                        );
-                        // Let's add return_matches to the scanner features
-                        scanner_features.return_matches = true;
+                    let match_validator = match_validation_type.into_match_validator();
+                    if let Ok(match_validator) = match_validator {
+                        if !match_validators_per_type.contains_key(&internal_type) {
+                            match_validators_per_type.insert(internal_type, match_validator);
+                            // Let's add return_matches to the scanner features
+                            scanner_features.return_matches = true;
+                        }
+                    } else {
+                        return Err(CreateScannerError::InvalidMatchValidator(
+                            MatchValidatorCreationError::InternalError,
+                        ));
                     }
                 }
             }
@@ -790,7 +794,7 @@ mod test {
 
     use crate::match_validation::config::{AwsConfig, AwsType, MatchValidationType};
 
-    use crate::match_validation::http_validator::HttpValidatorConfigBuilder;
+    use crate::match_validation::config::HttpValidatorConfigBuilder;
     use crate::match_validation::validator_utils::generate_aws_headers_and_body;
     use crate::observability::labels::Labels;
     use crate::scanner::regex_rule::config::{
@@ -2244,15 +2248,15 @@ mod test {
 
     #[test]
     fn test_should_return_match_with_match_validation() {
-        use crate::match_validation::config::HttpValidatorConfig;
-
         let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
-                "http://localhost:8080",
-            )))
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
+                    .build()
+                    .unwrap(),
+            ))
             .build()])
         .build()
         .unwrap();
@@ -2286,7 +2290,7 @@ mod test {
 
     #[test]
     fn test_should_allocate_match_validator_depending_on_match_type() {
-        use crate::match_validation::config::{AwsConfig, HttpValidatorConfig};
+        use crate::match_validation::config::AwsConfig;
 
         let rule_aws_id = RegexRuleConfig::new("aws-id")
             .match_action(MatchAction::Redact {
@@ -2307,27 +2311,33 @@ mod test {
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP1]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
-                "http://localhost:8080",
-            )))
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
+                    .build()
+                    .unwrap(),
+            ))
             .build();
 
         let rule_custom_http_2_domain_1 = RegexRuleConfig::new("custom-http2")
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP2]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
-                "http://localhost:8080",
-            )))
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
+                    .build()
+                    .unwrap(),
+            ))
             .build();
 
         let rule_custom_http_domain_2 = RegexRuleConfig::new("custom-http3")
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP2]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(HttpValidatorConfig::new(
-                "http://localhost:8081",
-            )))
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8081".to_string())
+                    .build()
+                    .unwrap(),
+            ))
             .build();
 
         let scanner = ScannerBuilder::new(&[
@@ -2348,14 +2358,14 @@ mod test {
             .get(&InternalMatchValidationType::Aws)
             .unwrap();
         let http_2_validator = match_validator_map
-            .get(&InternalMatchValidationType::CustomHttp(
+            .get(&InternalMatchValidationType::CustomHttp(vec![
                 "http://localhost:8080".to_string(),
-            ))
+            ]))
             .unwrap();
         let http_1_validator = match_validator_map
-            .get(&InternalMatchValidationType::CustomHttp(
+            .get(&InternalMatchValidationType::CustomHttp(vec![
                 "http://localhost:8081".to_string(),
-            ))
+            ]))
             .unwrap();
         assert!(!std::ptr::eq(
             http_1_validator.as_ref(),
@@ -2418,7 +2428,9 @@ mod test {
                 replacement: "[VALID]".to_string(),
             })
             .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new(server.url("/").to_string()).build(),
+                HttpValidatorConfigBuilder::new(server.url("/").to_string())
+                    .build()
+                    .unwrap(),
             ))
             .build();
 
@@ -2427,7 +2439,9 @@ mod test {
                 replacement: "[INVALID]".to_string(),
             })
             .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new(server.url("/").to_string()).build(),
+                HttpValidatorConfigBuilder::new(server.url("/").to_string())
+                    .build()
+                    .unwrap(),
             ))
             .build();
 
@@ -2436,7 +2450,9 @@ mod test {
                 replacement: "[ERROR]".to_string(),
             })
             .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new(server.url("/").to_string()).build(),
+                HttpValidatorConfigBuilder::new(server.url("/").to_string())
+                    .build()
+                    .unwrap(),
             ))
             .build();
         let scanner =
@@ -2480,7 +2496,8 @@ mod test {
             .match_validation_type(MatchValidationType::CustomHttp(
                 HttpValidatorConfigBuilder::new(server.url("/").to_string())
                     .set_timeout(Duration::from_micros(0))
-                    .build(),
+                    .build()
+                    .unwrap(),
             ))
             .build();
 
@@ -2518,7 +2535,9 @@ mod test {
                 replacement: "[VALID]".to_string(),
             })
             .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new(server.url("/http-service").to_string()).build(),
+                HttpValidatorConfigBuilder::new(server.url("/http-service").to_string())
+                    .build()
+                    .unwrap(),
             ))
             .build();
 
@@ -2559,6 +2578,45 @@ mod test {
         assert_eq!(matches[1].match_status, MatchStatus::Valid);
         assert_eq!(matches[2].match_status, MatchStatus::Valid);
     }
+
+    #[tokio::test]
+    async fn test_mock_endpoint_with_multiple_hosts() {
+        let server = MockServer::start();
+        // Create a mock on the server.
+        let mock_http_service_us = server.mock(|when, then| {
+            when.method(GET).path("/us-service");
+            then.status(200);
+        });
+        let mock_http_service_eu = server.mock(|when, then| {
+            when.method(GET).path("/eu-service");
+            then.status(403);
+        });
+        let rule_valid_match = RegexRuleConfig::new("\\bvalid_match\\b")
+            .match_action(MatchAction::Redact {
+                replacement: "[VALID]".to_string(),
+            })
+            .match_validation_type(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new(server.url("/$HOST-service").to_string())
+                    .set_hosts(vec!["us".to_string(), "eu".to_string()])
+                    .build()
+                    .unwrap(),
+            ))
+            .build();
+
+        let scanner = ScannerBuilder::new(&[rule_valid_match]).build().unwrap();
+        let mut content = "this is a content with a valid_match on multiple hosts".to_string();
+        let mut matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(
+            content,
+            "this is a content with a [VALID] on multiple hosts"
+        );
+        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        mock_http_service_us.assert();
+        mock_http_service_eu.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+    }
+
     #[tokio::test]
     async fn test_mock_aws_validator() {
         let server = MockServer::start();
