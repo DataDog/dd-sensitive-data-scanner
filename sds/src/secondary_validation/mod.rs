@@ -1,18 +1,22 @@
 mod chinese_id_checksum;
 mod github_token_checksum;
 mod iban_checker;
+mod jwt_expiration_checker;
 mod luhn_checksum;
 mod nhs_check_digit;
 mod nir_checksum;
 
+#[cfg(test)]
+pub use jwt_expiration_checker::generate_jwt;
+
+use crate::scanner::regex_rule::config::SecondaryValidator;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
+pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecker;
 pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 pub use crate::secondary_validation::nir_checksum::NirChecksum;
-
-use crate::scanner::regex_rule::config::SecondaryValidator;
 use std::str::Chars;
 
 pub trait Validator: Send + Sync {
@@ -47,6 +51,9 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::NhsCheckDigit => NhsCheckDigit.is_valid_match(regex_match),
             SecondaryValidator::IbanChecker => IbanChecker.is_valid_match(regex_match),
             SecondaryValidator::NirChecksum => NirChecksum.is_valid_match(regex_match),
+            SecondaryValidator::JwtExpirationChecker => {
+                JwtExpirationChecker.is_valid_match(regex_match)
+            }
         }
     }
 }
