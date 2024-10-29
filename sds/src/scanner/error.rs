@@ -40,7 +40,7 @@ pub enum CreateScannerError {
     InvalidMatchValidator(#[from] MatchValidatorCreationError),
     // The metadata used to create the scanner is invalid
     #[error(transparent)]
-    InvalidMetadata(#[from] ScannerMetadataError)
+    InvalidMetadata(#[from] ScannerMetadataError),
 }
 
 #[derive(Debug, PartialEq, Eq, Error)]
@@ -61,12 +61,12 @@ pub enum ScannerMetadataError {
     #[error("`name` field is too long, at most {0} characters are allowed, the current name has {1} characters")]
     NameTooLong(usize, usize),
     #[error("`description` field must not be trim empty")]
-
     //Description
     DescriptionTrimEmpty,
     #[error("`description` field is too long, at most {0} characters are allowed, the current description has {1} characters")]
     DescriptionTooLong(usize, usize),
-    #[error("`description` field is not correctly formatted, description should follow the template:
+    #[error(
+        "`description` field is not correctly formatted, description should follow the template:
               ```
               [DESCRIPTION OF THE SENSITIVE DATA FORMAT]
 
@@ -77,7 +77,8 @@ pub enum ScannerMetadataError {
               current description:
               ```
               %s
-              ```")]
+              ```"
+    )]
     DescriptionFormatInvalid,
     #[error("`description` example {0} does not match the rule's pattern")]
     DescriptionExampleDoesNotMatch(String),
@@ -95,8 +96,6 @@ pub enum ScannerMetadataError {
     //Labels
     #[error("label `{0}` in the `labels` field is not valid, all labels should be <key:value>")]
     InvalidLabel(String),
-
-
 }
 
 #[cfg(test)]
