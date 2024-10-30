@@ -683,6 +683,7 @@ dependencies = [
  "async-trait",
  "aws-sign-v4",
  "base62",
+ "base64 0.22.1",
  "chrono",
  "crc32fast",
  "criterion",

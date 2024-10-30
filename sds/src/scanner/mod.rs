@@ -809,6 +809,7 @@ mod test {
     use crate::{simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch};
     use crate::{Encoding, Utf8Encoding};
     use ahash::AHashSet;
+    use chrono::Utc;
     use httpmock::{Method::GET, Method::POST, MockServer};
 
     use regex_automata::Match;
@@ -1435,6 +1436,32 @@ mod test {
         let matches = scanner.scan(&mut content, vec![]);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "[GITHUB] ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5");
+    }
+
+    #[test]
+    fn test_jwt_expiration_checker() {
+        use crate::secondary_validation::generate_jwt;
+        let rule = RegexRuleConfig::new("[A-Za-z0-9._-]+")
+            .match_action(MatchAction::Redact {
+                replacement: "[JWT]".to_string(),
+            })
+            .validator(JwtExpirationChecker)
+            .build();
+        let scanner = ScannerBuilder::new(&[rule])
+            .with_keywords_should_match_event_paths(true)
+            .build()
+            .unwrap();
+        let future_time_as_string = (Utc::now().timestamp() + 1000000).to_string();
+
+        let mut content = generate_jwt(future_time_as_string).to_string();
+        let matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(content, "[JWT]");
+
+        let past_time_as_string = (Utc::now().timestamp() - 1000000).to_string();
+        let mut content = generate_jwt(past_time_as_string).to_string();
+        let matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 0);
     }
 
     #[test]
