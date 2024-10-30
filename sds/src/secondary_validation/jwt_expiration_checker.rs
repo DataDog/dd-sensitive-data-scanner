@@ -25,8 +25,7 @@ impl Validator for JwtExpirationChecker {
                 true
             }
         } else {
-            // product decision if an error happend while decoding the JWT shall we consider as a valid match ?
-            // In our case, we consider it as an invalid match (there is no reason to have an invalid JWT outside than having an non valid match)
+            // if JWT segments cannot be decoded, the JWT is not well formated, we consider it as an invalid match
             false
         }
     }
