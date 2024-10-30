@@ -57,13 +57,9 @@ fn decode_header_and_payload(
     header_segment: &str,
     payload_segment: &str,
 ) -> Option<(JsonValue, JsonValue)> {
-    let header_json = decode_segment(header_segment);
-    let payload_json = decode_segment(payload_segment);
-    if let (Some(header), Some(payload)) = (header_json, payload_json) {
-        Some((header, payload))
-    } else {
-        None
-    }
+    let header_json = decode_segment(header_segment)?;
+    let payload_json = decode_segment(payload_segment)?;
+    Some((header, payload))
 }
 
 #[cfg(test)]
