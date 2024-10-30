@@ -43,7 +43,9 @@ fn decode_segments(encoded_token: &str) -> Option<(JsonValue, JsonValue)> {
 
     let header_segment = raw_segments[0];
     let payload_segment = raw_segments[1];
-    decode_header_and_payload(header_segment, payload_segment)
+    let header_json = decode_segment(header_segment)?;
+    let payload_json = decode_segment(payload_segment)?;
+    Some((header_json, payload_json))
 }
 
 fn decode_segment(segment: &str) -> Option<JsonValue> {
@@ -51,15 +53,6 @@ fn decode_segment(segment: &str) -> Option<JsonValue> {
         .decode(segment)
         .ok()
         .and_then(|decoded| serde_json::from_slice(&decoded).ok())
-}
-
-fn decode_header_and_payload(
-    header_segment: &str,
-    payload_segment: &str,
-) -> Option<(JsonValue, JsonValue)> {
-    let header_json = decode_segment(header_segment)?;
-    let payload_json = decode_segment(payload_segment)?;
-    Some((header, payload))
 }
 
 #[cfg(test)]
