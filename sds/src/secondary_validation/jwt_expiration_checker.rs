@@ -10,14 +10,14 @@ const SEGMENTS_COUNT: usize = 3;
 impl Validator for JwtExpirationChecker {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         if let Some((_, payload)) = decode_segments(regex_match) {
-            let expiration = payload.get("exp");
-            if let Some(exp) = expiration {
-                if exp.is_i64() {
-                    let exp_int: i64 = exp.as_i64().unwrap();
+            if let Some(exp) = payload.get("exp") {
+                if let Some(exp) = exp.as_i64() {
                     let now = Utc::now().timestamp();
-                    exp_int > now
+                    exp > now
                 } else {
                     // if the expiration claim is not an integer, we consider it as an invalid match
+                    // exp is a reserved claim for NumericDate (https://www.rfc-editor.org/rfc/rfc7519#section-4.1.4)
+                    // The NumericDate is the UNIX timestamp (https://www.rfc-editor.org/rfc/rfc7519#section-2)
                     false
                 }
             } else {
