@@ -8,6 +8,7 @@ use crate::{CreateScannerError, EncodeIndices, MatchAction, Path};
 use regex_automata::meta::{Cache, Regex as MetaRegex};
 use std::any::{Any, TypeId};
 use std::sync::Arc;
+use wasm_bindgen::prelude::wasm_bindgen;
 
 use self::cache_pool::{CachePool, CachePoolBuilder, CachePoolGuard};
 use self::metrics::ScannerMetrics;
@@ -25,6 +26,7 @@ pub mod metrics;
 pub mod regex_rule;
 pub mod scope;
 
+#[wasm_bindgen]
 pub struct StringMatch {
     pub start: usize,
     pub end: usize,
@@ -226,7 +228,7 @@ impl Scanner {
         let mut excluded_matches = AHashSet::new();
 
         // Measure detection time
-        let start = std::time::Instant::now();
+        // let start = std::time::Instant::now();
         self.scoped_ruleset.visit_string_rule_combinations(
             event,
             ScannerContentVisitor {
@@ -273,15 +275,15 @@ impl Scanner {
             });
         }
         // Record detection time
-        self.metrics
-            .duration_ns
-            .increment(start.elapsed().as_nanos() as u64);
-        // Add number of scanned events
-        self.metrics.num_scanned_events.increment(1);
-        // Add number of matches
-        self.metrics
-            .match_count
-            .increment(output_rule_matches.len() as u64);
+        // self.metrics
+        //     .duration_ns
+        //     .increment(start.elapsed().as_nanos() as u64);
+        // // Add number of scanned events
+        // self.metrics.num_scanned_events.increment(1);
+        // // Add number of matches
+        // self.metrics
+        //     .match_count
+        //     .increment(output_rule_matches.len() as u64);
 
         output_rule_matches
     }

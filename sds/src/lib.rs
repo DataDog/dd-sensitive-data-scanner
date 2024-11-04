@@ -2,6 +2,8 @@
 // override with `#[allow(clippy::print_stdout)]`.
 #![deny(clippy::print_stdout)]
 
+use std::sync::Arc;
+
 use wasm_bindgen::prelude::*;
 
 mod encoding;
@@ -18,6 +20,7 @@ mod scoped_ruleset;
 mod secondary_validation;
 mod stats;
 mod validation;
+// use serde_json;
 
 #[cfg(any(test, feature = "testing", feature = "bench"))]
 mod simple_event;
@@ -38,6 +41,74 @@ pub use scanner::{
     scope::Scope,
     CompiledRule, CompiledRuleDyn, MatchEmitter, Scanner, ScannerBuilder, StringMatch,
 };
+
+#[wasm_bindgen]
+pub struct ScannerWrapper {
+    #[allow(dead_code)]
+    scanner: Scanner,
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct WasmRuleMatch {
+    pub start: usize,
+    pub end: usize,
+    pub rule_index: usize,
+}
+
+#[wasm_bindgen]
+pub struct WasmScanResult {
+    input: JsValue,
+    matches: Vec<WasmRuleMatch>,
+}
+
+#[wasm_bindgen]
+impl WasmScanResult {
+    // Add getter methods
+    #[wasm_bindgen(getter)]
+    pub fn input(&self) -> JsValue {
+        self.input.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn matches(&self) -> Vec<WasmRuleMatch> {
+        self.matches.clone()
+    }
+}
+
+#[wasm_bindgen]
+impl ScannerWrapper {
+    #[wasm_bindgen(constructor)]
+    pub fn new(rules: &str) -> Result<ScannerWrapper, String> {
+        // parse rules
+        let rules: Vec<RegexRuleConfig> = serde_json::from_str(rules).map_err(|e| e.to_string())?;
+        let rules_vec = rules
+            .iter()
+            .map(|r| Arc::new(r.clone()) as Arc<dyn RuleConfig>)
+            .collect::<Vec<_>>();
+        let scanner = ScannerBuilder::new(&rules_vec)
+            .build()
+            .map_err(|e| e.to_string())?;
+
+        Ok(ScannerWrapper { scanner })
+    }
+    pub fn scan(&self, input: &str) -> WasmScanResult {
+        let mut input = input.to_string();
+        let res = self.scanner.scan(&mut input, vec![]);
+        WasmScanResult {
+            input: JsValue::from_str(&input),
+            matches: res
+                .iter()
+                .map(|m| WasmRuleMatch {
+                    start: m.start_index,
+                    end: m.end_index_exclusive,
+                    rule_index: m.rule_index,
+                })
+                .collect(),
+        }
+    }
+}
+
 pub use scoped_ruleset::ExclusionCheck;
 pub use validation::{
     get_regex_complexity_estimate_very_slow, validate_regex, RegexValidationError,
@@ -49,8 +120,3 @@ pub use crate::{
     secondary_validation::{LuhnChecksum, Validator},
     simple_event::SimpleEvent,
 };
-
-#[wasm_bindgen]
-pub fn greet(name: &str) -> String {
-    format!("Hello, {}!", name)
-}

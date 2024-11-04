@@ -2,7 +2,9 @@ use crate::normalization::rust_regex_adapter::{convert_to_rust_regex, QUANTIFIER
 use crate::parser::error::ParseError;
 use regex_automata::meta::{self};
 use thiserror::Error;
+use wasm_bindgen::prelude::*;
 
+#[wasm_bindgen]
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum RegexValidationError {
     #[error("Invalid regex syntax")]
