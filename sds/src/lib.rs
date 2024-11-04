@@ -2,6 +2,8 @@
 // override with `#[allow(clippy::print_stdout)]`.
 #![deny(clippy::print_stdout)]
 
+use wasm_bindgen::prelude::*;
+
 mod encoding;
 mod event;
 mod match_action;
@@ -47,3 +49,8 @@ pub use crate::{
     secondary_validation::{LuhnChecksum, Validator},
     simple_event::SimpleEvent,
 };
+
+#[wasm_bindgen]
+pub fn greet(name: &str) -> String {
+    format!("Hello, {}!", name)
+}
