@@ -56,9 +56,11 @@ impl Event for SimpleEvent {
             match segment {
                 PathSegment::Field(key) => {
                     value = value.as_map_mut().unwrap().get_mut(key.as_ref()).unwrap();
+                    println!("Key is {}, Value is now {:?}", key, value);
                 }
                 PathSegment::Index(i) => {
                     value = value.as_list_mut().unwrap().get_mut(*i).unwrap();
+                    println!("Index is {}, Value is now {:?}", i, value);
                 }
             }
         }
