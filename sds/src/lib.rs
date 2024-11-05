@@ -30,7 +30,7 @@ pub use match_action::{MatchAction, PartialRedactDirection};
 
 pub use match_validation::{
     config::AwsConfig, config::AwsType, config::HttpMethod, config::HttpValidatorConfigBuilder,
-    config::InternalMatchValidationType, config::MatchValidationType,
+    config::InternalMatchValidationType, config::MatchValidationType, config::RequestHeader,
     http_validator::HttpValidatorHelper, match_status::MatchStatus,
 };
 pub use observability::labels::Labels;
