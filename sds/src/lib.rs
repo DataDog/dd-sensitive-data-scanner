@@ -29,7 +29,7 @@ pub use event::{Event, EventVisitor, VisitStringResult};
 pub use match_action::{MatchAction, PartialRedactDirection};
 
 pub use match_validation::{
-    config::AwsConfig, config::AwsType, config::HttpValidatorConfigBuilder,
+    config::AwsConfig, config::AwsType, config::HttpMethod, config::HttpValidatorConfigBuilder,
     config::InternalMatchValidationType, config::MatchValidationType,
     http_validator::HttpValidatorHelper, match_status::MatchStatus,
 };
