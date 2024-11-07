@@ -42,6 +42,12 @@ pub fn convert_to_rust_regex(pattern: &str) -> Result<String, ParseError> {
     Ok(regex_ast.to_string())
 }
 
+pub fn convert_to_ast(pattern: &str) -> Result<SdsAst, ParseError> {
+    let sds_ast = parse_regex_pattern(pattern)?;
+    convert_ast(&sds_ast)?;
+    Ok(sds_ast)
+}
+
 // This is private since only ASTs generated from the parser are supported.
 // (Manually crafted ASTs may cause issues).
 fn convert_ast(sds_ast: &SdsAst) -> Result<RegexAst, ParseError> {
