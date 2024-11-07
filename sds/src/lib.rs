@@ -54,8 +54,17 @@ pub struct WasmRuleMatch {
     pub start: usize,
     pub end: usize,
     pub rule_index: usize,
+    namespace: JsValue,
 }
 
+#[wasm_bindgen]
+impl WasmRuleMatch {
+    // Add getter methods
+    #[wasm_bindgen(getter)]
+    pub fn namespace(&self) -> JsValue {
+        self.namespace.clone()
+    }
+}
 #[wasm_bindgen]
 pub struct WasmScanResult {
     input: JsValue,
@@ -103,6 +112,7 @@ impl ScannerWrapper {
                     start: m.start_index,
                     end: m.end_index_exclusive,
                     rule_index: m.rule_index,
+                    namespace: JsValue::from_str(m.path.sanitize().as_str()),
                 })
                 .collect(),
         }
