@@ -16,9 +16,6 @@ testing = []
 utf16_hash_match_action = []
 bench = []
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
 ahash = "0.8.7"
 # Overriding with fix repo due to: https://github.com/seiflotfy/rust-farmhash/pull/16
@@ -42,7 +39,7 @@ wasm-bindgen = { version = "0.2" }
 serde_yaml = "0.9.34"
 lazy_static = "1.5.0"
 serde_json = "1.0.114"
-web-sys = "0.3.72"
+
 
 [dev-dependencies]
 rand = "0.8.5"
@@ -50,6 +47,7 @@ regex_generate = "0.2.3"
 criterion = { version = "0.5.1", features = ["html_reports"] }
 luhn = "1.0.1"
 serde_test = "1.0.176"
+
 
 [target.'cfg(target_arch = "x86_64")'.dev-dependencies]
 hyperscan = { version = "0.3.2", features = ["static"] }
