@@ -30,28 +30,11 @@ impl AwsValidator {
     pub fn new(config: AwsConfig) -> Self {
         AwsValidator { config }
     }
-}
-
-fn extract_aws_secret_from_match(match_value: &str) -> String {
-    let caps = AWS_SECRET_REGEX.captures(match_value);
-    if let Some(caps) = caps {
-        return caps[1].to_string();
-    }
-    "".to_string()
-}
-
-#[async_trait]
-impl MatchValidator for AwsValidator {
-    fn blocking_validate(
+    fn get_match_status_per_pairs_of_matches_idx(
         &self,
-        matches: &mut Vec<RuleMatch>,
+        matches: &Vec<RuleMatch>,
         scanner_rules: &[Box<dyn CompiledRuleDyn>],
-    ) {
-        // let's update the matches and return immediately for now
-        matches.par_iter_mut().enumerate().for_each(|m| {
-            m.1.match_status = MatchStatus::Error("AWS Not implemented".to_string());
-        });
-        // Let's regroup matches per type
+    ) -> AHashMap<(usize, usize), MatchStatus> {
         let mut aws_id_matches_idx = vec![];
         let mut aws_secret_matches_idx = vec![];
 
@@ -82,6 +65,45 @@ impl MatchValidator for AwsValidator {
                 );
             }
         }
+        match_status_per_pairs_of_matches_idx
+    }
+}
+
+fn extract_aws_secret_from_match(match_value: &str) -> String {
+    let caps = AWS_SECRET_REGEX.captures(match_value);
+    if let Some(caps) = caps {
+        return caps[1].to_string();
+    }
+    "".to_string()
+}
+
+fn merge_returned_match_status_with_better_status(
+    matches: &mut Vec<RuleMatch>,
+    match_status_per_pairs_of_matches_idx: &AHashMap<(usize, usize), MatchStatus>,
+) {
+    // Update the matches with the match_status
+    // Order is (from higest to lowest) MatchStatus::Valid, MatchStatus::Invalid, MatchStatus::Error
+    // Walk through all result and update the matches only if the new match_status has higher priority
+    for ((id_index, secret_index), match_status) in match_status_per_pairs_of_matches_idx {
+        {
+            matches[*id_index].match_status.merge(match_status.clone());
+            matches[*secret_index]
+                .match_status
+                .merge(match_status.clone());
+        }
+    }
+}
+
+#[async_trait]
+impl MatchValidator for AwsValidator {
+    fn blocking_validate(
+        &self,
+        matches: &mut Vec<RuleMatch>,
+        scanner_rules: &[Box<dyn CompiledRuleDyn>],
+    ) {
+        // Let's regroup matches per type
+        let mut match_status_per_pairs_of_matches_idx: AHashMap<(usize, usize), MatchStatus> =
+            self.get_match_status_per_pairs_of_matches_idx(matches, scanner_rules);
 
         // Let's try all combination of aws_id and aws_secret
         match_status_per_pairs_of_matches_idx
@@ -152,17 +174,10 @@ impl MatchValidator for AwsValidator {
                 }
             });
 
-        // Now let's update the matches with the match_status
-        // Order is (from higest to lowest) MatchStatus::Valid, MatchStatus::Invalid, MatchStatus::Error
-        // Let's walk through all result and update the matches only if the new match_status has higher priority
-        for ((id_index, secret_index), match_status) in match_status_per_pairs_of_matches_idx {
-            {
-                matches[id_index].match_status.merge(match_status.clone());
-                matches[secret_index]
-                    .match_status
-                    .merge(match_status.clone());
-            }
-        }
+        merge_returned_match_status_with_better_status(
+            matches,
+            &mut match_status_per_pairs_of_matches_idx,
+        );
     }
     async fn validate(
         &self,
@@ -170,36 +185,8 @@ impl MatchValidator for AwsValidator {
         scanner_rules: &[Box<dyn CompiledRuleDyn>],
     ) {
         // Let's regroup matches per type
-        let mut aws_id_matches_idx = vec![];
-        let mut aws_secret_matches_idx = vec![];
-
-        for (idx, m) in matches.iter().enumerate() {
-            let rule = &scanner_rules[m.rule_index];
-            if let Some(MatchValidationType::Aws(aws_type)) = rule.get_match_validation_type() {
-                match aws_type {
-                    AwsType::AwsId => {
-                        aws_id_matches_idx.push(idx);
-                    }
-                    AwsType::AwsSecret(_) => {
-                        aws_secret_matches_idx.push(idx);
-                    }
-                    AwsType::AwsSession => {
-                        // We don't support session for now
-                    }
-                }
-            }
-        }
-
         let mut match_status_per_pairs_of_matches_idx: AHashMap<(usize, usize), MatchStatus> =
-            AHashMap::new();
-        for aws_id_match_idx in &aws_id_matches_idx {
-            for aws_secret_match_idx in &aws_secret_matches_idx {
-                match_status_per_pairs_of_matches_idx.insert(
-                    (*aws_id_match_idx, *aws_secret_match_idx),
-                    MatchStatus::NotChecked,
-                );
-            }
-        }
+            self.get_match_status_per_pairs_of_matches_idx(matches, scanner_rules);
 
         // Let's try all combination of aws_id and aws_secret
         let futures = match_status_per_pairs_of_matches_idx.iter_mut().map(
@@ -276,17 +263,10 @@ impl MatchValidator for AwsValidator {
         // Wait for all result to complete
         let _ = join_all(futures).await;
 
-        // Now let's update the matches with the match_status
-        // Order is (from higest to lowest) MatchStatus::Valid, MatchStatus::Invalid, MatchStatus::Error
-        // Let's walk through all result and update the matches only if the new match_status has higher priority
-        for ((id_index, secret_index), match_status) in match_status_per_pairs_of_matches_idx {
-            {
-                matches[id_index].match_status.merge(match_status.clone());
-                matches[secret_index]
-                    .match_status
-                    .merge(match_status.clone());
-            }
-        }
+        merge_returned_match_status_with_better_status(
+            matches,
+            &mut match_status_per_pairs_of_matches_idx,
+        );
     }
 }
 
