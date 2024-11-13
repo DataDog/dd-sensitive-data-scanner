@@ -39,7 +39,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
     let num_threads = 32;
     // There are more jobs than threads to test things that may take longer the first time
     // a thread does something (e.g. thread local storage)
-    let num_jobs = 256;
+    let num_jobs = num_threads * 25;
     let thread_pool = ThreadPool::new(num_threads);
 
     c.bench_function("scan single strings (multi-threaded)", |b| {
