@@ -5,6 +5,7 @@ use crate::match_validation::{
     config::InternalMatchValidationType, config::MatchValidationType, match_status::MatchStatus,
     match_validator::MatchValidator,
 };
+use rayon::prelude::*;
 
 use error::{MatchValidationError, MatchValidatorCreationError};
 
@@ -323,7 +324,7 @@ impl Scanner {
         output_rule_matches
     }
 
-    pub async fn validate_matches(
+    pub fn validate_matches(
         &self,
         rule_matches: &mut Vec<RuleMatch>,
     ) -> Result<(), MatchValidationError> {
@@ -346,19 +347,17 @@ impl Scanner {
         }
 
         // Call the validate per match_validator_type with their matches and the RuleMatch list and collect the results
-        let futures = match_validator_rule_match_per_type.iter_mut().filter_map(
+        match_validator_rule_match_per_type.par_iter_mut().for_each(
             |(match_validation_type, matches_per_type)| {
                 let match_validator = self.match_validators_per_type.get(match_validation_type);
-                match_validator.map(|match_validator| {
+                if let Some(match_validator) = match_validator {
                     match_validator
                         .as_ref()
                         .validate(matches_per_type, &self.rules)
-                })
+                }
             },
         );
 
-        // Wait for all result to complete
-        let _ = futures::future::join_all(futures).await;
         // Refill the rule_matches with the validated matches
         for (_, mut matches) in match_validator_rule_match_per_type {
             rule_matches.append(&mut matches);
@@ -2295,8 +2294,8 @@ mod test {
         assert_eq!(rule_match[0].match_value, Some("world".to_string()));
     }
 
-    #[tokio::test]
-    async fn test_should_error_if_no_match_validation() {
+    #[test]
+    fn test_should_error_if_no_match_validation() {
         let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
@@ -2311,7 +2310,7 @@ mod test {
         assert_eq!(content, "hey [REDACTED]");
         assert_eq!(rule_match[0].match_value, None);
         // Let's call validate and check that it panics
-        let err = scanner.validate_matches(&mut rule_match).await;
+        let err = scanner.validate_matches(&mut rule_match);
         assert!(err.is_err());
     }
 
@@ -2408,8 +2407,8 @@ mod test {
         ));
     }
 
-    #[tokio::test]
-    async fn test_aws_id_only_shall_not_validate() {
+    #[test]
+    fn test_aws_id_only_shall_not_validate() {
         let rule_aws_id = RegexRuleConfig::new("aws_id")
             .match_action(MatchAction::Redact {
                 replacement: "[AWS_ID]".to_string(),
@@ -2422,12 +2421,12 @@ mod test {
         let mut matches = scanner.scan(&mut content, vec![]);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "this is an [AWS_ID]");
-        assert!(scanner.validate_matches(&mut matches).await.is_err());
+        assert!(scanner.validate_matches(&mut matches).is_err());
         assert_eq!(matches[0].match_status, MatchStatus::NotChecked);
     }
 
-    #[tokio::test]
-    async fn test_mock_same_http_validator_several_matches() {
+    #[test]
+    fn test_mock_same_http_validator_several_matches() {
         let server = MockServer::start();
 
         // Create a mock on the server.
@@ -2495,7 +2494,7 @@ mod test {
             content,
             "this is a content with a [VALID] an [INVALID] and an [ERROR]"
         );
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         mock_service_valid.assert();
         mock_service_invalid.assert();
         mock_service_error.assert();
@@ -2507,8 +2506,8 @@ mod test {
         );
     }
 
-    #[tokio::test]
-    async fn test_mock_http_timeout() {
+    #[test]
+    fn test_mock_http_timeout() {
         let server = MockServer::start();
         let _ = server.mock(|when, then| {
             when.method(GET)
@@ -2534,7 +2533,7 @@ mod test {
         let mut matches = scanner.scan(&mut content, vec![]);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "this is a content with a [VALID]");
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         // This will be in the form "Error making HTTP request: "
         match &matches[0].match_status {
             MatchStatus::Error(val) => {
@@ -2543,8 +2542,8 @@ mod test {
             _ => assert!(false),
         }
     }
-    #[tokio::test]
-    async fn test_mock_multiple_match_validators() {
+    #[test]
+    fn test_mock_multiple_match_validators() {
         let server = MockServer::start();
 
         // Create a mock on the server.
@@ -2598,7 +2597,7 @@ mod test {
             content,
             "this is a content with a [VALID] an [AWS_ID] and an [AWS_SECRET]"
         );
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         mock_http_service_valid.assert();
         mock_aws_service_valid.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -2606,8 +2605,8 @@ mod test {
         assert_eq!(matches[2].match_status, MatchStatus::Valid);
     }
 
-    #[tokio::test]
-    async fn test_mock_endpoint_with_multiple_hosts() {
+    #[test]
+    fn test_mock_endpoint_with_multiple_hosts() {
         let server = MockServer::start();
         // Create a mock on the server.
         let mock_http_service_us = server.mock(|when, then| {
@@ -2638,14 +2637,14 @@ mod test {
             content,
             "this is a content with a [VALID] on multiple hosts"
         );
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         mock_http_service_us.assert();
         mock_http_service_eu.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
     }
 
-    #[tokio::test]
-    async fn test_mock_aws_validator() {
+    #[test]
+    fn test_mock_aws_validator() {
         let server = MockServer::start();
         let server_url = server.url("/").to_string();
 
@@ -2759,7 +2758,7 @@ mod test {
             content,
             "content with a valid aws_id [AWS_ID], an invalid aws_id [AWS_ID], an error aws_id [AWS_ID] and an aws_secret [AWS_SECRET] and an other aws_secret [AWS_SECRET]"
         );
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         mock_service_valid.assert();
         mock_service_invalid_1.assert();
         mock_service_invalid_2.assert();
