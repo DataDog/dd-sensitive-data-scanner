@@ -11,4 +11,9 @@ pub trait MatchValidator: Send + Sync {
         matches: &mut Vec<RuleMatch>,
         scanner_rules: &[Box<dyn CompiledRuleDyn>],
     );
+    fn blocking_validate(
+        &self,
+        matches: &mut Vec<RuleMatch>,
+        scanner_rules: &[Box<dyn CompiledRuleDyn>],
+    );
 }
