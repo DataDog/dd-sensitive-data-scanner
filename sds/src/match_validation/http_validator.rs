@@ -1,6 +1,7 @@
 use super::{
     config::{HttpValidatorConfig, HttpValidatorConfigBuilder, RequestHeader},
     match_validator::MatchValidator,
+    validator_utils::ReqwestResponseAbstraction,
 };
 use crate::{match_validation::config::HttpMethod, CompiledRuleDyn, MatchStatus, RuleMatch};
 use ahash::AHashMap;
@@ -23,6 +24,31 @@ pub struct HttpValidator {
 impl HttpValidator {
     pub fn new_from_config(config: HttpValidatorConfig) -> Self {
         HttpValidator { config }
+    }
+    fn handle_reqwest_response(
+        &self,
+        match_status: &mut MatchStatus,
+        val: ReqwestResponseAbstraction,
+    ) {
+        // First check if this is in the valid status ranges
+        for valid_range in &self.config.valid_http_status_code {
+            if valid_range.contains(&val.status().as_u16()) {
+                *match_status = MatchStatus::Valid;
+                return;
+            }
+        }
+        // Next check if this is in the invalid status ranges
+        for invalid_range in &self.config.invalid_http_status_code {
+            if invalid_range.contains(&val.status().as_u16()) {
+                *match_status = MatchStatus::Invalid;
+                return;
+            }
+        }
+        // If it's not in either, then it's not available
+        *match_status = MatchStatus::Error(fmt::format(format_args!(
+            "Unexpected HTTP status code {}",
+            val.status().as_u16()
+        )));
     }
 }
 
@@ -115,25 +141,10 @@ impl MatchValidator for HttpValidator {
                 let res = request_builder.send();
                 match res {
                     Ok(val) => {
-                        // First check if this is in the valid status ranges
-                        for valid_range in &self.config.valid_http_status_code {
-                            if valid_range.contains(&val.status().as_u16()) {
-                                *match_status = MatchStatus::Valid;
-                                return;
-                            }
-                        }
-                        // Next check if this is in the invalid status ranges
-                        for invalid_range in &self.config.invalid_http_status_code {
-                            if invalid_range.contains(&val.status().as_u16()) {
-                                *match_status = MatchStatus::Invalid;
-                                return;
-                            }
-                        }
-                        // If it's not in either, then it's not available
-                        *match_status = MatchStatus::Error(fmt::format(format_args!(
-                            "Unexpected HTTP status code {}",
-                            val.status().as_u16()
-                        )));
+                        self.handle_reqwest_response(
+                            match_status,
+                            ReqwestResponseAbstraction::from_sync(val),
+                        );
                     }
                     Err(err) => {
                         // TODO(trosenblatt) emit a metrics for this
@@ -185,25 +196,10 @@ impl MatchValidator for HttpValidator {
                     let res = request_builder.send().await;
                     match res {
                         Ok(val) => {
-                            // First check if this is in the valid status ranges
-                            for valid_range in &self.config.valid_http_status_code {
-                                if valid_range.contains(&val.status().as_u16()) {
-                                    *match_status = MatchStatus::Valid;
-                                    return;
-                                }
-                            }
-                            // Next check if this is in the invalid status ranges
-                            for invalid_range in &self.config.invalid_http_status_code {
-                                if invalid_range.contains(&val.status().as_u16()) {
-                                    *match_status = MatchStatus::Invalid;
-                                    return;
-                                }
-                            }
-                            // If it's not in either, then it's not available
-                            *match_status = MatchStatus::Error(fmt::format(format_args!(
-                                "Unexpected HTTP status code {}",
-                                val.status().as_u16()
-                            )));
+                            self.handle_reqwest_response(
+                                match_status,
+                                ReqwestResponseAbstraction::from_async(val),
+                            );
                         }
                         Err(err) => {
                             // TODO(trosenblatt) emit a metrics for this

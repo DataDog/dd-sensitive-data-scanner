@@ -11,7 +11,7 @@ use reqwest::Client;
 use super::{
     config::{AwsConfig, AwsType, MatchValidationType},
     match_validator::MatchValidator,
-    validator_utils::generate_aws_headers_and_body,
+    validator_utils::{generate_aws_headers_and_body, ReqwestResponseAbstraction},
 };
 
 lazy_static! {
@@ -94,6 +94,29 @@ fn merge_returned_match_status_with_better_status(
     }
 }
 
+fn handle_reqwest_response(match_status: &mut MatchStatus, val: ReqwestResponseAbstraction) {
+    // If status is 200-299, then it's valid we can safely update the match status
+    // and return
+    if val.status().is_success() {
+        *match_status = MatchStatus::Valid;
+        return;
+    }
+
+    if val.status().is_client_error() {
+        *match_status = MatchStatus::Invalid;
+        return;
+    }
+
+    // There might be an issue with the request. We will mark the match_status as error
+    // unless it is already valid
+    if val.status().is_server_error() {
+        *match_status = MatchStatus::Error(fmt::format(format_args!(
+            "Unexpected HTTP status code {}",
+            val.status().as_u16()
+        )));
+    }
+}
+
 #[async_trait]
 impl MatchValidator for AwsValidator {
     fn blocking_validate(
@@ -141,37 +164,17 @@ impl MatchValidator for AwsValidator {
                     .timeout(self.config.timeout)
                     .send();
 
-                match res {
-                    Ok(val) => {
-                        // If status is 200-299, then it's valid we can safely update the match status
-                        // and return
-                        if val.status().is_success() {
-                            *match_status = MatchStatus::Valid;
-                            return;
-                        }
-
-                        if val.status().is_client_error() {
-                            *match_status = MatchStatus::Invalid;
-                            return;
-                        }
-
-                        // There might be an issue with the request. We will mark the match_status as error
-                        // unless it is already valid
-                        if val.status().is_server_error() {
-                            *match_status = MatchStatus::Error(fmt::format(format_args!(
-                                "Unexpected HTTP status code {}",
-                                val.status().as_u16()
-                            )));
-                        }
-                    }
+                let res = match res {
+                    Ok(val) => ReqwestResponseAbstraction::from_sync(val),
                     Err(err) => {
-                        // TODO(trosenblatt) emit a metrics for this
                         *match_status = MatchStatus::Error(fmt::format(format_args!(
                             "Error making HTTP request: {}",
                             err
                         )));
+                        return;
                     }
-                }
+                };
+                handle_reqwest_response(match_status, res);
             });
 
         merge_returned_match_status_with_better_status(
@@ -226,37 +229,17 @@ impl MatchValidator for AwsValidator {
                         .send()
                         .await;
 
-                    match res {
-                        Ok(val) => {
-                            // If status is 200-299, then it's valid we can safely update the match status
-                            // and return
-                            if val.status().is_success() {
-                                *match_status = MatchStatus::Valid;
-                                return;
-                            }
-
-                            if val.status().is_client_error() {
-                                *match_status = MatchStatus::Invalid;
-                                return;
-                            }
-
-                            // There might be an issue with the request. We will mark the match_status as error
-                            // unless it is already valid
-                            if val.status().is_server_error() {
-                                *match_status = MatchStatus::Error(fmt::format(format_args!(
-                                    "Unexpected HTTP status code {}",
-                                    val.status().as_u16()
-                                )));
-                            }
-                        }
+                    let res = match res {
+                        Ok(val) => ReqwestResponseAbstraction::from_async(val),
                         Err(err) => {
-                            // TODO(trosenblatt) emit a metrics for this
                             *match_status = MatchStatus::Error(fmt::format(format_args!(
                                 "Error making HTTP request: {}",
                                 err
                             )));
+                            return;
                         }
-                    }
+                    };
+                    handle_reqwest_response(match_status, res);
                 }
             },
         );
