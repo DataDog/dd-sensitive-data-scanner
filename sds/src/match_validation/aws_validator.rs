@@ -32,7 +32,7 @@ impl AwsValidator {
     }
     fn get_match_status_per_pairs_of_matches_idx(
         &self,
-        matches: &Vec<RuleMatch>,
+        matches: &[RuleMatch],
         scanner_rules: &[Box<dyn CompiledRuleDyn>],
     ) -> AHashMap<(usize, usize), MatchStatus> {
         let mut aws_id_matches_idx = vec![];
@@ -78,7 +78,7 @@ fn extract_aws_secret_from_match(match_value: &str) -> String {
 }
 
 fn merge_returned_match_status_with_better_status(
-    matches: &mut Vec<RuleMatch>,
+    matches: &mut [RuleMatch],
     match_status_per_pairs_of_matches_idx: &AHashMap<(usize, usize), MatchStatus>,
 ) {
     // Update the matches with the match_status
