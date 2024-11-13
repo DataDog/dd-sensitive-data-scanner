@@ -179,7 +179,7 @@ impl MatchValidator for AwsValidator {
 
         merge_returned_match_status_with_better_status(
             matches,
-            &mut match_status_per_pairs_of_matches_idx,
+            &match_status_per_pairs_of_matches_idx,
         );
     }
     async fn validate(
@@ -248,7 +248,7 @@ impl MatchValidator for AwsValidator {
 
         merge_returned_match_status_with_better_status(
             matches,
-            &mut match_status_per_pairs_of_matches_idx,
+            &match_status_per_pairs_of_matches_idx,
         );
     }
 }

@@ -360,9 +360,6 @@ impl Scanner {
 
         // Refill the rule_matches with the validated matches
         for (_, mut matches) in match_validator_rule_match_per_type {
-            for matche in &matches {
-                println!("Match status: {:?}", matche.match_status);
-            }
             rule_matches.append(&mut matches);
         }
 

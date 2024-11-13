@@ -37,21 +37,21 @@ pub fn generate_aws_headers_and_body(
 }
 
 pub enum ReqwestResponseAbstraction {
-    SYNC(reqwest::blocking::Response),
-    ASYNC(reqwest::Response),
+    Sync(reqwest::blocking::Response),
+    Async(reqwest::Response),
 }
 
 impl ReqwestResponseAbstraction {
     pub fn from_sync(res: reqwest::blocking::Response) -> Self {
-        ReqwestResponseAbstraction::SYNC(res)
+        ReqwestResponseAbstraction::Sync(res)
     }
     pub fn from_async(res: reqwest::Response) -> Self {
-        ReqwestResponseAbstraction::ASYNC(res)
+        ReqwestResponseAbstraction::Async(res)
     }
     pub fn status(&self) -> reqwest::StatusCode {
         match self {
-            ReqwestResponseAbstraction::SYNC(res) => res.status(),
-            ReqwestResponseAbstraction::ASYNC(res) => res.status(),
+            ReqwestResponseAbstraction::Sync(res) => res.status(),
+            ReqwestResponseAbstraction::Async(res) => res.status(),
         }
     }
 }
