@@ -6,8 +6,8 @@ use slotmap::SecondaryMap;
 use std::sync::Arc;
 
 lazy_static! {
-    static ref REGEX_CACHE_STORE: Arc<SharedPool<Box<RegexCaches>>> =
-        Arc::new(SharedPool::new(|| Box::new(RegexCaches::new())));
+    static ref REGEX_CACHE_STORE: Arc<SharedPool<Box<RegexCaches>, 16>> =
+        Arc::new(SharedPool::<_, 16>::new(|| Box::new(RegexCaches::new())));
 }
 
 pub fn access_regex_caches<T>(func: impl FnOnce(&mut RegexCaches) -> T) -> T {

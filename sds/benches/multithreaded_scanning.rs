@@ -36,7 +36,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
     let sample_inputs = sample_inputs();
     let sample_event = sample_large_event();
 
-    let num_threads = 32;
+    let num_threads = 16;
     // There are more jobs than threads to test things that may take longer the first time
     // a thread does something (e.g. thread local storage)
     let num_jobs = num_threads * 25;

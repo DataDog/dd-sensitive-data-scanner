@@ -433,7 +433,7 @@ dependencies = [
  "metrics-util",
  "nom",
  "regex",
- "regex-automata 0.4.9 (git+https://github.com/fbryden/regex?rev=7de87756bbd7c6568d2160206ff7615a5f48e205)",
+ "regex-automata 0.4.9 (git+https://github.com/fbryden/regex?rev=dccd48f48b6c772cb69eb864a8d95cd27515a53a)",
  "regex-syntax 0.7.5",
  "reqwest",
  "serde",
@@ -1338,11 +1338,11 @@ dependencies = [
 [[package]]
 name = "regex-automata"
 version = "0.4.9"
-source = "git+https://github.com/fbryden/regex?rev=7de87756bbd7c6568d2160206ff7615a5f48e205#7de87756bbd7c6568d2160206ff7615a5f48e205"
+source = "git+https://github.com/fbryden/regex?rev=dccd48f48b6c772cb69eb864a8d95cd27515a53a#dccd48f48b6c772cb69eb864a8d95cd27515a53a"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-syntax 0.8.5 (git+https://github.com/fbryden/regex?rev=7de87756bbd7c6568d2160206ff7615a5f48e205)",
+ "regex-syntax 0.8.5 (git+https://github.com/fbryden/regex?rev=dccd48f48b6c772cb69eb864a8d95cd27515a53a)",
 ]
 
 [[package]]
@@ -1364,7 +1364,7 @@ checksum = "dbb5fb1acd8a1a18b3dd5be62d25485eb770e05afb408a9627d14d451bae12da"
 [[package]]
 name = "regex-syntax"
 version = "0.8.5"
-source = "git+https://github.com/fbryden/regex?rev=7de87756bbd7c6568d2160206ff7615a5f48e205#7de87756bbd7c6568d2160206ff7615a5f48e205"
+source = "git+https://github.com/fbryden/regex?rev=dccd48f48b6c772cb69eb864a8d95cd27515a53a#dccd48f48b6c772cb69eb864a8d95cd27515a53a"
 
 [[package]]
 name = "regex-syntax"
