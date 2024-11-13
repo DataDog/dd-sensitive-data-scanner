@@ -1,24 +1,56 @@
-use serde::{Deserialize, Serialize};
+use serde::{Serialize, Serializer};
 use std::rc::Rc;
-
+use serde::ser::SerializeMap;
+use regex_syntax::ast::Alternation;
 /// The Abstract Syntax Tree describing a regex pattern. The AST is designed
 /// to preserve behavior, but doesn't necessarily preserve the exact syntax.
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(tag = "type", content = "content")]
+#[derive(Serialize, Clone, Debug)]
 pub enum Ast {
     Empty,
+    //Char
     Literal(Literal),
+    //abc  - Alternative
     Concat(Vec<Ast>),
+    // Group
     Group(Rc<Group>),
+    // CharacterClass
     CharacterClass(CharacterClass),
     // May be empty
+    //  Disjunction
+    // a|b|c
     Alternation(Vec<Ast>),
+    // Repetition
     Repetition(Repetition),
+    // Assertion
     Assertion(AssertionType),
+    // Tree -> Flags
     Flags(Flags),
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+
+impl Serialize for Ast {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(2))?;
+        match self {
+         Ast::Literal(literal) => {
+             serializer..se
+        }
+        }
+        state.serialize_entry("type", "Alternative")?;
+
+        if let Ast::Alternation(expression) = self {
+            state.serialize_entry("expressions", expression)?;
+        } else {
+            state.serialize_entry("expressions", &vec![])?;
+        }
+        state.end()
+    }
+}
+
+#[derive(Serialize, Copy, Clone, Debug)]
 pub struct Literal {
     #[serde(rename = "value")]
     pub c: char,
@@ -28,31 +60,59 @@ pub struct Literal {
     pub escaped: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum Group {
     Capturing(CaptureGroup),
     NonCapturing(NonCapturingGroup),
     NamedCapturing(NamedCapturingGroup),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+impl Serialize for Group {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_map(Some(4))?;
+        state.serialize_entry("type", "Group")?;
+        match self {
+            Group::Capturing(group) => {
+                state.serialize_entry("capturing", &false)?;
+                state.serialize_entry("name", "")?;
+                state.serialize_entry("expression", &group.inner)?;
+            }
+            Group::NonCapturing(group) => {
+                state.serialize_entry("capturing", &true)?;
+                state.serialize_entry("name", "")?;
+                state.serialize_entry("expression", &group.inner)?;
+            }
+            Group::NamedCapturing(group) => {
+                state.serialize_entry("capturing", &true)?;
+                state.serialize_entry("name", &group.name)?;
+                state.serialize_entry("expression", &group.inner)?;
+            }
+        }
+        state.end()
+    }
+}
+
+#[derive(Serialize, Clone, Debug)]
 pub struct CaptureGroup {
     pub inner: Ast,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct NonCapturingGroup {
     pub flags: Flags,
     pub inner: Ast,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct NamedCapturingGroup {
     pub name: String,
     pub inner: Ast,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub enum CharacterClass {
     Bracket(BracketCharacterClass),
     Perl(PerlCharacterClass),
@@ -64,13 +124,13 @@ pub enum CharacterClass {
     UnicodeProperty(UnicodePropertyClass),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct UnicodePropertyClass {
     pub negate: bool,
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub enum QuantifierKind {
     /// *
     ZeroOrMore,
@@ -86,13 +146,13 @@ pub enum QuantifierKind {
     OneOrMore,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Quantifier {
     pub lazy: bool,
     pub kind: QuantifierKind,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub enum PerlCharacterClass {
     Digit,
     Space,
@@ -102,13 +162,13 @@ pub enum PerlCharacterClass {
     NonWord,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct BracketCharacterClass {
     pub negated: bool,
     pub items: Vec<BracketCharacterClassItem>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub enum BracketCharacterClassItem {
     Literal(char),
     Range(char, char),
@@ -121,13 +181,13 @@ pub enum BracketCharacterClassItem {
     NotVerticalWhitespace,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct AsciiClass {
     pub negated: bool,
     pub kind: AsciiClassKind,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub enum AsciiClassKind {
     Alnum,
     Alpha,
@@ -145,13 +205,13 @@ pub enum AsciiClassKind {
     Xdigit,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Repetition {
     pub quantifier: Quantifier,
     pub inner: Rc<Ast>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub enum AssertionType {
     /// \b
     WordBoundary,
@@ -175,7 +235,7 @@ pub enum AssertionType {
     EndTextOptionalNewline,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Flags {
     /// Flags before a "-"
     pub add: Vec<Flag>,
@@ -183,7 +243,7 @@ pub struct Flags {
     pub remove: Vec<Flag>,
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Flag {
     /// i
     CaseInsensitive,
