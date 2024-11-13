@@ -57,6 +57,9 @@ jobs:
           go install honnef.co/go/tools/cmd/staticcheck@v0.5.1
           export PATH=$PATH:$(go env GOPATH)/bin
           LD_LIBRARY_PATH=../rust/target/release staticcheck ./...
+          gofmt -s -w . && git diff --exit-code
+          # Replace the gofmt command above by `gofmt -s -d .` when the following is resolved https://github.com/golang/go/issues/46289
+          go mod tidy -diff
       - name: "Run the Go unit tests"
         run: |
           cd go
