@@ -1,19 +1,15 @@
 use super::{
     config::{HttpValidatorConfig, HttpValidatorConfigBuilder, RequestHeader},
     match_validator::MatchValidator,
-    validator_utils::ReqwestResponseAbstraction,
 };
 use crate::{match_validation::config::HttpMethod, CompiledRuleDyn, MatchStatus, RuleMatch};
 use ahash::AHashMap;
-use async_trait::async_trait;
-use futures::future::join_all;
 use lazy_static::lazy_static;
 use rayon::prelude::*;
-use reqwest::Client;
+use reqwest::blocking::Response;
 use std::fmt;
 
 lazy_static! {
-    static ref HTTP_CLIENT: Client = Client::new();
     static ref BLOCKING_HTTP_CLIENT: reqwest::blocking::Client = reqwest::blocking::Client::new();
 }
 
@@ -25,11 +21,7 @@ impl HttpValidator {
     pub fn new_from_config(config: HttpValidatorConfig) -> Self {
         HttpValidator { config }
     }
-    fn handle_reqwest_response(
-        &self,
-        match_status: &mut MatchStatus,
-        val: ReqwestResponseAbstraction,
-    ) {
+    fn handle_reqwest_response(&self, match_status: &mut MatchStatus, val: &Response) {
         // First check if this is in the valid status ranges
         for valid_range in &self.config.valid_http_status_code {
             if valid_range.contains(&val.status().as_u16()) {
@@ -106,9 +98,8 @@ impl HttpValidatorHelper {
     }
 }
 
-#[async_trait]
 impl MatchValidator for HttpValidator {
-    fn blocking_validate(&self, matches: &mut Vec<RuleMatch>, _: &[Box<dyn CompiledRuleDyn>]) {
+    fn validate(&self, matches: &mut Vec<RuleMatch>, _: &[Box<dyn CompiledRuleDyn>]) {
         // build a map of match status per endpoint and per match_idx
         let mut match_status_per_endpoint_and_match: AHashMap<_, _> = matches
             .iter()
@@ -141,10 +132,7 @@ impl MatchValidator for HttpValidator {
                 let res = request_builder.send();
                 match res {
                     Ok(val) => {
-                        self.handle_reqwest_response(
-                            match_status,
-                            ReqwestResponseAbstraction::from_sync(val),
-                        );
+                        self.handle_reqwest_response(match_status, &val);
                     }
                     Err(err) => {
                         // TODO(trosenblatt) emit a metrics for this
@@ -156,64 +144,6 @@ impl MatchValidator for HttpValidator {
                 }
             },
         );
-
-        // Update the match status with this highest priority returned
-        for ((match_idx, _), status) in match_status_per_endpoint_and_match {
-            matches[match_idx].match_status.merge(status.clone());
-        }
-    }
-    async fn validate(&self, matches: &mut Vec<RuleMatch>, _: &[Box<dyn CompiledRuleDyn>]) {
-        // build a map of match status per endpoint and per match_idx
-        let mut match_status_per_endpoint_and_match: AHashMap<_, _> = matches
-            .iter()
-            .enumerate()
-            .flat_map(|(idx, _)| {
-                self.config
-                    .endpoints
-                    .iter()
-                    .map(move |endpoint| ((idx, endpoint), MatchStatus::NotChecked))
-            })
-            .collect();
-
-        let futures = match_status_per_endpoint_and_match.iter_mut().map(
-            |((match_idx, endpoint), match_status)| {
-                let match_value = matches[*match_idx].match_value.as_ref().unwrap();
-                async move {
-                    let mut request_builder = match self.config.method {
-                        HttpMethod::Get => HTTP_CLIENT.get(*endpoint),
-                        HttpMethod::Post => HTTP_CLIENT.post(*endpoint),
-                        HttpMethod::Put => HTTP_CLIENT.put(*endpoint),
-                        HttpMethod::Delete => HTTP_CLIENT.delete(*endpoint),
-                        HttpMethod::Patch => HTTP_CLIENT.patch(*endpoint),
-                    };
-                    request_builder = request_builder.timeout(self.config.options.timeout);
-
-                    // Add headers
-                    for header in &self.config.request_header {
-                        request_builder = request_builder
-                            .header(&header.key, &header.get_value_with_match(match_value));
-                    }
-                    let res = request_builder.send().await;
-                    match res {
-                        Ok(val) => {
-                            self.handle_reqwest_response(
-                                match_status,
-                                ReqwestResponseAbstraction::from_async(val),
-                            );
-                        }
-                        Err(err) => {
-                            // TODO(trosenblatt) emit a metrics for this
-                            *match_status = MatchStatus::Error(fmt::format(format_args!(
-                                "Error making HTTP request: {}",
-                                err
-                            )));
-                        }
-                    }
-                }
-            },
-        );
-        // Wait for all result to complete
-        let _ = join_all(futures).await;
 
         // Update the match status with this highest priority returned
         for ((match_idx, _), status) in match_status_per_endpoint_and_match {

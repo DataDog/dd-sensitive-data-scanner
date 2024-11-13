@@ -33,13 +33,10 @@ metrics-util = "0.18.0"
 crc32fast = "1.4.0"
 base62 = "2.0.2"
 iban_validate = "4"
-async-trait = "0.1.82"
 
 # This is deprecated and may switch to `serde_yml` in the future. Waiting for it to mature a bit first.
 serde_yaml = "0.9.34"
 lazy_static = "1.5.0"
-futures = "0.3.30"
-async-std = "1.13.0"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "charset", "http2", "macos-system-configuration", "rustls-tls-native-roots"] }
 aws-sign-v4 = "0.3.0"
 chrono = { version = "0.4", features = ["serde"] }

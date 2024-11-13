@@ -324,7 +324,7 @@ impl Scanner {
         output_rule_matches
     }
 
-    pub fn blocking_validate_matches(
+    pub fn validate_matches(
         &self,
         rule_matches: &mut Vec<RuleMatch>,
     ) -> Result<(), MatchValidationError> {
@@ -353,57 +353,11 @@ impl Scanner {
                 if let Some(match_validator) = match_validator {
                     match_validator
                         .as_ref()
-                        .blocking_validate(matches_per_type, &self.rules)
-                }
-            },
-        );
-
-        // Refill the rule_matches with the validated matches
-        for (_, mut matches) in match_validator_rule_match_per_type {
-            rule_matches.append(&mut matches);
-        }
-
-        // Sort rule_matches by start index
-        rule_matches.sort_by_key(|rule_match| rule_match.start_index);
-        Ok(())
-    }
-
-    pub async fn validate_matches(
-        &self,
-        rule_matches: &mut Vec<RuleMatch>,
-    ) -> Result<(), MatchValidationError> {
-        if !self.scanner_features.return_matches {
-            return Err(MatchValidationError::NoMatchValidationType);
-        }
-        // Create MatchValidatorRuleMatch per match_validator_type to pass it to each match_validator
-        let mut match_validator_rule_match_per_type = AHashMap::new();
-        for rule_match in rule_matches.drain(..) {
-            let rule = &self.rules[rule_match.rule_index];
-            if let Some(match_validation_type) = rule.get_internal_match_validation_type() {
-                if !match_validator_rule_match_per_type.contains_key(match_validation_type) {
-                    match_validator_rule_match_per_type.insert(match_validation_type, Vec::new());
-                }
-                match_validator_rule_match_per_type
-                    .get_mut(match_validation_type)
-                    .unwrap()
-                    .push(rule_match);
-            }
-        }
-
-        // Call the validate per match_validator_type with their matches and the RuleMatch list and collect the results
-        let futures = match_validator_rule_match_per_type.iter_mut().filter_map(
-            |(match_validation_type, matches_per_type)| {
-                let match_validator = self.match_validators_per_type.get(match_validation_type);
-                match_validator.map(|match_validator| {
-                    match_validator
-                        .as_ref()
                         .validate(matches_per_type, &self.rules)
-                })
+                }
             },
         );
 
-        // Wait for all result to complete
-        let _ = futures::future::join_all(futures).await;
         // Refill the rule_matches with the validated matches
         for (_, mut matches) in match_validator_rule_match_per_type {
             rule_matches.append(&mut matches);
@@ -2340,8 +2294,8 @@ mod test {
         assert_eq!(rule_match[0].match_value, Some("world".to_string()));
     }
 
-    #[tokio::test]
-    async fn test_should_error_if_no_match_validation() {
+    #[test]
+    fn test_should_error_if_no_match_validation() {
         let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
@@ -2356,7 +2310,7 @@ mod test {
         assert_eq!(content, "hey [REDACTED]");
         assert_eq!(rule_match[0].match_value, None);
         // Let's call validate and check that it panics
-        let err = scanner.validate_matches(&mut rule_match).await;
+        let err = scanner.validate_matches(&mut rule_match);
         assert!(err.is_err());
     }
 
@@ -2453,8 +2407,8 @@ mod test {
         ));
     }
 
-    #[tokio::test]
-    async fn test_aws_id_only_shall_not_validate() {
+    #[test]
+    fn test_aws_id_only_shall_not_validate() {
         let rule_aws_id = RegexRuleConfig::new("aws_id")
             .match_action(MatchAction::Redact {
                 replacement: "[AWS_ID]".to_string(),
@@ -2467,12 +2421,12 @@ mod test {
         let mut matches = scanner.scan(&mut content, vec![]);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "this is an [AWS_ID]");
-        assert!(scanner.validate_matches(&mut matches).await.is_err());
+        assert!(scanner.validate_matches(&mut matches).is_err());
         assert_eq!(matches[0].match_status, MatchStatus::NotChecked);
     }
 
-    #[tokio::test]
-    async fn test_mock_same_http_validator_several_matches() {
+    #[test]
+    fn test_mock_same_http_validator_several_matches() {
         let server = MockServer::start();
 
         // Create a mock on the server.
@@ -2540,7 +2494,7 @@ mod test {
             content,
             "this is a content with a [VALID] an [INVALID] and an [ERROR]"
         );
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         mock_service_valid.assert();
         mock_service_invalid.assert();
         mock_service_error.assert();
@@ -2552,8 +2506,8 @@ mod test {
         );
     }
 
-    #[tokio::test]
-    async fn test_mock_http_timeout() {
+    #[test]
+    fn test_mock_http_timeout() {
         let server = MockServer::start();
         let _ = server.mock(|when, then| {
             when.method(GET)
@@ -2579,7 +2533,7 @@ mod test {
         let mut matches = scanner.scan(&mut content, vec![]);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "this is a content with a [VALID]");
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         // This will be in the form "Error making HTTP request: "
         match &matches[0].match_status {
             MatchStatus::Error(val) => {
@@ -2588,8 +2542,8 @@ mod test {
             _ => assert!(false),
         }
     }
-    #[tokio::test]
-    async fn test_mock_multiple_match_validators() {
+    #[test]
+    fn test_mock_multiple_match_validators() {
         let server = MockServer::start();
 
         // Create a mock on the server.
@@ -2643,7 +2597,7 @@ mod test {
             content,
             "this is a content with a [VALID] an [AWS_ID] and an [AWS_SECRET]"
         );
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         mock_http_service_valid.assert();
         mock_aws_service_valid.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -2652,70 +2606,7 @@ mod test {
     }
 
     #[test]
-    fn test_mock_blocking_multiple_match_validators() {
-        let server = MockServer::start();
-
-        // Create a mock on the server.
-        let mock_http_service_valid = server.mock(|when, then| {
-            when.method(GET).path("/http-service");
-            then.status(200);
-        });
-        let mock_aws_service_valid = server.mock(|when, then| {
-            when.method(POST).path("/aws-service");
-            then.status(200);
-        });
-
-        let rule_valid_match = RegexRuleConfig::new("\\bvalid_match\\b")
-            .match_action(MatchAction::Redact {
-                replacement: "[VALID]".to_string(),
-            })
-            .match_validation_type(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new(server.url("/http-service").to_string())
-                    .build()
-                    .unwrap(),
-            ))
-            .build();
-
-        let rule_aws_id = RegexRuleConfig::new("\\baws_id\\b")
-            .match_action(MatchAction::Redact {
-                replacement: "[AWS_ID]".to_string(),
-            })
-            .match_validation_type(MatchValidationType::Aws(AwsType::AwsId))
-            .build();
-
-        let rule_aws_secret = RegexRuleConfig::new("\\baws_secret\\b")
-            .match_action(MatchAction::Redact {
-                replacement: "[AWS_SECRET]".to_string(),
-            })
-            .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
-                aws_sts_endpoint: server.url("/aws-service").to_string(),
-                forced_datetime_utc: None,
-                timeout: Duration::from_secs(1),
-            })))
-            .build();
-
-        let scanner = ScannerBuilder::new(&[rule_valid_match, rule_aws_id, rule_aws_secret])
-            .build()
-            .unwrap();
-
-        let mut content =
-            "this is a content with a valid_match an aws_id and an aws_secret".to_string();
-        let mut matches = scanner.scan(&mut content, vec![]);
-        assert_eq!(matches.len(), 3);
-        assert_eq!(
-            content,
-            "this is a content with a [VALID] an [AWS_ID] and an [AWS_SECRET]"
-        );
-        assert!(scanner.blocking_validate_matches(&mut matches).is_ok());
-        mock_http_service_valid.assert();
-        mock_aws_service_valid.assert();
-        assert_eq!(matches[0].match_status, MatchStatus::Valid);
-        assert_eq!(matches[1].match_status, MatchStatus::Valid);
-        assert_eq!(matches[2].match_status, MatchStatus::Valid);
-    }
-
-    #[tokio::test]
-    async fn test_mock_endpoint_with_multiple_hosts() {
+    fn test_mock_endpoint_with_multiple_hosts() {
         let server = MockServer::start();
         // Create a mock on the server.
         let mock_http_service_us = server.mock(|when, then| {
@@ -2746,14 +2637,14 @@ mod test {
             content,
             "this is a content with a [VALID] on multiple hosts"
         );
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         mock_http_service_us.assert();
         mock_http_service_eu.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
     }
 
-    #[tokio::test]
-    async fn test_mock_aws_validator() {
+    #[test]
+    fn test_mock_aws_validator() {
         let server = MockServer::start();
         let server_url = server.url("/").to_string();
 
@@ -2867,7 +2758,7 @@ mod test {
             content,
             "content with a valid aws_id [AWS_ID], an invalid aws_id [AWS_ID], an error aws_id [AWS_ID] and an aws_secret [AWS_SECRET] and an other aws_secret [AWS_SECRET]"
         );
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         mock_service_valid.assert();
         mock_service_invalid_1.assert();
         mock_service_invalid_2.assert();

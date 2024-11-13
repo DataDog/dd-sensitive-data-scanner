@@ -35,23 +35,3 @@ pub fn generate_aws_headers_and_body(
 
     (body, headers)
 }
-
-pub enum ReqwestResponseAbstraction {
-    Sync(reqwest::blocking::Response),
-    Async(reqwest::Response),
-}
-
-impl ReqwestResponseAbstraction {
-    pub fn from_sync(res: reqwest::blocking::Response) -> Self {
-        ReqwestResponseAbstraction::Sync(res)
-    }
-    pub fn from_async(res: reqwest::Response) -> Self {
-        ReqwestResponseAbstraction::Async(res)
-    }
-    pub fn status(&self) -> reqwest::StatusCode {
-        match self {
-            ReqwestResponseAbstraction::Sync(res) => res.status(),
-            ReqwestResponseAbstraction::Async(res) => res.status(),
-        }
-    }
-}

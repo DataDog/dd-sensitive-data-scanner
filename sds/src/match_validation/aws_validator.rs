@@ -2,8 +2,6 @@ use std::fmt;
 
 use crate::{CompiledRuleDyn, MatchStatus, RuleMatch};
 use ahash::AHashMap;
-use async_trait::async_trait;
-use futures::future::join_all;
 use lazy_static::lazy_static;
 use rayon::prelude::*;
 use reqwest::Client;
@@ -11,7 +9,7 @@ use reqwest::Client;
 use super::{
     config::{AwsConfig, AwsType, MatchValidationType},
     match_validator::MatchValidator,
-    validator_utils::{generate_aws_headers_and_body, ReqwestResponseAbstraction},
+    validator_utils::generate_aws_headers_and_body,
 };
 
 lazy_static! {
@@ -94,7 +92,7 @@ fn merge_returned_match_status_with_better_status(
     }
 }
 
-fn handle_reqwest_response(match_status: &mut MatchStatus, val: ReqwestResponseAbstraction) {
+fn handle_reqwest_response(match_status: &mut MatchStatus, val: &reqwest::blocking::Response) {
     // If status is 200-299, then it's valid we can safely update the match status
     // and return
     if val.status().is_success() {
@@ -117,13 +115,8 @@ fn handle_reqwest_response(match_status: &mut MatchStatus, val: ReqwestResponseA
     }
 }
 
-#[async_trait]
 impl MatchValidator for AwsValidator {
-    fn blocking_validate(
-        &self,
-        matches: &mut Vec<RuleMatch>,
-        scanner_rules: &[Box<dyn CompiledRuleDyn>],
-    ) {
+    fn validate(&self, matches: &mut Vec<RuleMatch>, scanner_rules: &[Box<dyn CompiledRuleDyn>]) {
         // Let's regroup matches per type
         let mut match_status_per_pairs_of_matches_idx: AHashMap<(usize, usize), MatchStatus> =
             self.get_match_status_per_pairs_of_matches_idx(matches, scanner_rules);
@@ -164,87 +157,16 @@ impl MatchValidator for AwsValidator {
                     .timeout(self.config.timeout)
                     .send();
 
-                let res = match res {
-                    Ok(val) => ReqwestResponseAbstraction::from_sync(val),
+                match res {
+                    Ok(val) => handle_reqwest_response(match_status, &val),
                     Err(err) => {
                         *match_status = MatchStatus::Error(fmt::format(format_args!(
                             "Error making HTTP request: {}",
                             err
                         )));
-                        return;
                     }
                 };
-                handle_reqwest_response(match_status, res);
             });
-
-        merge_returned_match_status_with_better_status(
-            matches,
-            &match_status_per_pairs_of_matches_idx,
-        );
-    }
-    async fn validate(
-        &self,
-        matches: &mut Vec<RuleMatch>,
-        scanner_rules: &[Box<dyn CompiledRuleDyn>],
-    ) {
-        // Let's regroup matches per type
-        let mut match_status_per_pairs_of_matches_idx: AHashMap<(usize, usize), MatchStatus> =
-            self.get_match_status_per_pairs_of_matches_idx(matches, scanner_rules);
-
-        // Let's try all combination of aws_id and aws_secret
-        let futures = match_status_per_pairs_of_matches_idx.iter_mut().map(
-            |((id_index, secret_index), match_status)| {
-                let match_id = &matches[*id_index].match_value;
-                let match_secret = &matches[*secret_index].match_value;
-                async move {
-                    if match_secret.is_none() {
-                        *match_status =
-                            MatchStatus::Error("Missing match value for aws_secret".to_string());
-                        return;
-                    }
-                    if match_id.is_none() {
-                        *match_status =
-                            MatchStatus::Error("Missing match value for aws_id".to_string());
-                        return;
-                    }
-                    let match_secret =
-                        extract_aws_secret_from_match(match_secret.as_ref().unwrap());
-                    let match_id = match_id.as_ref().unwrap();
-                    // Let's reqwest the HTTP API endpoint to validate the matches
-                    let mut datetime = chrono::Utc::now();
-                    if self.config.forced_datetime_utc.is_some() {
-                        datetime = self.config.forced_datetime_utc.unwrap()
-                    }
-                    let (body, headers) = generate_aws_headers_and_body(
-                        &datetime,
-                        &self.config.aws_sts_endpoint,
-                        match_id,
-                        &match_secret,
-                    );
-                    let res = AWS_CLIENT
-                        .post(self.config.aws_sts_endpoint.as_str())
-                        .headers(headers)
-                        .body(body)
-                        .timeout(self.config.timeout)
-                        .send()
-                        .await;
-
-                    let res = match res {
-                        Ok(val) => ReqwestResponseAbstraction::from_async(val),
-                        Err(err) => {
-                            *match_status = MatchStatus::Error(fmt::format(format_args!(
-                                "Error making HTTP request: {}",
-                                err
-                            )));
-                            return;
-                        }
-                    };
-                    handle_reqwest_response(match_status, res);
-                }
-            },
-        );
-        // Wait for all result to complete
-        let _ = join_all(futures).await;
 
         merge_returned_match_status_with_better_status(
             matches,
