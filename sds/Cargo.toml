@@ -34,6 +34,7 @@ crc32fast = "1.4.0"
 base62 = "2.0.2"
 iban_validate = "4"
 async-trait = "0.1.82"
+num_cpus = "1.16.0"
 
 # This is deprecated and may switch to `serde_yml` in the future. Waiting for it to mature a bit first.
 serde_yaml = "0.9.34"

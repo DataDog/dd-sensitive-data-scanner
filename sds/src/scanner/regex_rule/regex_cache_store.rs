@@ -5,11 +5,12 @@ use regex_automata::meta::Regex as MetaRegex;
 use slotmap::SecondaryMap;
 use std::ops::Deref;
 use std::sync::Arc;
+extern crate num_cpus;
 
 lazy_static! {
     static ref REGEX_CACHE_STORE: Arc<SharedPool<Box<RegexCaches>>> = Arc::new(SharedPool::new(
         Box::new(|| Box::new(RegexCaches::new())),
-        32
+        num_cpus::get()
     ));
 }
 

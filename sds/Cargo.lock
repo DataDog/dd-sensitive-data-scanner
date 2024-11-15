@@ -697,6 +697,7 @@ dependencies = [
  "metrics",
  "metrics-util",
  "nom",
+ "num_cpus",
  "rand",
  "regex 1.11.1",
  "regex-automata 0.4.9 (git+https://github.com/fbryden/regex?rev=dccd48f48b6c772cb69eb864a8d95cd27515a53a)",
