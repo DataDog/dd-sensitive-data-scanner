@@ -22,9 +22,10 @@ ahash = "0.8.7"
 # Overriding with fix repo due to: https://github.com/seiflotfy/rust-farmhash/pull/16
 farmhash = { git = "https://github.com/fuchsnj/rust-farmhash", rev = "82d80b689d65fbd378b13deff10cdd07794df64e" }
 nom = "7.1.3"
-regex = { git = "https://github.com/fbryden/regex" }
+# regex = { git = "https://github.com/fbryden/regex", tag = "1.9.5", rev = "554469b8c1116322f3c0a054ceeb610224f8ac65" }
+regex = { git = "https://github.com/fbryden/regex", rev = "554469b8c1116322f3c0a054ceeb610224f8ac65" }
 regex-automata = { git = "https://github.com/fbryden/regex", rev = "dccd48f48b6c772cb69eb864a8d95cd27515a53a" }
-regex-syntax = "0.7.5" # { git = "https://github.com/fbryden/regex" }
+regex-syntax = { git = "https://github.com/fbryden/regex", tag = "regex-syntax-0.7.5" }
 serde = { version = "1.0", features = ["derive"] }
 serde_with = "3.6.1"
 thiserror = "1.0.58"
