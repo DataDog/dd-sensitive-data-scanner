@@ -2076,12 +2076,12 @@ dependencies = [
 [[package]]
 name = "regex"
 version = "1.9.5"
-source = "git+https://github.com/fbryden/regex?rev=554469b8c1116322f3c0a054ceeb610224f8ac65#554469b8c1116322f3c0a054ceeb610224f8ac65"
+source = "git+https://github.com/fbryden/regex?tag=1.9.5#554469b8c1116322f3c0a054ceeb610224f8ac65"
 dependencies = [
  "aho-corasick",
  "memchr",
  "regex-automata 0.3.8",
- "regex-syntax 0.7.5 (git+https://github.com/fbryden/regex?rev=554469b8c1116322f3c0a054ceeb610224f8ac65)",
+ "regex-syntax 0.7.5 (git+https://github.com/fbryden/regex?tag=1.9.5)",
 ]
 
 [[package]]
@@ -2099,11 +2099,11 @@ dependencies = [
 [[package]]
 name = "regex-automata"
 version = "0.3.8"
-source = "git+https://github.com/fbryden/regex?rev=554469b8c1116322f3c0a054ceeb610224f8ac65#554469b8c1116322f3c0a054ceeb610224f8ac65"
+source = "git+https://github.com/fbryden/regex?tag=1.9.5#554469b8c1116322f3c0a054ceeb610224f8ac65"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-syntax 0.7.5 (git+https://github.com/fbryden/regex?rev=554469b8c1116322f3c0a054ceeb610224f8ac65)",
+ "regex-syntax 0.7.5 (git+https://github.com/fbryden/regex?tag=1.9.5)",
 ]
 
 [[package]]
@@ -2136,12 +2136,12 @@ checksum = "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1"
 [[package]]
 name = "regex-syntax"
 version = "0.7.5"
-source = "git+https://github.com/fbryden/regex?tag=regex-syntax-0.7.5#990979bbdc28fa841e3ad55934ee445cd710d110"
+source = "git+https://github.com/fbryden/regex?tag=1.9.5#554469b8c1116322f3c0a054ceeb610224f8ac65"
 
 [[package]]
 name = "regex-syntax"
 version = "0.7.5"
-source = "git+https://github.com/fbryden/regex?rev=554469b8c1116322f3c0a054ceeb610224f8ac65#554469b8c1116322f3c0a054ceeb610224f8ac65"
+source = "git+https://github.com/fbryden/regex?tag=regex-syntax-0.7.5#990979bbdc28fa841e3ad55934ee445cd710d110"
 
 [[package]]
 name = "regex-syntax"
