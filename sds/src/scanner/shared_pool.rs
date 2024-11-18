@@ -51,23 +51,16 @@ impl<T: Send + 'static> SharedPool<T> {
     ///     * new(_, 16) -> 16
     ///     * new(_, 42) -> 64
     pub fn new(factory: CachePoolFn<T>, count: usize) -> Self {
-        let pool = match count {
-            x if x <= 4 => {
-                Box::new(Pool::<_, _, 4>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
-            }
-            x if x > 4 && x <= 8 => {
-                Box::new(Pool::<_, _, 8>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
-            }
-            x if x > 8 && x <= 16 => {
-                Box::new(Pool::<_, _, 16>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
-            }
-            x if x > 16 && x <= 32 => {
-                Box::new(Pool::<_, _, 32>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
-            }
-            x if x > 32 => {
-                Box::new(Pool::<_, _, 64>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
-            }
-            _ => Box::new(Pool::<_, _, 4>::new(factory)) as Box<dyn AutoStacksSizePool<T>>,
+        let pool = if count <= 4 {
+            Box::new(Pool::<_, _, 4>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
+        } else if count <= 8 {
+            Box::new(Pool::<_, _, 8>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
+        } else if count <= 16 {
+            Box::new(Pool::<_, _, 16>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
+        } else if count <= 32 {
+            Box::new(Pool::<_, _, 32>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
+        } else {
+            Box::new(Pool::<_, _, 64>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
         };
         Self { pool }
     }
