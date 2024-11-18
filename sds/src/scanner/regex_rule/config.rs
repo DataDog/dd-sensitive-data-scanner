@@ -1,3 +1,4 @@
+#[cfg(feature = "wasm_incompatible")]
 use crate::match_validation::config::MatchValidationType;
 use crate::proximity_keywords::compile_keywords_proximity_config;
 use crate::scanner::config::RuleConfig;
@@ -26,6 +27,7 @@ pub struct RegexRuleConfig {
     #[serde(default)]
     pub labels: Labels,
 
+    #[cfg(feature = "wasm_incompatible")]
     pub match_validation_type: Option<MatchValidationType>,
 }
 
@@ -38,7 +40,7 @@ impl RegexRuleConfig {
             proximity_keywords: None,
             validator: None,
             labels: Labels::default(),
-
+            #[cfg(feature = "wasm_incompatible")]
             match_validation_type: None,
         }
     }
@@ -65,6 +67,7 @@ impl RegexRuleConfig {
         self.mutate_clone(|x| x.labels = labels)
     }
 
+    #[cfg(feature = "wasm_incompatible")]
     pub fn match_validation_type(&self, match_validation_type: MatchValidationType) -> Self {
         self.mutate_clone(|x| x.match_validation_type = Some(match_validation_type))
     }
@@ -77,7 +80,7 @@ impl RegexRuleConfig {
             proximity_keywords: self.proximity_keywords.clone(),
             validator: self.validator.clone(),
             labels: self.labels.clone(),
-
+            #[cfg(feature = "wasm_incompatible")]
             match_validation_type: self.match_validation_type.clone(),
         })
     }
@@ -118,13 +121,16 @@ impl RuleConfig for RegexRuleConfig {
                 .clone()
                 .map(|x| Arc::new(x) as Arc<dyn Validator>),
             metrics: RuleMetrics::new(&rule_labels),
+            #[cfg(feature = "wasm_incompatible")]
             match_validation_type: self.get_match_validation_type().cloned(),
+            #[cfg(feature = "wasm_incompatible")]
             internal_match_validation_type: self
                 .get_match_validation_type()
                 .map(|x| x.get_internal_match_validation_type()),
         }))
     }
 
+    #[cfg(feature = "wasm_incompatible")]
     fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
         match &self.match_validation_type {
             Some(match_validation_type) => Some(match_validation_type),
@@ -181,7 +187,7 @@ mod test {
                 proximity_keywords: None,
                 validator: None,
                 labels: Labels::empty(),
-
+                #[cfg(feature = "wasm_incompatible")]
                 match_validation_type: None,
             }
         );

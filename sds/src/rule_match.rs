@@ -1,3 +1,4 @@
+#[cfg(feature = "wasm_incompatible")]
 use crate::match_validation::match_status::MatchStatus;
 use crate::{encoding::Encoding, path::Path};
 use std::fmt::Debug;
@@ -34,6 +35,7 @@ pub struct RuleMatch {
     pub match_value: Option<String>,
 
     // match status updated by the validate_matches scanner method
+    #[cfg(feature = "wasm_incompatible")]
     pub match_status: MatchStatus,
 }
 

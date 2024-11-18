@@ -1,12 +1,14 @@
 use crate::encoding::Encoding;
 use crate::event::Event;
 
+#[cfg(feature = "wasm_incompatible")]
 use crate::match_validation::{
     config::InternalMatchValidationType, config::MatchValidationType, match_status::MatchStatus,
     match_validator::MatchValidator,
 };
 use rayon::prelude::*;
 
+#[cfg(feature = "wasm_incompatible")]
 use error::{MatchValidationError, MatchValidatorCreationError};
 
 use crate::observability::labels::Labels;
@@ -89,8 +91,10 @@ pub trait CompiledRuleDyn: Send + Sync {
         // default is to do nothing
     }
 
+    #[cfg(feature = "wasm_incompatible")]
     fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
 
+    #[cfg(feature = "wasm_incompatible")]
     fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
 }
 
@@ -144,10 +148,12 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         T::on_excluded_match_multipass_v0(self)
     }
 
+    #[cfg(feature = "wasm_incompatible")]
     fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
         T::get_match_validation_type(self)
     }
 
+    #[cfg(feature = "wasm_incompatible")]
     fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
         T::get_internal_match_validation_type(self)
     }
@@ -191,9 +197,11 @@ pub trait CompiledRule: Send + Sync {
         // default is to do nothing
     }
 
+    #[cfg(feature = "wasm_incompatible")]
     fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
 
     // This is the match validation type key used in the match_validators_per_type map
+    #[cfg(feature = "wasm_incompatible")]
     fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
 }
 
@@ -209,6 +217,7 @@ where
         self.as_ref().convert_to_compiled_rule(rule_index, labels)
     }
 
+    #[cfg(feature = "wasm_incompatible")]
     fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
         self.as_ref().get_match_validation_type()
     }
@@ -240,6 +249,7 @@ pub struct Scanner {
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
     labels: Labels,
+    #[cfg(feature = "wasm_incompatible")]
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
 }
 
@@ -260,6 +270,7 @@ impl Scanner {
 
         let mut excluded_matches = AHashSet::new();
 
+        #[cfg(feature = "wasm_incompatible")]
         // Measure detection time
         let start = std::time::Instant::now();
         access_regex_caches(|regex_caches| {
@@ -310,21 +321,25 @@ impl Scanner {
                 will_mutate
             });
         }
-        // Record detection time
-        self.metrics
-            .duration_ns
-            .increment(start.elapsed().as_nanos() as u64);
-        // Add number of scanned events
-        self.metrics.num_scanned_events.increment(1);
-        // Add number of matches
-        self.metrics
-            .match_count
-            .increment(output_rule_matches.len() as u64);
+        #[cfg(feature = "wasm_incompatible")]
+        {
+            // Record detection time
+            self.metrics
+                .duration_ns
+                .increment(start.elapsed().as_nanos() as u64);
+            // Add number of scanned events
+            self.metrics.num_scanned_events.increment(1);
+            // Add number of matches
+            self.metrics
+                .match_count
+                .increment(output_rule_matches.len() as u64);
+        }
 
         output_rule_matches
     }
 
-    pub fn validate_matches(
+    #[cfg(feature = "wasm_incompatible")]
+    pub async fn validate_matches(
         &self,
         rule_matches: &mut Vec<RuleMatch>,
     ) -> Result<(), MatchValidationError> {
@@ -459,6 +474,7 @@ impl Scanner {
 
         let rule = &self.rules[rule_match.rule_index];
 
+        #[cfg(feature = "wasm_incompatible")]
         let match_status: MatchStatus = if rule.get_match_validation_type().is_some() {
             MatchStatus::NotChecked
         } else {
@@ -473,6 +489,7 @@ impl Scanner {
             end_index_exclusive: custom_end,
             shift_offset,
             match_value: matched_content_copy,
+            #[cfg(feature = "wasm_incompatible")]
             match_status,
         }
     }
@@ -588,8 +605,10 @@ impl ScannerBuilder<'_> {
 
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
         let mut scanner_features = self.scanner_features.clone();
+        #[cfg(feature = "wasm_incompatible")]
         let mut match_validators_per_type = AHashMap::new();
 
+        #[cfg(feature = "wasm_incompatible")]
         for rule in self.rules.iter() {
             if let Some(match_validation_type) = rule.get_match_validation_type() {
                 if match_validation_type.can_create_match_validator() {
@@ -642,6 +661,7 @@ impl ScannerBuilder<'_> {
             scoped_ruleset,
             scanner_features,
             metrics: ScannerMetrics::new(&self.labels),
+            #[cfg(feature = "wasm_incompatible")]
             match_validators_per_type,
             labels: self.labels,
         })
@@ -849,10 +869,12 @@ mod test {
             match_emitter.emit(StringMatch { start: 10, end: 16 });
         }
 
+        #[cfg(feature = "wasm_incompatible")]
         fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
             None
         }
 
+        #[cfg(feature = "wasm_incompatible")]
         fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
             None
         }
@@ -1535,7 +1557,6 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1551,7 +1572,6 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -2314,6 +2334,7 @@ mod test {
         assert!(err.is_err());
     }
 
+    #[cfg(feature = "wasm_incompatible")]
     #[test]
     fn test_should_allocate_match_validator_depending_on_match_type() {
         use crate::match_validation::config::AwsConfig;
@@ -2542,8 +2563,14 @@ mod test {
             _ => assert!(false),
         }
     }
+<<<<<<< HEAD
     #[test]
     fn test_mock_multiple_match_validators() {
+=======
+    #[cfg(feature = "wasm_incompatible")]
+    #[tokio::test]
+    async fn test_mock_multiple_match_validators() {
+>>>>>>> c61f7cd (wasm-incompatible features)
         let server = MockServer::start();
 
         // Create a mock on the server.
@@ -2643,8 +2670,14 @@ mod test {
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
     }
 
+<<<<<<< HEAD
     #[test]
     fn test_mock_aws_validator() {
+=======
+    #[tokio::test]
+    #[cfg(feature = "wasm_incompatible")]
+    async fn test_mock_aws_validator() {
+>>>>>>> c61f7cd (wasm-incompatible features)
         let server = MockServer::start();
         let server_url = server.url("/").to_string();
 
@@ -2778,6 +2811,7 @@ mod test {
         );
     }
 
+    #[cfg(feature = "wasm_incompatible")]
     mod metrics_test {
         use crate::match_action::MatchAction;
         use crate::scanner::regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig};
