@@ -1936,9 +1936,6 @@ mod test {
         ]));
 
         let matches = scanner.scan(&mut content, vec![]);
-
-        // The match from the "test" field (which is excluded) is the same as the match from "message", so it is
-        // treated as a false positive.
         assert_eq!(matches.len(), 1);
     }
 

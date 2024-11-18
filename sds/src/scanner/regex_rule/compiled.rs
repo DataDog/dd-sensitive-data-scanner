@@ -141,34 +141,7 @@ impl RegexCompiledRule {
 
         let mut included_keyword_matches = included_keywords.keyword_matches(content);
 
-        if included_keyword_matches.is_empty(regex_caches) {
-            if should_kws_match_event_paths {
-                let true_positive_search = self.true_positive_matches(
-                    content,
-                    0,
-                    regex_caches.get(&self.regex),
-                    false,
-                    exclusion_check,
-                    excluded_matches,
-                );
-
-                let mut has_kws_in_path: Option<bool> = None;
-                for string_match in true_positive_search {
-                    // If has_kws_in_path is None, calculate it. We only do it once.
-                    if has_kws_in_path.is_none() {
-                        has_kws_in_path = Some(contains_keyword_in_path(
-                            &path.sanitize(),
-                            &included_keywords.keywords_pattern,
-                        ))
-                    }
-                    // If has_kws_in_path is Some(true), then always emit the match
-                    if has_kws_in_path.is_some_and(|b| b == true) {
-                        match_emitter.emit(string_match);
-                    }
-                }
-            }
-            return;
-        }
+        let mut has_verified_kws_in_path: Option<bool> = None;
 
         'included_keyword_search: while let Some(included_keyword_match_start) =
             included_keyword_matches.next(regex_caches)
@@ -215,6 +188,42 @@ impl RegexCompiledRule {
             // no more "true positive" matches were found in the entire string, so there's no need
             // to continue scanning for included keywords.
             break;
+        }
+
+        if should_kws_match_event_paths && has_verified_kws_in_path.is_none() {
+            let input = Input::new(content);
+
+            {
+                if self
+                    .regex
+                    .search_with(regex_caches.get(&self.regex), &input)
+                    .is_some()
+                {
+                    has_verified_kws_in_path = Some(contains_keyword_in_path(
+                        &path.sanitize(),
+                        &included_keywords.keywords_pattern,
+                    ))
+                }
+            };
+
+            if has_verified_kws_in_path.is_none_or(|x| x == false) {
+                // We don't deal with true positives is in this case, because keywords don't match the path.
+                // Return
+                return;
+            }
+
+            let true_positive_search = self.true_positive_matches(
+                content,
+                0,
+                regex_caches.get(&self.regex),
+                false,
+                exclusion_check,
+                excluded_matches,
+            );
+
+            for string_match in true_positive_search {
+                match_emitter.emit(string_match);
+            }
         }
     }
 
