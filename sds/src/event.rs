@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::hash::RandomState;
+
 use crate::encoding::{Encoding, Utf8Encoding};
 use crate::path::Path;
 use crate::PathSegment;
@@ -41,6 +44,14 @@ impl Event for String {
     fn visit_string_mut(&mut self, _path: &Path, mut visit: impl FnMut(&mut String) -> bool) {
         (visit)(self);
     }
+}
+
+impl<K, V> Event for HashMap<K, V, RandomState> {
+    type Encoding = Utf8Encoding;
+
+    fn visit_event<'a>(&'a mut self, visitor: &mut impl EventVisitor<'a>) {}
+
+    fn visit_string_mut(&mut self, path: &Path, visit: impl FnMut(&mut String) -> bool) {}
 }
 
 #[cfg(test)]
