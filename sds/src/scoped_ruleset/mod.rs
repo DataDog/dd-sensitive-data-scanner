@@ -217,7 +217,7 @@ where
         // Sanitize the segment and push it. If the segment is an Index, it will push None.
         self.sanitized_segments_until_node.push(segment.sanitize());
 
-        let true_positive_rules_count = if self.should_keywords_match_event_paths {
+        let true_positive_rules_count = if false {
             let mut total_len: usize = self
                 .sanitized_segments_until_node
                 .iter()

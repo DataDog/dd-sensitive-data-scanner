@@ -1,7 +1,7 @@
 use crate::match_validation::config::{InternalMatchValidationType, MatchValidationType};
 use crate::proximity_keywords::{
-    get_prefix_start, is_index_within_prefix, CompiledExcludedProximityKeywords,
-    CompiledIncludedProximityKeywords,
+    contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
+    CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
 };
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::regex_store::SharedRegex;
@@ -9,7 +9,7 @@ use crate::scanner::regex_rule::RegexCaches;
 use crate::scanner::scope::Scope;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::secondary_validation::Validator;
-use crate::{CompiledRule, ExclusionCheck, Labels, MatchAction, MatchEmitter, StringMatch};
+use crate::{CompiledRule, ExclusionCheck, Labels, MatchAction, MatchEmitter, Path, StringMatch};
 use ahash::AHashSet;
 use regex_automata::meta::Cache;
 use regex_automata::Input;
@@ -53,6 +53,8 @@ impl CompiledRule for RegexCompiledRule {
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &[usize],
+        path: &Path,
+        should_kws_match_event_paths: bool,
     ) {
         match self.included_keywords {
             Some(ref included_keywords) => {
@@ -64,6 +66,8 @@ impl CompiledRule for RegexCompiledRule {
                     match_emitter,
                     true_positive_rule_idx,
                     included_keywords,
+                    path,
+                    should_kws_match_event_paths,
                 );
             }
             None => {
@@ -116,7 +120,27 @@ impl RegexCompiledRule {
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &[usize],
         included_keywords: &CompiledIncludedProximityKeywords,
+        path: &Path,
+        should_kws_match_event_paths: bool,
     ) {
+        if should_kws_match_event_paths {
+            let sanitized_path = path.sanitize();
+            if contains_keyword_in_path(&sanitized_path, &included_keywords.keywords_pattern) {
+                // since the path contains a match, we can skip future included keyword checks
+                let true_positive_search = self.true_positive_matches(
+                    content,
+                    0,
+                    regex_caches.get(&self.regex),
+                    false,
+                    exclusion_check,
+                    excluded_matches,
+                );
+                for string_match in true_positive_search {
+                    match_emitter.emit(string_match);
+                }
+                return;
+            }
+        }
         if true_positive_rule_idx.contains(&self.rule_index) {
             // since the path contains a match, we can skip future included keyword checks
             let true_positive_search = self.true_positive_matches(
