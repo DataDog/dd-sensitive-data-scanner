@@ -8,19 +8,19 @@ pub type SharedPoolGuard<'a, T, const MAX_POOL_STACKS: usize> =
 
 /// This is a simple generic wrapper around `Pool` to make it a bit easier to use
 pub struct SharedPool<T> {
-    pool: Box<dyn MyPoolTrait<T>>,
+    pool: Box<dyn AutoStacksSizePool<T>>,
 }
 
-//MyPoolTrait and MyPoolGuardTrait are used to hide away the constant generic in the Pool
-pub trait MyPoolTrait<T>: Sync + Send {
-    fn get(&self) -> Box<dyn MyPoolGuardTrait<T> + '_>;
+//AutoStacksSizePool and AutoStacksSizeGuard are used to hide away the constant generic in the Pool
+pub trait AutoStacksSizePool<T>: Sync + Send {
+    fn get(&self) -> Box<dyn AutoStacksSizeGuard<T> + '_>;
 }
 
-pub trait MyPoolGuardTrait<T> {
+pub trait AutoStacksSizeGuard<T> {
     fn get_ref(&mut self) -> &mut T;
 }
 
-impl<'a, T: Send, const MAX_POOL_STACKS: usize> MyPoolGuardTrait<T>
+impl<'a, T: Send, const MAX_POOL_STACKS: usize> AutoStacksSizeGuard<T>
     for PoolGuard<'a, T, CachePoolFn<T>, MAX_POOL_STACKS>
 {
     fn get_ref(&mut self) -> &mut T {
@@ -28,10 +28,10 @@ impl<'a, T: Send, const MAX_POOL_STACKS: usize> MyPoolGuardTrait<T>
     }
 }
 
-impl<T: Send, const MAX_POOL_STACKS: usize> MyPoolTrait<T>
+impl<T: Send, const MAX_POOL_STACKS: usize> AutoStacksSizePool<T>
     for Pool<T, CachePoolFn<T>, MAX_POOL_STACKS>
 {
-    fn get(&self) -> Box<dyn MyPoolGuardTrait<T> + '_> {
+    fn get(&self) -> Box<dyn AutoStacksSizeGuard<T> + '_> {
         Box::new(Pool::get(self))
     }
 }
@@ -52,23 +52,27 @@ impl<T: Send + 'static> SharedPool<T> {
     ///     * new(_, 42) -> 64
     pub fn new(factory: CachePoolFn<T>, count: usize) -> Self {
         let pool = match count {
-            x if x <= 4 => Box::new(Pool::<_, _, 4>::new(factory)) as Box<dyn MyPoolTrait<T>>,
+            x if x <= 4 => {
+                Box::new(Pool::<_, _, 4>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
+            }
             x if x > 4 && x <= 8 => {
-                Box::new(Pool::<_, _, 8>::new(factory)) as Box<dyn MyPoolTrait<T>>
+                Box::new(Pool::<_, _, 8>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
             }
             x if x > 8 && x <= 16 => {
-                Box::new(Pool::<_, _, 16>::new(factory)) as Box<dyn MyPoolTrait<T>>
+                Box::new(Pool::<_, _, 16>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
             }
             x if x > 16 && x <= 32 => {
-                Box::new(Pool::<_, _, 32>::new(factory)) as Box<dyn MyPoolTrait<T>>
+                Box::new(Pool::<_, _, 32>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
             }
-            x if x > 32 => Box::new(Pool::<_, _, 64>::new(factory)) as Box<dyn MyPoolTrait<T>>,
-            _ => Box::new(Pool::<_, _, 4>::new(factory)) as Box<dyn MyPoolTrait<T>>,
+            x if x > 32 => {
+                Box::new(Pool::<_, _, 64>::new(factory)) as Box<dyn AutoStacksSizePool<T>>
+            }
+            _ => Box::new(Pool::<_, _, 4>::new(factory)) as Box<dyn AutoStacksSizePool<T>>,
         };
         Self { pool }
     }
 
-    pub fn get(&self) -> Box<dyn MyPoolGuardTrait<T> + '_> {
+    pub fn get(&self) -> Box<dyn AutoStacksSizeGuard<T> + '_> {
         self.pool.get()
     }
 }
