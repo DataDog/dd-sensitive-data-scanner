@@ -9,7 +9,7 @@ license = "Apache-2.0"
 members = ["tools/fuzz"]
 
 [features]
-default = ["wasm_incompatible"]
+default = []
 testing = ["wasm_incompatible"]
 wasm_incompatible = ["dep:aws-sign-v4"]
 
