@@ -117,10 +117,12 @@ impl Event for HashMap<String, serde_json::Value, RandomState> {
 
     fn visit_string_mut(&mut self, path: &Path, mut visit: impl FnMut(&mut String) -> bool) {
         let first_segment = path.segments.first().unwrap();
+        let mut remaining_segments = path.segments.clone();
+        remaining_segments.remove(0);
         match first_segment {
             PathSegment::Field(field) => {
                 let value = self.get_mut(&field.to_string()).unwrap();
-                value.visit_string_mut(path, &mut visit);
+                value.visit_string_mut(&Path::from(remaining_segments), &mut visit);
             }
             _ => {}
         }
@@ -130,7 +132,7 @@ impl Event for HashMap<String, serde_json::Value, RandomState> {
 #[cfg(test)]
 pub(crate) mod test {
 
-    use serde_json::{Map, Value};
+    use serde_json::{json, Map, Value};
 
     use crate::simple_event::SimpleEvent;
 
@@ -227,9 +229,10 @@ pub(crate) mod test {
             Value::String("value-a-1".to_string()),
         );
         map.insert(
-            "key-b-1".to_string(),
+            "key-a-2".to_string(),
             Value::String("value-b-1".to_string()),
         );
+        map.insert("key-a-3".to_string(), json!(["an", "array"]));
         let mut event = HashMap::from([("key-a".to_string(), Value::Object(map))]);
 
         let mut visitor = Visitor {
@@ -245,11 +248,33 @@ pub(crate) mod test {
                 VisitOp::Push(PathSegment::Field("key-a-1".into())),
                 VisitOp::Visit("value-a-1".into()),
                 VisitOp::Pop,
-                VisitOp::Push(PathSegment::Field("key-b-1".into())),
+                VisitOp::Push(PathSegment::Field("key-a-2".into())),
                 VisitOp::Visit("value-b-1".into()),
+                VisitOp::Pop,
+                VisitOp::Push(PathSegment::Field("key-a-3".into())),
+                VisitOp::Push(PathSegment::Index(0)),
+                VisitOp::Visit("an".into()),
+                VisitOp::Pop,
+                VisitOp::Push(PathSegment::Index(1)),
+                VisitOp::Visit("array".into()),
+                VisitOp::Pop,
                 VisitOp::Pop,
                 VisitOp::Pop,
             ]
         );
+
+        let mut leaf = String::new();
+        event.visit_string_mut(
+            &Path::from(vec![
+                PathSegment::Field("key-a".into()),
+                PathSegment::Field("key-a-3".into()),
+                PathSegment::Index(1),
+            ]),
+            |s| {
+                leaf = s.clone();
+                true
+            },
+        );
+        assert_eq!(leaf, "array".to_string())
     }
 }
