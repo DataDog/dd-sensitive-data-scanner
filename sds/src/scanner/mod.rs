@@ -24,7 +24,7 @@ use crate::scanner::regex_rule::{access_regex_caches, RegexCaches};
 use crate::scanner::scope::Scope;
 use crate::stats::GLOBAL_STATS;
 use ahash::{AHashMap, AHashSet};
-use regex_automata::Match;
+use regex_automata_fork::Match;
 
 pub mod config;
 pub mod error;
@@ -812,7 +812,7 @@ mod test {
     use chrono::Utc;
     use httpmock::{Method::GET, Method::POST, MockServer};
 
-    use regex_automata::Match;
+    use regex_automata_fork::Match;
     use std::collections::BTreeMap;
 
     use super::CompiledRule;

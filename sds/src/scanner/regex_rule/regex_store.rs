@@ -1,7 +1,7 @@
 use crate::stats::GLOBAL_STATS;
 use ahash::AHashMap;
 use lazy_static::lazy_static;
-use regex_automata::meta::{Cache, Regex as MetaRegex};
+use regex_automata_fork::meta::{Cache, Regex as MetaRegex};
 use slotmap::{new_key_type, SlotMap};
 use std::ops::Deref;
 use std::sync::Weak;
@@ -29,14 +29,14 @@ impl Deref for SharedRegex {
 
 pub fn get_memoized_regex<T>(
     pattern: &str,
-    regex_factory: impl FnOnce(&str) -> Result<regex_automata::meta::Regex, T>,
+    regex_factory: impl FnOnce(&str) -> Result<regex_automata_fork::meta::Regex, T>,
 ) -> Result<SharedRegex, T> {
     get_memoized_regex_with_custom_store(pattern, regex_factory, &REGEX_STORE)
 }
 
 fn get_memoized_regex_with_custom_store<T>(
     pattern: &str,
-    regex_factory: impl FnOnce(&str) -> Result<regex_automata::meta::Regex, T>,
+    regex_factory: impl FnOnce(&str) -> Result<regex_automata_fork::meta::Regex, T>,
     store: &Mutex<RegexStore>,
 ) -> Result<SharedRegex, T> {
     {
@@ -154,7 +154,7 @@ mod test {
     use crate::scanner::regex_rule::regex_store::{
         get_memoized_regex_with_custom_store, RegexStore, GC_FREQUENCY,
     };
-    use regex_automata::meta::Regex;
+    use regex_automata_fork::meta::Regex;
     use std::sync::Mutex;
 
     #[test]

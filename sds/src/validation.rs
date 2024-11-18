@@ -1,6 +1,6 @@
 use crate::normalization::rust_regex_adapter::{convert_to_rust_regex, QUANTIFIER_LIMIT};
 use crate::parser::error::ParseError;
-use regex_automata::meta::{self};
+use regex_automata_fork::meta::{self};
 use thiserror::Error;
 
 #[derive(Debug, PartialEq, Eq, Error)]
@@ -96,7 +96,7 @@ fn build_regex(
                 .hybrid_cache_capacity(2 * (1 << 20)),
         )
         .syntax(
-            regex_automata::util::syntax::Config::default()
+            regex_automata_fork::util::syntax::Config::default()
                 .dot_matches_new_line(false)
                 .unicode(true),
         )

@@ -3,7 +3,7 @@ use crate::proximity_keywords::{
     EXCLUDED_KEYWORDS_REMOVED_CHARS,
 };
 use metrics::Counter;
-use regex_automata::Input;
+use regex_automata_fork::Input;
 
 pub struct CompiledExcludedProximityKeywords {
     pub look_ahead_character_count: usize,

@@ -1,6 +1,6 @@
 use std::ops::DerefMut;
 
-use regex_automata::util::pool::{Pool, PoolGuard};
+use regex_automata_fork::util::pool::{Pool, PoolGuard};
 
 type CachePoolFn<T> = Box<dyn Fn() -> T + Send + Sync>;
 pub type SharedPoolGuard<'a, T, const MAX_POOL_STACKS: usize> =

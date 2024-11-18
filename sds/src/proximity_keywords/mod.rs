@@ -10,7 +10,7 @@ use crate::proximity_keywords::ProximityKeywordsValidationError::{
 use crate::scanner::regex_rule::{get_memoized_regex, SharedRegex};
 use crate::{Labels, ProximityKeywordsConfig};
 use metrics::counter;
-use regex_automata::{meta, Input};
+use regex_automata_fork::{meta, Input};
 use regex_syntax::ast::{
     Alternation, Assertion, AssertionKind, Ast, Concat, Flag, Flags, FlagsItem, FlagsItemKind,
     Group, GroupKind, Literal, LiteralKind, Position, Span,
@@ -227,7 +227,7 @@ fn compile_keywords(
                 // This is the default that `Regex` uses
                 .hybrid_cache_capacity(2 * (1 << 20)),
         )
-        .syntax(regex_automata::util::syntax::Config::default().case_insensitive(true));
+        .syntax(regex_automata_fork::util::syntax::Config::default().case_insensitive(true));
 
     Ok(Some((
         get_memoized_regex(&content_pattern, |p| regex_builder.build(p)).unwrap(),

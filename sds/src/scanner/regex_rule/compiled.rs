@@ -11,8 +11,8 @@ use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::secondary_validation::Validator;
 use crate::{CompiledRule, ExclusionCheck, Labels, MatchAction, MatchEmitter, StringMatch};
 use ahash::AHashSet;
-use regex_automata::meta::Cache;
-use regex_automata::Input;
+use regex_automata_fork::meta::Cache;
+use regex_automata_fork::Input;
 use std::sync::Arc;
 
 /// This is the internal representation of a rule after it has been validated / compiled.
