@@ -11,7 +11,7 @@ pub struct SharedPool<T> {
     pool: Box<dyn AutoStacksSizePool<T>>,
 }
 
-//AutoStacksSizePool and AutoStacksSizeGuard are used to hide away the constant generic in the Pool
+// AutoStacksSizePool and AutoStacksSizeGuard are used to hide away the constant generic in the Pool
 pub trait AutoStacksSizePool<T>: Sync + Send {
     fn get(&self) -> Box<dyn AutoStacksSizeGuard<T> + '_>;
 }
