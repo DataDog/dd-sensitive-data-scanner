@@ -141,8 +141,6 @@ impl RegexCompiledRule {
 
         let mut included_keyword_matches = included_keywords.keyword_matches(content);
 
-        let mut has_verified_kws_in_path: Option<bool> = None;
-
         'included_keyword_search: while let Some(included_keyword_match_start) =
             included_keyword_matches.next(regex_caches)
         {
@@ -190,10 +188,11 @@ impl RegexCompiledRule {
             break;
         }
 
-        if should_kws_match_event_paths && has_verified_kws_in_path.is_none() {
-            let input = Input::new(content);
+        if should_kws_match_event_paths {
+            let mut has_verified_kws_in_path: Option<bool> = None;
 
             {
+                let input = Input::new(content);
                 if self
                     .regex
                     .search_with(regex_caches.get(&self.regex), &input)

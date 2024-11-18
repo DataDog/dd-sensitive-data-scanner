@@ -2255,6 +2255,29 @@ mod test {
     }
 
     #[test]
+    fn should_verify_included_keywords_on_path_even_if_included_keywords_are_in_string() {
+        let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 10,
+                included_keywords: vec!["hello".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build()])
+        .with_keywords_should_match_event_paths(true)
+        .build()
+        .unwrap();
+
+        let mut event = SimpleEvent::Map(BTreeMap::from([(
+            "hello".to_string(),
+            SimpleEvent::String("hello [more than ten characters] world".to_string()),
+        )]));
+
+        // Even though the included keywords are too far from the match in the string
+        // the keyword is present in the path and that should validate the match.
+        assert_eq!(scanner.scan(&mut event, vec![]).len(), 1);
+    }
+
+    #[test]
     fn test_included_and_excluded_keyword() {
         let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
             .proximity_keywords(ProximityKeywordsConfig {
