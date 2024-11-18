@@ -207,7 +207,7 @@ impl RegexCompiledRule {
 
             if has_verified_kws_in_path.is_none_or(|x| x == false) {
                 // We don't deal with true positives is in this case, because keywords don't match the path.
-                // Return
+                // Return early.
                 return;
             }
 

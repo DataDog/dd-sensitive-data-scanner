@@ -30,19 +30,6 @@ impl<'a> IncludedKeywordSearch<'a> {
         }
     }
 
-    pub fn is_empty(&self, regex_caches: &mut RegexCaches) -> bool {
-        let input = Input::new(self.content).range(self.start..).earliest(true);
-
-        self.keywords
-            .keywords_pattern
-            .content_regex
-            .search_with(
-                regex_caches.get(&self.keywords.keywords_pattern.content_regex),
-                &input,
-            )
-            .is_none()
-    }
-
     pub fn next(&mut self, regex_caches: &mut RegexCaches) -> Option<usize> {
         let input = Input::new(self.content).range(self.start..).earliest(true);
 
