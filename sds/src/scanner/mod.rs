@@ -79,7 +79,6 @@ pub trait CompiledRuleDyn: Send + Sync {
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &[usize],
         scanner_labels: &Labels,
-        path: &Path,
         should_kws_match_event_paths: bool,
     );
 
@@ -133,7 +132,6 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &[usize],
         scanner_labels: &Labels,
-        path: &Path,
         should_kws_match_event_paths: bool,
     ) {
         let group_data_any = group_data
@@ -160,7 +158,6 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
             excluded_matches,
             match_emitter,
             true_positive_rule_idx,
-            path,
             should_kws_match_event_paths,
         )
     }
@@ -235,7 +232,6 @@ pub trait CompiledRule: Send + Sync {
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &[usize],
-        path: &Path,
         should_kws_match_event_paths: bool,
     );
 
@@ -774,7 +770,6 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     &mut emitter,
                     true_positive_rule_idx,
                     &self.scanner.labels,
-                    path,
                     self.scanner
                         .scanner_features
                         .should_keywords_match_event_paths,
@@ -931,7 +926,6 @@ mod test {
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
             _true_positive_rule_idx: &[usize],
-            _path: &Path,
             _should_kws_match_event_paths: bool,
         ) {
             match_emitter.emit(StringMatch { start: 10, end: 16 });

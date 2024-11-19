@@ -51,7 +51,7 @@ impl CompiledRule for RegexCompiledRule {
     fn get_string_matches(
         &self,
         content: &str,
-        _path: &Path,
+        path: &Path,
         regex_caches: &mut RegexCaches,
         _group_data: &mut (),
         _group_config: &(),
@@ -60,20 +60,19 @@ impl CompiledRule for RegexCompiledRule {
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &[usize],
-        path: &Path,
         should_kws_match_event_paths: bool,
     ) {
         match self.included_keywords {
             Some(ref included_keywords) => {
                 self.get_string_matches_with_included_keywords(
                     content,
+                    path,
                     regex_caches,
                     exclusion_check,
                     excluded_matches,
                     match_emitter,
                     true_positive_rule_idx,
                     included_keywords,
-                    path,
                     should_kws_match_event_paths,
                 );
             }
@@ -124,13 +123,13 @@ impl RegexCompiledRule {
     fn get_string_matches_with_included_keywords(
         &self,
         content: &str,
+        path: &Path,
         regex_caches: &mut RegexCaches,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &[usize],
         included_keywords: &CompiledIncludedProximityKeywords,
-        path: &Path,
         should_kws_match_event_paths: bool,
     ) {
         if true_positive_rule_idx.contains(&self.rule_index) {
