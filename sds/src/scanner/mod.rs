@@ -811,9 +811,13 @@ mod test {
     use super::{MatchEmitter, ScannerBuilder, StringMatch};
     use crate::match_action::{MatchAction, MatchActionValidationError};
 
+    #[cfg(feature = "wasm_incompatible")]
     use crate::match_validation::config::{AwsConfig, AwsType, MatchValidationType};
 
+    #[cfg(feature = "wasm_incompatible")]
     use crate::match_validation::config::HttpValidatorConfigBuilder;
+
+    #[cfg(feature = "wasm_incompatible")]
     use crate::match_validation::validator_utils::generate_aws_headers_and_body;
     use crate::observability::labels::Labels;
     use crate::scanner::regex_rule::config::{
@@ -894,6 +898,7 @@ mod test {
             }))
         }
 
+        #[cfg(feature = "wasm_incompatible")]
         fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
             None
         }
@@ -1557,6 +1562,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
+                #[cfg(feature = "wasm_incompatible")]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1572,6 +1578,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
+                #[cfg(feature = "wasm_incompatible")]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1587,7 +1594,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(feature = "wasm_incompatible")]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1635,7 +1642,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(feature = "wasm_incompatible")]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1651,7 +1658,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(feature = "wasm_incompatible")]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1667,7 +1674,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(feature = "wasm_incompatible")]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1709,7 +1716,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(feature = "wasm_incompatible")]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1749,7 +1756,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(feature = "wasm_incompatible")]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1789,7 +1796,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(feature = "wasm_incompatible")]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1829,7 +1836,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(feature = "wasm_incompatible")]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -2293,6 +2300,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "wasm_incompatible")]
     fn test_should_return_match_with_match_validation() {
         let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
             .match_action(MatchAction::Redact {
@@ -2315,6 +2323,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "wasm_incompatible")]
     fn test_should_error_if_no_match_validation() {
         let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
             .match_action(MatchAction::Redact {
@@ -2334,8 +2343,8 @@ mod test {
         assert!(err.is_err());
     }
 
-    #[cfg(feature = "wasm_incompatible")]
     #[test]
+    #[cfg(feature = "wasm_incompatible")]
     fn test_should_allocate_match_validator_depending_on_match_type() {
         use crate::match_validation::config::AwsConfig;
 
@@ -2429,6 +2438,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "wasm_incompatible")]
     fn test_aws_id_only_shall_not_validate() {
         let rule_aws_id = RegexRuleConfig::new("aws_id")
             .match_action(MatchAction::Redact {
@@ -2447,6 +2457,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "wasm_incompatible")]
     fn test_mock_same_http_validator_several_matches() {
         let server = MockServer::start();
 
@@ -2528,6 +2539,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "wasm_incompatible")]
     fn test_mock_http_timeout() {
         let server = MockServer::start();
         let _ = server.mock(|when, then| {
@@ -2563,14 +2575,9 @@ mod test {
             _ => assert!(false),
         }
     }
-<<<<<<< HEAD
     #[test]
-    fn test_mock_multiple_match_validators() {
-=======
     #[cfg(feature = "wasm_incompatible")]
-    #[tokio::test]
-    async fn test_mock_multiple_match_validators() {
->>>>>>> c61f7cd (wasm-incompatible features)
+    fn test_mock_multiple_match_validators() {
         let server = MockServer::start();
 
         // Create a mock on the server.
@@ -2633,6 +2640,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "wasm_incompatible")]
     fn test_mock_endpoint_with_multiple_hosts() {
         let server = MockServer::start();
         // Create a mock on the server.
@@ -2670,14 +2678,9 @@ mod test {
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
     }
 
-<<<<<<< HEAD
     #[test]
-    fn test_mock_aws_validator() {
-=======
-    #[tokio::test]
     #[cfg(feature = "wasm_incompatible")]
-    async fn test_mock_aws_validator() {
->>>>>>> c61f7cd (wasm-incompatible features)
+    fn test_mock_aws_validator() {
         let server = MockServer::start();
         let server_url = server.url("/").to_string();
 
