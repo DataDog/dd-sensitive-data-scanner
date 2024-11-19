@@ -137,6 +137,16 @@ mod test {
         map.insert("key-a-3".to_string(), json!(["an", "array"]));
         let mut event = HashMap::from([("key-a".to_string(), Value::Object(map))]);
 
+        /*
+           event = {
+               "key-a": {
+                   "key-a-1": "value-a-1",
+                   "key-a-2": "value-a-2",
+                   "key-a-3": ["an", "array"]
+               }
+           }
+        */
+
         let mut visitor = Visitor {
             ops: vec![],
             path: Path::root(),
