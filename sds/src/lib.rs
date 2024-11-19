@@ -7,7 +7,7 @@ mod encoding;
 mod event;
 mod match_action;
 
-#[cfg(feature = "wasm_incompatible")]
+#[cfg(not(target_arch = "wasm32"))]
 mod match_validation;
 mod normalization;
 mod observability;
@@ -29,7 +29,7 @@ pub use encoding::{EncodeIndices, Encoding, Utf8Encoding};
 pub use event::{Event, EventVisitor, VisitStringResult};
 pub use match_action::{MatchAction, PartialRedactDirection};
 
-#[cfg(feature = "wasm_incompatible")]
+#[cfg(not(target_arch = "wasm32"))]
 pub use match_validation::{
     config::AwsConfig, config::AwsType, config::HttpMethod, config::HttpValidatorConfigBuilder,
     config::InternalMatchValidationType, config::MatchValidationType, config::RequestHeader,
