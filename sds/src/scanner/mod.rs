@@ -5,6 +5,7 @@ use crate::match_validation::{
     config::InternalMatchValidationType, config::MatchValidationType, match_status::MatchStatus,
     match_validator::MatchValidator,
 };
+use rayon::prelude::*;
 
 use error::{MatchValidationError, MatchValidatorCreationError};
 
@@ -70,6 +71,7 @@ pub trait CompiledRuleDyn: Send + Sync {
         content: &str,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
+        group_config: &AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -91,6 +93,11 @@ pub trait CompiledRuleDyn: Send + Sync {
     fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
 
     fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
+
+    fn process_scanner_config(
+        &self,
+        group_config: &mut AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
+    );
 }
 
 // This is the "hidden" implementation of CompiledRuleDyn for any type that implements CompiledRule
@@ -114,6 +121,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         content: &str,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
+        group_config: &AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -124,10 +132,14 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
             .entry(TypeId::of::<T::GroupData>())
             .or_insert_with(|| Box::new(T::create_group_data(scanner_labels)));
         let group_data: &mut T::GroupData = group_data_any.downcast_mut().unwrap();
+        let group_config_any = group_config.get(&TypeId::of::<T::GroupConfig>()).unwrap();
+        let group_config: &T::GroupConfig = group_config_any.downcast_ref().unwrap();
+
         self.get_string_matches(
             content,
             regex_caches,
             group_data,
+            group_config,
             exclusion_check,
             excluded_matches,
             match_emitter,
@@ -150,6 +162,19 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
     fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
         T::get_internal_match_validation_type(self)
     }
+
+    // method used to provide each rule the list of rules enabled for a scanner
+    // this is used to allow rules that have group data to enabled/disable some features in this group
+    fn process_scanner_config(
+        &self,
+        group_config: &mut AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
+    ) {
+        let group_config_any = group_config
+            .entry(TypeId::of::<T::GroupConfig>())
+            .or_insert_with(|| Box::new(T::create_group_config()));
+        let group_config: &mut T::GroupConfig = group_config_any.downcast_mut().unwrap();
+        T::process_scanner_config(self, group_config);
+    }
 }
 
 // This is the public trait that is used to define the behavior of a compiled rule.
@@ -157,9 +182,15 @@ pub trait CompiledRule: Send + Sync {
     /// Data that is instantiated once per string being scanned, and shared with all rules that
     /// have the same `GroupData` type. `Default` will be used to initialize this data.
     type GroupData: 'static;
+    /// Data that is instantiated once per scanner, and shared with all rules that
+    /// have the same `GroupData` type. `Default` will be used to initialize this data
+    type GroupConfig: 'static + Send + Sync;
 
     /// Create a new instance of GroupData with the given scanner.
     fn create_group_data(labels: &Labels) -> Self::GroupData;
+
+    /// Create a new instance of GroupData with the given scanner.
+    fn create_group_config() -> Self::GroupConfig;
 
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
@@ -173,6 +204,7 @@ pub trait CompiledRule: Send + Sync {
         content: &str,
         regex_caches: &mut RegexCaches,
         group_data: &mut Self::GroupData,
+        group_config: &Self::GroupConfig,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -194,6 +226,10 @@ pub trait CompiledRule: Send + Sync {
 
     // This is the match validation type key used in the match_validators_per_type map
     fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
+
+    // method used to provide each rule the list of rules enabled for a scanner
+    // this is used to allow rules that have group data to enabled/disable some features in this group
+    fn process_scanner_config(&self, group_config: &mut Self::GroupConfig);
 }
 
 impl<T> RuleConfig for Box<T>
@@ -240,6 +276,7 @@ pub struct Scanner {
     metrics: ScannerMetrics,
     labels: Labels,
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
+    group_configs: AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
 }
 
 impl Scanner {
@@ -323,7 +360,7 @@ impl Scanner {
         output_rule_matches
     }
 
-    pub async fn validate_matches(
+    pub fn validate_matches(
         &self,
         rule_matches: &mut Vec<RuleMatch>,
     ) -> Result<(), MatchValidationError> {
@@ -346,19 +383,17 @@ impl Scanner {
         }
 
         // Call the validate per match_validator_type with their matches and the RuleMatch list and collect the results
-        let futures = match_validator_rule_match_per_type.iter_mut().filter_map(
+        match_validator_rule_match_per_type.par_iter_mut().for_each(
             |(match_validation_type, matches_per_type)| {
                 let match_validator = self.match_validators_per_type.get(match_validation_type);
-                match_validator.map(|match_validator| {
+                if let Some(match_validator) = match_validator {
                     match_validator
                         .as_ref()
                         .validate(matches_per_type, &self.rules)
-                })
+                }
             },
         );
 
-        // Wait for all result to complete
-        let _ = futures::future::join_all(futures).await;
         // Refill the rule_matches with the validated matches
         for (_, mut matches) in match_validator_rule_match_per_type {
             rule_matches.append(&mut matches);
@@ -620,6 +655,11 @@ impl ScannerBuilder<'_> {
             })
             .collect::<Result<Vec<Box<dyn CompiledRuleDyn>>, CreateScannerError>>()?;
 
+        let mut group_configs: AHashMap<TypeId, Box<dyn Any + Send + Sync>> = AHashMap::new();
+        compiled_rules.iter().for_each(|rule| {
+            rule.process_scanner_config(&mut group_configs);
+        });
+
         let scoped_ruleset = ScopedRuleSet::new(
             &compiled_rules
                 .iter()
@@ -645,6 +685,7 @@ impl ScannerBuilder<'_> {
             metrics: ScannerMetrics::new(&self.labels),
             match_validators_per_type,
             labels: self.labels,
+            group_configs,
         })
     }
 }
@@ -695,6 +736,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     content,
                     self.regex_caches,
                     &mut group_data,
+                    &self.scanner.group_configs,
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
@@ -827,6 +869,7 @@ mod test {
 
     impl CompiledRule for DumbCompiledRule {
         type GroupData = ();
+        type GroupConfig = ();
 
         fn get_match_action(&self) -> &MatchAction {
             &self.match_action
@@ -836,12 +879,14 @@ mod test {
         }
 
         fn create_group_data(_: &Labels) {}
+        fn create_group_config() {}
 
         fn get_string_matches(
             &self,
             _content: &str,
             _regex_caches: &mut RegexCaches,
             _group_data: &mut Self::GroupData,
+            _group_config: &Self::GroupConfig,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
@@ -856,6 +901,9 @@ mod test {
 
         fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
             None
+        }
+        fn process_scanner_config(&self, _: &mut Self::GroupConfig) {
+            // do nothing
         }
     }
 
@@ -2295,8 +2343,8 @@ mod test {
         assert_eq!(rule_match[0].match_value, Some("world".to_string()));
     }
 
-    #[tokio::test]
-    async fn test_should_error_if_no_match_validation() {
+    #[test]
+    fn test_should_error_if_no_match_validation() {
         let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
@@ -2311,7 +2359,7 @@ mod test {
         assert_eq!(content, "hey [REDACTED]");
         assert_eq!(rule_match[0].match_value, None);
         // Let's call validate and check that it panics
-        let err = scanner.validate_matches(&mut rule_match).await;
+        let err = scanner.validate_matches(&mut rule_match);
         assert!(err.is_err());
     }
 
@@ -2408,8 +2456,8 @@ mod test {
         ));
     }
 
-    #[tokio::test]
-    async fn test_aws_id_only_shall_not_validate() {
+    #[test]
+    fn test_aws_id_only_shall_not_validate() {
         let rule_aws_id = RegexRuleConfig::new("aws_id")
             .match_action(MatchAction::Redact {
                 replacement: "[AWS_ID]".to_string(),
@@ -2422,12 +2470,12 @@ mod test {
         let mut matches = scanner.scan(&mut content, vec![]);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "this is an [AWS_ID]");
-        assert!(scanner.validate_matches(&mut matches).await.is_err());
+        assert!(scanner.validate_matches(&mut matches).is_err());
         assert_eq!(matches[0].match_status, MatchStatus::NotChecked);
     }
 
-    #[tokio::test]
-    async fn test_mock_same_http_validator_several_matches() {
+    #[test]
+    fn test_mock_same_http_validator_several_matches() {
         let server = MockServer::start();
 
         // Create a mock on the server.
@@ -2495,7 +2543,7 @@ mod test {
             content,
             "this is a content with a [VALID] an [INVALID] and an [ERROR]"
         );
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         mock_service_valid.assert();
         mock_service_invalid.assert();
         mock_service_error.assert();
@@ -2507,8 +2555,8 @@ mod test {
         );
     }
 
-    #[tokio::test]
-    async fn test_mock_http_timeout() {
+    #[test]
+    fn test_mock_http_timeout() {
         let server = MockServer::start();
         let _ = server.mock(|when, then| {
             when.method(GET)
@@ -2534,7 +2582,7 @@ mod test {
         let mut matches = scanner.scan(&mut content, vec![]);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "this is a content with a [VALID]");
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         // This will be in the form "Error making HTTP request: "
         match &matches[0].match_status {
             MatchStatus::Error(val) => {
@@ -2543,8 +2591,8 @@ mod test {
             _ => assert!(false),
         }
     }
-    #[tokio::test]
-    async fn test_mock_multiple_match_validators() {
+    #[test]
+    fn test_mock_multiple_match_validators() {
         let server = MockServer::start();
 
         // Create a mock on the server.
@@ -2598,7 +2646,7 @@ mod test {
             content,
             "this is a content with a [VALID] an [AWS_ID] and an [AWS_SECRET]"
         );
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         mock_http_service_valid.assert();
         mock_aws_service_valid.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -2606,8 +2654,8 @@ mod test {
         assert_eq!(matches[2].match_status, MatchStatus::Valid);
     }
 
-    #[tokio::test]
-    async fn test_mock_endpoint_with_multiple_hosts() {
+    #[test]
+    fn test_mock_endpoint_with_multiple_hosts() {
         let server = MockServer::start();
         // Create a mock on the server.
         let mock_http_service_us = server.mock(|when, then| {
@@ -2638,14 +2686,14 @@ mod test {
             content,
             "this is a content with a [VALID] on multiple hosts"
         );
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         mock_http_service_us.assert();
         mock_http_service_eu.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
     }
 
-    #[tokio::test]
-    async fn test_mock_aws_validator() {
+    #[test]
+    fn test_mock_aws_validator() {
         let server = MockServer::start();
         let server_url = server.url("/").to_string();
 
@@ -2759,7 +2807,7 @@ mod test {
             content,
             "content with a valid aws_id [AWS_ID], an invalid aws_id [AWS_ID], an error aws_id [AWS_ID] and an aws_secret [AWS_SECRET] and an other aws_secret [AWS_SECRET]"
         );
-        assert!(scanner.validate_matches(&mut matches).await.is_ok());
+        assert!(scanner.validate_matches(&mut matches).is_ok());
         mock_service_valid.assert();
         mock_service_invalid_1.assert();
         mock_service_invalid_2.assert();

@@ -8,8 +8,8 @@ import "C"
 
 import (
 	"encoding/json"
-	"unsafe"
 	"fmt"
+	"unsafe"
 )
 
 type RegexRuleConfig struct {

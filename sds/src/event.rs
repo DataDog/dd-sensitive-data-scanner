@@ -45,7 +45,6 @@ impl Event for String {
 
 #[cfg(test)]
 pub(crate) mod test {
-
     use crate::simple_event::SimpleEvent;
 
     use super::*;
