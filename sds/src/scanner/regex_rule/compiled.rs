@@ -9,7 +9,7 @@ use crate::scanner::regex_rule::RegexCaches;
 use crate::scanner::scope::Scope;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::secondary_validation::Validator;
-use crate::{CompiledRule, ExclusionCheck, Labels, MatchAction, MatchEmitter, StringMatch};
+use crate::{CompiledRule, ExclusionCheck, Labels, MatchAction, MatchEmitter, Path, StringMatch};
 use ahash::AHashSet;
 use regex_automata::meta::Cache;
 use regex_automata::Input;
@@ -33,6 +33,7 @@ impl CompiledRule for RegexCompiledRule {
     // no special data
     type GroupData = ();
     type GroupConfig = ();
+    type RuleScanCache = ();
 
     fn get_match_action(&self) -> &MatchAction {
         &self.match_action
@@ -42,6 +43,7 @@ impl CompiledRule for RegexCompiledRule {
     }
     fn create_group_data(_: &Labels) {}
     fn create_group_config() {}
+    fn create_rule_scan_cache() {}
     fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
         self.included_keywords.as_ref()
     }
@@ -49,9 +51,11 @@ impl CompiledRule for RegexCompiledRule {
     fn get_string_matches(
         &self,
         content: &str,
+        _path: &Path,
         regex_caches: &mut RegexCaches,
         _group_data: &mut (),
         _group_config: &(),
+        _rule_scan_cache: &mut (),
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
