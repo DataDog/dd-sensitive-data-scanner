@@ -396,7 +396,7 @@ impl Scanner {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub async fn validate_matches(
+    pub fn validate_matches(
         &self,
         rule_matches: &mut Vec<RuleMatch>,
     ) -> Result<(), MatchValidationError> {
