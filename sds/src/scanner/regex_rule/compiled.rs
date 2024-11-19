@@ -32,6 +32,7 @@ pub struct RegexCompiledRule {
 impl CompiledRule for RegexCompiledRule {
     // no special data
     type GroupData = ();
+    type GroupConfig = ();
 
     fn get_match_action(&self) -> &MatchAction {
         &self.match_action
@@ -40,6 +41,7 @@ impl CompiledRule for RegexCompiledRule {
         &self.scope
     }
     fn create_group_data(_: &Labels) {}
+    fn create_group_config() {}
     fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
         self.included_keywords.as_ref()
     }
@@ -49,6 +51,7 @@ impl CompiledRule for RegexCompiledRule {
         content: &str,
         regex_caches: &mut RegexCaches,
         _group_data: &mut (),
+        _group_config: &(),
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -102,6 +105,9 @@ impl CompiledRule for RegexCompiledRule {
             Some(internal_match_validation_type) => Some(internal_match_validation_type),
             None => None,
         }
+    }
+    fn process_scanner_config(&self, _: &mut Self::GroupConfig) {
+        // no special processing
     }
 }
 
