@@ -177,6 +177,9 @@ mod test {
                 true
             },
         );
+        // We're going to the "key-a.key-a-3.1" path
+        // This corresponds to the leaf "array" in the test event I created.
+        // Because "array" is the second element of the array, located at "key-a.key-a-3"
         assert_eq!(leaf, "array".to_string())
     }
 }
