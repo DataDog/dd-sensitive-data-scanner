@@ -69,9 +69,11 @@ pub trait CompiledRuleDyn: Send + Sync {
     fn get_string_matches(
         &self,
         content: &str,
+        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
         group_config: &AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
+        rule_scan_cache: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -119,9 +121,11 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
     fn get_string_matches(
         &self,
         content: &str,
+        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
         group_config: &AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
+        rule_scan_cache: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -132,14 +136,22 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
             .entry(TypeId::of::<T::GroupData>())
             .or_insert_with(|| Box::new(T::create_group_data(scanner_labels)));
         let group_data: &mut T::GroupData = group_data_any.downcast_mut().unwrap();
+
         let group_config_any = group_config.get(&TypeId::of::<T::GroupConfig>()).unwrap();
         let group_config: &T::GroupConfig = group_config_any.downcast_ref().unwrap();
 
+        let rule_scan_cache_any = rule_scan_cache
+            .entry(TypeId::of::<T::RuleScanCache>())
+            .or_insert_with(|| Box::new(T::create_rule_scan_cache()));
+        let rule_scan_cache: &mut T::RuleScanCache = rule_scan_cache_any.downcast_mut().unwrap();
+
         self.get_string_matches(
             content,
+            path,
             regex_caches,
             group_data,
             group_config,
+            rule_scan_cache,
             exclusion_check,
             excluded_matches,
             match_emitter,
@@ -186,11 +198,17 @@ pub trait CompiledRule: Send + Sync {
     /// have the same `GroupData` type. `Default` will be used to initialize this data
     type GroupConfig: 'static + Send + Sync;
 
+    // Each rule can have a cache that is shared during the whole scan of an even
+    type RuleScanCache: 'static;
+
     /// Create a new instance of GroupData with the given scanner.
     fn create_group_data(labels: &Labels) -> Self::GroupData;
 
     /// Create a new instance of GroupData with the given scanner.
     fn create_group_config() -> Self::GroupConfig;
+
+    /// Create a new instance of RuleScanCache
+    fn create_rule_scan_cache() -> Self::RuleScanCache;
 
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
@@ -202,9 +220,11 @@ pub trait CompiledRule: Send + Sync {
     fn get_string_matches(
         &self,
         content: &str,
+        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut Self::GroupData,
         group_config: &Self::GroupConfig,
+        rule_scan_cache: &mut Self::RuleScanCache,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -307,6 +327,7 @@ impl Scanner {
                     rule_matches: &mut rule_matches_list,
                     blocked_rules: &blocked_rules_idx,
                     excluded_matches: &mut excluded_matches,
+                    rule_scan_caches: AHashMap::new(),
                 },
             );
         });
@@ -698,6 +719,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     // This list shall be small (<10), so a linear search is acceptable
     blocked_rules: &'a Vec<usize>,
     excluded_matches: &'a mut AHashSet<String>,
+    rule_scan_caches: AHashMap<TypeId, Box<dyn Any>>,
 }
 
 impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
@@ -734,9 +756,11 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
                 rule.get_string_matches(
                     content,
+                    path,
                     self.regex_caches,
                     &mut group_data,
                     &self.scanner.group_configs,
+                    &mut self.rule_scan_caches,
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
@@ -870,6 +894,7 @@ mod test {
     impl CompiledRule for DumbCompiledRule {
         type GroupData = ();
         type GroupConfig = ();
+        type RuleScanCache = ();
 
         fn get_match_action(&self) -> &MatchAction {
             &self.match_action
@@ -880,13 +905,16 @@ mod test {
 
         fn create_group_data(_: &Labels) {}
         fn create_group_config() {}
+        fn create_rule_scan_cache() -> () {}
 
         fn get_string_matches(
             &self,
             _content: &str,
+            _path: &Path,
             _regex_caches: &mut RegexCaches,
             _group_data: &mut Self::GroupData,
             _group_config: &Self::GroupConfig,
+            _rule_scan_cache: &mut Self::RuleScanCache,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
