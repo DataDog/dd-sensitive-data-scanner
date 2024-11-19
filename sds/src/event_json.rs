@@ -165,6 +165,7 @@ mod test {
             ]
         );
 
+        // I'm testing here that when I visit a string, giving the path will actually visit the right leaf of the tree.
         let mut leaf = String::new();
         event.visit_string_mut(
             &Path::from(vec![
