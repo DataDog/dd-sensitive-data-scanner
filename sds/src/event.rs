@@ -60,7 +60,7 @@ impl Event for serde_json::Value {
                 let _result = visitor.visit_string(number.to_string().as_str());
             }
             serde_json::Value::String(s) => {
-                let _result = visitor.visit_string(&s);
+                let _result = visitor.visit_string(s);
             }
             serde_json::Value::Object(map) => {
                 for (k, child) in map.iter_mut() {
@@ -70,7 +70,7 @@ impl Event for serde_json::Value {
                 }
             }
             serde_json::Value::Array(values) => {
-                for (i, value) in values.into_iter().enumerate() {
+                for (i, value) in values.iter_mut().enumerate() {
                     visitor.push_segment(PathSegment::Index(i));
                     value.visit_event(visitor);
                     visitor.pop_segment();
@@ -119,12 +119,9 @@ impl Event for HashMap<String, serde_json::Value, RandomState> {
         let first_segment = path.segments.first().unwrap();
         let mut remaining_segments = path.segments.clone();
         remaining_segments.remove(0);
-        match first_segment {
-            PathSegment::Field(field) => {
-                let value = self.get_mut(&field.to_string()).unwrap();
-                value.visit_string_mut(&Path::from(remaining_segments), &mut visit);
-            }
-            _ => {}
+        if let PathSegment::Field(field) = first_segment {
+            let value = self.get_mut(&field.to_string()).unwrap();
+            value.visit_string_mut(&Path::from(remaining_segments), &mut visit);
         }
     }
 }
