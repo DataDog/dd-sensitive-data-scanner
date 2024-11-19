@@ -69,8 +69,11 @@ pub trait CompiledRuleDyn: Send + Sync {
     fn get_string_matches(
         &self,
         content: &str,
+        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
+        group_config: &AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
+        rule_scan_cache: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -94,6 +97,11 @@ pub trait CompiledRuleDyn: Send + Sync {
     fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
 
     fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
+
+    fn process_scanner_config(
+        &self,
+        group_config: &mut AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
+    );
 }
 
 // This is the "hidden" implementation of CompiledRuleDyn for any type that implements CompiledRule
@@ -115,8 +123,11 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
     fn get_string_matches(
         &self,
         content: &str,
+        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
+        group_config: &AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
+        rule_scan_cache: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -129,10 +140,22 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
             .entry(TypeId::of::<T::GroupData>())
             .or_insert_with(|| Box::new(T::create_group_data(scanner_labels)));
         let group_data: &mut T::GroupData = group_data_any.downcast_mut().unwrap();
+
+        let group_config_any = group_config.get(&TypeId::of::<T::GroupConfig>()).unwrap();
+        let group_config: &T::GroupConfig = group_config_any.downcast_ref().unwrap();
+
+        let rule_scan_cache_any = rule_scan_cache
+            .entry(TypeId::of::<T::RuleScanCache>())
+            .or_insert_with(|| Box::new(T::create_rule_scan_cache()));
+        let rule_scan_cache: &mut T::RuleScanCache = rule_scan_cache_any.downcast_mut().unwrap();
+
         self.get_string_matches(
             content,
+            path,
             regex_caches,
             group_data,
+            group_config,
+            rule_scan_cache,
             exclusion_check,
             excluded_matches,
             match_emitter,
@@ -157,6 +180,19 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
     fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
         T::get_internal_match_validation_type(self)
     }
+
+    // method used to provide each rule the list of rules enabled for a scanner
+    // this is used to allow rules that have group data to enabled/disable some features in this group
+    fn process_scanner_config(
+        &self,
+        group_config: &mut AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
+    ) {
+        let group_config_any = group_config
+            .entry(TypeId::of::<T::GroupConfig>())
+            .or_insert_with(|| Box::new(T::create_group_config()));
+        let group_config: &mut T::GroupConfig = group_config_any.downcast_mut().unwrap();
+        T::process_scanner_config(self, group_config);
+    }
 }
 
 // This is the public trait that is used to define the behavior of a compiled rule.
@@ -164,9 +200,21 @@ pub trait CompiledRule: Send + Sync {
     /// Data that is instantiated once per string being scanned, and shared with all rules that
     /// have the same `GroupData` type. `Default` will be used to initialize this data.
     type GroupData: 'static;
+    /// Data that is instantiated once per scanner, and shared with all rules that
+    /// have the same `GroupData` type. `Default` will be used to initialize this data
+    type GroupConfig: 'static + Send + Sync;
+
+    // Each rule can have a cache that is shared during the whole scan of an even
+    type RuleScanCache: 'static;
 
     /// Create a new instance of GroupData with the given scanner.
     fn create_group_data(labels: &Labels) -> Self::GroupData;
+
+    /// Create a new instance of GroupData with the given scanner.
+    fn create_group_config() -> Self::GroupConfig;
+
+    /// Create a new instance of RuleScanCache
+    fn create_rule_scan_cache() -> Self::RuleScanCache;
 
     fn get_match_action(&self) -> &MatchAction;
     fn get_scope(&self) -> &Scope;
@@ -178,8 +226,11 @@ pub trait CompiledRule: Send + Sync {
     fn get_string_matches(
         &self,
         content: &str,
+        path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut Self::GroupData,
+        group_config: &Self::GroupConfig,
+        rule_scan_cache: &mut Self::RuleScanCache,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -203,6 +254,10 @@ pub trait CompiledRule: Send + Sync {
 
     // This is the match validation type key used in the match_validators_per_type map
     fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
+
+    // method used to provide each rule the list of rules enabled for a scanner
+    // this is used to allow rules that have group data to enabled/disable some features in this group
+    fn process_scanner_config(&self, group_config: &mut Self::GroupConfig);
 }
 
 impl<T> RuleConfig for Box<T>
@@ -249,6 +304,7 @@ pub struct Scanner {
     metrics: ScannerMetrics,
     labels: Labels,
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
+    group_configs: AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
 }
 
 impl Scanner {
@@ -279,6 +335,7 @@ impl Scanner {
                     rule_matches: &mut rule_matches_list,
                     blocked_rules: &blocked_rules_idx,
                     excluded_matches: &mut excluded_matches,
+                    rule_scan_caches: AHashMap::new(),
                 },
             );
         });
@@ -627,6 +684,11 @@ impl ScannerBuilder<'_> {
             })
             .collect::<Result<Vec<Box<dyn CompiledRuleDyn>>, CreateScannerError>>()?;
 
+        let mut group_configs: AHashMap<TypeId, Box<dyn Any + Send + Sync>> = AHashMap::new();
+        compiled_rules.iter().for_each(|rule| {
+            rule.process_scanner_config(&mut group_configs);
+        });
+
         let scoped_ruleset = ScopedRuleSet::new(
             &compiled_rules
                 .iter()
@@ -652,6 +714,7 @@ impl ScannerBuilder<'_> {
             metrics: ScannerMetrics::new(&self.labels),
             match_validators_per_type,
             labels: self.labels,
+            group_configs,
         })
     }
 }
@@ -664,6 +727,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     // This list shall be small (<10), so a linear search is acceptable
     blocked_rules: &'a Vec<usize>,
     excluded_matches: &'a mut AHashSet<String>,
+    rule_scan_caches: AHashMap<TypeId, Box<dyn Any>>,
 }
 
 impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
@@ -700,8 +764,11 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
                 rule.get_string_matches(
                     content,
+                    path,
                     self.regex_caches,
                     &mut group_data,
+                    &self.scanner.group_configs,
+                    &mut self.rule_scan_caches,
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
@@ -838,6 +905,8 @@ mod test {
 
     impl CompiledRule for DumbCompiledRule {
         type GroupData = ();
+        type GroupConfig = ();
+        type RuleScanCache = ();
 
         fn get_match_action(&self) -> &MatchAction {
             &self.match_action
@@ -847,12 +916,17 @@ mod test {
         }
 
         fn create_group_data(_: &Labels) {}
+        fn create_group_config() {}
+        fn create_rule_scan_cache() -> () {}
 
         fn get_string_matches(
             &self,
             _content: &str,
+            _path: &Path,
             _regex_caches: &mut RegexCaches,
             _group_data: &mut Self::GroupData,
+            _group_config: &Self::GroupConfig,
+            _rule_scan_cache: &mut Self::RuleScanCache,
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
@@ -869,6 +943,9 @@ mod test {
 
         fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
             None
+        }
+        fn process_scanner_config(&self, _: &mut Self::GroupConfig) {
+            // do nothing
         }
     }
 
