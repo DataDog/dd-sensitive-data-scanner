@@ -679,6 +679,7 @@ name = "dd-sds"
 version = "0.1.2"
 dependencies = [
  "ahash",
+ "async-trait",
  "aws-sign-v4",
  "base62",
  "base64 0.22.1",
@@ -694,10 +695,12 @@ dependencies = [
  "metrics",
  "metrics-util",
  "nom",
+ "num_cpus",
  "rand",
  "rayon",
  "regex",
- "regex-automata",
+ "regex-automata 0.4.7",
+ "regex-automata 0.4.9",
  "regex-syntax 0.7.5",
  "regex_generate",
  "reqwest",
@@ -1470,7 +1473,7 @@ version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "507460a910eb7b32ee961886ff48539633b788a36b65692b95f225b844c82553"
 dependencies = [
- "regex-automata",
+ "regex-automata 0.4.7",
 ]
 
 [[package]]
@@ -2051,7 +2054,7 @@ checksum = "b91213439dad192326a0d7c6ee3955910425f441d7038e0d6933b0aec5c4517f"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata",
+ "regex-automata 0.4.7",
  "regex-syntax 0.8.4",
 ]
 
@@ -2064,6 +2067,16 @@ dependencies = [
  "aho-corasick",
  "memchr",
  "regex-syntax 0.8.4",
+]
+
+[[package]]
+name = "regex-automata"
+version = "0.4.9"
+source = "git+https://github.com/fbryden/regex?rev=6952250af962ca3e364da47382b16dba9c703431#6952250af962ca3e364da47382b16dba9c703431"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-syntax 0.8.5",
 ]
 
 [[package]]
@@ -2083,6 +2096,11 @@ name = "regex-syntax"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b"
+
+[[package]]
+name = "regex-syntax"
+version = "0.8.5"
+source = "git+https://github.com/fbryden/regex?rev=6952250af962ca3e364da47382b16dba9c703431#6952250af962ca3e364da47382b16dba9c703431"
 
 [[package]]
 name = "regex_generate"
