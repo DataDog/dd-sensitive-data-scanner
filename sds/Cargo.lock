@@ -679,6 +679,7 @@ name = "dd-sds"
 version = "0.1.2"
 dependencies = [
  "ahash",
+ "async-trait",
  "aws-sign-v4",
  "base62",
  "base64 0.22.1",

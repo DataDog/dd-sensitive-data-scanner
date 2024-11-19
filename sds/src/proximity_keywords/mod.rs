@@ -749,7 +749,7 @@ mod test {
         assert!(!content_regex.is_match("he-l_lo"));
         assert_eq!(
             content_regex.search(&Input::new("I want to say hello to my dear friend")),
-            Some(regex_automata::Match::must(0, 14..19))
+            Some(regex_automata_fork::Match::must(0, 14..19))
         );
 
         assert!(!path_regex.is_match("awsAccess"));
@@ -757,7 +757,7 @@ mod test {
         assert!(!path_regex.is_match("aws.accessible"));
         assert_eq!(
             path_regex.search(&Input::new("my.path.to.aws.access")),
-            Some(regex_automata::Match::must(0, 11..21))
+            Some(regex_automata_fork::Match::must(0, 11..21))
         );
     }
 
