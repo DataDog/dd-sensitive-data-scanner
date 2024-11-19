@@ -86,7 +86,7 @@ impl ScopedRuleSet {
             path: Path::root(),
             bool_set,
             add_implicit_index_wildcards: self.add_implicit_index_wildcards,
-            should_keywords_match_event_paths: self.should_keywords_match_event_paths,
+            // should_keywords_match_event_paths: self.should_keywords_match_event_paths,
         };
 
         event.visit_event(&mut visitor)
@@ -179,7 +179,7 @@ struct ScopedRuledSetEventVisitor<'a, C> {
     bool_set: Option<BoolSet>,
 
     add_implicit_index_wildcards: bool,
-    should_keywords_match_event_paths: bool,
+    // should_keywords_match_event_paths: bool,
 }
 
 impl<'path, C> EventVisitor<'path> for ScopedRuledSetEventVisitor<'path, C>
