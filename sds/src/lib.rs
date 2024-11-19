@@ -7,6 +7,8 @@ mod encoding;
 mod event;
 mod match_action;
 
+#[cfg(any(test, feature = "testing", feature = "bench"))]
+mod event_json;
 mod match_validation;
 mod normalization;
 mod observability;
@@ -17,10 +19,9 @@ mod rule_match;
 mod scanner;
 mod scoped_ruleset;
 mod secondary_validation;
+mod simple_event;
 mod stats;
 mod validation;
-
-mod simple_event;
 
 pub use simple_event::SimpleEvent;
 
