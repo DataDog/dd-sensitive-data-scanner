@@ -23,6 +23,7 @@ ahash = "0.8.7"
 farmhash = { git = "https://github.com/fuchsnj/rust-farmhash", rev = "82d80b689d65fbd378b13deff10cdd07794df64e" }
 nom = "7.1.3"
 regex = "1.9.5"
+regex-automata = "0.4.7"
 # Switch over to the original repo when this issue is resolved: https://github.com/rust-lang/regex/issues/1241
 regex-automata-fork = { git = "https://github.com/fbryden/regex", rev = "6952250af962ca3e364da47382b16dba9c703431", package = "regex-automata" }
 regex-syntax = "0.7.5"

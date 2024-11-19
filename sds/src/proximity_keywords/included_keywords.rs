@@ -1,6 +1,6 @@
 use crate::proximity_keywords::next_char_index;
 use crate::scanner::regex_rule::RegexCaches;
-use regex_automata_fork::Input;
+use regex_automata::Input;
 
 pub struct CompiledIncludedProximityKeywords {
     pub look_ahead_character_count: usize,

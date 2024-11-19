@@ -699,6 +699,7 @@ dependencies = [
  "rand",
  "rayon",
  "regex",
+ "regex-automata 0.4.7",
  "regex-automata 0.4.9",
  "regex-syntax 0.7.5",
  "regex_generate",

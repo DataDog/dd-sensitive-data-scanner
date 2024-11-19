@@ -1,7 +1,7 @@
 use crate::scanner::regex_rule::regex_store::{RegexCacheKey, SharedRegex};
 use crate::SharedPool;
 use lazy_static::lazy_static;
-use regex_automata_fork::meta::Regex as MetaRegex;
+use regex_automata::meta::Regex as MetaRegex;
 use slotmap::SecondaryMap;
 use std::sync::Arc;
 extern crate num_cpus;
@@ -21,7 +21,7 @@ pub fn access_regex_caches<T>(func: impl FnOnce(&mut RegexCaches) -> T) -> T {
 }
 
 pub struct RegexCaches {
-    map: SecondaryMap<RegexCacheKey, regex_automata_fork::meta::Cache>,
+    map: SecondaryMap<RegexCacheKey, regex_automata::meta::Cache>,
 }
 
 impl RegexCaches {
@@ -31,7 +31,7 @@ impl RegexCaches {
         }
     }
 
-    pub fn get(&mut self, shared_regex: &SharedRegex) -> &mut regex_automata_fork::meta::Cache {
+    pub fn get(&mut self, shared_regex: &SharedRegex) -> &mut regex_automata::meta::Cache {
         self.raw_get(shared_regex.cache_key, &shared_regex.regex)
     }
 
@@ -39,7 +39,7 @@ impl RegexCaches {
         &mut self,
         key: RegexCacheKey,
         regex: &MetaRegex,
-    ) -> &mut regex_automata_fork::meta::Cache {
+    ) -> &mut regex_automata::meta::Cache {
         self.map
             .entry(key)
             .unwrap()

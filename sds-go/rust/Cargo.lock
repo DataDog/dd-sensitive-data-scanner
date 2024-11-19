@@ -308,6 +308,7 @@ dependencies = [
  "num_cpus",
  "rayon",
  "regex",
+ "regex-automata 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex-automata 0.4.9 (git+https://github.com/fbryden/regex?rev=6952250af962ca3e364da47382b16dba9c703431)",
  "regex-syntax 0.7.5",
  "reqwest",
