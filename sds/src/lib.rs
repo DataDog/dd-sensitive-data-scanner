@@ -7,6 +7,8 @@ mod encoding;
 mod event;
 mod match_action;
 
+#[cfg(any(test, feature = "testing", feature = "bench"))]
+mod event_json;
 #[cfg(not(target_arch = "wasm32"))]
 mod match_validation;
 mod normalization;
@@ -18,11 +20,11 @@ mod rule_match;
 mod scanner;
 mod scoped_ruleset;
 mod secondary_validation;
+mod simple_event;
 mod stats;
 mod validation;
 
-#[cfg(any(test, feature = "testing", feature = "bench"))]
-mod simple_event;
+pub use simple_event::SimpleEvent;
 
 // This is the public API of the SDS core library
 pub use encoding::{EncodeIndices, Encoding, Utf8Encoding};
@@ -58,5 +60,4 @@ pub use validation::{
 pub use crate::{
     scoped_ruleset::{ContentVisitor, RuleIndexVisitor, ScopedRuleSet},
     secondary_validation::{LuhnChecksum, Validator},
-    simple_event::SimpleEvent,
 };
