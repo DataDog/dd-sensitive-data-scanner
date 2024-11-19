@@ -215,8 +215,10 @@ where
         }
 
         // Sanitize the segment and push it. If the segment is an Index, it will push None.
-        self.sanitized_segments_until_node.push(segment.sanitize());
+        // I'm testing another way of performing the included keywords on path, so I simply push None here.
+        self.sanitized_segments_until_node.push(None);
 
+        // I'm testing another way of performing the included keywords on path feature, so this will be cleaned soon.
         let true_positive_rules_count = if false {
             let mut total_len: usize = self
                 .sanitized_segments_until_node
