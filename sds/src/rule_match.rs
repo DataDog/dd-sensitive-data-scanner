@@ -1,3 +1,4 @@
+#[cfg(not(target_arch = "wasm32"))]
 use crate::match_validation::match_status::MatchStatus;
 use crate::{encoding::Encoding, path::Path};
 use std::fmt::Debug;
@@ -34,6 +35,7 @@ pub struct RuleMatch {
     pub match_value: Option<String>,
 
     // match status updated by the validate_matches scanner method
+    #[cfg(not(target_arch = "wasm32"))]
     pub match_status: MatchStatus,
 }
 

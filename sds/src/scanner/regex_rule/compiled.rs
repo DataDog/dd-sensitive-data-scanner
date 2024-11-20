@@ -1,3 +1,4 @@
+#[cfg(not(target_arch = "wasm32"))]
 use crate::match_validation::config::{InternalMatchValidationType, MatchValidationType};
 use crate::proximity_keywords::{
     contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
@@ -25,7 +26,9 @@ pub struct RegexCompiledRule {
     pub excluded_keywords: Option<CompiledExcludedProximityKeywords>,
     pub validator: Option<Arc<dyn Validator>>,
     pub metrics: RuleMetrics,
+    #[cfg(not(target_arch = "wasm32"))]
     pub match_validation_type: Option<MatchValidationType>,
+    #[cfg(not(target_arch = "wasm32"))]
     pub internal_match_validation_type: Option<InternalMatchValidationType>,
 }
 
@@ -100,6 +103,7 @@ impl CompiledRule for RegexCompiledRule {
         self.metrics.false_positive_excluded_attributes.increment(1);
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
         match &self.match_validation_type {
             Some(match_validation_type) => Some(match_validation_type),
@@ -107,6 +111,7 @@ impl CompiledRule for RegexCompiledRule {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
         match &self.internal_match_validation_type {
             Some(internal_match_validation_type) => Some(internal_match_validation_type),

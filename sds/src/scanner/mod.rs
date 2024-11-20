@@ -1,12 +1,15 @@
 use crate::encoding::Encoding;
 use crate::event::Event;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::match_validation::{
     config::InternalMatchValidationType, config::MatchValidationType, match_status::MatchStatus,
     match_validator::MatchValidator,
 };
+#[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::*;
 
+#[cfg(not(target_arch = "wasm32"))]
 use error::{MatchValidationError, MatchValidatorCreationError};
 
 use crate::observability::labels::Labels;
@@ -93,8 +96,10 @@ pub trait CompiledRuleDyn: Send + Sync {
         // default is to do nothing
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
 
     fn process_scanner_config(
@@ -170,10 +175,12 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         T::on_excluded_match_multipass_v0(self)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
         T::get_match_validation_type(self)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
         T::get_internal_match_validation_type(self)
     }
@@ -246,9 +253,11 @@ pub trait CompiledRule: Send + Sync {
         // default is to do nothing
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
 
     // This is the match validation type key used in the match_validators_per_type map
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
 
     // method used to provide each rule the list of rules enabled for a scanner
@@ -268,6 +277,7 @@ where
         self.as_ref().convert_to_compiled_rule(rule_index, labels)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
         self.as_ref().get_match_validation_type()
     }
@@ -299,6 +309,7 @@ pub struct Scanner {
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
     labels: Labels,
+    #[cfg(not(target_arch = "wasm32"))]
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
     group_configs: AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
 }
@@ -320,6 +331,7 @@ impl Scanner {
 
         let mut excluded_matches = AHashSet::new();
 
+        #[cfg(not(target_arch = "wasm32"))]
         // Measure detection time
         let start = std::time::Instant::now();
         access_regex_caches(|regex_caches| {
@@ -371,20 +383,24 @@ impl Scanner {
                 will_mutate
             });
         }
-        // Record detection time
-        self.metrics
-            .duration_ns
-            .increment(start.elapsed().as_nanos() as u64);
-        // Add number of scanned events
-        self.metrics.num_scanned_events.increment(1);
-        // Add number of matches
-        self.metrics
-            .match_count
-            .increment(output_rule_matches.len() as u64);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // Record detection time
+            self.metrics
+                .duration_ns
+                .increment(start.elapsed().as_nanos() as u64);
+            // Add number of scanned events
+            self.metrics.num_scanned_events.increment(1);
+            // Add number of matches
+            self.metrics
+                .match_count
+                .increment(output_rule_matches.len() as u64);
+        }
 
         output_rule_matches
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn validate_matches(
         &self,
         rule_matches: &mut Vec<RuleMatch>,
@@ -520,6 +536,7 @@ impl Scanner {
 
         let rule = &self.rules[rule_match.rule_index];
 
+        #[cfg(not(target_arch = "wasm32"))]
         let match_status: MatchStatus = if rule.get_match_validation_type().is_some() {
             MatchStatus::NotChecked
         } else {
@@ -534,6 +551,7 @@ impl Scanner {
             end_index_exclusive: custom_end,
             shift_offset,
             match_value: matched_content_copy,
+            #[cfg(not(target_arch = "wasm32"))]
             match_status,
         }
     }
@@ -649,8 +667,10 @@ impl ScannerBuilder<'_> {
 
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
         let mut scanner_features = self.scanner_features.clone();
+        #[cfg(not(target_arch = "wasm32"))]
         let mut match_validators_per_type = AHashMap::new();
 
+        #[cfg(not(target_arch = "wasm32"))]
         for rule in self.rules.iter() {
             if let Some(match_validation_type) = rule.get_match_validation_type() {
                 if match_validation_type.can_create_match_validator() {
@@ -708,6 +728,7 @@ impl ScannerBuilder<'_> {
             scoped_ruleset,
             scanner_features,
             metrics: ScannerMetrics::new(&self.labels),
+            #[cfg(not(target_arch = "wasm32"))]
             match_validators_per_type,
             labels: self.labels,
             group_configs,
@@ -865,9 +886,13 @@ mod test {
     use super::{MatchEmitter, ScannerBuilder, StringMatch};
     use crate::match_action::{MatchAction, MatchActionValidationError};
 
+    #[cfg(not(target_arch = "wasm32"))]
     use crate::match_validation::config::{AwsConfig, AwsType, MatchValidationType};
 
+    #[cfg(not(target_arch = "wasm32"))]
     use crate::match_validation::config::HttpValidatorConfigBuilder;
+
+    #[cfg(not(target_arch = "wasm32"))]
     use crate::match_validation::validator_utils::generate_aws_headers_and_body;
     use crate::observability::labels::Labels;
     use crate::scanner::regex_rule::config::{
@@ -931,10 +956,12 @@ mod test {
             match_emitter.emit(StringMatch { start: 10, end: 16 });
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
         fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
             None
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
         fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
             None
         }
@@ -957,6 +984,7 @@ mod test {
             }))
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
         fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
             None
         }
@@ -1620,7 +1648,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(not(target_arch = "wasm32"))]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1636,7 +1664,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(not(target_arch = "wasm32"))]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1652,7 +1680,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(not(target_arch = "wasm32"))]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1700,7 +1728,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(not(target_arch = "wasm32"))]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1716,7 +1744,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(not(target_arch = "wasm32"))]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1732,7 +1760,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(not(target_arch = "wasm32"))]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1774,7 +1802,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(not(target_arch = "wasm32"))]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1814,7 +1842,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(not(target_arch = "wasm32"))]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1854,7 +1882,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(not(target_arch = "wasm32"))]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -1894,7 +1922,7 @@ mod test {
                 shift_offset: 0,
 
                 match_value: None,
-
+                #[cfg(not(target_arch = "wasm32"))]
                 match_status: MatchStatus::NotAvailable,
             }
         );
@@ -2378,6 +2406,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn test_should_return_match_with_match_validation() {
         let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
             .match_action(MatchAction::Redact {
@@ -2400,6 +2429,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn test_should_error_if_no_match_validation() {
         let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
             .match_action(MatchAction::Redact {
@@ -2420,6 +2450,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn test_should_allocate_match_validator_depending_on_match_type() {
         use crate::match_validation::config::AwsConfig;
 
@@ -2513,6 +2544,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn test_aws_id_only_shall_not_validate() {
         let rule_aws_id = RegexRuleConfig::new("aws_id")
             .match_action(MatchAction::Redact {
@@ -2531,6 +2563,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn test_mock_same_http_validator_several_matches() {
         let server = MockServer::start();
 
@@ -2612,6 +2645,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn test_mock_http_timeout() {
         let server = MockServer::start();
         let _ = server.mock(|when, then| {
@@ -2648,6 +2682,7 @@ mod test {
         }
     }
     #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn test_mock_multiple_match_validators() {
         let server = MockServer::start();
 
@@ -2711,6 +2746,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn test_mock_endpoint_with_multiple_hosts() {
         let server = MockServer::start();
         // Create a mock on the server.
@@ -2749,6 +2785,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn test_mock_aws_validator() {
         let server = MockServer::start();
         let server_url = server.url("/").to_string();
@@ -2883,6 +2920,7 @@ mod test {
         );
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     mod metrics_test {
         use crate::match_action::MatchAction;
         use crate::scanner::regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig};

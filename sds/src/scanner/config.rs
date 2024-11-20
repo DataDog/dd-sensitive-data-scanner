@@ -1,3 +1,4 @@
+#[cfg(not(target_arch = "wasm32"))]
 use crate::match_validation::config::{InternalMatchValidationType, MatchValidationType};
 use crate::scanner::error::CreateScannerError;
 use crate::scanner::CompiledRuleDyn;
@@ -10,8 +11,10 @@ pub trait RuleConfig: Send + Sync {
         label: Labels,
     ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError>;
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_internal_match_validation_type(&self) -> Option<InternalMatchValidationType> {
         self.get_match_validation_type()
             .map(|x| x.get_internal_match_validation_type())
