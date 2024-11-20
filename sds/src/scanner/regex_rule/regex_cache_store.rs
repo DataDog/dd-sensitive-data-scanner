@@ -4,17 +4,20 @@ use lazy_static::lazy_static;
 use regex_automata::meta::Regex as MetaRegex;
 use slotmap::SecondaryMap;
 use std::sync::Arc;
+extern crate num_cpus;
 
 lazy_static! {
-    static ref REGEX_CACHE_STORE: Arc<SharedPool<Box<RegexCaches>>> =
-        Arc::new(SharedPool::new(|| Box::new(RegexCaches::new())));
+    static ref REGEX_CACHE_STORE: Arc<SharedPool<Box<RegexCaches>>> = Arc::new(SharedPool::new(
+        Box::new(|| Box::new(RegexCaches::new())),
+        num_cpus::get()
+    ));
 }
 
 pub fn access_regex_caches<T>(func: impl FnOnce(&mut RegexCaches) -> T) -> T {
     // This function isn't strictly necessary, but it makes it easier to change the implementation
     // later
     let mut caches = REGEX_CACHE_STORE.get();
-    func(&mut caches)
+    func(caches.get_ref())
 }
 
 pub struct RegexCaches {

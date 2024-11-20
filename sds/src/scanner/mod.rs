@@ -81,6 +81,7 @@ pub trait CompiledRuleDyn: Send + Sync {
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &[usize],
         scanner_labels: &Labels,
+        should_kws_match_event_paths: bool,
     );
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
@@ -135,6 +136,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &[usize],
         scanner_labels: &Labels,
+        should_kws_match_event_paths: bool,
     ) {
         let group_data_any = group_data
             .entry(TypeId::of::<T::GroupData>())
@@ -160,6 +162,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
             excluded_matches,
             match_emitter,
             true_positive_rule_idx,
+            should_kws_match_event_paths,
         )
     }
 
@@ -235,6 +238,7 @@ pub trait CompiledRule: Send + Sync {
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &[usize],
+        should_kws_match_event_paths: bool,
     );
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
@@ -786,6 +790,9 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     &mut emitter,
                     true_positive_rule_idx,
                     &self.scanner.labels,
+                    self.scanner
+                        .scanner_features
+                        .should_keywords_match_event_paths,
                 );
             }
         });
@@ -943,6 +950,7 @@ mod test {
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
             _true_positive_rule_idx: &[usize],
+            _should_kws_match_event_paths: bool,
         ) {
             match_emitter.emit(StringMatch { start: 10, end: 16 });
         }
@@ -2026,9 +2034,6 @@ mod test {
         ]));
 
         let matches = scanner.scan(&mut content, vec![]);
-
-        // The match from the "test" field (which is excluded) is the same as the match from "message", so it is
-        // treated as a false positive.
         assert_eq!(matches.len(), 1);
     }
 
@@ -2345,6 +2350,29 @@ mod test {
 
         let mut content = " host      x".to_string();
         assert_eq!(scanner.scan(&mut content, vec![]).len(), 1);
+    }
+
+    #[test]
+    fn should_verify_included_keywords_on_path_even_if_included_keywords_are_in_string() {
+        let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 10,
+                included_keywords: vec!["hello".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build()])
+        .with_keywords_should_match_event_paths(true)
+        .build()
+        .unwrap();
+
+        let mut event = SimpleEvent::Map(BTreeMap::from([(
+            "hello".to_string(),
+            SimpleEvent::String("hello [more than ten characters] world".to_string()),
+        )]));
+
+        // Even though the included keywords are too far from the match in the string
+        // the keyword is present in the path and that should validate the match.
+        assert_eq!(scanner.scan(&mut event, vec![]).len(), 1);
     }
 
     #[test]

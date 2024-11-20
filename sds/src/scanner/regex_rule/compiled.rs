@@ -1,8 +1,8 @@
 #[cfg(not(target_arch = "wasm32"))]
 use crate::match_validation::config::{InternalMatchValidationType, MatchValidationType};
 use crate::proximity_keywords::{
-    get_prefix_start, is_index_within_prefix, CompiledExcludedProximityKeywords,
-    CompiledIncludedProximityKeywords,
+    contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
+    CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
 };
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::regex_store::SharedRegex;
@@ -54,7 +54,7 @@ impl CompiledRule for RegexCompiledRule {
     fn get_string_matches(
         &self,
         content: &str,
-        _path: &Path,
+        path: &Path,
         regex_caches: &mut RegexCaches,
         _group_data: &mut (),
         _group_config: &(),
@@ -63,17 +63,20 @@ impl CompiledRule for RegexCompiledRule {
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &[usize],
+        should_kws_match_event_paths: bool,
     ) {
         match self.included_keywords {
             Some(ref included_keywords) => {
                 self.get_string_matches_with_included_keywords(
                     content,
+                    path,
                     regex_caches,
                     exclusion_check,
                     excluded_matches,
                     match_emitter,
                     true_positive_rule_idx,
                     included_keywords,
+                    should_kws_match_event_paths,
                 );
             }
             None => {
@@ -125,12 +128,14 @@ impl RegexCompiledRule {
     fn get_string_matches_with_included_keywords(
         &self,
         content: &str,
+        path: &Path,
         regex_caches: &mut RegexCaches,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         true_positive_rule_idx: &[usize],
         included_keywords: &CompiledIncludedProximityKeywords,
+        should_kws_match_event_paths: bool,
     ) {
         if true_positive_rule_idx.contains(&self.rule_index) {
             // since the path contains a match, we can skip future included keyword checks
@@ -195,6 +200,43 @@ impl RegexCompiledRule {
             // no more "true positive" matches were found in the entire string, so there's no need
             // to continue scanning for included keywords.
             break;
+        }
+
+        if should_kws_match_event_paths {
+            let mut has_verified_kws_in_path: Option<bool> = None;
+
+            {
+                let input = Input::new(content);
+                if self
+                    .regex
+                    .search_with(regex_caches.get(&self.regex), &input)
+                    .is_some()
+                {
+                    has_verified_kws_in_path = Some(contains_keyword_in_path(
+                        &path.sanitize(),
+                        &included_keywords.keywords_pattern,
+                    ))
+                }
+            };
+
+            if has_verified_kws_in_path.is_none() || has_verified_kws_in_path.is_some_and(|x| !x) {
+                // We don't deal with true positives is in this case, because keywords don't match the path.
+                // Return early.
+                return;
+            }
+
+            let true_positive_search = self.true_positive_matches(
+                content,
+                0,
+                regex_caches.get(&self.regex),
+                false,
+                exclusion_check,
+                excluded_matches,
+            );
+
+            for string_match in true_positive_search {
+                match_emitter.emit(string_match);
+            }
         }
     }
 
