@@ -6,6 +6,7 @@ use crate::match_validation::{
     config::InternalMatchValidationType, config::MatchValidationType, match_status::MatchStatus,
     match_validator::MatchValidator,
 };
+#[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::*;
 
 #[cfg(not(target_arch = "wasm32"))]
