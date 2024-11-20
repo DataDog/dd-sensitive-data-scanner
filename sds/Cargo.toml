@@ -62,7 +62,6 @@ luhn = "1.0.1"
 serde_json = "1.0.114"
 serde_test = "1.0.176"
 httpmock = "0.7.0"
-tokio = { version = "1", features = ["rt"] }
 dd-sds = { path = ".", features = ["bench"] }
 threadpool = "1.8.1"
 
