@@ -127,9 +127,11 @@ impl RegexStore {
             let shared_regex = Arc::new(regex);
 
             let regex_cache = shared_regex.create_cache();
+            let cache_size = regex_cache.memory_usage() + std::mem::size_of::<Cache>();
+            GLOBAL_STATS.add_total_regex_cache(cache_size as i64);
             let cache_key = self.key_map.insert(WeakSharedRegex {
                 regex: Arc::downgrade(&shared_regex),
-                cache_size: regex_cache.memory_usage() + std::mem::size_of::<Cache>(),
+                cache_size,
             });
             if let Some(old_cache_key) = self.pattern_index.insert(pattern.to_owned(), cache_key) {
                 // cleanup old value (which must be a "dead" reference since `get` returned None)
