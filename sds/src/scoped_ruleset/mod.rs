@@ -86,7 +86,7 @@ impl ScopedRuleSet {
             path: Path::root(),
             bool_set,
             add_implicit_index_wildcards: self.add_implicit_index_wildcards,
-            should_keywords_match_event_paths: self.should_keywords_match_event_paths,
+            // should_keywords_match_event_paths: self.should_keywords_match_event_paths,
         };
 
         event.visit_event(&mut visitor)
@@ -179,7 +179,6 @@ struct ScopedRuledSetEventVisitor<'a, C> {
     bool_set: Option<BoolSet>,
 
     add_implicit_index_wildcards: bool,
-    should_keywords_match_event_paths: bool,
 }
 
 impl<'path, C> EventVisitor<'path> for ScopedRuledSetEventVisitor<'path, C>
@@ -215,9 +214,11 @@ where
         }
 
         // Sanitize the segment and push it. If the segment is an Index, it will push None.
-        self.sanitized_segments_until_node.push(segment.sanitize());
+        // I'm testing another way of performing the included keywords on path, so I simply push None here.
+        self.sanitized_segments_until_node.push(None);
 
-        let true_positive_rules_count = if self.should_keywords_match_event_paths {
+        // I'm testing another way of performing the included keywords on path feature, so this will be cleaned soon.
+        let true_positive_rules_count = if false {
             let mut total_len: usize = self
                 .sanitized_segments_until_node
                 .iter()
