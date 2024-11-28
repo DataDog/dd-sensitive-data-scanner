@@ -37,7 +37,7 @@ iban_validate = "4"
 # This is deprecated and may switch to `serde_yml` in the future. Waiting for it to mature a bit first.
 serde_yaml = "0.9.34"
 lazy_static = "1.5.0"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "charset", "http2", "macos-system-configuration", "rustls-tls-native-roots"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "charset", "http2", "rustls-tls-native-roots"] }
 aws-sign-v4 = "0.3.0"
 chrono = { version = "0.4", features = ["serde"] }
 slotmap = "1.0.7"
