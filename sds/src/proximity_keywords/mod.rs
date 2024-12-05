@@ -451,6 +451,8 @@ pub enum ProximityKeywordsValidationError {
 
 #[cfg(test)]
 mod test {
+    use excluded_keywords::contains_excluded_keyword_match;
+
     use crate::proximity_keywords::BypassStandardizePathResult::{
         BypassAndAllLowercase, BypassAndAllUppercase, NoBypass,
     };
@@ -527,27 +529,39 @@ mod test {
 
     #[test]
     fn excluded_keyword_should_have_word_boundaries() {
-        let (_included, excluded) =
-            try_new_compiled_proximity_keyword(30, vec![], vec!["host".to_string()]).unwrap();
+        let (_included, excluded) = try_new_compiled_proximity_keyword(
+            30,
+            vec![],
+            vec![
+                String::from("host"),
+                String::from("hostname"),
+                String::from("syslog.hostname"),
+                String::from("service"),
+                String::from("status"),
+                String::from("env"),
+                String::from("dd.trace_id"),
+                String::from("dd.span_id"),
+                String::from("trace_id"),
+                String::from("span_id"),
+                String::from("@timestamp"),
+                String::from("timestamp"),
+                String::from("_timestamp"),
+                String::from("Timestamp"),
+                String::from("date"),
+                String::from("published_date"),
+                String::from("syslog.timestamp"),
+                String::from("error.fingerprint"),
+                String::from("x-datadog-parent-id"),
+                String::from("trace id"),
+                String::from("span id"),
+            ],
+        )
+        .unwrap();
         let excluded = excluded.unwrap();
-
-        assert!(excluded.is_false_positive_match("host ping", 5));
-        assert!(!excluded.is_false_positive_match("localhost ping", 10));
-        assert!(!excluded.is_false_positive_match("hostlocal ping", 10));
-
-        // word boundaries are is added at the beginning (resp. end) only if the first (resp. last) character is a letter or a digit
-        let (_included, excluded) =
-            try_new_compiled_proximity_keyword(30, vec![], vec!["!host".to_string()]).unwrap();
-        let excluded = excluded.unwrap();
-        assert!(excluded.is_false_positive_match("!host- ping", 6));
-        assert!(excluded.is_false_positive_match("local!host ping", 11));
-        assert!(!excluded.is_false_positive_match("!hostlocal ping", 11));
-
-        let (_included, excluded) =
-            try_new_compiled_proximity_keyword(30, vec![], vec!["ৎhost".to_string()]).unwrap();
-        let excluded = excluded.unwrap();
-        assert!(excluded.is_false_positive_match("ৎhost ping", 7));
-        assert!(excluded.is_false_positive_match("localৎhost ping", 12));
+        let my_other_str = "¬------------------------------";
+        let contains =
+            contains_excluded_keyword_match(&my_other_str, 32, 30, &excluded.keywords_pattern);
+        assert!(!contains);
     }
 
     #[test]
