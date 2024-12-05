@@ -35,6 +35,12 @@ fn contains_excluded_keyword_match(
     look_ahead_char_count: usize,
     regex: &ProximityKeywordsRegex,
 ) -> bool {
+    println!("content: {}", content);
+    println!("match_start: {}", match_start);
+    println!("look_ahead_char_count: {}", look_ahead_char_count);
+    println!("content: {}", content);
+    println!("regex: {:?}", regex);
+
     let prefix_start_info = get_prefix_start(
         match_start,
         // Adding 1 to the start to account for assertion checking
