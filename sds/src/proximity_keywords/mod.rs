@@ -106,9 +106,20 @@ pub fn contains_keyword_in_path(path: &str, regex: &ProximityKeywordsRegex) -> b
 }
 
 fn next_char_index(content: &str, start: usize) -> Option<usize> {
+    println!(
+        "Using {} to determine what the next char is",
+        &content[start..]
+    );
     content[start..]
         .char_indices()
         .nth(1)
+        .map(|(i, _c)| start + i)
+}
+
+fn my_next_char_index(content: &str, start: usize) -> Option<usize> {
+    content[start..]
+        .char_indices()
+        .nth(0)
         .map(|(i, _c)| start + i)
 }
 
