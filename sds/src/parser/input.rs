@@ -14,13 +14,13 @@ pub struct Input<'a> {
     pub depth: usize,
 }
 
-impl<'a> InputLength for Input<'a> {
+impl InputLength for Input<'_> {
     fn input_len(&self) -> usize {
         self.value.len()
     }
 }
 
-impl<'a> InputTake for Input<'a> {
+impl InputTake for Input<'_> {
     fn take(&self, count: usize) -> Self {
         Self {
             value: self.value.take(count),
@@ -68,7 +68,7 @@ impl<'a> InputIter for Input<'a> {
     }
 }
 
-impl<'a> UnspecializedInput for Input<'a> {
+impl UnspecializedInput for Input<'_> {
     // Automatically implements InputTakeAtPosition and Compare<Self>
 }
 
@@ -93,7 +93,7 @@ impl<'a> From<(&'a str, usize)> for Input<'a> {
     }
 }
 
-impl<'a> Slice<RangeFrom<usize>> for Input<'a> {
+impl Slice<RangeFrom<usize>> for Input<'_> {
     fn slice(&self, range: RangeFrom<usize>) -> Self {
         Self {
             value: self.value.slice(range),
@@ -102,7 +102,7 @@ impl<'a> Slice<RangeFrom<usize>> for Input<'a> {
     }
 }
 
-impl<'a> Slice<RangeTo<usize>> for Input<'a> {
+impl Slice<RangeTo<usize>> for Input<'_> {
     fn slice(&self, range: RangeTo<usize>) -> Self {
         Self {
             value: self.value.slice(range),
@@ -111,7 +111,7 @@ impl<'a> Slice<RangeTo<usize>> for Input<'a> {
     }
 }
 
-impl<'a> Offset for Input<'a> {
+impl Offset for Input<'_> {
     fn offset(&self, second: &Self) -> usize {
         self.value.offset(second.value)
     }

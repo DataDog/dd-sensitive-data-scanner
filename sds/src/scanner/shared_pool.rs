@@ -20,8 +20,8 @@ pub trait AutoStacksSizeGuard<T> {
     fn get_ref(&mut self) -> &mut T;
 }
 
-impl<'a, T: Send, const MAX_POOL_STACKS: usize> AutoStacksSizeGuard<T>
-    for PoolGuard<'a, T, CachePoolFn<T>, MAX_POOL_STACKS>
+impl<T: Send, const MAX_POOL_STACKS: usize> AutoStacksSizeGuard<T>
+    for PoolGuard<'_, T, CachePoolFn<T>, MAX_POOL_STACKS>
 {
     fn get_ref(&mut self) -> &mut T {
         self.deref_mut()

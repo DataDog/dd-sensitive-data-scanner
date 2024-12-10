@@ -1,6 +1,5 @@
 /// This allows keeping track of multiple (contiguous) boolean flags,
 /// and efficiently resetting all of them.
-
 pub struct BoolSet {
     rule_used: Vec<bool>,
 }

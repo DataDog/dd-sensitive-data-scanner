@@ -19,7 +19,7 @@ pub enum PathSegment<'a> {
     Index(usize),
 }
 
-impl<'a> Path<'a> {
+impl Path<'_> {
     /// An empty path - pointing to the root.
     pub fn root() -> Self {
         Self { segments: vec![] }
@@ -131,7 +131,7 @@ impl<'a> PathSegment<'a> {
     }
 }
 
-impl<'a> Debug for Path<'a> {
+impl Debug for Path<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(self, f)
     }
@@ -139,7 +139,7 @@ impl<'a> Debug for Path<'a> {
 
 // Note: This format isn't great, some indices / fields can collide, and fields aren't escaped.
 // It's kept like this to match the existing "logs-backend" behavior.
-impl<'a> Display for Path<'a> {
+impl Display for Path<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for (i, segment) in self.segments.iter().enumerate() {
             match segment {

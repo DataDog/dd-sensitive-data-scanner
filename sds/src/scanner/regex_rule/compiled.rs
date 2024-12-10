@@ -266,7 +266,7 @@ pub struct TruePositiveSearch<'a> {
     excluded_matches: &'a mut AHashSet<String>,
 }
 
-impl<'a> Iterator for TruePositiveSearch<'a> {
+impl Iterator for TruePositiveSearch<'_> {
     type Item = StringMatch;
 
     fn next(&mut self) -> Option<Self::Item> {
