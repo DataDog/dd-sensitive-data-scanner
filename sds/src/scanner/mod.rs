@@ -917,7 +917,7 @@ mod test {
 
         fn create_group_data(_: &Labels) {}
         fn create_group_config() {}
-        fn create_rule_scan_cache() -> () {}
+        fn create_rule_scan_cache() {}
 
         fn get_string_matches(
             &self,

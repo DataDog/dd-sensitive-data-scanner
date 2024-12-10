@@ -23,7 +23,7 @@ pub struct IncludedKeywordSearch<'a> {
     start: usize,
 }
 
-impl<'a> IncludedKeywordSearch<'a> {
+impl IncludedKeywordSearch<'_> {
     pub fn skip_to(&mut self, start: usize) {
         if start > self.start {
             self.start = start;
