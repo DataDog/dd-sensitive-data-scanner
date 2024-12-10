@@ -59,7 +59,6 @@ impl CompiledRule for RegexCompiledRule {
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        true_positive_rule_idx: &[usize],
         should_kws_match_event_paths: bool,
     ) {
         match self.included_keywords {
@@ -71,7 +70,6 @@ impl CompiledRule for RegexCompiledRule {
                     exclusion_check,
                     excluded_matches,
                     match_emitter,
-                    true_positive_rule_idx,
                     included_keywords,
                     should_kws_match_event_paths,
                 );
@@ -128,26 +126,9 @@ impl RegexCompiledRule {
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        true_positive_rule_idx: &[usize],
         included_keywords: &CompiledIncludedProximityKeywords,
         should_kws_match_event_paths: bool,
     ) {
-        if true_positive_rule_idx.contains(&self.rule_index) {
-            // since the path contains a match, we can skip future included keyword checks
-            let true_positive_search = self.true_positive_matches(
-                content,
-                0,
-                regex_caches.get(&self.regex),
-                false,
-                exclusion_check,
-                excluded_matches,
-            );
-            for string_match in true_positive_search {
-                match_emitter.emit(string_match);
-            }
-            return;
-        }
-
         let mut included_keyword_matches = included_keywords.keyword_matches(content);
 
         'included_keyword_search: while let Some(included_keyword_match_start) =
