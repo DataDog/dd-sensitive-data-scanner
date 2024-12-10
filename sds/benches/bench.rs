@@ -59,7 +59,6 @@ pub fn scoped_ruleset(c: &mut Criterion) {
                     });
                     false
                 }
-
             }
 
             fast_rule_set.visit_string_rule_combinations(

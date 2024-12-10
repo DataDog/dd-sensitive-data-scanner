@@ -18,7 +18,7 @@ use std::any::{Any, TypeId};
 use std::sync::Arc;
 
 use self::metrics::ScannerMetrics;
-use crate::proximity_keywords::{CompiledIncludedProximityKeywords};
+use crate::proximity_keywords::CompiledIncludedProximityKeywords;
 use crate::scanner::config::RuleConfig;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::{access_regex_caches, RegexCaches};
@@ -1268,8 +1268,8 @@ mod test {
         let scanner = build_test_scanner(true);
 
         let mut content = SimpleEvent::Map(BTreeMap::from([(
-                "accessKEY".to_string(),
-                SimpleEvent::String("hello world".to_string()),
+            "accessKEY".to_string(),
+            SimpleEvent::String("hello world".to_string()),
         )]));
 
         let matches = scanner.scan(&mut content, vec![]);
