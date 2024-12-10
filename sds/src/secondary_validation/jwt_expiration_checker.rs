@@ -122,6 +122,6 @@ mod tests {
     fn test_is_invalid_match_for_invalid_jwt() {
         let json = "invalid_jwt";
         let checker = JwtExpirationChecker;
-        assert!(!checker.is_valid_match(&json));
+        assert!(!checker.is_valid_match(json));
     }
 }

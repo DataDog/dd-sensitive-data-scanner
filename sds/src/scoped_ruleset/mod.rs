@@ -97,7 +97,7 @@ pub struct ExclusionCheck<'a> {
     tree_nodes: &'a [ActiveRuleTree<'a>],
 }
 
-impl<'a> ExclusionCheck<'a> {
+impl ExclusionCheck<'_> {
     pub fn is_excluded(&self, rule_index: usize) -> bool {
         for include_node in self.tree_nodes {
             for change in &include_node.rule_tree.rule_changes {
@@ -303,7 +303,7 @@ pub struct RuleIndexVisitor<'a> {
     used_rule_set: Option<&'a mut BoolSet>,
 }
 
-impl<'a> RuleIndexVisitor<'a> {
+impl RuleIndexVisitor<'_> {
     /// Visits all rules associated with the current string. This may
     /// potentially return no rule indices at all.
     pub fn visit_rule_indices(&mut self, mut visit: impl FnMut(usize)) {
