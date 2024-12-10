@@ -265,6 +265,10 @@ mod test {
             Path::from(vec!["hello_world-of-".into(), "/chickens_/".into()]).sanitize(),
             "hello.world.of-./chickens./"
         );
+        assert_eq!(
+            Path::from(vec!["helloChicken".into()]).sanitize(),
+            "hello.chicken"
+        );
     }
 
     #[test]

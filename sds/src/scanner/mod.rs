@@ -77,7 +77,6 @@ pub trait CompiledRuleDyn: Send + Sync {
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        true_positive_rule_idx: &[usize],
         scanner_labels: &Labels,
         should_kws_match_event_paths: bool,
     );
@@ -130,7 +129,6 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        true_positive_rule_idx: &[usize],
         scanner_labels: &Labels,
         should_kws_match_event_paths: bool,
     ) {
@@ -157,7 +155,6 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
             exclusion_check,
             excluded_matches,
             match_emitter,
-            true_positive_rule_idx,
             should_kws_match_event_paths,
         )
     }
@@ -231,7 +228,6 @@ pub trait CompiledRule: Send + Sync {
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        true_positive_rule_idx: &[usize],
         should_kws_match_event_paths: bool,
     );
 
@@ -733,7 +729,6 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         content: &str,
         mut rule_visitor: crate::scoped_ruleset::RuleIndexVisitor,
         exclusion_check: ExclusionCheck<'b>,
-        true_positive_rule_idx: &[usize],
     ) -> bool {
         // matches for a single path
         let mut path_rules_matches = vec![];
@@ -768,7 +763,6 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
-                    true_positive_rule_idx,
                     &self.scanner.labels,
                     self.scanner
                         .scanner_features
@@ -925,7 +919,6 @@ mod test {
             _exclusion_check: &ExclusionCheck<'_>,
             _excluded_matches: &mut AHashSet<String>,
             match_emitter: &mut dyn MatchEmitter,
-            _true_positive_rule_idx: &[usize],
             _should_kws_match_event_paths: bool,
         ) {
             match_emitter.emit(StringMatch { start: 10, end: 16 });
@@ -1284,6 +1277,27 @@ mod test {
                 "KEY".to_string(),
                 SimpleEvent::String("hello world".to_string()),
             )])),
+        )]));
+
+        let matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 1);
+    }
+
+    #[test]
+    fn test_included_keywords_match_path_camel_case() {
+        let scanner = build_test_scanner(true);
+
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
+                "accessKEY".to_string(),
+                SimpleEvent::String("hello world".to_string()),
+        )]));
+
+        let matches = scanner.scan(&mut content, vec![]);
+        assert_eq!(matches.len(), 1);
+
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
+            "AccessKey".to_string(),
+            SimpleEvent::String("hello world".to_string()),
         )]));
 
         let matches = scanner.scan(&mut content, vec![]);
