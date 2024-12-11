@@ -116,6 +116,7 @@ impl<E: Encoding> Event for BinaryEvent<E> {
 pub fn encode_response(
     storage: &BTreeMap<Path, (bool, String)>,
     matches: &[RuleMatch],
+    return_matches: bool,
 ) -> Option<Vec<u8>> {
     if matches.is_empty() {
         return None;
@@ -128,13 +129,13 @@ pub fn encode_response(
         }
     }
     for rule_match in matches {
-        encode_match(&mut out, rule_match);
+        encode_match(&mut out, rule_match, return_matches);
     }
 
     Some(out)
 }
 
-fn encode_match(out: &mut Vec<u8>, rule_match: &RuleMatch) {
+fn encode_match(out: &mut Vec<u8>, rule_match: &RuleMatch, return_matches: bool) {
     out.push(5);
     out.extend((rule_match.rule_index as u32).to_be_bytes());
 
@@ -149,6 +150,16 @@ fn encode_match(out: &mut Vec<u8>, rule_match: &RuleMatch) {
     out.extend((rule_match.start_index as u32).to_be_bytes());
     out.extend((rule_match.end_index_exclusive as u32).to_be_bytes());
     out.extend((rule_match.shift_offset as u32).to_be_bytes());
+
+    // This is a breaking change, so it is opt-in for now until all bindings support it.
+    if return_matches {
+        let match_value = rule_match
+            .match_value
+            .as_ref()
+            .map(|x| x.as_bytes())
+            .unwrap_or(&[]);
+        encode_bytes(out, match_value);
+    }
 }
 
 fn encode_path(out: &mut Vec<u8>, path: &Path) {
