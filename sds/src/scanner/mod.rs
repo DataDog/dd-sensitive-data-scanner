@@ -635,6 +635,11 @@ impl ScannerBuilder<'_> {
         self
     }
 
+    pub fn with_return_matches(mut self, value: bool) -> Self {
+        self.scanner_features.return_matches = value;
+        self
+    }
+
     /// Enables/Disables the Multipass V0 feature. This defaults to TRUE.
     /// Multipass V0 saves matches from excluded scopes, and marks any identical
     /// matches in included scopes as a false positive.

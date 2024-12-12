@@ -3,9 +3,9 @@ use std::ffi::c_void;
 use std::slice;
 use std::sync::Arc;
 
+use crate::convert_panic_to_go_error;
 use dd_sds::{Scanner, Utf8Encoding};
 use sds_bindings_utils::{encode_response, BinaryEvent};
-use crate::{convert_panic_to_go_error};
 
 #[no_mangle]
 pub extern "C" fn scan(
@@ -27,7 +27,7 @@ pub extern "C" fn scan(
 
         let matches = scanner.scan(&mut event, vec![]);
 
-        if let Some(encoded_response) = encode_response(&event.storage, &matches) {
+        if let Some(encoded_response) = encode_response(&event.storage, &matches, false) {
             let mut str = std::mem::ManuallyDrop::new(encoded_response);
             let len = str.len() as i64;
             let cap = str.capacity() as i64;
