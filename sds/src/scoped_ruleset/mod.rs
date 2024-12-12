@@ -1,12 +1,10 @@
 mod bool_set;
 
 use crate::event::{EventVisitor, VisitStringResult};
-use crate::proximity_keywords::UNIFIED_LINK_CHAR;
 use crate::scanner::scope::Scope;
 use crate::scoped_ruleset::bool_set::BoolSet;
 use crate::{Event, Path, PathSegment};
 use ahash::AHashMap;
-use std::borrow::Cow;
 
 /// A `ScopedRuleSet` determines which rules will be used to scan each field of an event, and which
 /// paths are considered `excluded`.
@@ -77,11 +75,8 @@ impl ScopedRuleSet {
                 rule_tree: &self.tree,
                 index_wildcard_match: false,
             }],
-            true_positive_rule_idx: vec![],
-            sanitized_segments_until_node: vec![],
             active_node_counter: vec![NodeCounter {
                 active_tree_count: 1,
-                true_positive_rules_count: 0,
             }],
             path: Path::root(),
             bool_set,
@@ -122,14 +117,7 @@ pub trait ContentVisitor<'path> {
         content: &str,
         rules: RuleIndexVisitor,
         is_excluded: ExclusionCheck<'content_visitor>,
-        true_positive_rule_idx: &[usize],
     ) -> bool;
-
-    fn find_true_positive_rules_from_current_path(
-        &self,
-        sanitized_path: &str,
-        current_true_positive_rule_idx: &mut Vec<usize>,
-    ) -> usize;
 }
 
 // This is just a reference to a RuleTree with some additional information
@@ -146,10 +134,6 @@ struct NodeCounter {
     // list is the current number of active trees (n), which is the last
     // n trees in `tree_nodes`.
     active_tree_count: usize,
-    #[allow(dead_code)]
-    // This counts how many rule indices we have pushed at the given node.
-    // This helps remove the right number of elements when popping the segment.
-    true_positive_rules_count: usize,
 }
 
 struct ScopedRuledSetEventVisitor<'a, C> {
@@ -159,14 +143,6 @@ struct ScopedRuledSetEventVisitor<'a, C> {
     // This is a list of parent tree nodes, which is a list of all of the "active" rule changes.
     // If an "Add" exists for a rule in this list, it will be scanned. If a single "Remove" exists, it will cause the `ExclusionCheck` to return true.
     tree_nodes: Vec<ActiveRuleTree<'a>>,
-
-    #[allow(dead_code)]
-    // This is a list of rule indices that have been detected as true positives for the current path.
-    true_positive_rule_idx: Vec<usize>,
-
-    // This is a list of sanitized segments until the current node.
-    // It contains Options because the segments can be Indexes, not Fields. Fields have a path, Index don't and will result in None instead.
-    sanitized_segments_until_node: Vec<Option<Cow<'a, str>>>,
 
     // This is a counter that helps keep track of how many elements we have pushed
     // In the tree_nodes list and in the true_positive_rule_idx list
@@ -213,48 +189,9 @@ where
             }
         }
 
-        // Sanitize the segment and push it. If the segment is an Index, it will push None.
-        // I'm testing another way of performing the included keywords on path, so I simply push None here.
-        self.sanitized_segments_until_node.push(None);
-
-        // I'm testing another way of performing the included keywords on path feature, so this will be cleaned soon.
-        let true_positive_rules_count = if false {
-            let mut total_len: usize = self
-                .sanitized_segments_until_node
-                .iter()
-                .flatten()
-                .map(|x| x.len() + 1)
-                .sum();
-
-            // This will remove 1 to the total_len only if the result is >= 0
-            total_len = total_len.saturating_sub(1);
-
-            let mut current_sanitized_path = String::with_capacity(total_len);
-            for (i, segment) in self
-                .sanitized_segments_until_node
-                .iter()
-                .flatten()
-                .enumerate()
-            {
-                if i != 0 {
-                    current_sanitized_path.push(UNIFIED_LINK_CHAR);
-                }
-                current_sanitized_path.push_str(segment.as_ref());
-            }
-
-            self.content_visitor
-                .find_true_positive_rules_from_current_path(
-                    current_sanitized_path.as_str(),
-                    &mut self.true_positive_rule_idx,
-                )
-        } else {
-            0
-        };
-
         // The new number of active trees is the number of new trees pushed
         self.active_node_counter.push(NodeCounter {
             active_tree_count: self.tree_nodes.len() - tree_nodes_len,
-            true_positive_rules_count,
         });
 
         self.path.segments.push(segment);
@@ -266,12 +203,6 @@ where
             // The rules from the last node are no longer active, so remove them.
             let _popped = self.tree_nodes.pop();
         }
-        for _ in 0..node_counter.true_positive_rules_count {
-            // The true positive rule indices from the last node are no longer active, remove them.
-            let _popped = self.true_positive_rule_idx.pop();
-        }
-        // Pop the sanitized segment
-        self.sanitized_segments_until_node.pop();
         self.path.segments.pop();
     }
 
@@ -286,7 +217,6 @@ where
             ExclusionCheck {
                 tree_nodes: &self.tree_nodes,
             },
-            &self.true_positive_rule_idx,
         );
         if let Some(bool_set) = &mut self.bool_set {
             bool_set.reset();
@@ -425,7 +355,6 @@ mod test {
                 content: &str,
                 mut rule_iter: RuleIndexVisitor,
                 exclusion_check: ExclusionCheck<'content_visitor>,
-                _true_positive_rule_idx: &[usize],
             ) -> bool {
                 let mut rules = vec![];
                 rule_iter.visit_rule_indices(|rule_index| {
@@ -441,14 +370,6 @@ mod test {
                     rules,
                 });
                 true
-            }
-
-            fn find_true_positive_rules_from_current_path(
-                &self,
-                _sanitized_path: &str,
-                _current_true_positive_rule_idx: &mut Vec<usize>,
-            ) -> usize {
-                0
             }
         }
 

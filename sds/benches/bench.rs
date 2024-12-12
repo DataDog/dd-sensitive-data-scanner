@@ -53,20 +53,11 @@ pub fn scoped_ruleset(c: &mut Criterion) {
                     _content: &str,
                     mut rules: RuleIndexVisitor,
                     _check: ExclusionCheck,
-                    _current: &[usize],
                 ) -> bool {
                     rules.visit_rule_indices(|_rule_index| {
                         *self.num_visited += 1;
                     });
                     false
-                }
-
-                fn find_true_positive_rules_from_current_path(
-                    &self,
-                    sanitized_path: &str,
-                    current_true_positive_rule_idx: &mut Vec<usize>,
-                ) -> usize {
-                    0
                 }
             }
 
