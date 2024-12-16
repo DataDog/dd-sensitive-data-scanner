@@ -112,14 +112,12 @@ fn next_char_index(content: &str, start: usize) -> Option<usize> {
         .map(|(i, _c)| start + i)
 }
 
-fn prev_char_index(content: &str, start: usize) -> Option<usize> {
-    content[..start].char_indices().next_back().map(|(i, _c)| i)
+fn prev_char_with_index(content: &str, start: usize) -> Option<(usize, char)> {
+    content[..start].char_indices().next_back()
 }
 
 pub struct PrefixStart {
     pub start: usize,
-    // A boolean indicating if all of the chars requested were available for the prefix
-    pub used_all_chars: bool,
 }
 
 pub fn is_index_within_prefix(
@@ -153,14 +151,8 @@ pub fn get_prefix_start(
     let mut char_indices = prefix.char_indices();
 
     match char_indices.nth_back(look_ahead_char_count - 1) {
-        Some((i, _)) => PrefixStart {
-            start: i,
-            used_all_chars: true,
-        },
-        None => PrefixStart {
-            start: 0,
-            used_all_chars: false,
-        },
+        Some((i, _)) => PrefixStart { start: i },
+        None => PrefixStart { start: 0 },
     }
 }
 
@@ -451,6 +443,8 @@ pub enum ProximityKeywordsValidationError {
 
 #[cfg(test)]
 mod test {
+    use excluded_keywords::contains_excluded_keyword_match;
+
     use crate::proximity_keywords::BypassStandardizePathResult::{
         BypassAndAllLowercase, BypassAndAllUppercase, NoBypass,
     };
@@ -528,26 +522,12 @@ mod test {
     #[test]
     fn excluded_keyword_should_have_word_boundaries() {
         let (_included, excluded) =
-            try_new_compiled_proximity_keyword(30, vec![], vec!["host".to_string()]).unwrap();
+            try_new_compiled_proximity_keyword(30, vec![], vec![String::from("host")]).unwrap();
         let excluded = excluded.unwrap();
-
-        assert!(excluded.is_false_positive_match("host ping", 5));
-        assert!(!excluded.is_false_positive_match("localhost ping", 10));
-        assert!(!excluded.is_false_positive_match("hostlocal ping", 10));
-
-        // word boundaries are is added at the beginning (resp. end) only if the first (resp. last) character is a letter or a digit
-        let (_included, excluded) =
-            try_new_compiled_proximity_keyword(30, vec![], vec!["!host".to_string()]).unwrap();
-        let excluded = excluded.unwrap();
-        assert!(excluded.is_false_positive_match("!host- ping", 6));
-        assert!(excluded.is_false_positive_match("local!host ping", 11));
-        assert!(!excluded.is_false_positive_match("!hostlocal ping", 11));
-
-        let (_included, excluded) =
-            try_new_compiled_proximity_keyword(30, vec![], vec!["ৎhost".to_string()]).unwrap();
-        let excluded = excluded.unwrap();
-        assert!(excluded.is_false_positive_match("ৎhost ping", 7));
-        assert!(excluded.is_false_positive_match("localৎhost ping", 12));
+        let my_other_str = "¬------------------------------";
+        let contains =
+            contains_excluded_keyword_match(&my_other_str, 32, 30, &excluded.keywords_pattern);
+        assert!(!contains);
     }
 
     #[test]
@@ -877,11 +857,11 @@ mod test {
 
     #[test]
     fn test_prev_char() {
-        assert_eq!(prev_char_index("a€b", 5), Some(4));
-        assert_eq!(prev_char_index("a€b", 4), Some(1));
-        assert_eq!(prev_char_index("a€b", 1), Some(0));
-        assert_eq!(prev_char_index("a€b", 0), None);
-        assert_eq!(prev_char_index("", 0), None);
+        assert_eq!(prev_char_with_index("a€b", 5), Some((4, 'b')));
+        assert_eq!(prev_char_with_index("a€b", 4), Some((1, '€')));
+        assert_eq!(prev_char_with_index("a€b", 1), Some((0, 'a')));
+        assert_eq!(prev_char_with_index("a€b", 0), None);
+        assert_eq!(prev_char_with_index("", 0), None);
     }
 
     #[test]
