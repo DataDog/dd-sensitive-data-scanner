@@ -5,10 +5,10 @@
 
 mod encoding;
 mod event;
+mod event_json;
 mod match_action;
 
 #[cfg(any(test, feature = "testing", feature = "bench"))]
-mod event_json;
 mod match_validation;
 mod normalization;
 mod observability;
