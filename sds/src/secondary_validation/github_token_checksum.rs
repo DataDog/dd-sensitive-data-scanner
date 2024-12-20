@@ -20,11 +20,14 @@ impl Validator for GithubTokenChecksum {
             return false;
         }
 
-        // extract the payload (everything except the last 6 chars)
         let computed_checksum = crc32fast::hash(last_part[..last_part.len() - 6].as_bytes());
-        let computed_checksum_b62 = base62::encode(computed_checksum);
-        // check that the crc is the last 6 chars
-        computed_checksum_b62 == last_part[last_part.len() - 6..]
+        let checksum = base62::decode(last_part[last_part.len() - 6..].as_bytes());
+
+        if checksum.is_err() {
+            return false;
+        }
+
+        computed_checksum as u64 == checksum.unwrap() as u64
     }
 }
 
@@ -38,7 +41,10 @@ mod test {
             "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",
             "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",
             "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",
+            // long prefix
             "nawak_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",
+            // Example with zero padding
+            "b62_QdwULL38u41vs1OcAjhKqcaSZ9W63r0Zu4ln",
         ];
         for id in validids {
             assert!(GithubTokenChecksum.is_valid_match(id));
@@ -55,6 +61,8 @@ mod test {
             "ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V/",
             // No sep
             "ghpM7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V4",
+            // too short second part
+            "ghp_T4V4",
         ];
         for id in invalid_ids {
             assert!(!GithubTokenChecksum.is_valid_match(id));
