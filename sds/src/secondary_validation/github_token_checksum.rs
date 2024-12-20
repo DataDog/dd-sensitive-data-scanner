@@ -20,11 +20,14 @@ impl Validator for GithubTokenChecksum {
             return false;
         }
 
-        // extract the payload (everything except the last 6 chars)
         let computed_checksum = crc32fast::hash(last_part[..last_part.len() - 6].as_bytes());
-        let computed_checksum_b62 = base62::encode(computed_checksum);
-        // check that the crc is the last 6 chars
-        computed_checksum_b62 == last_part[last_part.len() - 6..]
+        let checksum = base62::decode(last_part[last_part.len() - 6..].as_bytes());
+
+        if checksum.is_err() {
+            return false;
+        }
+
+        computed_checksum as u64 == checksum.unwrap() as u64
     }
 }
 
