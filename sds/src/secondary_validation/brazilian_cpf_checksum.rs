@@ -13,8 +13,6 @@ impl Validator for BrazilianCpfChecksum {
             return false;
         }
 
-        // Check if all characters are digits except the last one
-        // Compute the sum to compute checksum later on
         let mut digit_idx = 0;
         let mut v1: u32 = 0;
         let mut v2: u32 = 0;
@@ -29,12 +27,10 @@ impl Validator for BrazilianCpfChecksum {
             }
             if let Some(x) = c.to_digit(10) {
                 v1 += x * (9 - (digit_idx % 10));
-                println!("v1 -> {} * (9 - ({} % 10)) -> {}", x, digit_idx, v1);
                 v2 += x * (9 - ((digit_idx + 1) % 10));
-                // println!("char: {}, idx: {}, digit_idx: {}", c, idx, digit_idx);
                 digit_idx += 1;
             } else {
-                println!("non digit char: {}", c);
+                // Non-digit char in a position that should be a digit
                 return false;
             }
         }
@@ -42,17 +38,10 @@ impl Validator for BrazilianCpfChecksum {
         v2 += v1 * 9;
         v2 = (v2 % 11) % 10;
 
-        for (idx, c) in regex_match.chars().enumerate() {
-            println!("idx: {}, c: {}", idx, c);
-        }
-
         let actual_v1 = regex_match.chars().nth(12).unwrap().to_digit(10).unwrap();
         let actual_v2 = regex_match.chars().nth(13).unwrap().to_digit(10).unwrap();
         if v1 != actual_v1 || v2 != actual_v2 {
-            println!(
-                "v1: {}, v2: {}, actual_v1: {}, actual_v2: {}",
-                v1, v2, actual_v1, actual_v2
-            );
+            // Checksum failed
             return false;
         }
         return true;
