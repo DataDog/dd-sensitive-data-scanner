@@ -51,7 +51,7 @@ impl Validator for BrazilianCpfChecksum {
 mod test {
     use crate::secondary_validation::*;
     #[test]
-    fn test_valid_brazilian_ids() {
+    fn test_valid_brazilian_cpf_ids() {
         let valid_ids = vec!["012.345.678-90", "083.358.948-25"];
         for id in valid_ids {
             assert!(BrazilianCpfChecksum.is_valid_match(id));
@@ -59,7 +59,7 @@ mod test {
     }
 
     #[test]
-    fn test_invalid_brazilian_ids() {
+    fn test_invalid_brazilian_cpf_ids() {
         let invalid_ids = vec![
             // wrong checksum
             "345.675.677-78",
