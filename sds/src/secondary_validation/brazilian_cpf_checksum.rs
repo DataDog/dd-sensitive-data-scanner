@@ -43,7 +43,7 @@ impl Validator for BrazilianCpfChecksum {
             // Checksum failed
             return false;
         }
-        return true;
+        true
     }
 }
 
