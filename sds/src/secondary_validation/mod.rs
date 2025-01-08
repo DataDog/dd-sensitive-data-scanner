@@ -55,8 +55,10 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::NirChecksum => NirChecksum.is_valid_match(regex_match),
             SecondaryValidator::JwtExpirationChecker => {
                 JwtExpirationChecker.is_valid_match(regex_match)
-            },
-            SecondaryValidator::BrazilianCpfChecksum => BrazilianCpfChecksum.is_valid_match(regex_match),
+            }
+            SecondaryValidator::BrazilianCpfChecksum => {
+                BrazilianCpfChecksum.is_valid_match(regex_match)
+            }
         }
     }
 }
