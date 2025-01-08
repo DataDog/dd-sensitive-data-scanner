@@ -4,7 +4,7 @@ pub struct BrazilianCnpjChecksum;
 
 const BRAZILIAN_CNPJ_LENGTH: usize = 18;
 // XX.XXX.XXX/YYYY-ZZ
-const BRAZILIAN_CNPJ_SEPARATOR_INDICES: &'static [usize] = &[2, 6, 10, 15];
+const BRAZILIAN_CNPJ_SEPARATOR_INDICES: &[usize] = &[2, 6, 10, 15];
 
 impl Validator for BrazilianCnpjChecksum {
     // https://pt.wikipedia.org/wiki/Cadastro_Nacional_da_Pessoa_Jur%C3%ADdica
