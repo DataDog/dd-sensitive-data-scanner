@@ -9,7 +9,6 @@ impl Validator for BrazilianCpfChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         // Check if the length of the ID is correct
         if regex_match.len() != BRAZILIAN_CPF_LENGTH {
-            println!("wrong length: {}", regex_match.len());
             return false;
         }
 
