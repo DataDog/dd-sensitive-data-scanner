@@ -3032,7 +3032,7 @@ mod test {
 
         #[test]
         fn test_regex_match_and_included_keyword_same_index() {
-            let email_rule = RegexRuleConfig::new("email.+")
+            let email_rule = RegexRuleConfig::new(".+")
                 .match_action(MatchAction::Redact {
                     replacement: "[REDACTED]".to_string(),
                 })
@@ -3045,6 +3045,7 @@ mod test {
 
             let scanner = ScannerBuilder::new(&[email_rule])
                 .with_keywords_should_match_event_paths(true)
+                .with_return_matches(true)
                 .build()
                 .unwrap();
             let mut content = SimpleEvent::Map(BTreeMap::from([(
@@ -3052,7 +3053,12 @@ mod test {
                 SimpleEvent::String("email=firstname.lastname@acme.com&page2".to_string()),
             )]));
             let matches = scanner.scan(&mut content, vec![]);
-            assert_eq!(matches.len(), 0);
+            assert_eq!(matches.len(), 1);
+
+            assert_eq!(
+                matches[0].match_value,
+                Some("=firstname.lastname@acme.com&page2".to_string())
+            );
         }
     }
 }
