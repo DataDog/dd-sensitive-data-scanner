@@ -136,7 +136,6 @@ impl RegexCompiledRule {
         {
             let true_positive_search = self.true_positive_matches(
                 content,
-                // 71,
                 included_keyword_match.end,
                 regex_caches.get(&self.regex),
                 false,
