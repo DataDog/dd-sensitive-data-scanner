@@ -126,6 +126,10 @@ pub fn is_index_within_prefix(
     target: usize,
     prefix_size: usize,
 ) -> bool {
+    println!("Content: {:?}", content);
+    println!("Prefix start: {:?}", prefix_start);
+    println!("Target: {:?}", target);
+    println!("Prefix size: {:?}", prefix_size);
     debug_assert!(target > prefix_start);
     debug_assert!(content.is_char_boundary(prefix_start));
     debug_assert!(content.is_char_boundary(target));
