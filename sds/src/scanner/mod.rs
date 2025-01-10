@@ -3029,5 +3029,36 @@ mod test {
 
             assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
         }
+
+        #[test]
+        fn test_regex_match_and_included_keyword_same_index() {
+            let email_rule = RegexRuleConfig::new(".+")
+                .match_action(MatchAction::Redact {
+                    replacement: "[REDACTED]".to_string(),
+                })
+                .proximity_keywords(ProximityKeywordsConfig {
+                    look_ahead_character_count: 30,
+                    included_keywords: vec!["email".to_string()],
+                    excluded_keywords: vec![],
+                })
+                .build();
+
+            let scanner = ScannerBuilder::new(&[email_rule])
+                .with_keywords_should_match_event_paths(true)
+                .with_return_matches(true)
+                .build()
+                .unwrap();
+            let mut content = SimpleEvent::Map(BTreeMap::from([(
+                "message".to_string(),
+                SimpleEvent::String("email=firstname.lastname@acme.com&page2".to_string()),
+            )]));
+            let matches = scanner.scan(&mut content, vec![]);
+            assert_eq!(matches.len(), 1);
+
+            assert_eq!(
+                matches[0].match_value,
+                Some("=firstname.lastname@acme.com&page2".to_string())
+            );
+        }
     }
 }
