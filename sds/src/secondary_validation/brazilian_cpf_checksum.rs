@@ -1,8 +1,10 @@
+use crate::secondary_validation::get_previous_digit;
 use crate::secondary_validation::Validator;
 
 pub struct BrazilianCpfChecksum;
 
 const BRAZILIAN_CPF_LENGTH: usize = 14;
+const BRAZILIAN_CPF_DIGIT_COUNT: usize = 11;
 
 impl Validator for BrazilianCpfChecksum {
     // https://pt.wikipedia.org/wiki/Cadastro_de_Pessoas_F%C3%ADsicas#C%C3%A1lculo_do_d%C3%ADgito_verificador
@@ -15,30 +17,34 @@ impl Validator for BrazilianCpfChecksum {
         let mut digit_idx = 0;
         let mut v1: u32 = 0;
         let mut v2: u32 = 0;
-        for (idx, c) in regex_match[..BRAZILIAN_CPF_LENGTH - 2]
-            .chars()
-            .rev()
-            .enumerate()
-        {
-            if idx % 4 == 0 {
-                // Skip the separator
-                continue;
-            }
-            if let Some(x) = c.to_digit(10) {
+        let mut content_to_scan = regex_match.chars();
+        // v1 and v2 are in order, but since we are scanning from the end, they retrieved in reverse-order
+        let actual_v2 = match get_previous_digit(&mut content_to_scan) {
+            Some(x) => x,
+            None => return false,
+        };
+        let actual_v1 = match get_previous_digit(&mut content_to_scan) {
+            Some(x) => x,
+            None => return false,
+        };
+        loop {
+            if let Some(x) = get_previous_digit(&mut content_to_scan) {
                 v1 += x * (9 - (digit_idx % 10));
                 v2 += x * (9 - ((digit_idx + 1) % 10));
                 digit_idx += 1;
             } else {
-                // Non-digit char in a position that should be a digit
-                return false;
+                // Non-digit char in a position that should be a digit as we expect
+                // to find all 9 digits (11 - 2 check digits)
+                if (digit_idx as usize) != BRAZILIAN_CPF_DIGIT_COUNT - 2 {
+                    return false;
+                }
+                break;
             }
         }
         v1 = (v1 % 11) % 10;
         v2 += v1 * 9;
         v2 = (v2 % 11) % 10;
 
-        let actual_v1 = regex_match.chars().nth(12).unwrap().to_digit(10).unwrap();
-        let actual_v2 = regex_match.chars().nth(13).unwrap().to_digit(10).unwrap();
         if v1 != actual_v1 || v2 != actual_v2 {
             // Checksum failed
             return false;
