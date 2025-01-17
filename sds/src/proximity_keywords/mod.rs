@@ -162,10 +162,6 @@ fn compile_keywords_to_ast(
     let (content_patterns, path_patterns) = keywords
         .iter()
         .map(|keyword| {
-            if keyword.chars().count() > look_ahead_character_count {
-                return Err(KeywordTooLong(look_ahead_character_count));
-            }
-
             let trimmed_keyword = keyword.trim().replace(remove_chars, "");
             if trimmed_keyword.is_empty() {
                 return Err(EmptyKeyword);
