@@ -50,12 +50,6 @@ pub fn compile_keywords_proximity_config(
     ),
     ProximityKeywordsValidationError,
 > {
-    if config.look_ahead_character_count == 0
-        || config.look_ahead_character_count > MAX_LOOK_AHEAD_CHARACTER_COUNT
-    {
-        return Err(InvalidLookAheadCharacterCount);
-    }
-
     let mut included_keywords = None;
     let mut excluded_keywords = None;
 
