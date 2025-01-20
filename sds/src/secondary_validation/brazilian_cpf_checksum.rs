@@ -3,16 +3,12 @@ use crate::secondary_validation::Validator;
 
 pub struct BrazilianCpfChecksum;
 
-const BRAZILIAN_CPF_LENGTH: usize = 14;
-const BRAZILIAN_CPF_DIGIT_COUNT: usize = 11;
+const BRAZILIAN_CPF_DIGIT_COUNT: u32 = 11;
 
 impl Validator for BrazilianCpfChecksum {
     // https://pt.wikipedia.org/wiki/Cadastro_de_Pessoas_F%C3%ADsicas#C%C3%A1lculo_do_d%C3%ADgito_verificador
     fn is_valid_match(&self, regex_match: &str) -> bool {
         // Check if the length of the ID is correct
-        if regex_match.len() != BRAZILIAN_CPF_LENGTH {
-            return false;
-        }
 
         let mut digit_idx = 0;
         let mut v1: u32 = 0;
@@ -27,19 +23,15 @@ impl Validator for BrazilianCpfChecksum {
             Some(x) => x,
             None => return false,
         };
-        loop {
-            if let Some(x) = get_previous_digit(&mut content_to_scan) {
-                v1 += x * (9 - (digit_idx % 10));
-                v2 += x * (9 - ((digit_idx + 1) % 10));
-                digit_idx += 1;
-            } else {
-                // Non-digit char in a position that should be a digit as we expect
-                // to find all 9 digits (11 - 2 check digits)
-                if (digit_idx as usize) != BRAZILIAN_CPF_DIGIT_COUNT - 2 {
-                    return false;
-                }
-                break;
-            }
+        while let Some(x) = get_previous_digit(&mut content_to_scan) {
+            v1 += x * (9 - (digit_idx % 10));
+            v2 += x * (9 - ((digit_idx + 1) % 10));
+            digit_idx += 1;
+        }
+        // Non-digit char in a position that should be a digit as we expect
+        // to find all 9 digits (11 - 2 check digits)
+        if digit_idx != BRAZILIAN_CPF_DIGIT_COUNT - 2 {
+            return false;
         }
         v1 = (v1 % 11) % 10;
         v2 += v1 * 9;
