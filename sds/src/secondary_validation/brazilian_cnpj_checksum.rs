@@ -4,8 +4,6 @@ use super::get_next_digit;
 
 pub struct BrazilianCnpjChecksum;
 
-const BRAZILIAN_CNPJ_DIGIT_COUNT: usize = 14;
-
 const BRAZILIAN_CNPJ_V1_MULTIPLIERS: &[u32] = &[5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
 const BRAZILIAN_CNPJ_V2_MULTIPLIERS: &[u32] = &[6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3];
 
@@ -18,42 +16,35 @@ impl Validator for BrazilianCnpjChecksum {
         let mut content_to_scan = regex_match.chars();
         let mut digit_idx = 0;
         let mut prev_digit = 0;
-        loop {
-            if let Some(x) = get_next_digit(&mut content_to_scan) {
-                match digit_idx {
-                    idx if idx < 12 => {
-                        v1 += BRAZILIAN_CNPJ_V1_MULTIPLIERS[idx] * x;
-                        v2 += BRAZILIAN_CNPJ_V2_MULTIPLIERS[idx] * x;
+        while let Some(x) = get_next_digit(&mut content_to_scan) {
+            match digit_idx {
+                idx if idx < 12 => {
+                    v1 += BRAZILIAN_CNPJ_V1_MULTIPLIERS[idx] * x;
+                    v2 += BRAZILIAN_CNPJ_V2_MULTIPLIERS[idx] * x;
+                }
+                12 => {
+                    v1 = 11 - v1 % 11;
+                    if v1 >= 10 {
+                        v1 = 0;
                     }
-                    idx if idx == 12 => {
-                        v1 = 11 - v1 % 11;
-                        if v1 >= 10 {
-                            v1 = 0;
-                        }
-                        v2 += 2 * x;
-                        v2 = 11 - v2 % 11;
-                        if v2 >= 10 {
-                            v2 = 0;
-                        }
-                    }
-                    idx if idx == 13 => {
-                        // Compare the computed checksum with the provided one
-                        return v1 == prev_digit && v2 == x;
-                    }
-                    _ => {
-                        return false;
+                    v2 += 2 * x;
+                    v2 = 11 - v2 % 11;
+                    if v2 >= 10 {
+                        v2 = 0;
                     }
                 }
-                digit_idx += 1;
-                prev_digit = x;
-            } else {
-                // Non-digit char in a position that should be a digit as we expect
-                // to find all 9 digits (11 - 2 check digits)
-                if (digit_idx as usize) != BRAZILIAN_CNPJ_DIGIT_COUNT {
+                13 => {
+                    // Compare the computed checksum with the provided one
+                    return v1 == prev_digit && v2 == x;
+                }
+                _ => {
                     return false;
                 }
             }
+            digit_idx += 1;
+            prev_digit = x;
         }
+        false
     }
 }
 
