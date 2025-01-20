@@ -10,9 +10,6 @@ impl Validator for BrazilianCpfChecksum {
     // https://pt.wikipedia.org/wiki/Cadastro_de_Pessoas_F%C3%ADsicas#C%C3%A1lculo_do_d%C3%ADgito_verificador
     fn is_valid_match(&self, regex_match: &str) -> bool {
         // Check if the length of the ID is correct
-        if regex_match.len() != BRAZILIAN_CPF_LENGTH {
-            return false;
-        }
 
         let mut digit_idx = 0;
         let mut v1: u32 = 0;
