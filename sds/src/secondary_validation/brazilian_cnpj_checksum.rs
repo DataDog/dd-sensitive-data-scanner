@@ -1,5 +1,3 @@
-use std::{default, f32::DIGITS};
-
 use crate::secondary_validation::Validator;
 
 use super::get_next_digit;
