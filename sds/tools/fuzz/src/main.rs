@@ -88,7 +88,6 @@ fn run_fuzz(pattern: &str, input: &str, mut rng: StdRng) {
     let scanner_result = ScannerBuilder::new(&[RegexRuleConfig::new(pattern)
         .match_action(match_action)
         .build()])
-    .with_keywords_should_match_event_paths(true)
     .build();
 
     if let Ok(scanner) = scanner_result {
