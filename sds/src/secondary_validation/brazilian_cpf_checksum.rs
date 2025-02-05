@@ -50,7 +50,12 @@ mod test {
     use crate::secondary_validation::*;
     #[test]
     fn test_valid_brazilian_cpf_ids() {
-        let valid_ids = vec!["012.345.678-90", "083.358.948-25"];
+        let valid_ids = vec![
+            "012.345.678-90",
+            "083.358.948-25",
+            "083---358___948_____25",
+            "08335894825",
+        ];
         for id in valid_ids {
             assert!(BrazilianCpfChecksum.is_valid_match(id));
         }
