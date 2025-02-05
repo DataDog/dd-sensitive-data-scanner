@@ -53,7 +53,12 @@ mod test {
     use crate::secondary_validation::*;
     #[test]
     fn test_valid_brazilian_cnpj_ids() {
-        let valid_ids = vec!["00.623.904/0001-73", "00.623.904/0001-73"];
+        let valid_ids = vec![
+            "00.623.904/0001-73",
+            "00.623.904/0001-73",
+            "00....623.904////0001-/-73",
+            "00623904000173",
+        ];
         for id in valid_ids {
             assert!(BrazilianCnpjChecksum.is_valid_match(id));
         }
