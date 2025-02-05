@@ -188,25 +188,6 @@ pub fn included_keywords_on_path(c: &mut Criterion) {
             excluded_keywords: vec![],
         })
         .build()])
-    .with_keywords_should_match_event_paths(false)
-    .build()
-    .unwrap();
-
-    c.bench_function("included_keywords_on_path_off", |b| {
-        b.iter(|| {
-            let matches = scanner.scan(&mut event, vec![]);
-            assert_eq!(matches.len(), 0);
-        });
-    });
-
-    let scanner = Scanner::builder(&[RegexRuleConfig::new("value")
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 30,
-            included_keywords: vec!["secret".to_string(), "ssn".to_string()],
-            excluded_keywords: vec![],
-        })
-        .build()])
-    .with_keywords_should_match_event_paths(true)
     .build()
     .unwrap();
 

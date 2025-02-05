@@ -1,6 +1,7 @@
 use crate::proximity_keywords::next_char_index;
 use crate::scanner::regex_rule::RegexCaches;
 use regex_automata::Input;
+use std::ops::Range;
 
 pub struct CompiledIncludedProximityKeywords {
     pub look_ahead_character_count: usize,
@@ -30,7 +31,7 @@ impl IncludedKeywordSearch<'_> {
         }
     }
 
-    pub fn next(&mut self, regex_caches: &mut RegexCaches) -> Option<usize> {
+    pub fn next(&mut self, regex_caches: &mut RegexCaches) -> Option<Range<usize>> {
         let input = Input::new(self.content).range(self.start..).earliest(true);
 
         if let Some(included_keyword_match) =
@@ -43,7 +44,7 @@ impl IncludedKeywordSearch<'_> {
             // multi-word keywords can overlap
             self.start = next_char_index(self.content, included_keyword_match.start())
                 .unwrap_or(included_keyword_match.end());
-            Some(included_keyword_match.start())
+            Some(included_keyword_match.range())
         } else {
             None
         }
@@ -63,7 +64,7 @@ mod test {
         let mut caches = RegexCaches::new();
         let mut output = vec![];
         while let Some(x) = search.next(&mut caches) {
-            output.push(x);
+            output.push(x.start);
         }
         output
     }
