@@ -28,6 +28,7 @@ impl Default for AwsConfig {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "kind")]
 pub enum AwsType {
     AwsId,
     AwsSecret(AwsConfig),
@@ -186,6 +187,7 @@ impl HttpValidatorConfigBuilder {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "type", content = "config")]
 pub enum MatchValidationType {
     Aws(AwsType),
     CustomHttp(HttpValidatorConfig),
