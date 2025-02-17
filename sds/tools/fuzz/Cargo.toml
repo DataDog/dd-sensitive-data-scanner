@@ -14,6 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 afl = "0.14.5"
+ahash = "0.8.11"
 dd-sds = { path = "../../" }
 
 # optional

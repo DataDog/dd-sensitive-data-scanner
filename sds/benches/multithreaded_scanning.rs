@@ -51,7 +51,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     let mut sample_inputs = sample_inputs.clone();
                     let mut matches = 0;
                     for input in &mut sample_inputs {
-                        let results = scanner.scan(input, vec![]);
+                        let results = scanner.scan(input, vec![], AHashMap::new());
                         matches += results.len();
                     }
                     assert_eq!(matches, 65);
@@ -68,7 +68,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                 let scanner = Arc::clone(&scanner);
                 thread_pool.execute(move || {
                     let mut sample_event = sample_event.clone();
-                    let results = scanner.scan(&mut sample_event, vec![]);
+                    let results = scanner.scan(&mut sample_event, vec![], AHashMap::new());
                     assert_eq!(results.len(), 65);
                 });
             }
@@ -87,7 +87,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                         let mut sample_inputs = sample_inputs.clone();
                         let mut matches = 0;
                         for input in &mut sample_inputs {
-                            let results = scanner.scan(input, vec![]);
+                            let results = scanner.scan(input, vec![], AHashMap::new());
                             matches += results.len();
                         }
                         assert_eq!(matches, 35);
@@ -107,7 +107,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     let scanner = Arc::clone(&scanner_with_keywords);
                     thread_pool.execute(move || {
                         let mut sample_event = sample_event.clone();
-                        let results = scanner.scan(&mut sample_event, vec![]);
+                        let results = scanner.scan(&mut sample_event, vec![], AHashMap::new());
                         assert_eq!(results.len(), 35);
                     });
                 }
@@ -125,7 +125,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                 let mut sample_inputs = sample_inputs.clone();
                 let mut matches = 0;
                 for input in &mut sample_inputs {
-                    let results = scanner.scan(input, vec![]);
+                    let results = scanner.scan(input, vec![], AHashMap::new());
                     matches += results.len();
                 }
                 assert_eq!(matches, 65);
@@ -140,7 +140,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                 let sample_event = sample_event.clone();
                 let scanner = Arc::clone(&scanner);
                 let mut sample_event = sample_event.clone();
-                let results = scanner.scan(&mut sample_event, vec![]);
+                let results = scanner.scan(&mut sample_event, vec![], AHashMap::new());
                 assert_eq!(results.len(), 65);
             }
         })
@@ -157,7 +157,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     let mut sample_inputs = sample_inputs.clone();
                     let mut matches = 0;
                     for input in &mut sample_inputs {
-                        let results = scanner.scan(input, vec![]);
+                        let results = scanner.scan(input, vec![], AHashMap::new());
                         matches += results.len();
                     }
                     assert_eq!(matches, 35);
@@ -175,7 +175,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     let sample_event = sample_event.clone();
                     let scanner = Arc::clone(&scanner_with_keywords);
                     let mut sample_event = sample_event.clone();
-                    let results = scanner.scan(&mut sample_event, vec![]);
+                    let results = scanner.scan(&mut sample_event, vec![], AHashMap::new());
                     assert_eq!(results.len(), 35);
                 }
             })
