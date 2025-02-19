@@ -1,3 +1,4 @@
+mod aba_rtn_checksum;
 mod brazilian_cpf_checksum;
 mod chinese_id_checksum;
 mod github_token_checksum;
@@ -11,6 +12,7 @@ mod nir_checksum;
 pub use jwt_expiration_checker::generate_jwt;
 
 use crate::scanner::regex_rule::config::SecondaryValidator;
+pub use crate::secondary_validation::aba_rtn_checksum::AbaRtnChecksum;
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
@@ -58,6 +60,9 @@ impl Validator for SecondaryValidator {
             }
             SecondaryValidator::BrazilianCpfChecksum => {
                 BrazilianCpfChecksum.is_valid_match(regex_match)
+            }
+            SecondaryValidator::AbaRtnChecksum => {
+                AbaRtnChecksum.is_valid_match(regex_match)
             }
         }
     }

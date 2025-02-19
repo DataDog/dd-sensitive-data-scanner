@@ -158,6 +158,7 @@ pub enum SecondaryValidator {
     NirChecksum,
     JwtExpirationChecker,
     BrazilianCpfChecksum,
+    AbaRtnChecksum,
 }
 
 #[cfg(test)]
