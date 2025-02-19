@@ -66,9 +66,7 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::BrazilianCnpjChecksum => {
                 BrazilianCnpjChecksum.is_valid_match(regex_match)
             }
-            SecondaryValidator::AbaRtnChecksum => {
-                AbaRtnChecksum.is_valid_match(regex_match)
-            }
+            SecondaryValidator::AbaRtnChecksum => AbaRtnChecksum.is_valid_match(regex_match),
         }
     }
 }
