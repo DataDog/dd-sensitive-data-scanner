@@ -150,15 +150,16 @@ pub struct ProximityKeywordsConfig {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "type")]
 pub enum SecondaryValidator {
-    LuhnChecksum,
+    AbaRtnChecksum,
+    BrazilianCpfChecksum,
+    BrazilianCnpjChecksum,
     ChineseIdChecksum,
     GithubTokenChecksum,
-    NhsCheckDigit,
     IbanChecker,
-    NirChecksum,
     JwtExpirationChecker,
-    BrazilianCpfChecksum,
-    AbaRtnChecksum,
+    LuhnChecksum,
+    NhsCheckDigit,
+    NirChecksum,
 }
 
 #[cfg(test)]
