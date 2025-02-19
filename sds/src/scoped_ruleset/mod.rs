@@ -14,7 +14,6 @@ pub struct ScopedRuleSet {
     // The number of rules stored in this set
     num_rules: usize,
     add_implicit_index_wildcards: bool,
-    should_keywords_match_event_paths: bool,
 }
 
 impl ScopedRuleSet {
@@ -45,17 +44,11 @@ impl ScopedRuleSet {
             tree,
             num_rules: rules_scopes.len(),
             add_implicit_index_wildcards: false,
-            should_keywords_match_event_paths: false,
         }
     }
 
     pub fn with_implicit_index_wildcards(mut self, value: bool) -> Self {
         self.add_implicit_index_wildcards = value;
-        self
-    }
-
-    pub fn with_keywords_should_match_event_paths(mut self, value: bool) -> Self {
-        self.should_keywords_match_event_paths = value;
         self
     }
 

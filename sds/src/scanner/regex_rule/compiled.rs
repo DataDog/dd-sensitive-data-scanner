@@ -59,7 +59,6 @@ impl CompiledRule for RegexCompiledRule {
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
-        should_kws_match_event_paths: bool,
     ) {
         match self.included_keywords {
             Some(ref included_keywords) => {
@@ -71,7 +70,6 @@ impl CompiledRule for RegexCompiledRule {
                     excluded_matches,
                     match_emitter,
                     included_keywords,
-                    should_kws_match_event_paths,
                 );
             }
             None => {
@@ -127,16 +125,15 @@ impl RegexCompiledRule {
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         included_keywords: &CompiledIncludedProximityKeywords,
-        should_kws_match_event_paths: bool,
     ) {
         let mut included_keyword_matches = included_keywords.keyword_matches(content);
 
-        'included_keyword_search: while let Some(included_keyword_match_start) =
+        'included_keyword_search: while let Some(included_keyword_match) =
             included_keyword_matches.next(regex_caches)
         {
             let true_positive_search = self.true_positive_matches(
                 content,
-                included_keyword_match_start,
+                included_keyword_match.end,
                 regex_caches.get(&self.regex),
                 false,
                 exclusion_check,
@@ -146,7 +143,7 @@ impl RegexCompiledRule {
             for true_positive_match in true_positive_search {
                 if is_index_within_prefix(
                     content,
-                    included_keyword_match_start,
+                    included_keyword_match.start,
                     true_positive_match.start,
                     included_keywords.look_ahead_character_count,
                 ) {
@@ -178,41 +175,39 @@ impl RegexCompiledRule {
             break;
         }
 
-        if should_kws_match_event_paths {
-            let mut has_verified_kws_in_path: Option<bool> = None;
+        let mut has_verified_kws_in_path: Option<bool> = None;
 
+        {
+            let input = Input::new(content);
+            if self
+                .regex
+                .search_with(regex_caches.get(&self.regex), &input)
+                .is_some()
             {
-                let input = Input::new(content);
-                if self
-                    .regex
-                    .search_with(regex_caches.get(&self.regex), &input)
-                    .is_some()
-                {
-                    has_verified_kws_in_path = Some(contains_keyword_in_path(
-                        &path.sanitize(),
-                        &included_keywords.keywords_pattern,
-                    ))
-                }
-            };
-
-            if has_verified_kws_in_path.is_none() || has_verified_kws_in_path.is_some_and(|x| !x) {
-                // We don't deal with true positives is in this case, because keywords don't match the path.
-                // Return early.
-                return;
+                has_verified_kws_in_path = Some(contains_keyword_in_path(
+                    &path.sanitize(),
+                    &included_keywords.keywords_pattern,
+                ))
             }
+        };
 
-            let true_positive_search = self.true_positive_matches(
-                content,
-                0,
-                regex_caches.get(&self.regex),
-                false,
-                exclusion_check,
-                excluded_matches,
-            );
+        if has_verified_kws_in_path.is_none() || has_verified_kws_in_path.is_some_and(|x| !x) {
+            // We don't deal with true positives is in this case, because keywords don't match the path.
+            // Return early.
+            return;
+        }
 
-            for string_match in true_positive_search {
-                match_emitter.emit(string_match);
-            }
+        let true_positive_search = self.true_positive_matches(
+            content,
+            0,
+            regex_caches.get(&self.regex),
+            false,
+            exclusion_check,
+            excluded_matches,
+        );
+
+        for string_match in true_positive_search {
+            match_emitter.emit(string_match);
         }
     }
 
@@ -252,6 +247,9 @@ impl Iterator for TruePositiveSearch<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
+            if self.start > self.content.len() {
+                return None;
+            }
             let input = Input::new(self.content).range(self.start..);
 
             if let Some(regex_match) = self.rule.regex.search_with(self.cache, &input) {
