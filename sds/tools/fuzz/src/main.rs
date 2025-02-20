@@ -2,6 +2,7 @@
 #![allow(warnings)]
 
 use afl::fuzz;
+use ahash::AHashMap;
 use dd_sds::{MatchAction, PartialRedactDirection, RegexRuleConfig, ScannerBuilder, Scope};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
@@ -92,7 +93,7 @@ fn run_fuzz(pattern: &str, input: &str, mut rng: StdRng) {
 
     if let Ok(scanner) = scanner_result {
         let mut mutated_input = input.to_string();
-        let sds_matches = scanner.scan(&mut mutated_input, vec![]);
+        let sds_matches = scanner.scan(&mut mutated_input);
         #[cfg(feature = "manual_test")]
         {
             println!("SDS matches: {:?}", sds_matches);

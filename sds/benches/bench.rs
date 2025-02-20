@@ -1,3 +1,4 @@
+use ahash::AHashMap;
 use criterion::Criterion;
 use dd_sds::{
     ContentVisitor, ExclusionCheck, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
@@ -140,7 +141,7 @@ pub fn included_keywords(c: &mut Criterion) {
 
     c.bench_function("included_keywords_worst_case_scenario", |b| {
         b.iter(|| {
-            let matches = scanner.scan(&mut message, vec![]);
+            let matches = scanner.scan(&mut message);
             assert_eq!(matches.len(), 0);
         })
     });
@@ -193,7 +194,7 @@ pub fn included_keywords_on_path(c: &mut Criterion) {
 
     c.bench_function("included_keywords_on_path_on", |b| {
         b.iter(|| {
-            let matches = scanner.scan(&mut event, vec![]);
+            let matches = scanner.scan(&mut event);
             assert!(!matches.is_empty());
         })
     });
