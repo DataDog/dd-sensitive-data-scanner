@@ -1,4 +1,3 @@
-use ahash::AHashMap;
 use std::ffi::c_char;
 use std::ffi::c_void;
 use std::slice;
