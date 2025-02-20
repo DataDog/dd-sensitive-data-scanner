@@ -31,7 +31,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_with = "3.6.1"
 thiserror = "1.0.58"
 metrics = "0.24.0"
-metrics-util = "0.18.0"
+metrics-util = "0.19.0"
 crc32fast = "1.4.0"
 base62 = "2.0.2"
 iban_validate = "4"
