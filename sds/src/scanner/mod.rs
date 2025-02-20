@@ -286,6 +286,57 @@ impl Default for ScannerFeatures {
     }
 }
 
+pub struct ScanOptions {
+    // The blocked_rules_idx parameter is a list of rule indices that should be skipped for this scan.
+    // this list shall be small (<10), so a linear search is acceptable otherwise performance will be impacted.
+    pub blocked_rules_idx: Vec<usize>,
+    // The wildcarded_indices parameter is a map containing a list of tuples of (start, end) indices that should be treated as wildcards (for the message key only) per path.
+    pub wildcarded_indices: AHashMap<Path<'static>, Vec<(usize, usize)>>,
+}
+
+impl Default for ScanOptions {
+    fn default() -> Self {
+        Self {
+            blocked_rules_idx: vec![],
+            wildcarded_indices: AHashMap::new(),
+        }
+    }
+}
+
+pub struct ScanOptionBuilder {
+    blocked_rules_idx: Vec<usize>,
+    wildcarded_indices: AHashMap<Path<'static>, Vec<(usize, usize)>>,
+}
+
+impl ScanOptionBuilder {
+    pub fn new() -> Self {
+        Self {
+            blocked_rules_idx: vec![],
+            wildcarded_indices: AHashMap::new(),
+        }
+    }
+
+    pub fn with_blocked_rules_idx(mut self, blocked_rules_idx: Vec<usize>) -> Self {
+        self.blocked_rules_idx = blocked_rules_idx;
+        self
+    }
+
+    pub fn with_wildcarded_indices(
+        mut self,
+        wildcarded_indices: AHashMap<Path<'static>, Vec<(usize, usize)>>,
+    ) -> Self {
+        self.wildcarded_indices = wildcarded_indices;
+        self
+    }
+
+    pub fn build(self) -> ScanOptions {
+        ScanOptions {
+            blocked_rules_idx: self.blocked_rules_idx,
+            wildcarded_indices: self.wildcarded_indices,
+        }
+    }
+}
+
 pub struct Scanner {
     rules: Vec<Box<dyn CompiledRuleDyn>>,
     scoped_ruleset: ScopedRuleSet,
@@ -301,18 +352,7 @@ impl Scanner {
         ScannerBuilder::new(rules)
     }
 
-    // This function scans the given event with the rules configured in the scanner.
-    // The event parameter is a mutable reference to the event that should be scanned (implemented the Event trait).
-    // The blocked_rules_idx parameter is a list of rule indices that should be skipped for this scan.
-    // The wildcarded_indices parameter is a map containing a list of tuples of (start, end) indices that should be treated as wildcards (for the message key only) per path.
-    // this list shall be small (<10), so a linear search is acceptable otherwise performance will be impacted.
-    // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
-    pub fn scan<E: Event>(
-        &self,
-        event: &mut E,
-        blocked_rules_idx: Vec<usize>,
-        wildcarded_indices: AHashMap<Path<'static>, Vec<(usize, usize)>>,
-    ) -> Vec<RuleMatch> {
+    pub fn scanWithOptions<E: Event>(&self, event: &mut E, options: ScanOptions) -> Vec<RuleMatch> {
         // All matches, after some (but not all) false-positives have been removed.
         // This is a vec of vecs, where each inner vec is a set of matches for a single path.
         let mut rule_matches_list = vec![];
@@ -328,10 +368,10 @@ impl Scanner {
                     scanner: self,
                     regex_caches,
                     rule_matches: &mut rule_matches_list,
-                    blocked_rules: &blocked_rules_idx,
+                    blocked_rules: &options.blocked_rules_idx,
                     excluded_matches: &mut excluded_matches,
                     rule_scan_caches: AHashMap::new(),
-                    wildcarded_indexes: &wildcarded_indices,
+                    wildcarded_indexes: &options.wildcarded_indices,
                 },
             );
         });
@@ -383,6 +423,13 @@ impl Scanner {
             .increment(output_rule_matches.len() as u64);
 
         output_rule_matches
+    }
+
+    // This function scans the given event with the rules configured in the scanner.
+    // The event parameter is a mutable reference to the event that should be scanned (implemented the Event trait).
+    // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
+    pub fn scan<E: Event>(&self, event: &mut E) -> Vec<RuleMatch> {
+        return self.scanWithOptions(event, ScanOptions::default());
     }
 
     pub fn validate_matches(
@@ -944,7 +991,7 @@ mod test {
 
         let mut input = "this is a secret with random data".to_owned();
 
-        let matched_rules = scanner.scan(&mut input, vec![], AHashMap::new());
+        let matched_rules = scanner.scan(&mut input);
 
         assert_eq!(matched_rules.len(), 1);
         assert_eq!(input, "this is a [REDACTED] with random data");
@@ -965,7 +1012,7 @@ mod test {
 
         let mut input = "this is a dumbss with random data and a secret".to_owned();
 
-        let matched_rules = scanner.scan(&mut input, vec![], AHashMap::new());
+        let matched_rules = scanner.scan(&mut input);
 
         assert_eq!(matched_rules.len(), 2);
         assert_eq!(
@@ -986,7 +1033,7 @@ mod test {
 
         let mut input = "text with secret".to_owned();
 
-        let matched_rules = scanner.scan(&mut input, vec![], AHashMap::new());
+        let matched_rules = scanner.scan(&mut input);
 
         assert_eq!(matched_rules.len(), 1);
         assert_eq!(input, "text with [REDACTED]");
@@ -1005,7 +1052,7 @@ mod test {
 
         let mut input = "text with secret".to_owned();
 
-        let matched_rules = scanner.scan(&mut input, vec![], AHashMap::new());
+        let matched_rules = scanner.scan(&mut input);
 
         assert_eq!(matched_rules.len(), 1);
         assert_eq!(input, "text with [REDACTED]");
@@ -1052,7 +1099,7 @@ mod test {
 
         let mut content = "testing 1 2 3".to_string();
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
 
         assert_eq!(content, "testing [REDACTED] [REDACTED] [REDACTED]");
         assert_eq!(matches.len(), 3);
@@ -1069,7 +1116,7 @@ mod test {
 
         let mut content = "a b".to_string();
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
 
         assert_eq!(content, "a b");
         assert_eq!(matches.len(), 2);
@@ -1137,7 +1184,7 @@ mod test {
         for (rule_config, input, expected_indices) in test_cases {
             let scanner = ScannerBuilder::new(rule_config.leak()).build().unwrap();
             let mut input = input.to_string();
-            let matches = scanner.scan(&mut input, vec![], AHashMap::new());
+            let matches = scanner.scan(&mut input);
 
             assert_eq!(matches.len(), expected_indices.len());
             for (rule_match, expected_range) in matches.iter().zip(expected_indices) {
@@ -1168,17 +1215,17 @@ mod test {
 
         let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
         let mut content = "hello world".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(content, "hello [REDACTED]");
         assert_eq!(matches.len(), 1);
 
         let mut content = "he**o world".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(content, "he**o world");
         assert_eq!(matches.len(), 0);
 
         let mut content = "world hello world".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(content, "world hello [REDACTED]");
         assert_eq!(matches.len(), 1);
     }
@@ -1210,7 +1257,7 @@ mod test {
             )])),
         )]));
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
     }
 
@@ -1226,7 +1273,7 @@ mod test {
             )])),
         )]));
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
     }
 
@@ -1239,7 +1286,7 @@ mod test {
             SimpleEvent::String("hello world".to_string()),
         )]));
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
 
         let mut content = SimpleEvent::Map(BTreeMap::from([(
@@ -1247,7 +1294,7 @@ mod test {
             SimpleEvent::String("hello world".to_string()),
         )]));
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
     }
 
@@ -1269,7 +1316,7 @@ mod test {
             ]),
         )]));
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 0);
     }
 
@@ -1282,7 +1329,7 @@ mod test {
             SimpleEvent::String("hello".to_string()),
         )]));
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 0);
     }
 
@@ -1313,7 +1360,7 @@ mod test {
             ]),
         )]));
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
     }
 
@@ -1329,13 +1376,18 @@ mod test {
         let mut content = "hello world".to_string();
 
         // Scan with no blocked rules
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(content, "hello [REDACTED]");
         assert_eq!(matches.len(), 1);
 
         // Scan with blocked rules
         let mut content = "hello world".to_string();
-        let matches = scanner.scan(&mut content, vec![0], AHashMap::new());
+        let matches = scanner.scanWithOptions(
+            &mut content,
+            ScanOptionBuilder::new()
+                .with_blocked_rules_idx(vec![0])
+                .build(),
+        );
         assert_eq!(content, "hello world");
         assert_eq!(matches.len(), 0);
     }
@@ -1355,12 +1407,12 @@ mod test {
 
         let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
         let mut content = "hello world".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(content, "hello world");
         assert_eq!(matches.len(), 0);
 
         let mut content = "he**o world".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(content, "he**o [REDACTED]");
         assert_eq!(matches.len(), 1);
     }
@@ -1377,13 +1429,13 @@ mod test {
 
         let scanner = ScannerBuilder::new(&[rule.build()]).build().unwrap();
         let mut content = "4556997807150071  4111 1111 1111 1111".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 2);
         assert_eq!(content, "[credit card]  [credit card]");
 
         let scanner = ScannerBuilder::new(&[rule_with_checksum]).build().unwrap();
         let mut content = "4556997807150071  4111 1111 1111 1111".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "4556997807150071  [credit card]");
     }
@@ -1398,13 +1450,13 @@ mod test {
 
         let scanner = ScannerBuilder::new(&[rule.build()]).build().unwrap();
         let mut content = "513231200012121657 513231200012121651".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 2);
         assert_eq!(content, "[IDCARD] [IDCARD]");
 
         let scanner = ScannerBuilder::new(&[rule_with_checksum]).build().unwrap();
         let mut content = "513231200012121657 513231200012121651".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "[IDCARD] 513231200012121651");
     }
@@ -1423,7 +1475,7 @@ mod test {
         let scanner = ScannerBuilder::new(&[rule_with_checksum.clone()])
             .build()
             .unwrap();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "number=[IBAN]");
 
@@ -1432,7 +1484,7 @@ mod test {
         let scanner = ScannerBuilder::new(&[rule_with_checksum.clone()])
             .build()
             .unwrap();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 0);
         assert_eq!(content, "number=DE34500105175407324931");
     }
@@ -1449,7 +1501,7 @@ mod test {
         let mut content =
             "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 ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5"
                 .to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 2);
         assert_eq!(content, "[GITHUB] [GITHUB]");
 
@@ -1457,7 +1509,7 @@ mod test {
         let mut content =
             "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 ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5"
                 .to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "[GITHUB] ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5");
     }
@@ -1475,13 +1527,13 @@ mod test {
         let future_time_as_string = (Utc::now().timestamp() + 1000000).to_string();
 
         let mut content = generate_jwt(future_time_as_string).to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "[JWT]");
 
         let past_time_as_string = (Utc::now().timestamp() - 1000000).to_string();
         let mut content = generate_jwt(past_time_as_string).to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 0);
     }
 
@@ -1499,7 +1551,7 @@ mod test {
         let scanner = ScannerBuilder::new(&[rule_with_checksum.clone()])
             .build()
             .unwrap();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "[NHS]");
     }
@@ -1517,7 +1569,7 @@ mod test {
 
         let scanner = ScannerBuilder::new(&[rule.clone(), rule]).build().unwrap();
         let mut content = "hello world".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(content, "* world");
 
         // The rule was cloned, so if this is only 1, the 2nd was filtered out
@@ -1535,7 +1587,7 @@ mod test {
 
         let scanner = ScannerBuilder::new(&[rule.clone(), rule]).build().unwrap();
         let mut content = "hello world".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
 
         assert_eq!(matches.len(), 3);
         assert_eq!(content, "*el*o *orld");
@@ -1611,7 +1663,7 @@ mod test {
 
         let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
         let mut content = "hello world".to_string();
-        let mut matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let mut matches = scanner.scan(&mut content);
         matches.sort();
 
         assert_eq!(matches.len(), 3);
@@ -1682,7 +1734,7 @@ mod test {
 
         let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
         let mut content = "abcdef".to_string();
-        let mut matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let mut matches = scanner.scan(&mut content);
         matches.sort();
 
         assert_eq!(matches.len(), 1);
@@ -1719,7 +1771,7 @@ mod test {
 
         let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
         let mut content = "abcdef".to_string();
-        let mut matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let mut matches = scanner.scan(&mut content);
         matches.sort();
 
         assert_eq!(matches.len(), 1);
@@ -1756,7 +1808,7 @@ mod test {
 
         let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
         let mut content = "abcdef".to_string();
-        let mut matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let mut matches = scanner.scan(&mut content);
         matches.sort();
 
         assert_eq!(matches.len(), 1);
@@ -1793,7 +1845,7 @@ mod test {
 
         let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
         let mut content = "abcdef".to_string();
-        let mut matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let mut matches = scanner.scan(&mut content);
         matches.sort();
 
         assert_eq!(matches.len(), 1);
@@ -1843,7 +1895,7 @@ mod test {
             ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
         ]));
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
 
         // "test" is excluded because it matches the excluded scope.
         // Both "a-match" and "z-match" are excluded due to having the
@@ -1879,7 +1931,7 @@ mod test {
             ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
         ]));
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
 
         // "test" is excluded because it matches the excluded scope.
         // Both "a-match" and "z-match" are kept since multipass V0 is disabled
@@ -1915,7 +1967,7 @@ mod test {
             ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
         ]));
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
     }
 
@@ -1988,7 +2040,7 @@ mod test {
             SimpleEvent::String("abc-efg".to_string()),
         )])));
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 2);
     }
 
@@ -2003,7 +2055,7 @@ mod test {
         let mut content =
             SimpleEvent::String("rand string that has a leading zero after hashing: y".to_string());
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
 
         // normally 09d99e4b6ad0d289, but the leading 0 is removed
@@ -2021,7 +2073,7 @@ mod test {
 
         let mut content = "rand string that has a leading zero after hashing: S".to_string();
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
 
         // normally 08c3ad1a22e2edb1, but the leading 0 is removed
@@ -2044,7 +2096,7 @@ mod test {
         // The last 4 numbers (which overlap with the first match) pass the checksum.
         let mut content = "[5€184,5185,5252,5052,5005]".to_string();
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         // This is mostly asserting that the scanner doesn't panic when encountering multibyte characters
         assert_eq!(matches.len(), 1);
     }
@@ -2075,7 +2127,7 @@ mod test {
         // boundary shouldn't match here
         let mut content = "x-test=value".to_string();
 
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
         // This should match because "test" is not found, so it's not a false-positive
         assert_eq!(matches.len(), 1);
     }
@@ -2096,7 +2148,7 @@ mod test {
         let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
 
         let mut content = "hello [this block is exactly 37 chars long] world".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
 
         assert_eq!(matches.len(), 0);
     }
@@ -2117,7 +2169,7 @@ mod test {
         let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
 
         let mut content = "hello world world".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
 
         // Both "world" matches fit within the 30 char prefix.
         assert_eq!(matches.len(), 2);
@@ -2141,7 +2193,7 @@ mod test {
         let mut content =
             "hello world [this takes up enough space to separate the prefixes] world hello world"
                 .to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
 
         // Both "worlds" after a "hello" should match
         assert_eq!(matches.len(), 2);
@@ -2160,7 +2212,7 @@ mod test {
         .unwrap();
 
         let mut content = "users id   ab".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
 
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].start_index, 11);
@@ -2180,7 +2232,7 @@ mod test {
         .unwrap();
 
         let mut content = "users idabc".to_string();
-        let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let matches = scanner.scan(&mut content);
 
         assert_eq!(matches.len(), 0);
     }
@@ -2198,16 +2250,16 @@ mod test {
         .unwrap();
 
         let mut content = "host           x".to_string();
-        assert_eq!(scanner.scan(&mut content, vec![], AHashMap::new()).len(), 0);
+        assert_eq!(scanner.scan(&mut content).len(), 0);
 
         let mut content = "host      x".to_string();
-        assert_eq!(scanner.scan(&mut content, vec![], AHashMap::new()).len(), 1);
+        assert_eq!(scanner.scan(&mut content).len(), 1);
 
         let mut content = "host       x".to_string();
-        assert_eq!(scanner.scan(&mut content, vec![], AHashMap::new()).len(), 0);
+        assert_eq!(scanner.scan(&mut content).len(), 0);
 
         let mut content = " host      x".to_string();
-        assert_eq!(scanner.scan(&mut content, vec![], AHashMap::new()).len(), 1);
+        assert_eq!(scanner.scan(&mut content).len(), 1);
     }
 
     #[test]
@@ -2229,7 +2281,7 @@ mod test {
 
         // Even though the included keywords are too far from the match in the string
         // the keyword is present in the path and that should validate the match.
-        assert_eq!(scanner.scan(&mut event, vec![], AHashMap::new()).len(), 1);
+        assert_eq!(scanner.scan(&mut event).len(), 1);
     }
 
     #[test]
@@ -2246,19 +2298,19 @@ mod test {
 
         // only the included keyword is present
         let mut content = "hey world".to_string();
-        assert_eq!(scanner.scan(&mut content, vec![], AHashMap::new()).len(), 1);
+        assert_eq!(scanner.scan(&mut content).len(), 1);
 
         // only the excluded keyword is present
         let mut content = "hello world".to_string();
-        assert_eq!(scanner.scan(&mut content, vec![], AHashMap::new()).len(), 0);
+        assert_eq!(scanner.scan(&mut content).len(), 0);
 
         // no keyword is present
         let mut content = "world".to_string();
-        assert_eq!(scanner.scan(&mut content, vec![], AHashMap::new()).len(), 0);
+        assert_eq!(scanner.scan(&mut content).len(), 0);
 
         // included and excluded keywords are present
         let mut content = "hey, hello world".to_string();
-        assert_eq!(scanner.scan(&mut content, vec![], AHashMap::new()).len(), 1);
+        assert_eq!(scanner.scan(&mut content).len(), 1);
     }
 
     #[test]
@@ -2277,7 +2329,7 @@ mod test {
         .unwrap();
 
         let mut content = "hey world".to_string();
-        let rule_match = scanner.scan(&mut content, vec![], AHashMap::new());
+        let rule_match = scanner.scan(&mut content);
         assert_eq!(rule_match.len(), 1);
         assert_eq!(content, "hey [REDACTED]");
         assert_eq!(rule_match[0].match_value, Some("world".to_string()));
@@ -2294,7 +2346,7 @@ mod test {
         .unwrap();
 
         let mut content = "hey world".to_string();
-        let mut rule_match = scanner.scan(&mut content, vec![], AHashMap::new());
+        let mut rule_match = scanner.scan(&mut content);
         assert_eq!(rule_match.len(), 1);
         assert_eq!(content, "hey [REDACTED]");
         assert_eq!(rule_match[0].match_value, None);
@@ -2407,7 +2459,7 @@ mod test {
 
         let scanner = ScannerBuilder::new(&[rule_aws_id]).build().unwrap();
         let mut content = "this is an aws_id".to_string();
-        let mut matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let mut matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "this is an [AWS_ID]");
         assert!(scanner.validate_matches(&mut matches).is_err());
@@ -2477,7 +2529,7 @@ mod test {
 
         let mut content =
             "this is a content with a valid_match an invalid_match and an error_match".to_string();
-        let mut matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let mut matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 3);
         assert_eq!(
             content,
@@ -2519,7 +2571,7 @@ mod test {
         let scanner = ScannerBuilder::new(&[rule_valid_match]).build().unwrap();
 
         let mut content = "this is a content with a valid_match".to_string();
-        let mut matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let mut matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
         assert_eq!(content, "this is a content with a [VALID]");
         assert!(scanner.validate_matches(&mut matches).is_ok());
@@ -2580,7 +2632,7 @@ mod test {
 
         let mut content =
             "this is a content with a valid_match an aws_id and an aws_secret".to_string();
-        let mut matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let mut matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 3);
         assert_eq!(
             content,
@@ -2620,7 +2672,7 @@ mod test {
 
         let scanner = ScannerBuilder::new(&[rule_valid_match]).build().unwrap();
         let mut content = "this is a content with a valid_match on multiple hosts".to_string();
-        let mut matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let mut matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 1);
         assert_eq!(
             content,
@@ -2741,7 +2793,7 @@ mod test {
 
         let mut content = fmt::format(format_args!(
                                 "content with a valid aws_id {}, an invalid aws_id {}, an error aws_id {} and an aws_secret {} and an other aws_secret {}", aws_id_valid, aws_id_invalid, aws_id_error, aws_secret_1, aws_secret_2));
-        let mut matches = scanner.scan(&mut content, vec![], AHashMap::new());
+        let mut matches = scanner.scan(&mut content);
         assert_eq!(matches.len(), 5);
         assert_eq!(
             content,
@@ -2806,7 +2858,7 @@ mod test {
                     ),
                 ]));
 
-                scanner.scan(&mut content, vec![], AHashMap::new());
+                scanner.scan(&mut content);
             });
 
             let snapshot = snapshotter.snapshot().into_hashmap();
@@ -2856,7 +2908,7 @@ mod test {
                     ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
                 ]));
 
-                scanner.scan(&mut content, vec![], AHashMap::new());
+                scanner.scan(&mut content);
             });
 
             let snapshot = snapshotter.snapshot().into_hashmap();
@@ -2891,7 +2943,7 @@ mod test {
                     "test".to_string(),
                     SimpleEvent::String("hello world".to_string()),
                 )]));
-                scanner.scan(&mut content, vec![], AHashMap::new());
+                scanner.scan(&mut content);
             });
 
             let snapshot = snapshotter.snapshot().into_hashmap();
@@ -2931,7 +2983,7 @@ mod test {
                 "message".to_string(),
                 SimpleEvent::String("email=firstname.lastname@acme.com&page2".to_string()),
             )]));
-            let matches = scanner.scan(&mut content, vec![], AHashMap::new());
+            let matches = scanner.scan(&mut content);
             assert_eq!(matches.len(), 1);
 
             assert_eq!(

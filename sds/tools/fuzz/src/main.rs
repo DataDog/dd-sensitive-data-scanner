@@ -93,7 +93,7 @@ fn run_fuzz(pattern: &str, input: &str, mut rng: StdRng) {
 
     if let Ok(scanner) = scanner_result {
         let mut mutated_input = input.to_string();
-        let sds_matches = scanner.scan(&mut mutated_input, vec![], AHashMap::new());
+        let sds_matches = scanner.scan(&mut mutated_input);
         #[cfg(feature = "manual_test")]
         {
             println!("SDS matches: {:?}", sds_matches);
