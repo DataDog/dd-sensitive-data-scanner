@@ -352,7 +352,11 @@ impl Scanner {
         ScannerBuilder::new(rules)
     }
 
-    pub fn scanWithOptions<E: Event>(&self, event: &mut E, options: ScanOptions) -> Vec<RuleMatch> {
+    pub fn scan_with_options<E: Event>(
+        &self,
+        event: &mut E,
+        options: ScanOptions,
+    ) -> Vec<RuleMatch> {
         // All matches, after some (but not all) false-positives have been removed.
         // This is a vec of vecs, where each inner vec is a set of matches for a single path.
         let mut rule_matches_list = vec![];
@@ -429,7 +433,7 @@ impl Scanner {
     // The event parameter is a mutable reference to the event that should be scanned (implemented the Event trait).
     // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
     pub fn scan<E: Event>(&self, event: &mut E) -> Vec<RuleMatch> {
-        return self.scanWithOptions(event, ScanOptions::default());
+        self.scan_with_options(event, ScanOptions::default())
     }
 
     pub fn validate_matches(
@@ -1382,7 +1386,7 @@ mod test {
 
         // Scan with blocked rules
         let mut content = "hello world".to_string();
-        let matches = scanner.scanWithOptions(
+        let matches = scanner.scan_with_options(
             &mut content,
             ScanOptionBuilder::new()
                 .with_blocked_rules_idx(vec![0])
@@ -2825,7 +2829,6 @@ mod test {
         use crate::scanner::scope::Scope;
         use crate::scanner::ScannerBuilder;
         use crate::{simple_event::SimpleEvent, Path, PathSegment};
-        use ahash::AHashMap;
         use metrics::{Key, Label};
         use metrics_util::debugging::DebugValue;
         use metrics_util::debugging::DebuggingRecorder;
