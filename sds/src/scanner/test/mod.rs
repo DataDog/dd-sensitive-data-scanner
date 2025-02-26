@@ -9,25 +9,19 @@ use super::*;
 use super::{MatchEmitter, ScannerBuilder, StringMatch};
 use crate::match_action::{MatchAction, MatchActionValidationError};
 
-use crate::match_validation::config::{AwsConfig, AwsType, MatchValidationType};
-
-use crate::match_validation::config::HttpValidatorConfigBuilder;
-use crate::match_validation::validator_utils::generate_aws_headers_and_body;
+use crate::match_validation::config::MatchValidationType;
 use crate::observability::labels::Labels;
 use crate::scanner::regex_rule::config::{
-    ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator, SecondaryValidator::*,
+    ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator::*,
 };
 use crate::scanner::scope::Scope;
 use crate::scanner::{get_next_regex_start, CreateScannerError, Scanner};
 use crate::scoped_ruleset::ExclusionCheck;
 use crate::validation::RegexValidationError;
-use std::{fmt, time::Duration};
 
 use crate::{simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch};
 use crate::{Encoding, Utf8Encoding};
 use ahash::AHashSet;
-use chrono::Utc;
-use httpmock::{Method::GET, Method::POST, MockServer};
 
 use regex_automata::Match;
 use std::collections::BTreeMap;
