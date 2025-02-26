@@ -138,7 +138,8 @@ pub fn is_index_within_prefix(
     // Slower method that works with unicode chars
     content[prefix_start..]
         .char_indices()
-        .nth(prefix_size).is_none_or(|(i, _)| prefix_start + i >= target)
+        .nth(prefix_size)
+        .is_none_or(|(i, _)| prefix_start + i >= target)
 }
 
 pub fn get_prefix_start(
