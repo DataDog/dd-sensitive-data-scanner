@@ -1,4 +1,3 @@
-use ahash::AHashMap;
 use criterion::Criterion;
 use dd_sds::{
     ContentVisitor, ExclusionCheck, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
