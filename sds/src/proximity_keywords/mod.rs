@@ -178,7 +178,8 @@ fn compile_keywords_to_ast(
             }
             Ok((
                 calculate_keyword_content_pattern(&trimmed_keyword),
-                calculate_keyword_path_pattern(&trimmed_keyword),
+                calculate_keyword_path_ptus
+               attern(&trimmed_keyword),
             ))
         })
         .collect::<Result<Vec<_>, _>>()?
@@ -235,19 +236,44 @@ fn should_push_word_boundary(c: char) -> bool {
 fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
     let mut keyword_pattern: Vec<Ast> = vec![];
     if should_push_word_boundary(keyword.chars().next().unwrap()) {
-        keyword_pattern.push(word_boundary())
+        keyword_pattern.push(word_boundary_or_link_char())
     }
 
     for c in keyword.chars() {
-        keyword_pattern.push(Ast::Literal(literal_ast(c)))
+        if MULTI_WORD_KEYWORDS_LINK_CHARS.contains(&c) {
+            // All "link chars" are treated the same, so the regex is built allowing any of them
+            // interchangeably
+            keyword_pattern.push(any_link_char())
+        } else {
+            keyword_pattern.push(Ast::Literal(literal_ast(c)))
+        }
     }
 
     if should_push_word_boundary(keyword.chars().next_back().unwrap()) {
-        keyword_pattern.push(word_boundary())
+        keyword_pattern.push(word_boundary_or_link_char())
     }
-    Ast::Concat(Concat {
+    let out = Ast::Concat(Concat {
         span: span(),
         asts: keyword_pattern,
+    });
+    println!("Ast: {}", out);
+    out
+}
+
+fn any_link_char() -> Ast {
+    let mut asts = vec![];
+
+    for c in MULTI_WORD_KEYWORDS_LINK_CHARS {
+        asts.push(Ast::Literal(literal_ast(*c)));
+    }
+
+    Ast::Group(Group {
+        span: span(),
+        kind: GroupKind::NonCapturing(Flags {
+            span: span(),
+            items: vec![],
+        }),
+        ast: Box::new(Ast::Alternation(Alternation { span: span(), asts })),
     })
 }
 
@@ -399,28 +425,46 @@ fn span() -> Span {
     Span::new(Position::new(0, 0, 0), Position::new(0, 0, 0))
 }
 
-fn word_boundary() -> Ast {
-    // The "Unicode" flag is disabled to disable the equivalent of Hyperscans UCP flag
+fn word_boundary_or_link_char() -> Ast {
+    non_capturing_group(
+        Ast::Alternation(Alternation {
+            span: span(),
+            asts: vec![word_boundary(), any_link_char()],
+        }),
+        vec![],
+    )
+}
+
+fn non_capturing_group(inner: Ast, flags: Vec<FlagsItem>) -> Ast {
     Ast::Group(Group {
         span: span(),
         kind: GroupKind::NonCapturing(Flags {
             span: span(),
-            items: vec![
-                FlagsItem {
-                    span: span(),
-                    kind: FlagsItemKind::Negation,
-                },
-                FlagsItem {
-                    span: span(),
-                    kind: FlagsItemKind::Flag(Flag::Unicode),
-                },
-            ],
+            items: flags,
         }),
-        ast: Box::new(Ast::Assertion(Assertion {
-            span: span(),
-            kind: AssertionKind::WordBoundary,
-        })),
+        ast: Box::new(inner),
     })
+}
+
+fn word_boundary() -> Ast {
+    // The "Unicode" flag is disabled to disable the equivalent of Hyperscans UCP flag
+    let inner = Ast::Assertion(Assertion {
+        span: span(),
+        kind: AssertionKind::WordBoundary,
+    });
+
+    let flags = vec![
+        FlagsItem {
+            span: span(),
+            kind: FlagsItemKind::Negation,
+        },
+        FlagsItem {
+            span: span(),
+            kind: FlagsItemKind::Flag(Flag::Unicode),
+        },
+    ];
+
+    non_capturing_group(inner, flags)
 }
 
 #[derive(Debug, PartialEq, Eq, Error)]
