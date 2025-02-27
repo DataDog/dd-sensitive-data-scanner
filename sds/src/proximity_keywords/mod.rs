@@ -178,8 +178,7 @@ fn compile_keywords_to_ast(
             }
             Ok((
                 calculate_keyword_content_pattern(&trimmed_keyword),
-                calculate_keyword_path_ptus
-               attern(&trimmed_keyword),
+                calculate_keyword_path_pattern(&trimmed_keyword),
             ))
         })
         .collect::<Result<Vec<_>, _>>()?
@@ -252,12 +251,10 @@ fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
     if should_push_word_boundary(keyword.chars().next_back().unwrap()) {
         keyword_pattern.push(word_boundary_or_link_char())
     }
-    let out = Ast::Concat(Concat {
+    Ast::Concat(Concat {
         span: span(),
         asts: keyword_pattern,
-    });
-    println!("Ast: {}", out);
-    out
+    })
 }
 
 fn any_link_char() -> Ast {
