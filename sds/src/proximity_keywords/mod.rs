@@ -36,6 +36,10 @@ pub struct ProximityKeywordsRegex {
 /// Example: '.' in "my.path" is considered to be a link character.
 pub const MULTI_WORD_KEYWORDS_LINK_CHARS: &[char] = &['-', '_', '.', ' ', '/'];
 
+/// This is a list of all the link chars above that are also considered "word characters".
+/// These are added to the word boundary assertion in some cases
+pub const MULTI_WORD_KEYWORDS_WORD_BOUNDARY_LINK_CHARS: &[char] = &['_'];
+
 pub const UNIFIED_LINK_CHAR: char = '.';
 #[allow(dead_code)]
 pub const UNIFIED_LINK_STR: &str = ".";
@@ -242,7 +246,7 @@ fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
         if MULTI_WORD_KEYWORDS_LINK_CHARS.contains(&c) {
             // All "link chars" are treated the same, so the regex is built allowing any of them
             // interchangeably
-            keyword_pattern.push(any_link_char())
+            keyword_pattern.push(any_char(MULTI_WORD_KEYWORDS_LINK_CHARS))
         } else {
             keyword_pattern.push(Ast::Literal(literal_ast(c)))
         }
@@ -257,10 +261,10 @@ fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
     })
 }
 
-fn any_link_char() -> Ast {
+fn any_char(chars: &[char]) -> Ast {
     let mut asts = vec![];
 
-    for c in MULTI_WORD_KEYWORDS_LINK_CHARS {
+    for c in chars {
         asts.push(Ast::Literal(literal_ast(*c)));
     }
 
@@ -426,7 +430,10 @@ fn word_boundary_or_link_char() -> Ast {
     non_capturing_group(
         Ast::Alternation(Alternation {
             span: span(),
-            asts: vec![word_boundary(), any_link_char()],
+            asts: vec![
+                word_boundary(),
+                any_char(MULTI_WORD_KEYWORDS_WORD_BOUNDARY_LINK_CHARS),
+            ],
         }),
         vec![],
     )
@@ -798,7 +805,7 @@ mod test {
             _ => ("".to_string(), "".to_string()),
         };
 
-        assert_eq!(content_pattern, "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*|_aws(?-u:\\b)|(?-u:\\b)aws\\-access(?-u:\\b)");
+        assert_eq!(content_pattern, "(?:(?-u:\\b)|(?:_))hello(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))world\\*|(?:\\-|_|\\.| |/)aws(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))aws(?:\\-|_|\\.| |/)access(?:(?-u:\\b)|(?:_))");
         assert_eq!(path_pattern, "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*|_aws(?-u:\\b)|(?-u:\\b)aws\\.access(?-u:\\b)");
     }
 
@@ -806,7 +813,7 @@ mod test {
     fn test_calculate_keyword_pattern() {
         assert_eq!(
             calculate_keyword_content_pattern("test").to_string(),
-            "(?-u:\\b)test(?-u:\\b)".to_string()
+            "(?:(?-u:\\b)|(?:_))test(?:(?-u:\\b)|(?:_))".to_string()
         );
     }
 
@@ -814,7 +821,7 @@ mod test {
     fn test_calculate_multi_word_keyword_pattern() {
         assert_eq!(
             calculate_keyword_content_pattern("multi word-KEYWORD").to_string(),
-            "(?-u:\\b)multi word\\-KEYWORD(?-u:\\b)"
+            "(?:(?-u:\\b)|(?:_))multi(?:\\-|_|\\.| |/)word(?:\\-|_|\\.| |/)KEYWORD(?:(?-u:\\b)|(?:_))"
         )
     }
 
