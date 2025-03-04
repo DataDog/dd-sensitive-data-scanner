@@ -187,7 +187,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
 fn sample_regexes() -> Vec<String> {
     sample_regexes_with_keywords()
         .into_iter()
-        .map(|(keywords, pattern)| pattern)
+        .map(|(_keywords, pattern)| pattern)
         .collect()
 }
 
@@ -259,7 +259,7 @@ impl Event for BenchEvent {
                 PathSegment::Field(key) => {
                     value = value.as_map_mut().unwrap().get_mut(key.as_ref()).unwrap();
                 }
-                PathSegment::Index(i) => { /* indices not supported here */ }
+                PathSegment::Index(_i) => { /* indices not supported here */ }
             }
         }
         (visit)(value.as_string_mut().unwrap());
