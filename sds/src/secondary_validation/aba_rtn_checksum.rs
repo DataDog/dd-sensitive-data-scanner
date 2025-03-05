@@ -2,7 +2,7 @@ use crate::secondary_validation::{get_next_digit, Validator};
 
 pub struct AbaRtnChecksum;
 
-static ABA_RNT_MULTIPLIERS: &[u32] = &[3, 7, 1];
+const ABA_RTN_MULTIPLIERS: &[u32] = &[3, 7, 1];
 
 impl Validator for AbaRtnChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
@@ -13,15 +13,10 @@ impl Validator for AbaRtnChecksum {
 
         let mut chars = regex_match.chars();
         let mut checksum = 0;
-        let mut idx = 0;
 
-        for _ in 0..9 {
+        for i in 0..9 {
             if let Some(digit) = get_next_digit(&mut chars) {
-                checksum += ABA_RNT_MULTIPLIERS[idx] * digit;
-                idx += 1;
-                if idx == 3 {
-                    idx = 0;
-                } // Avoid %3 operation
+                checksum += ABA_RTN_MULTIPLIERS[i % 3] * digit;
             } else {
                 return false;
             }
