@@ -2,7 +2,7 @@ use crate::secondary_validation::{get_next_digit, Validator};
 
 pub struct PolishNationalIdChecksum;
 
-const MULTIPLIERS: &[u32] = &[1, 3, 7, 9];
+const POLISH_NATIONAL_ID_MULTIPLIERS: &[u32] = &[1, 3, 7, 9];
 
 impl Validator for PolishNationalIdChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
@@ -20,7 +20,7 @@ impl Validator for PolishNationalIdChecksum {
                 Some(d) => d,
                 None => return false,
             };
-            sum += digit * MULTIPLIERS[i % 4];
+            sum += digit * POLISH_NATIONAL_ID_MULTIPLIERS[i % 4];
         }
 
         // the checksum is the last digit of (10 − last digit of the sum)
