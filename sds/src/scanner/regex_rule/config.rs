@@ -159,6 +159,7 @@ pub enum SecondaryValidator {
     LuhnChecksum,
     NhsCheckDigit,
     NirChecksum,
+    PolishNationalIdChecksum,
 }
 
 #[cfg(test)]
