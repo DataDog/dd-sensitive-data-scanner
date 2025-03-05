@@ -12,7 +12,6 @@ impl Validator for PolishNationalIdChecksum {
 
         // calculate A×1 + B×3 + C×7 + D×9 + E×1 + F×3 + G×7 + H×9 + I×1 + J×3
         let mut chars = regex_match.chars();
-        // let multipliers = [1, 3, 7, 9];
         let mut sum = 0;
 
         // accumulate the first 10 digits with their respective multipliers
