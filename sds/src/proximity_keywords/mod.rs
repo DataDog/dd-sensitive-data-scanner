@@ -139,7 +139,7 @@ pub fn is_index_within_prefix(
     content[prefix_start..]
         .char_indices()
         .nth(prefix_size)
-        .map_or(true, |(i, _)| prefix_start + i >= target)
+        .is_none_or(|(i, _)| prefix_start + i >= target)
 }
 
 pub fn get_prefix_start(
@@ -526,7 +526,7 @@ mod test {
         let excluded = excluded.unwrap();
         let my_other_str = "¬------------------------------";
         let contains =
-            contains_excluded_keyword_match(&my_other_str, 32, 30, &excluded.keywords_pattern);
+            contains_excluded_keyword_match(my_other_str, 32, 30, &excluded.keywords_pattern);
         assert!(!contains);
     }
 

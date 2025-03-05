@@ -51,7 +51,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     let mut sample_inputs = sample_inputs.clone();
                     let mut matches = 0;
                     for input in &mut sample_inputs {
-                        let results = scanner.scan(input, vec![]);
+                        let results = scanner.scan(input);
                         matches += results.len();
                     }
                     assert_eq!(matches, 65);
@@ -68,7 +68,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                 let scanner = Arc::clone(&scanner);
                 thread_pool.execute(move || {
                     let mut sample_event = sample_event.clone();
-                    let results = scanner.scan(&mut sample_event, vec![]);
+                    let results = scanner.scan(&mut sample_event);
                     assert_eq!(results.len(), 65);
                 });
             }
@@ -87,7 +87,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                         let mut sample_inputs = sample_inputs.clone();
                         let mut matches = 0;
                         for input in &mut sample_inputs {
-                            let results = scanner.scan(input, vec![]);
+                            let results = scanner.scan(input);
                             matches += results.len();
                         }
                         assert_eq!(matches, 35);
@@ -107,7 +107,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     let scanner = Arc::clone(&scanner_with_keywords);
                     thread_pool.execute(move || {
                         let mut sample_event = sample_event.clone();
-                        let results = scanner.scan(&mut sample_event, vec![]);
+                        let results = scanner.scan(&mut sample_event);
                         assert_eq!(results.len(), 35);
                     });
                 }
@@ -125,7 +125,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                 let mut sample_inputs = sample_inputs.clone();
                 let mut matches = 0;
                 for input in &mut sample_inputs {
-                    let results = scanner.scan(input, vec![]);
+                    let results = scanner.scan(input);
                     matches += results.len();
                 }
                 assert_eq!(matches, 65);
@@ -140,7 +140,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                 let sample_event = sample_event.clone();
                 let scanner = Arc::clone(&scanner);
                 let mut sample_event = sample_event.clone();
-                let results = scanner.scan(&mut sample_event, vec![]);
+                let results = scanner.scan(&mut sample_event);
                 assert_eq!(results.len(), 65);
             }
         })
@@ -157,7 +157,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     let mut sample_inputs = sample_inputs.clone();
                     let mut matches = 0;
                     for input in &mut sample_inputs {
-                        let results = scanner.scan(input, vec![]);
+                        let results = scanner.scan(input);
                         matches += results.len();
                     }
                     assert_eq!(matches, 35);
@@ -175,7 +175,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     let sample_event = sample_event.clone();
                     let scanner = Arc::clone(&scanner_with_keywords);
                     let mut sample_event = sample_event.clone();
-                    let results = scanner.scan(&mut sample_event, vec![]);
+                    let results = scanner.scan(&mut sample_event);
                     assert_eq!(results.len(), 35);
                 }
             })
@@ -187,7 +187,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
 fn sample_regexes() -> Vec<String> {
     sample_regexes_with_keywords()
         .into_iter()
-        .map(|(keywords, pattern)| pattern)
+        .map(|(_keywords, pattern)| pattern)
         .collect()
 }
 
@@ -259,7 +259,7 @@ impl Event for BenchEvent {
                 PathSegment::Field(key) => {
                     value = value.as_map_mut().unwrap().get_mut(key.as_ref()).unwrap();
                 }
-                PathSegment::Index(i) => { /* indices not supported here */ }
+                PathSegment::Index(_i) => { /* indices not supported here */ }
             }
         }
         (visit)(value.as_string_mut().unwrap());

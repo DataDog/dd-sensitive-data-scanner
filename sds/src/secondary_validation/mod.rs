@@ -8,6 +8,7 @@ mod jwt_expiration_checker;
 mod luhn_checksum;
 mod nhs_check_digit;
 mod nir_checksum;
+mod polish_national_id_checksum;
 
 #[cfg(test)]
 pub use jwt_expiration_checker::generate_jwt;
@@ -23,6 +24,7 @@ pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecke
 pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 pub use crate::secondary_validation::nir_checksum::NirChecksum;
+pub use crate::secondary_validation::polish_national_id_checksum::PolishNationalIdChecksum;
 use std::str::Chars;
 
 pub trait Validator: Send + Sync {
@@ -67,6 +69,9 @@ impl Validator for SecondaryValidator {
                 BrazilianCnpjChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::AbaRtnChecksum => AbaRtnChecksum.is_valid_match(regex_match),
+            SecondaryValidator::PolishNationalIdChecksum => {
+                PolishNationalIdChecksum.is_valid_match(regex_match)
+            }
         }
     }
 }

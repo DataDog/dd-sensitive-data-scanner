@@ -59,6 +59,7 @@ impl CompiledRule for RegexCompiledRule {
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
+        _: Option<&Vec<(usize, usize)>>,
     ) {
         match self.included_keywords {
             Some(ref included_keywords) => {
