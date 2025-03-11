@@ -1,13 +1,11 @@
-use crate::match_validation::config::MatchValidationType;
 use crate::proximity_keywords::compile_keywords_proximity_config;
 use crate::scanner::config::RuleConfig;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::regex_store::get_memoized_regex;
-use crate::scanner::scope::Scope;
 use crate::secondary_validation::Validator;
 use crate::validation::validate_and_create_regex;
-use crate::{CompiledRuleDyn, CreateScannerError, Labels, MatchAction};
+use crate::{CompiledRuleDyn, CreateScannerError, Labels};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DefaultOnNull;
@@ -17,29 +15,20 @@ use std::sync::Arc;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RegexRuleConfig {
     pub pattern: String,
-    pub match_action: MatchAction,
-    #[serde(default)]
-    pub scope: Scope,
     pub proximity_keywords: Option<ProximityKeywordsConfig>,
     pub validator: Option<SecondaryValidator>,
     #[serde_as(deserialize_as = "DefaultOnNull")]
     #[serde(default)]
     pub labels: Labels,
-
-    pub match_validation_type: Option<MatchValidationType>,
 }
 
 impl RegexRuleConfig {
     pub fn new(pattern: &str) -> Self {
         Self {
             pattern: pattern.to_owned(),
-            match_action: MatchAction::None,
-            scope: Scope::default(),
             proximity_keywords: None,
             validator: None,
             labels: Labels::default(),
-
-            match_validation_type: None,
         }
     }
 
@@ -47,12 +36,12 @@ impl RegexRuleConfig {
         self.mutate_clone(|x| x.pattern = pattern)
     }
 
-    pub fn match_action(&self, match_action: MatchAction) -> Self {
-        self.mutate_clone(|x| x.match_action = match_action)
-    }
-    pub fn scope(&self, scope: Scope) -> Self {
-        self.mutate_clone(|x| x.scope = scope)
-    }
+    // pub fn match_action(&self, match_action: MatchAction) -> Self {
+    //     self.mutate_clone(|x| x.match_action = match_action)
+    // }
+    // pub fn scope(&self, scope: Scope) -> Self {
+    //     self.mutate_clone(|x| x.scope = scope)
+    // }
     pub fn proximity_keywords(&self, proximity_keywords: ProximityKeywordsConfig) -> Self {
         self.mutate_clone(|x| x.proximity_keywords = Some(proximity_keywords))
     }
@@ -65,21 +54,12 @@ impl RegexRuleConfig {
         self.mutate_clone(|x| x.labels = labels)
     }
 
-    pub fn match_validation_type(&self, match_validation_type: MatchValidationType) -> Self {
-        self.mutate_clone(|x| x.match_validation_type = Some(match_validation_type))
-    }
+    // pub fn match_validation_type(&self, match_validation_type: MatchValidationType) -> Self {
+    //     self.mutate_clone(|x| x.match_validation_type = Some(match_validation_type))
+    // }
 
     pub fn build(&self) -> Arc<dyn RuleConfig> {
-        Arc::new(RegexRuleConfig {
-            pattern: self.pattern.clone(),
-            match_action: self.match_action.clone(),
-            scope: self.scope.clone(),
-            proximity_keywords: self.proximity_keywords.clone(),
-            validator: self.validator.clone(),
-            labels: self.labels.clone(),
-
-            match_validation_type: self.match_validation_type.clone(),
-        })
+        Arc::new(self.clone())
     }
 
     fn mutate_clone(&self, modify: impl FnOnce(&mut Self)) -> Self {
@@ -96,7 +76,6 @@ impl RuleConfig for RegexRuleConfig {
         scanner_labels: Labels,
     ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
         let regex = get_memoized_regex(&self.pattern, validate_and_create_regex)?;
-        self.match_action.validate()?;
 
         let rule_labels = scanner_labels.clone_with_labels(self.labels.clone());
 
@@ -109,8 +88,6 @@ impl RuleConfig for RegexRuleConfig {
         Ok(Box::new(RegexCompiledRule {
             rule_index,
             regex,
-            match_action: self.match_action.clone(),
-            scope: self.scope.clone(),
             included_keywords,
             excluded_keywords,
             validator: self
@@ -118,18 +95,7 @@ impl RuleConfig for RegexRuleConfig {
                 .clone()
                 .map(|x| Arc::new(x) as Arc<dyn Validator>),
             metrics: RuleMetrics::new(&rule_labels),
-            match_validation_type: self.get_match_validation_type().cloned(),
-            internal_match_validation_type: self
-                .get_match_validation_type()
-                .map(|x| x.get_internal_match_validation_type()),
         }))
-    }
-
-    fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
-        match &self.match_validation_type {
-            Some(match_validation_type) => Some(match_validation_type),
-            None => None,
-        }
     }
 }
 
@@ -180,13 +146,9 @@ mod test {
             rule_config,
             RegexRuleConfig {
                 pattern: "123".to_string(),
-                match_action: MatchAction::None,
-                scope: Scope::all(),
                 proximity_keywords: None,
                 validator: None,
                 labels: Labels::empty(),
-
-                match_validation_type: None,
             }
         );
     }

@@ -1,7 +1,7 @@
 use crate::match_action::MatchAction;
 use crate::scanner::regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig};
 use crate::scanner::scope::Scope;
-use crate::scanner::ScannerBuilder;
+use crate::scanner::{RootRuleConfig, ScannerBuilder};
 use crate::{simple_event::SimpleEvent, Path, PathSegment};
 use metrics::{Key, Label};
 use metrics_util::debugging::DebugValue;
@@ -19,9 +19,8 @@ fn should_submit_scanning_metrics() {
     let content_2 = "no match";
 
     metrics::with_local_recorder(&recorder, || {
-        let rule_0 = RegexRuleConfig::new(content_1)
-            .match_action(MatchAction::None)
-            .build();
+        let rule_0 = RootRuleConfig::new(RegexRuleConfig::new(content_1).build())
+            .match_action(MatchAction::None);
 
         let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
         let mut content = SimpleEvent::Map(BTreeMap::from([
@@ -68,12 +67,11 @@ fn should_submit_excluded_match_metric() {
     let snapshotter = recorder.snapshotter();
 
     metrics::with_local_recorder(&recorder, || {
-        let rule_0 = RegexRuleConfig::new("bcdef")
+        let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("bcdef").build())
             .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
                 "test".into(),
             )])]))
-            .match_action(MatchAction::None)
-            .build();
+            .match_action(MatchAction::None);
 
         let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
         let mut content = SimpleEvent::Map(BTreeMap::from([
@@ -104,16 +102,18 @@ fn should_submit_excluded_keywords_metric() {
     let snapshotter = recorder.snapshotter();
 
     metrics::with_local_recorder(&recorder, || {
-        let redact_test_rule = RegexRuleConfig::new("world")
-            .match_action(MatchAction::Redact {
-                replacement: "[REDACTED]".to_string(),
-            })
-            .proximity_keywords(ProximityKeywordsConfig {
-                look_ahead_character_count: 30,
-                included_keywords: vec![],
-                excluded_keywords: vec!["hello".to_string()],
-            })
-            .build();
+        let redact_test_rule = RootRuleConfig::new(
+            RegexRuleConfig::new("world")
+                .proximity_keywords(ProximityKeywordsConfig {
+                    look_ahead_character_count: 30,
+                    included_keywords: vec![],
+                    excluded_keywords: vec!["hello".to_string()],
+                })
+                .build(),
+        )
+        .match_action(MatchAction::Redact {
+            replacement: "[REDACTED]".to_string(),
+        });
 
         let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
         let mut content = SimpleEvent::Map(BTreeMap::from([(
@@ -141,16 +141,18 @@ fn should_submit_excluded_keywords_metric() {
 
 #[test]
 fn test_regex_match_and_included_keyword_same_index() {
-    let email_rule = RegexRuleConfig::new(".+")
-        .match_action(MatchAction::Redact {
-            replacement: "[REDACTED]".to_string(),
-        })
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 30,
-            included_keywords: vec!["email".to_string()],
-            excluded_keywords: vec![],
-        })
-        .build();
+    let email_rule = RootRuleConfig::new(
+        RegexRuleConfig::new(".+")
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["email".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    });
 
     let scanner = ScannerBuilder::new(&[email_rule])
         .with_return_matches(true)

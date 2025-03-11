@@ -15,6 +15,7 @@ use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Path};
 use std::any::{Any, TypeId};
+use std::ops::Deref;
 use std::sync::Arc;
 
 use self::metrics::ScannerMetrics;
@@ -26,6 +27,8 @@ use crate::scanner::scope::Scope;
 use crate::stats::GLOBAL_STATS;
 use ahash::{AHashMap, AHashSet};
 use regex_automata::Match;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 pub mod config;
 pub mod error;
@@ -58,12 +61,81 @@ where
     }
 }
 
+#[serde_as]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct RootRuleConfig<T> {
+    pub match_action: MatchAction,
+    #[serde(default)]
+    pub scope: Scope,
+    pub match_validation_type: Option<MatchValidationType>,
+    pub inner: T,
+}
+
+impl<T> RootRuleConfig<T> {
+    pub fn new(inner: T) -> Self {
+        Self {
+            match_action: MatchAction::None,
+            scope: Scope::all(),
+            match_validation_type: None,
+            inner,
+        }
+    }
+
+    pub fn match_action(mut self, action: MatchAction) -> Self {
+        self.match_action = action;
+        self
+    }
+
+    pub fn scope(mut self, scope: Scope) -> Self {
+        self.scope = scope;
+        self
+    }
+
+    pub fn match_validation_type(mut self, match_validation_type: MatchValidationType) -> Self {
+        self.match_validation_type = Some(match_validation_type);
+        self
+    }
+}
+
+impl<T> Deref for RootRuleConfig<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+pub struct RootCompiledRule {
+    pub inner: Box<dyn CompiledRuleDyn>,
+    pub scope: Scope,
+    pub match_action: MatchAction,
+    pub match_validation_type: Option<MatchValidationType>,
+}
+
+impl RootCompiledRule {
+    pub fn internal_match_validation_type(&self) -> Option<InternalMatchValidationType> {
+        self.match_validation_type
+            .as_ref()
+            .map(|x| x.get_internal_match_validation_type())
+    }
+}
+
+impl Deref for RootCompiledRule {
+    type Target = dyn CompiledRuleDyn;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref()
+    }
+}
+
 // CompiledRuleDyn is a private trait that is used to hide the complexity of downcasting the group data
 // into the correct type.
 // This is used to allow the group data to be stored in a map only if the group of rule has a groupData associated with it (unlike regex rules)
 pub trait CompiledRuleDyn: Send + Sync {
-    fn get_match_action(&self) -> &MatchAction;
-    fn get_scope(&self) -> &Scope;
+    fn create_group_data(&self, labels: &Labels) -> Option<Box<dyn Any>>;
+    fn create_group_config(&self) -> Option<Box<dyn Any>>;
+    fn create_rule_scan_cache(&self) -> Option<Box<dyn Any>>;
+
+    // TODO: remove this?
     fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
         None
     }
@@ -95,9 +167,9 @@ pub trait CompiledRuleDyn: Send + Sync {
         // default is to do nothing
     }
 
-    fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
+    // fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
 
-    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
+    // fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
 
     fn process_scanner_config(
         &self,
@@ -109,12 +181,31 @@ pub trait CompiledRuleDyn: Send + Sync {
 // get_string_matches will downcast the group data to the correct type and call the actual implementation
 // done in the CompiledRule trait
 impl<T: CompiledRule> CompiledRuleDyn for T {
-    fn get_match_action(&self) -> &MatchAction {
-        self.get_match_action()
+    fn create_group_data(&self, labels: &Labels) -> Option<Box<dyn Any>> {
+        let group_data = self.create_group_data(labels);
+        if TypeId::of::<<T as CompiledRule>::GroupData>() == TypeId::of::<()>() {
+            None
+        } else {
+            Some(Box::new(group_data))
+        }
     }
 
-    fn get_scope(&self) -> &Scope {
-        self.get_scope()
+    fn create_group_config(&self) -> Option<Box<dyn Any>> {
+        let group_config = self.create_group_config();
+        if TypeId::of::<<T as CompiledRule>::GroupConfig>() == TypeId::of::<()>() {
+            None
+        } else {
+            Some(Box::new(group_config))
+        }
+    }
+
+    fn create_rule_scan_cache(&self) -> Option<Box<dyn Any>> {
+        let rule_scan_cache = self.create_rule_scan_cache();
+        if TypeId::of::<<T as CompiledRule>::RuleScanCache>() == TypeId::of::<()>() {
+            None
+        } else {
+            Some(Box::new(rule_scan_cache))
+        }
     }
 
     fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
@@ -137,7 +228,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
     ) {
         let group_data_any = group_data
             .entry(TypeId::of::<T::GroupData>())
-            .or_insert_with(|| Box::new(T::create_group_data(scanner_labels)));
+            .or_insert_with(|| Box::new(self.create_group_data(scanner_labels)));
         let group_data: &mut T::GroupData = group_data_any.downcast_mut().unwrap();
 
         let group_config_any = group_config.get(&TypeId::of::<T::GroupConfig>()).unwrap();
@@ -145,7 +236,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
 
         let rule_scan_cache_any = rule_scan_cache
             .entry(TypeId::of::<T::RuleScanCache>())
-            .or_insert_with(|| Box::new(T::create_rule_scan_cache()));
+            .or_insert_with(|| Box::new(self.create_rule_scan_cache()));
         let rule_scan_cache: &mut T::RuleScanCache = rule_scan_cache_any.downcast_mut().unwrap();
 
         self.get_string_matches(
@@ -170,14 +261,6 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         T::on_excluded_match_multipass_v0(self)
     }
 
-    fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
-        T::get_match_validation_type(self)
-    }
-
-    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
-        T::get_internal_match_validation_type(self)
-    }
-
     // method used to provide each rule the list of rules enabled for a scanner
     // this is used to allow rules that have group data to enabled/disable some features in this group
     fn process_scanner_config(
@@ -186,7 +269,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
     ) {
         let group_config_any = group_config
             .entry(TypeId::of::<T::GroupConfig>())
-            .or_insert_with(|| Box::new(T::create_group_config()));
+            .or_insert_with(|| Box::new(self.create_group_config()));
         let group_config: &mut T::GroupConfig = group_config_any.downcast_mut().unwrap();
         T::process_scanner_config(self, group_config);
     }
@@ -205,16 +288,14 @@ pub trait CompiledRule: Send + Sync {
     type RuleScanCache: 'static;
 
     /// Create a new instance of GroupData with the given scanner.
-    fn create_group_data(labels: &Labels) -> Self::GroupData;
+    fn create_group_data(&self, labels: &Labels) -> Self::GroupData;
 
     /// Create a new instance of GroupData with the given scanner.
-    fn create_group_config() -> Self::GroupConfig;
+    fn create_group_config(&self) -> Self::GroupConfig;
 
     /// Create a new instance of RuleScanCache
-    fn create_rule_scan_cache() -> Self::RuleScanCache;
+    fn create_rule_scan_cache(&self) -> Self::RuleScanCache;
 
-    fn get_match_action(&self) -> &MatchAction;
-    fn get_scope(&self) -> &Scope;
     fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
         None
     }
@@ -245,11 +326,6 @@ pub trait CompiledRule: Send + Sync {
         // default is to do nothing
     }
 
-    fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
-
-    // This is the match validation type key used in the match_validators_per_type map
-    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
-
     // method used to provide each rule the list of rules enabled for a scanner
     // this is used to allow rules that have group data to enabled/disable some features in this group
     fn process_scanner_config(&self, group_config: &mut Self::GroupConfig);
@@ -265,10 +341,6 @@ where
         labels: Labels,
     ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
         self.as_ref().convert_to_compiled_rule(rule_index, labels)
-    }
-
-    fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
-        self.as_ref().get_match_validation_type()
     }
 }
 
@@ -341,7 +413,7 @@ impl ScanOptionBuilder {
 }
 
 pub struct Scanner {
-    rules: Vec<Box<dyn CompiledRuleDyn>>,
+    rules: Vec<RootCompiledRule>,
     scoped_ruleset: ScopedRuleSet,
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
@@ -351,7 +423,7 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn builder(rules: &[Arc<dyn RuleConfig>]) -> ScannerBuilder {
+    pub fn builder(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder {
         ScannerBuilder::new(rules)
     }
 
@@ -392,7 +464,10 @@ impl Scanner {
                     // Now that the `excluded_matches` set is fully populated, filter out any matches
                     // that are the same as excluded matches (also known as "Multi-pass V0")
                     rule_matches.retain(|rule_match| {
-                        if self.rules[rule_match.rule_index].should_exclude_multipass_v0() {
+                        if self.rules[rule_match.rule_index]
+                            .inner
+                            .should_exclude_multipass_v0()
+                        {
                             let is_false_positive = excluded_matches
                                 .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
                             if is_false_positive && self.scanner_features.multipass_v0_enabled {
@@ -407,11 +482,9 @@ impl Scanner {
 
                 self.sort_and_remove_overlapping_rules::<E::Encoding>(rule_matches);
 
-                let will_mutate = rule_matches.iter().any(|rule_match| {
-                    self.rules[rule_match.rule_index]
-                        .get_match_action()
-                        .is_mutating()
-                });
+                let will_mutate = rule_matches
+                    .iter()
+                    .any(|rule_match| self.rules[rule_match.rule_index].match_action.is_mutating());
 
                 self.apply_match_actions(content, path, rule_matches, &mut output_rule_matches);
 
@@ -450,14 +523,11 @@ impl Scanner {
         let mut match_validator_rule_match_per_type = AHashMap::new();
         for rule_match in rule_matches.drain(..) {
             let rule = &self.rules[rule_match.rule_index];
-            if let Some(match_validation_type) = rule.get_internal_match_validation_type() {
-                if !match_validator_rule_match_per_type.contains_key(match_validation_type) {
-                    match_validator_rule_match_per_type.insert(match_validation_type, Vec::new());
-                }
+            if let Some(match_validation_type) = rule.internal_match_validation_type() {
                 match_validator_rule_match_per_type
-                    .get_mut(match_validation_type)
-                    .unwrap()
-                    .push(rule_match);
+                    .entry(match_validation_type)
+                    .or_insert_with(|| vec![])
+                    .push(rule_match)
             }
         }
 
@@ -540,7 +610,7 @@ impl Scanner {
             matched_content_copy = Some(matched_content.to_string());
         }
 
-        if rule.get_match_action().is_mutating() {
+        if rule.match_action.is_mutating() {
             let mutated_utf8_match_start =
                 (rule_match.utf8_start as isize + *utf8_byte_delta) as usize;
             let mutated_utf8_match_end = (rule_match.utf8_end as isize + *utf8_byte_delta) as usize;
@@ -550,7 +620,7 @@ impl Scanner {
             debug_assert!(content.is_char_boundary(mutated_utf8_match_end));
 
             let matched_content = &content[mutated_utf8_match_start..mutated_utf8_match_end];
-            if let Some(replacement) = rule.get_match_action().get_replacement(matched_content) {
+            if let Some(replacement) = rule.match_action.get_replacement(matched_content) {
                 let before_replacement = &matched_content[replacement.start..replacement.end];
 
                 // update indices to match the new mutated content
@@ -574,7 +644,7 @@ impl Scanner {
 
         let rule = &self.rules[rule_match.rule_index];
 
-        let match_status: MatchStatus = if rule.get_match_validation_type().is_some() {
+        let match_status: MatchStatus = if rule.match_validation_type.is_some() {
             MatchStatus::NotChecked
         } else {
             MatchStatus::NotAvailable
@@ -583,7 +653,7 @@ impl Scanner {
         RuleMatch {
             rule_index: rule_match.rule_index,
             path,
-            replacement_type: rule.get_match_action().replacement_type(),
+            replacement_type: rule.match_action.replacement_type(),
             start_index: custom_start,
             end_index_exclusive: custom_end,
             shift_offset,
@@ -602,9 +672,9 @@ impl Scanner {
         rule_matches.sort_unstable_by(|a, b| {
             // Mutating rules are a higher priority (earlier in the list)
             let ord = self.rules[a.rule_index]
-                .get_match_action()
+                .match_action
                 .is_mutating()
-                .cmp(&self.rules[b.rule_index].get_match_action().is_mutating())
+                .cmp(&self.rules[b.rule_index].match_action.is_mutating())
                 .reverse();
 
             // Earlier start offset
@@ -623,10 +693,7 @@ impl Scanner {
         let mut retained_rules: Vec<InternalRuleMatch<E>> = vec![];
 
         'rule_matches: while let Some(rule_match) = rule_matches.pop() {
-            if self.rules[rule_match.rule_index]
-                .get_match_action()
-                .is_mutating()
-            {
+            if self.rules[rule_match.rule_index].match_action.is_mutating() {
                 // Mutating rules are kept only if they don't overlap with a previous rule.
                 if let Some(last) = retained_rules.last() {
                     if last.utf8_end > rule_match.utf8_start {
@@ -664,13 +731,13 @@ impl Drop for Scanner {
 
 #[derive(Default)]
 pub struct ScannerBuilder<'a> {
-    rules: &'a [Arc<dyn RuleConfig>],
+    rules: &'a [RootRuleConfig<Arc<dyn RuleConfig>>],
     labels: Labels,
     scanner_features: ScannerFeatures,
 }
 
 impl ScannerBuilder<'_> {
-    pub fn new(rules: &[Arc<dyn RuleConfig>]) -> ScannerBuilder {
+    pub fn new(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder {
         ScannerBuilder {
             rules,
             labels: Labels::empty(),
@@ -706,7 +773,7 @@ impl ScannerBuilder<'_> {
         let mut match_validators_per_type = AHashMap::new();
 
         for rule in self.rules.iter() {
-            if let Some(match_validation_type) = rule.get_match_validation_type() {
+            if let Some(match_validation_type) = &rule.match_validation_type {
                 if match_validation_type.can_create_match_validator() {
                     let internal_type = match_validation_type.get_internal_match_validation_type();
                     let match_validator = match_validation_type.into_match_validator();
@@ -730,9 +797,16 @@ impl ScannerBuilder<'_> {
             .iter()
             .enumerate()
             .map(|(rule_index, config)| {
-                config.convert_to_compiled_rule(rule_index, self.labels.clone())
+                let inner = config.convert_to_compiled_rule(rule_index, self.labels.clone())?;
+                config.match_action.validate()?;
+                Ok(RootCompiledRule {
+                    inner,
+                    scope: config.scope.clone(),
+                    match_action: config.match_action.clone(),
+                    match_validation_type: config.match_validation_type.clone(),
+                })
             })
-            .collect::<Result<Vec<Box<dyn CompiledRuleDyn>>, CreateScannerError>>()?;
+            .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;
 
         let mut group_configs: AHashMap<TypeId, Box<dyn Any + Send + Sync>> = AHashMap::new();
         compiled_rules.iter().for_each(|rule| {
@@ -742,14 +816,13 @@ impl ScannerBuilder<'_> {
         let scoped_ruleset = ScopedRuleSet::new(
             &compiled_rules
                 .iter()
-                .map(|rule| rule.get_scope().clone())
+                .map(|rule| rule.scope.clone())
                 .collect::<Vec<_>>(),
         )
         .with_implicit_index_wildcards(self.scanner_features.add_implicit_index_wildcards);
 
         {
             let stats = &*GLOBAL_STATS;
-
             stats.scanner_creations.increment(1);
             stats.increment_total_scanners();
         }

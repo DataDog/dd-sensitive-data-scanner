@@ -1,19 +1,22 @@
 use crate::scanner::test::build_test_scanner;
+use crate::scanner::RootRuleConfig;
 use crate::{MatchAction, ProximityKeywordsConfig, RegexRuleConfig, ScannerBuilder, SimpleEvent};
 use std::collections::BTreeMap;
 
 #[test]
 fn test_included_keywords_match_content() {
-    let redact_test_rule = RegexRuleConfig::new("world")
-        .match_action(MatchAction::Redact {
-            replacement: "[REDACTED]".to_string(),
-        })
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 30,
-            included_keywords: vec!["hello".to_string()],
-            excluded_keywords: vec![],
-        })
-        .build();
+    let redact_test_rule = RootRuleConfig::new(
+        RegexRuleConfig::new("world")
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["hello".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    });
 
     let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
     let mut content = "hello world".to_string();
@@ -115,16 +118,18 @@ fn test_included_keywords_path_deep() {
 
 #[test]
 fn test_included_keyword_not_match_further_than_look_ahead_character_count() {
-    let redact_test_rule = RegexRuleConfig::new("world")
-        .match_action(MatchAction::Redact {
-            replacement: "[REDACTED]".to_string(),
-        })
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 30,
-            included_keywords: vec!["hello".to_string()],
-            excluded_keywords: vec![],
-        })
-        .build();
+    let redact_test_rule = RootRuleConfig::new(
+        RegexRuleConfig::new("world")
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["hello".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    });
 
     let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
 
@@ -136,16 +141,18 @@ fn test_included_keyword_not_match_further_than_look_ahead_character_count() {
 
 #[test]
 fn test_included_keyword_multiple_matches_in_one_prefix() {
-    let redact_test_rule = RegexRuleConfig::new("world")
-        .match_action(MatchAction::Redact {
-            replacement: "[REDACTED]".to_string(),
-        })
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 30,
-            included_keywords: vec!["hello".to_string()],
-            excluded_keywords: vec![],
-        })
-        .build();
+    let redact_test_rule = RootRuleConfig::new(
+        RegexRuleConfig::new("world")
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["hello".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    });
 
     let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
 
@@ -158,16 +165,18 @@ fn test_included_keyword_multiple_matches_in_one_prefix() {
 
 #[test]
 fn test_included_keyword_multiple_prefix_matches() {
-    let redact_test_rule = RegexRuleConfig::new("world")
-        .match_action(MatchAction::Redact {
-            replacement: "[REDACTED]".to_string(),
-        })
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 30,
-            included_keywords: vec!["hello".to_string()],
-            excluded_keywords: vec![],
-        })
-        .build();
+    let redact_test_rule = RootRuleConfig::new(
+        RegexRuleConfig::new("world")
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["hello".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    });
 
     let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
 
@@ -182,13 +191,15 @@ fn test_included_keyword_multiple_prefix_matches() {
 
 #[test]
 fn test_included_keywords_on_start_boundary_with_space_including_word_boundary() {
-    let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("ab")
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 30,
-            included_keywords: vec!["id".to_string()],
-            excluded_keywords: vec![],
-        })
-        .build()])
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
+        RegexRuleConfig::new("ab")
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["id".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )])
     .build()
     .unwrap();
 
@@ -202,13 +213,15 @@ fn test_included_keywords_on_start_boundary_with_space_including_word_boundary()
 
 #[test]
 fn test_included_keywords_on_end_boundary() {
-    let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("abc")
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 30,
-            included_keywords: vec!["id".to_string()],
-            excluded_keywords: vec![],
-        })
-        .build()])
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
+        RegexRuleConfig::new("abc")
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["id".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )])
     .build()
     .unwrap();
 
@@ -220,13 +233,15 @@ fn test_included_keywords_on_end_boundary() {
 
 #[test]
 fn should_not_look_ahead_too_far() {
-    let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("x")
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 10,
-            included_keywords: vec!["host".to_string()],
-            excluded_keywords: vec![],
-        })
-        .build()])
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
+        RegexRuleConfig::new("x")
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 10,
+                included_keywords: vec!["host".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )])
     .build()
     .unwrap();
 
@@ -245,13 +260,15 @@ fn should_not_look_ahead_too_far() {
 
 #[test]
 fn should_verify_included_keywords_on_path_even_if_included_keywords_are_in_string() {
-    let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 10,
-            included_keywords: vec!["hello".to_string()],
-            excluded_keywords: vec![],
-        })
-        .build()])
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
+        RegexRuleConfig::new("world")
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 10,
+                included_keywords: vec!["hello".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )])
     .build()
     .unwrap();
 
@@ -267,13 +284,15 @@ fn should_verify_included_keywords_on_path_even_if_included_keywords_are_in_stri
 
 #[test]
 fn test_included_and_excluded_keyword() {
-    let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 11,
-            included_keywords: vec!["hey".to_string()],
-            excluded_keywords: vec!["hello".to_string()],
-        })
-        .build()])
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
+        RegexRuleConfig::new("world")
+            .proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 11,
+                included_keywords: vec!["hey".to_string()],
+                excluded_keywords: vec!["hello".to_string()],
+            })
+            .build(),
+    )])
     .build()
     .unwrap();
 

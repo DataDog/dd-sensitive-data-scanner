@@ -1,3 +1,4 @@
+use crate::scanner::RootRuleConfig;
 use crate::SecondaryValidator::{
     ChineseIdChecksum, GithubTokenChecksum, IbanChecker, JwtExpirationChecker, NhsCheckDigit,
 };
@@ -6,14 +7,20 @@ use chrono::Utc;
 
 #[test]
 fn test_luhn_checksum() {
-    let rule =
-        RegexRuleConfig::new("(\\d{16})|((\\d{4} ){3}\\d{4})").match_action(MatchAction::Redact {
-            replacement: "[credit card]".to_string(),
-        });
+    let match_action = MatchAction::Redact {
+        replacement: "[credit card]".to_string(),
+    };
 
-    let rule_with_checksum = rule.validator(SecondaryValidator::LuhnChecksum).build();
+    let rule = RegexRuleConfig::new("(\\d{16})|((\\d{4} ){3}\\d{4})");
 
-    let scanner = ScannerBuilder::new(&[rule.build()]).build().unwrap();
+    let rule_with_checksum =
+        RootRuleConfig::new(rule.validator(SecondaryValidator::LuhnChecksum).build())
+            .match_action(match_action.clone());
+
+    let scanner =
+        ScannerBuilder::new(&[RootRuleConfig::new(rule.build()).match_action(match_action)])
+            .build()
+            .unwrap();
     let mut content = "4556997807150071  4111 1111 1111 1111".to_string();
     let matches = scanner.scan(&mut content);
     assert_eq!(matches.len(), 2);
@@ -28,13 +35,19 @@ fn test_luhn_checksum() {
 
 #[test]
 fn test_chinese_id_checksum() {
-    let rule = RegexRuleConfig::new("\\d+").match_action(MatchAction::Redact {
+    let match_action = MatchAction::Redact {
         replacement: "[IDCARD]".to_string(),
-    });
+    };
 
-    let rule_with_checksum = rule.validator(ChineseIdChecksum).build();
+    let rule = RegexRuleConfig::new("\\d+"); //.match_action(match_action);
 
-    let scanner = ScannerBuilder::new(&[rule.build()]).build().unwrap();
+    let rule_with_checksum = RootRuleConfig::new(rule.validator(ChineseIdChecksum).build())
+        .match_action(match_action.clone());
+
+    let scanner =
+        ScannerBuilder::new(&[RootRuleConfig::new(rule.build()).match_action(match_action)])
+            .build()
+            .unwrap();
     let mut content = "513231200012121657 513231200012121651".to_string();
     let matches = scanner.scan(&mut content);
     assert_eq!(matches.len(), 2);
@@ -49,12 +62,14 @@ fn test_chinese_id_checksum() {
 
 #[test]
 fn test_iban_checksum() {
-    let rule_with_checksum = RegexRuleConfig::new("DE[0-9]+")
-        .match_action(MatchAction::Redact {
-            replacement: "[IBAN]".to_string(),
-        })
-        .validator(IbanChecker)
-        .build();
+    let rule_with_checksum = RootRuleConfig::new(
+        RegexRuleConfig::new("DE[0-9]+")
+            .validator(IbanChecker)
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[IBAN]".to_string(),
+    });
 
     // Valid content with checksum
     let mut content = "number=DE44500105175407324931".to_string();
@@ -77,13 +92,19 @@ fn test_iban_checksum() {
 
 #[test]
 fn test_github_token_checksum() {
-    let rule = RegexRuleConfig::new("[^ ]+").match_action(MatchAction::Redact {
+    let rule = RegexRuleConfig::new("[^ ]+");
+    let match_action = MatchAction::Redact {
         replacement: "[GITHUB]".to_string(),
-    });
+    };
 
-    let rule_with_checksum = rule.validator(GithubTokenChecksum).build();
+    let rule_with_checksum = RootRuleConfig::new(rule.validator(GithubTokenChecksum).build())
+        .match_action(match_action.clone());
 
-    let scanner = ScannerBuilder::new(&[rule.build()]).build().unwrap();
+    let scanner =
+        ScannerBuilder::new(&[RootRuleConfig::new(rule.build()).match_action(match_action)])
+            .build()
+            .unwrap();
+
     let mut content =
         "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 ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5"
             .to_string();
@@ -103,12 +124,14 @@ fn test_github_token_checksum() {
 #[test]
 fn test_jwt_expiration_checker() {
     use crate::secondary_validation::generate_jwt;
-    let rule = RegexRuleConfig::new("[A-Za-z0-9._-]+")
-        .match_action(MatchAction::Redact {
-            replacement: "[JWT]".to_string(),
-        })
-        .validator(JwtExpirationChecker)
-        .build();
+    let rule = RootRuleConfig::new(
+        RegexRuleConfig::new("[A-Za-z0-9._-]+")
+            .validator(JwtExpirationChecker)
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[JWT]".to_string(),
+    });
     let scanner = ScannerBuilder::new(&[rule]).build().unwrap();
     let future_time_as_string = (Utc::now().timestamp() + 1000000).to_string();
 
@@ -125,12 +148,11 @@ fn test_jwt_expiration_checker() {
 
 #[test]
 fn test_nhs_checksum() {
-    let rule_with_checksum = RegexRuleConfig::new(".+")
-        .match_action(MatchAction::Redact {
-            replacement: "[NHS]".to_string(),
-        })
-        .validator(NhsCheckDigit)
-        .build();
+    let rule_with_checksum =
+        RootRuleConfig::new(RegexRuleConfig::new(".+").validator(NhsCheckDigit).build())
+            .match_action(MatchAction::Redact {
+                replacement: "[NHS]".to_string(),
+            });
 
     let mut content = "1234567881".to_string();
     // Test matching NHS number with checksum
