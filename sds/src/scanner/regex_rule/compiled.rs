@@ -5,6 +5,7 @@ use crate::proximity_keywords::{
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::regex_store::SharedRegex;
 use crate::scanner::regex_rule::RegexCaches;
+use crate::scanner::shared_data::SharedData;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::secondary_validation::Validator;
 use crate::{CompiledRule, ExclusionCheck, Labels, MatchEmitter, Path, StringMatch};
@@ -26,11 +27,9 @@ pub struct RegexCompiledRule {
 impl CompiledRule for RegexCompiledRule {
     // no special data
     type GroupData = ();
-    type GroupConfig = ();
     type RuleScanCache = ();
 
     fn create_group_data(&self, _: &Labels) {}
-    fn create_group_config(&self) {}
     fn create_rule_scan_cache(&self) {}
     fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
         self.included_keywords.as_ref()
@@ -42,7 +41,7 @@ impl CompiledRule for RegexCompiledRule {
         path: &Path,
         regex_caches: &mut RegexCaches,
         _group_data: &mut (),
-        _group_config: &(),
+        _per_scanner_data: &SharedData,
         _rule_scan_cache: &mut (),
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -83,10 +82,6 @@ impl CompiledRule for RegexCompiledRule {
 
     fn on_excluded_match_multipass_v0(&self) {
         self.metrics.false_positive_excluded_attributes.increment(1);
-    }
-
-    fn process_scanner_config(&self, _: &mut Self::GroupConfig) {
-        // no special processing
     }
 }
 

@@ -47,8 +47,8 @@ pub use scanner::{
     regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator},
     regex_rule::RegexCaches,
     scope::Scope,
-    CompiledRule, CompiledRuleDyn, MatchEmitter, ScanOptionBuilder, Scanner, ScannerBuilder,
-    StringMatch,
+    CompiledRule, CompiledRuleDyn, MatchEmitter, RootCompiledRule, RootRuleConfig,
+    ScanOptionBuilder, Scanner, ScannerBuilder, SharedData, StringMatch,
 };
 pub use scoped_ruleset::ExclusionCheck;
 pub use validation::{

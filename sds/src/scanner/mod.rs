@@ -24,6 +24,7 @@ use crate::scanner::config::RuleConfig;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::{access_regex_caches, RegexCaches};
 use crate::scanner::scope::Scope;
+pub use crate::scanner::shared_data::SharedData;
 use crate::stats::GLOBAL_STATS;
 use ahash::{AHashMap, AHashSet};
 use regex_automata::Match;
@@ -35,6 +36,7 @@ pub mod error;
 pub mod metrics;
 pub mod regex_rule;
 pub mod scope;
+pub mod shared_data;
 pub mod shared_pool;
 
 #[cfg(test)]
@@ -69,6 +71,15 @@ pub struct RootRuleConfig<T> {
     pub scope: Scope,
     pub match_validation_type: Option<MatchValidationType>,
     pub inner: T,
+}
+
+impl<T> RootRuleConfig<T>
+where
+    T: RuleConfig + 'static,
+{
+    pub fn new_dyn(inner: T) -> RootRuleConfig<Arc<dyn RuleConfig>> {
+        RootRuleConfig::new(Arc::new(inner) as Arc<dyn RuleConfig>)
+    }
 }
 
 impl<T> RootRuleConfig<T> {
@@ -131,8 +142,7 @@ impl Deref for RootCompiledRule {
 // into the correct type.
 // This is used to allow the group data to be stored in a map only if the group of rule has a groupData associated with it (unlike regex rules)
 pub trait CompiledRuleDyn: Send + Sync {
-    fn create_group_data(&self, labels: &Labels) -> Option<Box<dyn Any>>;
-    fn create_group_config(&self) -> Option<Box<dyn Any>>;
+    fn create_group_data(&self, labels: &Labels) -> Option<Box<dyn Any + Send>>;
     fn create_rule_scan_cache(&self) -> Option<Box<dyn Any>>;
 
     // TODO: remove this?
@@ -147,7 +157,7 @@ pub trait CompiledRuleDyn: Send + Sync {
         path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
-        group_config: &AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
+        per_scanner_data: &SharedData,
         rule_scan_cache: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -167,35 +177,19 @@ pub trait CompiledRuleDyn: Send + Sync {
         // default is to do nothing
     }
 
-    // fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
-
-    // fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
-
-    fn process_scanner_config(
-        &self,
-        group_config: &mut AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
-    );
+    fn setup_per_scanner_data(&self, data: &mut SharedData);
 }
 
 // This is the "hidden" implementation of CompiledRuleDyn for any type that implements CompiledRule
 // get_string_matches will downcast the group data to the correct type and call the actual implementation
 // done in the CompiledRule trait
 impl<T: CompiledRule> CompiledRuleDyn for T {
-    fn create_group_data(&self, labels: &Labels) -> Option<Box<dyn Any>> {
+    fn create_group_data(&self, labels: &Labels) -> Option<Box<dyn Any + Send>> {
         let group_data = self.create_group_data(labels);
         if TypeId::of::<<T as CompiledRule>::GroupData>() == TypeId::of::<()>() {
             None
         } else {
             Some(Box::new(group_data))
-        }
-    }
-
-    fn create_group_config(&self) -> Option<Box<dyn Any>> {
-        let group_config = self.create_group_config();
-        if TypeId::of::<<T as CompiledRule>::GroupConfig>() == TypeId::of::<()>() {
-            None
-        } else {
-            Some(Box::new(group_config))
         }
     }
 
@@ -218,7 +212,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
-        group_config: &AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
+        per_scanner_data: &SharedData,
         rule_scan_cache: &mut AHashMap<TypeId, Box<dyn Any>>,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -231,8 +225,8 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
             .or_insert_with(|| Box::new(self.create_group_data(scanner_labels)));
         let group_data: &mut T::GroupData = group_data_any.downcast_mut().unwrap();
 
-        let group_config_any = group_config.get(&TypeId::of::<T::GroupConfig>()).unwrap();
-        let group_config: &T::GroupConfig = group_config_any.downcast_ref().unwrap();
+        // let group_config_any = group_config.get(&TypeId::of::<T::GroupConfig>()).unwrap();
+        // let group_config: &T::GroupConfig = group_config_any.downcast_ref().unwrap();
 
         let rule_scan_cache_any = rule_scan_cache
             .entry(TypeId::of::<T::RuleScanCache>())
@@ -244,7 +238,7 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
             path,
             regex_caches,
             group_data,
-            group_config,
+            per_scanner_data,
             rule_scan_cache,
             exclusion_check,
             excluded_matches,
@@ -261,17 +255,8 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
         T::on_excluded_match_multipass_v0(self)
     }
 
-    // method used to provide each rule the list of rules enabled for a scanner
-    // this is used to allow rules that have group data to enabled/disable some features in this group
-    fn process_scanner_config(
-        &self,
-        group_config: &mut AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
-    ) {
-        let group_config_any = group_config
-            .entry(TypeId::of::<T::GroupConfig>())
-            .or_insert_with(|| Box::new(self.create_group_config()));
-        let group_config: &mut T::GroupConfig = group_config_any.downcast_mut().unwrap();
-        T::process_scanner_config(self, group_config);
+    fn setup_per_scanner_data(&self, data: &mut SharedData) {
+        T::setup_per_scanner_data(self, data)
     }
 }
 
@@ -279,23 +264,28 @@ impl<T: CompiledRule> CompiledRuleDyn for T {
 pub trait CompiledRule: Send + Sync {
     /// Data that is instantiated once per string being scanned, and shared with all rules that
     /// have the same `GroupData` type. `Default` will be used to initialize this data.
-    type GroupData: 'static;
-    /// Data that is instantiated once per scanner, and shared with all rules that
-    /// have the same `GroupData` type. `Default` will be used to initialize this data
-    type GroupConfig: 'static + Send + Sync;
+    type GroupData: 'static + Send;
+    // /// Data that is instantiated once per scanner, and shared with all rules that
+    // /// have the same `GroupData` type. `Default` will be used to initialize this data
+    // type GroupConfig: 'static + Send + Sync;
 
     // Each rule can have a cache that is shared during the whole scan of an even
     type RuleScanCache: 'static;
 
+    fn setup_per_scanner_data(&self, _per_scanner_data: &mut SharedData) {
+        // by default, no per-scanner data is created
+    }
+
     /// Create a new instance of GroupData with the given scanner.
     fn create_group_data(&self, labels: &Labels) -> Self::GroupData;
 
-    /// Create a new instance of GroupData with the given scanner.
-    fn create_group_config(&self) -> Self::GroupConfig;
+    // /// Create a new instance of GroupData with the given scanner.
+    // fn create_group_config(&self) -> Self::GroupConfig;
 
     /// Create a new instance of RuleScanCache
     fn create_rule_scan_cache(&self) -> Self::RuleScanCache;
 
+    // TODO: delete this?
     fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
         None
     }
@@ -307,7 +297,7 @@ pub trait CompiledRule: Send + Sync {
         path: &Path,
         regex_caches: &mut RegexCaches,
         group_data: &mut Self::GroupData,
-        group_config: &Self::GroupConfig,
+        per_scanner_data: &SharedData,
         rule_scan_cache: &mut Self::RuleScanCache,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
@@ -325,10 +315,6 @@ pub trait CompiledRule: Send + Sync {
     fn on_excluded_match_multipass_v0(&self) {
         // default is to do nothing
     }
-
-    // method used to provide each rule the list of rules enabled for a scanner
-    // this is used to allow rules that have group data to enabled/disable some features in this group
-    fn process_scanner_config(&self, group_config: &mut Self::GroupConfig);
 }
 
 impl<T> RuleConfig for Box<T>
@@ -419,7 +405,8 @@ pub struct Scanner {
     metrics: ScannerMetrics,
     labels: Labels,
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
-    group_configs: AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
+    per_scanner_data: SharedData,
+    // group_configs: AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
 }
 
 impl Scanner {
@@ -808,9 +795,10 @@ impl ScannerBuilder<'_> {
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;
 
-        let mut group_configs: AHashMap<TypeId, Box<dyn Any + Send + Sync>> = AHashMap::new();
+        let mut per_scanner_data = SharedData::new();
+
         compiled_rules.iter().for_each(|rule| {
-            rule.process_scanner_config(&mut group_configs);
+            rule.setup_per_scanner_data(&mut per_scanner_data);
         });
 
         let scoped_ruleset = ScopedRuleSet::new(
@@ -834,7 +822,7 @@ impl ScannerBuilder<'_> {
             metrics: ScannerMetrics::new(&self.labels),
             match_validators_per_type,
             labels: self.labels,
-            group_configs,
+            per_scanner_data: SharedData::new(),
         })
     }
 }
@@ -888,7 +876,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     path,
                     self.regex_caches,
                     &mut group_data,
-                    &self.scanner.group_configs,
+                    &self.scanner.per_scanner_data,
                     &mut self.rule_scan_caches,
                     &exclusion_check,
                     self.excluded_matches,
