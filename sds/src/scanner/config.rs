@@ -13,6 +13,7 @@ pub trait RuleConfig: Send + Sync {
     fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
 
     fn get_internal_match_validation_type(&self) -> Option<InternalMatchValidationType> {
+        #[allow(deprecated)]
         self.get_match_validation_type()
             .map(|x| x.get_internal_match_validation_type())
     }
