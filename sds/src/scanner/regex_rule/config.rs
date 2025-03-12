@@ -36,12 +36,6 @@ impl RegexRuleConfig {
         self.mutate_clone(|x| x.pattern = pattern)
     }
 
-    // pub fn match_action(&self, match_action: MatchAction) -> Self {
-    //     self.mutate_clone(|x| x.match_action = match_action)
-    // }
-    // pub fn scope(&self, scope: Scope) -> Self {
-    //     self.mutate_clone(|x| x.scope = scope)
-    // }
     pub fn proximity_keywords(&self, proximity_keywords: ProximityKeywordsConfig) -> Self {
         self.mutate_clone(|x| x.proximity_keywords = Some(proximity_keywords))
     }
@@ -53,10 +47,6 @@ impl RegexRuleConfig {
     pub fn labels(&self, labels: Labels) -> Self {
         self.mutate_clone(|x| x.labels = labels)
     }
-
-    // pub fn match_validation_type(&self, match_validation_type: MatchValidationType) -> Self {
-    //     self.mutate_clone(|x| x.match_validation_type = Some(match_validation_type))
-    // }
 
     pub fn build(&self) -> Arc<dyn RuleConfig> {
         Arc::new(self.clone())
