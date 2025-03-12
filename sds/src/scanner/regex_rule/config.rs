@@ -25,12 +25,14 @@ pub struct RegexRuleConfig {
     #[serde_as(deserialize_as = "DefaultOnNull")]
     #[serde(default)]
     pub labels: Labels,
-
+    #[deprecated(note = "Use `third_party_active_checker` instead")]
     pub match_validation_type: Option<MatchValidationType>,
+    pub third_party_active_checker: Option<MatchValidationType>,
 }
 
 impl RegexRuleConfig {
     pub fn new(pattern: &str) -> Self {
+        #[allow(deprecated)]
         Self {
             pattern: pattern.to_owned(),
             match_action: MatchAction::None,
@@ -38,8 +40,8 @@ impl RegexRuleConfig {
             proximity_keywords: None,
             validator: None,
             labels: Labels::default(),
-
             match_validation_type: None,
+            third_party_active_checker: None,
         }
     }
 
@@ -65,11 +67,21 @@ impl RegexRuleConfig {
         self.mutate_clone(|x| x.labels = labels)
     }
 
+    #[deprecated(note = "Use `third_party_active_checker` instead")]
     pub fn match_validation_type(&self, match_validation_type: MatchValidationType) -> Self {
-        self.mutate_clone(|x| x.match_validation_type = Some(match_validation_type))
+        #[allow(deprecated)]
+        self.mutate_clone(|x| {
+            x.match_validation_type = Some(match_validation_type.clone());
+            x.third_party_active_checker = Some(match_validation_type);
+        })
+    }
+
+    pub fn third_party_active_checker(&self, checker: MatchValidationType) -> Self {
+        self.mutate_clone(|x| x.third_party_active_checker = Some(checker))
     }
 
     pub fn build(&self) -> Arc<dyn RuleConfig> {
+        #[allow(deprecated)]
         Arc::new(RegexRuleConfig {
             pattern: self.pattern.clone(),
             match_action: self.match_action.clone(),
@@ -77,8 +89,8 @@ impl RegexRuleConfig {
             proximity_keywords: self.proximity_keywords.clone(),
             validator: self.validator.clone(),
             labels: self.labels.clone(),
-
             match_validation_type: self.match_validation_type.clone(),
+            third_party_active_checker: self.third_party_active_checker.clone(),
         })
     }
 
@@ -126,10 +138,10 @@ impl RuleConfig for RegexRuleConfig {
     }
 
     fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
-        match &self.match_validation_type {
-            Some(match_validation_type) => Some(match_validation_type),
-            None => None,
-        }
+        #[allow(deprecated)]
+        self.third_party_active_checker
+            .as_ref()
+            .or(self.match_validation_type.as_ref())
     }
 }
 
@@ -165,6 +177,8 @@ pub enum SecondaryValidator {
 
 #[cfg(test)]
 mod test {
+    use crate::{AwsType, HttpValidatorConfigBuilder};
+
     use super::*;
 
     #[test]
@@ -174,6 +188,7 @@ mod test {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn should_have_default() {
         let rule_config = RegexRuleConfig::new("123");
         assert_eq!(
@@ -185,8 +200,8 @@ mod test {
                 proximity_keywords: None,
                 validator: None,
                 labels: Labels::empty(),
-
                 match_validation_type: None,
+                third_party_active_checker: None,
             }
         );
     }
@@ -213,6 +228,57 @@ mod test {
                 included_keywords: vec![],
                 excluded_keywords: vec![]
             }
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_third_party_active_checker() {
+        // Test setting only the new field
+        let http_config = HttpValidatorConfigBuilder::new("http://test.com".to_string())
+            .build()
+            .unwrap();
+        let validation_type = MatchValidationType::CustomHttp(http_config.clone());
+        let rule_config =
+            RegexRuleConfig::new("123").third_party_active_checker(validation_type.clone());
+
+        assert_eq!(
+            rule_config.third_party_active_checker,
+            Some(validation_type.clone())
+        );
+        assert_eq!(rule_config.match_validation_type, None);
+        assert_eq!(
+            rule_config.get_match_validation_type(),
+            Some(&validation_type)
+        );
+
+        // Test setting via deprecated field updates both
+        let aws_type = AwsType::AwsId;
+        let validation_type2 = MatchValidationType::Aws(aws_type);
+        let rule_config =
+            RegexRuleConfig::new("123").match_validation_type(validation_type2.clone());
+
+        assert_eq!(
+            rule_config.third_party_active_checker,
+            Some(validation_type2.clone())
+        );
+        assert_eq!(
+            rule_config.match_validation_type,
+            Some(validation_type2.clone())
+        );
+        assert_eq!(
+            rule_config.get_match_validation_type(),
+            Some(&validation_type2)
+        );
+
+        // Test that get_match_validation_type prioritizes third_party_active_checker
+        let rule_config = RegexRuleConfig::new("123")
+            .match_validation_type(MatchValidationType::Aws(AwsType::AwsId))
+            .third_party_active_checker(MatchValidationType::CustomHttp(http_config.clone()));
+
+        assert_eq!(
+            rule_config.get_match_validation_type(),
+            Some(&MatchValidationType::CustomHttp(http_config.clone()))
         );
     }
 }

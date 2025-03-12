@@ -162,9 +162,9 @@ pub fn included_keywords_on_path(c: &mut Criterion) {
 
     for i in 0..100 {
         let mut nested_event = BTreeMap::new();
-        for j in 0..1000 {
+        for _j in 0..1000 {
             let mut double_nested_event = BTreeMap::new();
-            for k in 0..100 {
+            for _k in 0..100 {
                 double_nested_event.insert(
                     "yet-another-key".to_string(),
                     SimpleEvent::String(format!("value-{}", i)),
