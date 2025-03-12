@@ -67,7 +67,9 @@ pub struct RootRuleConfig<T> {
     pub match_action: MatchAction,
     #[serde(default)]
     pub scope: Scope,
-    pub match_validation_type: Option<MatchValidationType>,
+    #[deprecated(note = "Use `third_party_active_checker` instead")]
+    match_validation_type: Option<MatchValidationType>,
+    third_party_active_checker: Option<MatchValidationType>,
     pub inner: T,
 }
 
@@ -82,10 +84,12 @@ where
 
 impl<T> RootRuleConfig<T> {
     pub fn new(inner: T) -> Self {
+        #[allow(deprecated)]
         Self {
             match_action: MatchAction::None,
             scope: Scope::all(),
             match_validation_type: None,
+            third_party_active_checker: None,
             inner,
         }
     }
@@ -100,9 +104,19 @@ impl<T> RootRuleConfig<T> {
         self
     }
 
-    pub fn match_validation_type(mut self, match_validation_type: MatchValidationType) -> Self {
-        self.match_validation_type = Some(match_validation_type);
+    pub fn third_party_active_checker(
+        mut self,
+        match_validation_type: MatchValidationType,
+    ) -> Self {
+        self.third_party_active_checker = Some(match_validation_type);
         self
+    }
+
+    fn get_third_party_active_checker(&self) -> Option<&MatchValidationType> {
+        #[allow(deprecated)]
+        self.third_party_active_checker
+            .as_ref()
+            .or(self.match_validation_type.as_ref())
     }
 }
 
@@ -653,7 +667,7 @@ impl ScannerBuilder<'_> {
         let mut match_validators_per_type = AHashMap::new();
 
         for rule in self.rules.iter() {
-            if let Some(match_validation_type) = &rule.match_validation_type {
+            if let Some(match_validation_type) = &rule.get_third_party_active_checker() {
                 if match_validation_type.can_create_match_validator() {
                     let internal_type = match_validation_type.get_internal_match_validation_type();
                     let match_validator = match_validation_type.into_match_validator();
@@ -683,7 +697,7 @@ impl ScannerBuilder<'_> {
                     inner,
                     scope: config.scope.clone(),
                     match_action: config.match_action.clone(),
-                    match_validation_type: config.match_validation_type.clone(),
+                    match_validation_type: config.get_third_party_active_checker().cloned(),
                 })
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;

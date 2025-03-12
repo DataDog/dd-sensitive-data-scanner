@@ -16,7 +16,7 @@ fn test_should_return_match_with_match_validation() {
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(
+            .third_party_active_checker(MatchValidationType::CustomHttp(
                 HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
                     .build()
                     .unwrap(),
@@ -59,12 +59,12 @@ fn test_should_allocate_match_validator_depending_on_match_type() {
         .match_action(MatchAction::Redact {
             replacement: "[AWS ID]".to_string(),
         })
-        .match_validation_type(MatchValidationType::Aws(AwsType::AwsId));
+        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsId));
     let rule_aws_secret = RootRuleConfig::new(RegexRuleConfig::new("aws-secret").build())
         .match_action(MatchAction::Redact {
             replacement: "[AWS SECRET]".to_string(),
         })
-        .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret(
+        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsSecret(
             AwsConfig::default(),
         )));
 
@@ -73,7 +73,7 @@ fn test_should_allocate_match_validator_depending_on_match_type() {
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP1]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(
+            .third_party_active_checker(MatchValidationType::CustomHttp(
                 HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
                     .build()
                     .unwrap(),
@@ -84,7 +84,7 @@ fn test_should_allocate_match_validator_depending_on_match_type() {
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP2]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(
+            .third_party_active_checker(MatchValidationType::CustomHttp(
                 HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
                     .build()
                     .unwrap(),
@@ -95,7 +95,7 @@ fn test_should_allocate_match_validator_depending_on_match_type() {
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP2]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(
+            .third_party_active_checker(MatchValidationType::CustomHttp(
                 HttpValidatorConfigBuilder::new("http://localhost:8081".to_string())
                     .build()
                     .unwrap(),
@@ -148,7 +148,7 @@ fn test_aws_id_only_shall_not_validate() {
         .match_action(MatchAction::Redact {
             replacement: "[AWS_ID]".to_string(),
         })
-        .match_validation_type(MatchValidationType::Aws(AwsType::AwsId));
+        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsId));
 
     let scanner = ScannerBuilder::new(&[rule_aws_id]).build().unwrap();
     let mut content = "this is an aws_id".to_string();
@@ -187,7 +187,7 @@ fn test_mock_same_http_validator_several_matches() {
         .match_action(MatchAction::Redact {
             replacement: "[VALID]".to_string(),
         })
-        .match_validation_type(MatchValidationType::CustomHttp(
+        .third_party_active_checker(MatchValidationType::CustomHttp(
             HttpValidatorConfigBuilder::new(server.url("/").to_string())
                 .build()
                 .unwrap(),
@@ -198,7 +198,7 @@ fn test_mock_same_http_validator_several_matches() {
             .match_action(MatchAction::Redact {
                 replacement: "[INVALID]".to_string(),
             })
-            .match_validation_type(MatchValidationType::CustomHttp(
+            .third_party_active_checker(MatchValidationType::CustomHttp(
                 HttpValidatorConfigBuilder::new(server.url("/").to_string())
                     .build()
                     .unwrap(),
@@ -208,7 +208,7 @@ fn test_mock_same_http_validator_several_matches() {
         .match_action(MatchAction::Redact {
             replacement: "[ERROR]".to_string(),
         })
-        .match_validation_type(MatchValidationType::CustomHttp(
+        .third_party_active_checker(MatchValidationType::CustomHttp(
             HttpValidatorConfigBuilder::new(server.url("/").to_string())
                 .build()
                 .unwrap(),
@@ -250,7 +250,7 @@ fn test_mock_http_timeout() {
         .match_action(MatchAction::Redact {
             replacement: "[VALID]".to_string(),
         })
-        .match_validation_type(MatchValidationType::CustomHttp(
+        .third_party_active_checker(MatchValidationType::CustomHttp(
             HttpValidatorConfigBuilder::new(server.url("/").to_string())
                 .set_timeout(Duration::from_micros(0))
                 .build()
@@ -290,7 +290,7 @@ fn test_mock_multiple_match_validators() {
         .match_action(MatchAction::Redact {
             replacement: "[VALID]".to_string(),
         })
-        .match_validation_type(MatchValidationType::CustomHttp(
+        .third_party_active_checker(MatchValidationType::CustomHttp(
             HttpValidatorConfigBuilder::new(server.url("/http-service").to_string())
                 .build()
                 .unwrap(),
@@ -300,13 +300,13 @@ fn test_mock_multiple_match_validators() {
         .match_action(MatchAction::Redact {
             replacement: "[AWS_ID]".to_string(),
         })
-        .match_validation_type(MatchValidationType::Aws(AwsType::AwsId));
+        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsId));
 
     let rule_aws_secret = RootRuleConfig::new(RegexRuleConfig::new("\\baws_secret\\b").build())
         .match_action(MatchAction::Redact {
             replacement: "[AWS_SECRET]".to_string(),
         })
-        .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
+        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
             aws_sts_endpoint: server.url("/aws-service").to_string(),
             forced_datetime_utc: None,
             timeout: Duration::from_secs(1),
@@ -348,7 +348,7 @@ fn test_mock_endpoint_with_multiple_hosts() {
         .match_action(MatchAction::Redact {
             replacement: "[VALID]".to_string(),
         })
-        .match_validation_type(MatchValidationType::CustomHttp(
+        .third_party_active_checker(MatchValidationType::CustomHttp(
             HttpValidatorConfigBuilder::new(server.url("/$HOST-service").to_string())
                 .set_hosts(vec!["us".to_string(), "eu".to_string()])
                 .build()
@@ -433,7 +433,7 @@ fn test_mock_aws_validator() {
         .match_action(MatchAction::Redact {
             replacement: "[AWS_ID]".to_string(),
         })
-        .match_validation_type(MatchValidationType::Aws(AwsType::AwsId));
+        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsId));
 
     let rule_aws_secret = RootRuleConfig::new(
         RegexRuleConfig::new("[A-Za-z0-9/+]{40}")
@@ -444,7 +444,7 @@ fn test_mock_aws_validator() {
             })
             .build(),
     )
-    .match_validation_type(MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
+    .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
         aws_sts_endpoint: server_url.clone(),
         forced_datetime_utc: Some(datetime),
         timeout: Duration::from_secs(5),

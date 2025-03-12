@@ -24,6 +24,7 @@ pub struct RegexRuleConfig {
 
 impl RegexRuleConfig {
     pub fn new(pattern: &str) -> Self {
+        #[allow(deprecated)]
         Self {
             pattern: pattern.to_owned(),
             proximity_keywords: None,
@@ -121,6 +122,8 @@ pub enum SecondaryValidator {
 
 #[cfg(test)]
 mod test {
+    use crate::{AwsType, HttpValidatorConfigBuilder, MatchValidationType, RootRuleConfig};
+
     use super::*;
 
     #[test]
@@ -130,6 +133,7 @@ mod test {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn should_have_default() {
         let rule_config = RegexRuleConfig::new("123");
         assert_eq!(
@@ -165,6 +169,52 @@ mod test {
                 included_keywords: vec![],
                 excluded_keywords: vec![]
             }
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_third_party_active_checker() {
+        // Test setting only the new field
+        let http_config = HttpValidatorConfigBuilder::new("http://test.com".to_string())
+            .build()
+            .unwrap();
+        let validation_type = MatchValidationType::CustomHttp(http_config.clone());
+        let rule_config = RootRuleConfig::new(RegexRuleConfig::new("123"))
+            .third_party_active_checker(validation_type.clone());
+
+        assert_eq!(
+            rule_config.third_party_active_checker,
+            Some(validation_type.clone())
+        );
+        assert_eq!(rule_config.match_validation_type, None);
+        assert_eq!(
+            rule_config.get_third_party_active_checker(),
+            Some(&validation_type)
+        );
+
+        // Test setting via deprecated field updates both
+        let aws_type = AwsType::AwsId;
+        let validation_type2 = MatchValidationType::Aws(aws_type);
+        let rule_config = RootRuleConfig::new(RegexRuleConfig::new("123"))
+            .third_party_active_checker(validation_type2.clone());
+
+        assert_eq!(
+            rule_config.third_party_active_checker,
+            Some(validation_type2.clone())
+        );
+        assert_eq!(
+            rule_config.get_third_party_active_checker(),
+            Some(&validation_type2)
+        );
+
+        // Test that get_match_validation_type prioritizes third_party_active_checker
+        let rule_config = RootRuleConfig::new(RegexRuleConfig::new("123"))
+            .third_party_active_checker(MatchValidationType::CustomHttp(http_config.clone()));
+
+        assert_eq!(
+            rule_config.get_third_party_active_checker(),
+            Some(&MatchValidationType::CustomHttp(http_config.clone()))
         );
     }
 }
