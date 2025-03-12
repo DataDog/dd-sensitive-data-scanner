@@ -164,7 +164,7 @@ impl Deref for RootCompiledRule {
 
 // This is the public trait that is used to define the behavior of a compiled rule.
 pub trait CompiledRule: Send + Sync {
-    fn setup_per_scanner_data(&self, _per_scanner_data: &mut SharedData) {
+    fn init_per_scanner_data(&self, _per_scanner_data: &mut SharedData) {
         // by default, no per-scanner data is initialized
     }
 
@@ -718,7 +718,7 @@ impl ScannerBuilder<'_> {
         let mut per_scanner_data = SharedData::new();
 
         compiled_rules.iter().for_each(|rule| {
-            rule.setup_per_scanner_data(&mut per_scanner_data);
+            rule.init_per_scanner_data(&mut per_scanner_data);
         });
 
         let scoped_ruleset = ScopedRuleSet::new(
