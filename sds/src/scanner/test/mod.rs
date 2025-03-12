@@ -4,7 +4,6 @@ mod metrics;
 mod overlapping_matches;
 mod validators;
 
-use super::CompiledRuleDyn;
 use super::*;
 use super::{MatchEmitter, ScannerBuilder, StringMatch};
 use crate::match_action::{MatchAction, MatchActionValidationError};
@@ -33,32 +32,20 @@ pub struct DumbRuleConfig {}
 pub struct DumbCompiledRule {}
 
 impl CompiledRule for DumbCompiledRule {
-    type GroupData = ();
-    type GroupConfig = ();
-    type RuleScanCache = ();
-
-    fn create_group_data(&self, _: &Labels) {}
-    fn create_group_config(&self) {}
-    fn create_rule_scan_cache(&self) {}
-
     fn get_string_matches(
         &self,
         _content: &str,
         _path: &Path,
         _regex_caches: &mut RegexCaches,
-        _group_data: &mut Self::GroupData,
-        _group_config: &Self::GroupConfig,
-        _rule_scan_cache: &mut Self::RuleScanCache,
+        _per_string_data: &mut SharedData,
+        _per_scanner_data: &SharedData,
+        _per_event_data: &mut SharedData,
         _exclusion_check: &ExclusionCheck<'_>,
         _excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         _: Option<&Vec<(usize, usize)>>,
     ) {
         match_emitter.emit(StringMatch { start: 10, end: 16 });
-    }
-
-    fn process_scanner_config(&self, _: &mut Self::GroupConfig) {
-        // do nothing
     }
 }
 
@@ -67,7 +54,7 @@ impl RuleConfig for DumbRuleConfig {
         &self,
         _content: usize,
         _: Labels,
-    ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
+    ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
         Ok(Box::new(DumbCompiledRule {}))
     }
 }
