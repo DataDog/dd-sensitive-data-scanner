@@ -70,6 +70,7 @@ pub struct RootRuleConfig<T> {
     #[deprecated(note = "Use `third_party_active_checker` instead")]
     match_validation_type: Option<MatchValidationType>,
     third_party_active_checker: Option<MatchValidationType>,
+    #[serde(flatten)]
     pub inner: T,
 }
 
