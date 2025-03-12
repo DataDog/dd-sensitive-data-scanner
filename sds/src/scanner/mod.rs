@@ -194,6 +194,7 @@ pub trait CompiledRule: Send + Sync {
     /// or finding multiple matches. The default implementation just calls
     /// `get_string_matches`, but this can be overridden with a more efficient
     /// implementation if applicable
+    #[allow(clippy::too_many_arguments)]
     fn has_string_match(
         &self,
         content: &str,
@@ -431,7 +432,7 @@ impl Scanner {
             if let Some(match_validation_type) = rule.internal_match_validation_type() {
                 match_validator_rule_match_per_type
                     .entry(match_validation_type)
-                    .or_insert_with(|| vec![])
+                    .or_insert_with(Vec::new)
                     .push(rule_match)
             }
         }
