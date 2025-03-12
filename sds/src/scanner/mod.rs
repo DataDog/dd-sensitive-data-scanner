@@ -80,6 +80,17 @@ where
     pub fn new_dyn(inner: T) -> RootRuleConfig<Arc<dyn RuleConfig>> {
         RootRuleConfig::new(Arc::new(inner) as Arc<dyn RuleConfig>)
     }
+
+    pub fn into_dyn(self) -> RootRuleConfig<Arc<dyn RuleConfig>> {
+        #[allow(deprecated)]
+        RootRuleConfig {
+            match_action: self.match_action,
+            scope: self.scope,
+            match_validation_type: self.match_validation_type,
+            third_party_active_checker: self.third_party_active_checker,
+            inner: Arc::new(self.inner),
+        }
+    }
 }
 
 impl<T> RootRuleConfig<T> {
