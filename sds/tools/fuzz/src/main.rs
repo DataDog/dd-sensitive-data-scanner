@@ -3,7 +3,9 @@
 
 use afl::fuzz;
 use ahash::AHashMap;
-use dd_sds::{MatchAction, PartialRedactDirection, RegexRuleConfig, ScannerBuilder, Scope};
+use dd_sds::{
+    MatchAction, PartialRedactDirection, RegexRuleConfig, RootRuleConfig, ScannerBuilder, Scope,
+};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 #[cfg(not(feature = "manual_test"))]
@@ -86,10 +88,11 @@ fn run_fuzz(pattern: &str, input: &str, mut rng: StdRng) {
         println!("Match action: {:?}", match_action);
     }
 
-    let scanner_result = ScannerBuilder::new(&[RegexRuleConfig::new(pattern)
-        .match_action(match_action)
-        .build()])
-    .build();
+    let scanner_result =
+        ScannerBuilder::new(&[
+            RootRuleConfig::new(RegexRuleConfig::new(pattern).build()).match_action(match_action)
+        ])
+        .build();
 
     if let Ok(scanner) = scanner_result {
         let mut mutated_input = input.to_string();
