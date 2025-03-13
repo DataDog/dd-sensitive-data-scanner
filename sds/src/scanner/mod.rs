@@ -14,24 +14,27 @@ use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Path};
-use std::any::{Any, TypeId};
+use std::ops::Deref;
 use std::sync::Arc;
 
 use self::metrics::ScannerMetrics;
-use crate::proximity_keywords::CompiledIncludedProximityKeywords;
 use crate::scanner::config::RuleConfig;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::{access_regex_caches, RegexCaches};
 use crate::scanner::scope::Scope;
+pub use crate::scanner::shared_data::SharedData;
 use crate::stats::GLOBAL_STATS;
 use ahash::{AHashMap, AHashSet};
 use regex_automata::Match;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 pub mod config;
 pub mod error;
 pub mod metrics;
 pub mod regex_rule;
 pub mod scope;
+pub mod shared_data;
 pub mod shared_pool;
 
 #[cfg(test)]
@@ -58,165 +61,123 @@ where
     }
 }
 
-// CompiledRuleDyn is a private trait that is used to hide the complexity of downcasting the group data
-// into the correct type.
-// This is used to allow the group data to be stored in a map only if the group of rule has a groupData associated with it (unlike regex rules)
-pub trait CompiledRuleDyn: Send + Sync {
-    fn get_match_action(&self) -> &MatchAction;
-    fn get_scope(&self) -> &Scope;
-    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
-        None
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn get_string_matches(
-        &self,
-        content: &str,
-        path: &Path,
-        regex_caches: &mut RegexCaches,
-        group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
-        group_config: &AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
-        rule_scan_cache: &mut AHashMap<TypeId, Box<dyn Any>>,
-        exclusion_check: &ExclusionCheck<'_>,
-        excluded_matches: &mut AHashSet<String>,
-        match_emitter: &mut dyn MatchEmitter,
-        scanner_labels: &Labels,
-        wildcard_indices: Option<&Vec<(usize, usize)>>,
-    );
-
-    // Whether a match from this rule should be excluded (marked as a false-positive)
-    // if the content of this match was found in a match from an excluded scope
-    fn should_exclude_multipass_v0(&self) -> bool {
-        // default is to NOT use Multi-pass V0
-        false
-    }
-
-    fn on_excluded_match_multipass_v0(&self) {
-        // default is to do nothing
-    }
-
-    fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
-
-    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
-
-    fn process_scanner_config(
-        &self,
-        group_config: &mut AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
-    );
+#[serde_as]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct RootRuleConfig<T> {
+    pub match_action: MatchAction,
+    #[serde(default)]
+    pub scope: Scope,
+    #[deprecated(note = "Use `third_party_active_checker` instead")]
+    match_validation_type: Option<MatchValidationType>,
+    third_party_active_checker: Option<MatchValidationType>,
+    #[serde(flatten)]
+    pub inner: T,
 }
 
-// This is the "hidden" implementation of CompiledRuleDyn for any type that implements CompiledRule
-// get_string_matches will downcast the group data to the correct type and call the actual implementation
-// done in the CompiledRule trait
-impl<T: CompiledRule> CompiledRuleDyn for T {
-    fn get_match_action(&self) -> &MatchAction {
-        self.get_match_action()
+impl<T> RootRuleConfig<T>
+where
+    T: RuleConfig + 'static,
+{
+    pub fn new_dyn(inner: T) -> RootRuleConfig<Arc<dyn RuleConfig>> {
+        RootRuleConfig::new(Arc::new(inner) as Arc<dyn RuleConfig>)
     }
 
-    fn get_scope(&self) -> &Scope {
-        self.get_scope()
+    pub fn into_dyn(self) -> RootRuleConfig<Arc<dyn RuleConfig>> {
+        self.map_inner(|x| Arc::new(x) as Arc<dyn RuleConfig>)
+    }
+}
+
+impl<T> RootRuleConfig<T> {
+    pub fn new(inner: T) -> Self {
+        #[allow(deprecated)]
+        Self {
+            match_action: MatchAction::None,
+            scope: Scope::all(),
+            match_validation_type: None,
+            third_party_active_checker: None,
+            inner,
+        }
     }
 
-    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
-        self.get_included_keywords()
+    pub fn map_inner<U>(self, func: impl FnOnce(T) -> U) -> RootRuleConfig<U> {
+        #[allow(deprecated)]
+        RootRuleConfig {
+            match_action: self.match_action,
+            scope: self.scope,
+            match_validation_type: self.match_validation_type,
+            third_party_active_checker: self.third_party_active_checker,
+            inner: func(self.inner),
+        }
     }
 
-    fn get_string_matches(
-        &self,
-        content: &str,
-        path: &Path,
-        regex_caches: &mut RegexCaches,
-        group_data: &mut AHashMap<TypeId, Box<dyn Any>>,
-        group_config: &AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
-        rule_scan_cache: &mut AHashMap<TypeId, Box<dyn Any>>,
-        exclusion_check: &ExclusionCheck<'_>,
-        excluded_matches: &mut AHashSet<String>,
-        match_emitter: &mut dyn MatchEmitter,
-        scanner_labels: &Labels,
-        wildcard_indices: Option<&Vec<(usize, usize)>>,
-    ) {
-        let group_data_any = group_data
-            .entry(TypeId::of::<T::GroupData>())
-            .or_insert_with(|| Box::new(T::create_group_data(scanner_labels)));
-        let group_data: &mut T::GroupData = group_data_any.downcast_mut().unwrap();
-
-        let group_config_any = group_config.get(&TypeId::of::<T::GroupConfig>()).unwrap();
-        let group_config: &T::GroupConfig = group_config_any.downcast_ref().unwrap();
-
-        let rule_scan_cache_any = rule_scan_cache
-            .entry(TypeId::of::<T::RuleScanCache>())
-            .or_insert_with(|| Box::new(T::create_rule_scan_cache()));
-        let rule_scan_cache: &mut T::RuleScanCache = rule_scan_cache_any.downcast_mut().unwrap();
-
-        self.get_string_matches(
-            content,
-            path,
-            regex_caches,
-            group_data,
-            group_config,
-            rule_scan_cache,
-            exclusion_check,
-            excluded_matches,
-            match_emitter,
-            wildcard_indices,
-        )
+    pub fn match_action(mut self, action: MatchAction) -> Self {
+        self.match_action = action;
+        self
     }
 
-    fn should_exclude_multipass_v0(&self) -> bool {
-        T::should_exclude_multipass_v0(self)
+    pub fn scope(mut self, scope: Scope) -> Self {
+        self.scope = scope;
+        self
     }
 
-    fn on_excluded_match_multipass_v0(&self) {
-        T::on_excluded_match_multipass_v0(self)
+    pub fn third_party_active_checker(
+        mut self,
+        match_validation_type: MatchValidationType,
+    ) -> Self {
+        self.third_party_active_checker = Some(match_validation_type);
+        self
     }
 
-    fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
-        T::get_match_validation_type(self)
+    fn get_third_party_active_checker(&self) -> Option<&MatchValidationType> {
+        #[allow(deprecated)]
+        self.third_party_active_checker
+            .as_ref()
+            .or(self.match_validation_type.as_ref())
     }
+}
 
-    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
-        T::get_internal_match_validation_type(self)
+impl<T> Deref for RootRuleConfig<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
+}
+pub struct RootCompiledRule {
+    pub inner: Box<dyn CompiledRule>,
+    pub scope: Scope,
+    pub match_action: MatchAction,
+    pub match_validation_type: Option<MatchValidationType>,
+}
 
-    // method used to provide each rule the list of rules enabled for a scanner
-    // this is used to allow rules that have group data to enabled/disable some features in this group
-    fn process_scanner_config(
-        &self,
-        group_config: &mut AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
-    ) {
-        let group_config_any = group_config
-            .entry(TypeId::of::<T::GroupConfig>())
-            .or_insert_with(|| Box::new(T::create_group_config()));
-        let group_config: &mut T::GroupConfig = group_config_any.downcast_mut().unwrap();
-        T::process_scanner_config(self, group_config);
+impl RootCompiledRule {
+    pub fn internal_match_validation_type(&self) -> Option<InternalMatchValidationType> {
+        self.match_validation_type
+            .as_ref()
+            .map(|x| x.get_internal_match_validation_type())
+    }
+}
+
+impl Deref for RootCompiledRule {
+    type Target = dyn CompiledRule;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref()
     }
 }
 
 // This is the public trait that is used to define the behavior of a compiled rule.
 pub trait CompiledRule: Send + Sync {
-    /// Data that is instantiated once per string being scanned, and shared with all rules that
-    /// have the same `GroupData` type. `Default` will be used to initialize this data.
-    type GroupData: 'static;
-    /// Data that is instantiated once per scanner, and shared with all rules that
-    /// have the same `GroupData` type. `Default` will be used to initialize this data
-    type GroupConfig: 'static + Send + Sync;
+    fn init_per_scanner_data(&self, _per_scanner_data: &mut SharedData) {
+        // by default, no per-scanner data is initialized
+    }
 
-    // Each rule can have a cache that is shared during the whole scan of an even
-    type RuleScanCache: 'static;
+    fn init_per_string_data(&self, _labels: &Labels, _per_string_data: &mut SharedData) {
+        // by default, no per-string data is initialized
+    }
 
-    /// Create a new instance of GroupData with the given scanner.
-    fn create_group_data(labels: &Labels) -> Self::GroupData;
-
-    /// Create a new instance of GroupData with the given scanner.
-    fn create_group_config() -> Self::GroupConfig;
-
-    /// Create a new instance of RuleScanCache
-    fn create_rule_scan_cache() -> Self::RuleScanCache;
-
-    fn get_match_action(&self) -> &MatchAction;
-    fn get_scope(&self) -> &Scope;
-    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
-        None
+    fn init_per_event_data(&self, _per_event_data: &mut SharedData) {
+        // by default, no per-event data is initialized
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -225,14 +186,48 @@ pub trait CompiledRule: Send + Sync {
         content: &str,
         path: &Path,
         regex_caches: &mut RegexCaches,
-        group_data: &mut Self::GroupData,
-        group_config: &Self::GroupConfig,
-        rule_scan_cache: &mut Self::RuleScanCache,
+        per_string_data: &mut SharedData,
+        per_scanner_data: &SharedData,
+        per_event_data: &mut SharedData,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         wildcard_indices: Option<&Vec<(usize, usize)>>,
     );
+
+    /// Determines if this rule has a match, without determining the exact position,
+    /// or finding multiple matches. The default implementation just calls
+    /// `get_string_matches`, but this can be overridden with a more efficient
+    /// implementation if applicable
+    #[allow(clippy::too_many_arguments)]
+    fn has_string_match(
+        &self,
+        content: &str,
+        path: &Path,
+        regex_caches: &mut RegexCaches,
+        per_string_data: &mut SharedData,
+        per_scanner_data: &SharedData,
+        per_event_data: &mut SharedData,
+        exclusion_check: &ExclusionCheck<'_>,
+        excluded_matches: &mut AHashSet<String>,
+        wildcard_indices: Option<&Vec<(usize, usize)>>,
+    ) -> bool {
+        let mut found_match = false;
+        let mut match_emitter = |_| found_match = true;
+        self.get_string_matches(
+            content,
+            path,
+            regex_caches,
+            per_string_data,
+            per_scanner_data,
+            per_event_data,
+            exclusion_check,
+            excluded_matches,
+            &mut match_emitter,
+            wildcard_indices,
+        );
+        found_match
+    }
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
     // if the content of this match was found in a match from an excluded scope
@@ -244,15 +239,6 @@ pub trait CompiledRule: Send + Sync {
     fn on_excluded_match_multipass_v0(&self) {
         // default is to do nothing
     }
-
-    fn get_match_validation_type(&self) -> Option<&MatchValidationType>;
-
-    // This is the match validation type key used in the match_validators_per_type map
-    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType>;
-
-    // method used to provide each rule the list of rules enabled for a scanner
-    // this is used to allow rules that have group data to enabled/disable some features in this group
-    fn process_scanner_config(&self, group_config: &mut Self::GroupConfig);
 }
 
 impl<T> RuleConfig for Box<T>
@@ -263,12 +249,8 @@ where
         &self,
         rule_index: usize,
         labels: Labels,
-    ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
+    ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
         self.as_ref().convert_to_compiled_rule(rule_index, labels)
-    }
-
-    fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
-        self.as_ref().get_match_validation_type()
     }
 }
 
@@ -341,17 +323,17 @@ impl ScanOptionBuilder {
 }
 
 pub struct Scanner {
-    rules: Vec<Box<dyn CompiledRuleDyn>>,
+    rules: Vec<RootCompiledRule>,
     scoped_ruleset: ScopedRuleSet,
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
     labels: Labels,
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
-    group_configs: AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
+    per_scanner_data: SharedData,
 }
 
 impl Scanner {
-    pub fn builder(rules: &[Arc<dyn RuleConfig>]) -> ScannerBuilder {
+    pub fn builder(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder {
         ScannerBuilder::new(rules)
     }
 
@@ -377,7 +359,7 @@ impl Scanner {
                     rule_matches: &mut rule_matches_list,
                     blocked_rules: &options.blocked_rules_idx,
                     excluded_matches: &mut excluded_matches,
-                    rule_scan_caches: AHashMap::new(),
+                    per_event_data: SharedData::new(),
                     wildcarded_indexes: &options.wildcarded_indices,
                 },
             );
@@ -392,7 +374,10 @@ impl Scanner {
                     // Now that the `excluded_matches` set is fully populated, filter out any matches
                     // that are the same as excluded matches (also known as "Multi-pass V0")
                     rule_matches.retain(|rule_match| {
-                        if self.rules[rule_match.rule_index].should_exclude_multipass_v0() {
+                        if self.rules[rule_match.rule_index]
+                            .inner
+                            .should_exclude_multipass_v0()
+                        {
                             let is_false_positive = excluded_matches
                                 .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
                             if is_false_positive && self.scanner_features.multipass_v0_enabled {
@@ -407,11 +392,9 @@ impl Scanner {
 
                 self.sort_and_remove_overlapping_rules::<E::Encoding>(rule_matches);
 
-                let will_mutate = rule_matches.iter().any(|rule_match| {
-                    self.rules[rule_match.rule_index]
-                        .get_match_action()
-                        .is_mutating()
-                });
+                let will_mutate = rule_matches
+                    .iter()
+                    .any(|rule_match| self.rules[rule_match.rule_index].match_action.is_mutating());
 
                 self.apply_match_actions(content, path, rule_matches, &mut output_rule_matches);
 
@@ -450,14 +433,11 @@ impl Scanner {
         let mut match_validator_rule_match_per_type = AHashMap::new();
         for rule_match in rule_matches.drain(..) {
             let rule = &self.rules[rule_match.rule_index];
-            if let Some(match_validation_type) = rule.get_internal_match_validation_type() {
-                if !match_validator_rule_match_per_type.contains_key(match_validation_type) {
-                    match_validator_rule_match_per_type.insert(match_validation_type, Vec::new());
-                }
+            if let Some(match_validation_type) = rule.internal_match_validation_type() {
                 match_validator_rule_match_per_type
-                    .get_mut(match_validation_type)
-                    .unwrap()
-                    .push(rule_match);
+                    .entry(match_validation_type)
+                    .or_insert_with(Vec::new)
+                    .push(rule_match)
             }
         }
 
@@ -540,7 +520,7 @@ impl Scanner {
             matched_content_copy = Some(matched_content.to_string());
         }
 
-        if rule.get_match_action().is_mutating() {
+        if rule.match_action.is_mutating() {
             let mutated_utf8_match_start =
                 (rule_match.utf8_start as isize + *utf8_byte_delta) as usize;
             let mutated_utf8_match_end = (rule_match.utf8_end as isize + *utf8_byte_delta) as usize;
@@ -550,7 +530,7 @@ impl Scanner {
             debug_assert!(content.is_char_boundary(mutated_utf8_match_end));
 
             let matched_content = &content[mutated_utf8_match_start..mutated_utf8_match_end];
-            if let Some(replacement) = rule.get_match_action().get_replacement(matched_content) {
+            if let Some(replacement) = rule.match_action.get_replacement(matched_content) {
                 let before_replacement = &matched_content[replacement.start..replacement.end];
 
                 // update indices to match the new mutated content
@@ -574,7 +554,7 @@ impl Scanner {
 
         let rule = &self.rules[rule_match.rule_index];
 
-        let match_status: MatchStatus = if rule.get_match_validation_type().is_some() {
+        let match_status: MatchStatus = if rule.match_validation_type.is_some() {
             MatchStatus::NotChecked
         } else {
             MatchStatus::NotAvailable
@@ -583,7 +563,7 @@ impl Scanner {
         RuleMatch {
             rule_index: rule_match.rule_index,
             path,
-            replacement_type: rule.get_match_action().replacement_type(),
+            replacement_type: rule.match_action.replacement_type(),
             start_index: custom_start,
             end_index_exclusive: custom_end,
             shift_offset,
@@ -602,9 +582,9 @@ impl Scanner {
         rule_matches.sort_unstable_by(|a, b| {
             // Mutating rules are a higher priority (earlier in the list)
             let ord = self.rules[a.rule_index]
-                .get_match_action()
+                .match_action
                 .is_mutating()
-                .cmp(&self.rules[b.rule_index].get_match_action().is_mutating())
+                .cmp(&self.rules[b.rule_index].match_action.is_mutating())
                 .reverse();
 
             // Earlier start offset
@@ -623,10 +603,7 @@ impl Scanner {
         let mut retained_rules: Vec<InternalRuleMatch<E>> = vec![];
 
         'rule_matches: while let Some(rule_match) = rule_matches.pop() {
-            if self.rules[rule_match.rule_index]
-                .get_match_action()
-                .is_mutating()
-            {
+            if self.rules[rule_match.rule_index].match_action.is_mutating() {
                 // Mutating rules are kept only if they don't overlap with a previous rule.
                 if let Some(last) = retained_rules.last() {
                     if last.utf8_end > rule_match.utf8_start {
@@ -664,13 +641,13 @@ impl Drop for Scanner {
 
 #[derive(Default)]
 pub struct ScannerBuilder<'a> {
-    rules: &'a [Arc<dyn RuleConfig>],
+    rules: &'a [RootRuleConfig<Arc<dyn RuleConfig>>],
     labels: Labels,
     scanner_features: ScannerFeatures,
 }
 
 impl ScannerBuilder<'_> {
-    pub fn new(rules: &[Arc<dyn RuleConfig>]) -> ScannerBuilder {
+    pub fn new(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder {
         ScannerBuilder {
             rules,
             labels: Labels::empty(),
@@ -706,7 +683,7 @@ impl ScannerBuilder<'_> {
         let mut match_validators_per_type = AHashMap::new();
 
         for rule in self.rules.iter() {
-            if let Some(match_validation_type) = rule.get_match_validation_type() {
+            if let Some(match_validation_type) = &rule.get_third_party_active_checker() {
                 if match_validation_type.can_create_match_validator() {
                     let internal_type = match_validation_type.get_internal_match_validation_type();
                     let match_validator = match_validation_type.into_match_validator();
@@ -730,26 +707,33 @@ impl ScannerBuilder<'_> {
             .iter()
             .enumerate()
             .map(|(rule_index, config)| {
-                config.convert_to_compiled_rule(rule_index, self.labels.clone())
+                let inner = config.convert_to_compiled_rule(rule_index, self.labels.clone())?;
+                config.match_action.validate()?;
+                Ok(RootCompiledRule {
+                    inner,
+                    scope: config.scope.clone(),
+                    match_action: config.match_action.clone(),
+                    match_validation_type: config.get_third_party_active_checker().cloned(),
+                })
             })
-            .collect::<Result<Vec<Box<dyn CompiledRuleDyn>>, CreateScannerError>>()?;
+            .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;
 
-        let mut group_configs: AHashMap<TypeId, Box<dyn Any + Send + Sync>> = AHashMap::new();
+        let mut per_scanner_data = SharedData::new();
+
         compiled_rules.iter().for_each(|rule| {
-            rule.process_scanner_config(&mut group_configs);
+            rule.init_per_scanner_data(&mut per_scanner_data);
         });
 
         let scoped_ruleset = ScopedRuleSet::new(
             &compiled_rules
                 .iter()
-                .map(|rule| rule.get_scope().clone())
+                .map(|rule| rule.scope.clone())
                 .collect::<Vec<_>>(),
         )
         .with_implicit_index_wildcards(self.scanner_features.add_implicit_index_wildcards);
 
         {
             let stats = &*GLOBAL_STATS;
-
             stats.scanner_creations.increment(1);
             stats.increment_total_scanners();
         }
@@ -761,7 +745,7 @@ impl ScannerBuilder<'_> {
             metrics: ScannerMetrics::new(&self.labels),
             match_validators_per_type,
             labels: self.labels,
-            group_configs,
+            per_scanner_data,
         })
     }
 }
@@ -774,7 +758,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     // This list shall be small (<10), so a linear search is acceptable
     blocked_rules: &'a Vec<usize>,
     excluded_matches: &'a mut AHashSet<String>,
-    rule_scan_caches: AHashMap<TypeId, Box<dyn Any>>,
+    per_event_data: SharedData,
     wildcarded_indexes: &'a AHashMap<Path<'static>, Vec<(usize, usize)>>,
 }
 
@@ -790,7 +774,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         let mut path_rules_matches = vec![];
 
         // Create a map of per rule type data that can be shared between rules of the same type
-        let mut group_data: AHashMap<TypeId, Box<dyn Any>> = AHashMap::new();
+        let mut per_string_data = SharedData::new();
         let wildcard_indices_per_path = self.wildcarded_indexes.get(path);
 
         rule_visitor.visit_rule_indices(|rule_index| {
@@ -810,17 +794,21 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     });
                 };
 
+                rule.init_per_string_data(&self.scanner.labels, &mut per_string_data);
+
+                // TODO: move this somewhere higher?
+                rule.init_per_event_data(&mut self.per_event_data);
+
                 rule.get_string_matches(
                     content,
                     path,
                     self.regex_caches,
-                    &mut group_data,
-                    &self.scanner.group_configs,
-                    &mut self.rule_scan_caches,
+                    &mut per_string_data,
+                    &self.scanner.per_scanner_data,
+                    &mut self.per_event_data,
                     &exclusion_check,
                     self.excluded_matches,
                     &mut emitter,
-                    &self.scanner.labels,
                     wildcard_indices_per_path,
                 );
             }

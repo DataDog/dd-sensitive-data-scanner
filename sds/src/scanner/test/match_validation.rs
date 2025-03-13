@@ -1,4 +1,5 @@
 use crate::match_validation::validator_utils::generate_aws_headers_and_body;
+use crate::scanner::RootRuleConfig;
 use crate::{
     AwsConfig, AwsType, HttpValidatorConfigBuilder, InternalMatchValidationType, MatchAction,
     MatchStatus, MatchValidationType, ProximityKeywordsConfig, RegexRuleConfig, ScannerBuilder,
@@ -10,18 +11,18 @@ use std::time::Duration;
 
 #[test]
 fn test_should_return_match_with_match_validation() {
-    let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
-        .match_action(MatchAction::Redact {
-            replacement: "[REDACTED]".to_string(),
-        })
-        .third_party_active_checker(MatchValidationType::CustomHttp(
-            HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
-                .build()
-                .unwrap(),
-        ))
-        .build()])
-    .build()
-    .unwrap();
+    let scanner =
+        ScannerBuilder::new(&[RootRuleConfig::new(RegexRuleConfig::new("world").build())
+            .match_action(MatchAction::Redact {
+                replacement: "[REDACTED]".to_string(),
+            })
+            .third_party_active_checker(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
+                    .build()
+                    .unwrap(),
+            ))])
+        .build()
+        .unwrap();
 
     let mut content = "hey world".to_string();
     let rule_match = scanner.scan(&mut content);
@@ -32,13 +33,13 @@ fn test_should_return_match_with_match_validation() {
 
 #[test]
 fn test_should_error_if_no_match_validation() {
-    let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("world")
-        .match_action(MatchAction::Redact {
-            replacement: "[REDACTED]".to_string(),
-        })
-        .build()])
-    .build()
-    .unwrap();
+    let scanner =
+        ScannerBuilder::new(&[RootRuleConfig::new(RegexRuleConfig::new("world").build())
+            .match_action(MatchAction::Redact {
+                replacement: "[REDACTED]".to_string(),
+            })])
+        .build()
+        .unwrap();
 
     let mut content = "hey world".to_string();
     let mut rule_match = scanner.scan(&mut content);
@@ -54,53 +55,51 @@ fn test_should_error_if_no_match_validation() {
 fn test_should_allocate_match_validator_depending_on_match_type() {
     use crate::match_validation::config::AwsConfig;
 
-    let rule_aws_id = RegexRuleConfig::new("aws-id")
+    let rule_aws_id = RootRuleConfig::new(RegexRuleConfig::new("aws-id").build())
         .match_action(MatchAction::Redact {
             replacement: "[AWS ID]".to_string(),
         })
-        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsId))
-        .build();
-    let rule_aws_secret = RegexRuleConfig::new("aws-secret")
+        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsId));
+    let rule_aws_secret = RootRuleConfig::new(RegexRuleConfig::new("aws-secret").build())
         .match_action(MatchAction::Redact {
             replacement: "[AWS SECRET]".to_string(),
         })
         .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsSecret(
             AwsConfig::default(),
-        )))
-        .build();
+        )));
 
-    let rule_custom_http_1_domain_1 = RegexRuleConfig::new("custom-http1")
-        .match_action(MatchAction::Redact {
-            replacement: "[CUSTOM HTTP1]".to_string(),
-        })
-        .third_party_active_checker(MatchValidationType::CustomHttp(
-            HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
-                .build()
-                .unwrap(),
-        ))
-        .build();
+    let rule_custom_http_1_domain_1 =
+        RootRuleConfig::new(RegexRuleConfig::new("custom-http1").build())
+            .match_action(MatchAction::Redact {
+                replacement: "[CUSTOM HTTP1]".to_string(),
+            })
+            .third_party_active_checker(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
+                    .build()
+                    .unwrap(),
+            ));
 
-    let rule_custom_http_2_domain_1 = RegexRuleConfig::new("custom-http2")
-        .match_action(MatchAction::Redact {
-            replacement: "[CUSTOM HTTP2]".to_string(),
-        })
-        .third_party_active_checker(MatchValidationType::CustomHttp(
-            HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
-                .build()
-                .unwrap(),
-        ))
-        .build();
+    let rule_custom_http_2_domain_1 =
+        RootRuleConfig::new(RegexRuleConfig::new("custom-http2").build())
+            .match_action(MatchAction::Redact {
+                replacement: "[CUSTOM HTTP2]".to_string(),
+            })
+            .third_party_active_checker(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
+                    .build()
+                    .unwrap(),
+            ));
 
-    let rule_custom_http_domain_2 = RegexRuleConfig::new("custom-http3")
-        .match_action(MatchAction::Redact {
-            replacement: "[CUSTOM HTTP2]".to_string(),
-        })
-        .third_party_active_checker(MatchValidationType::CustomHttp(
-            HttpValidatorConfigBuilder::new("http://localhost:8081".to_string())
-                .build()
-                .unwrap(),
-        ))
-        .build();
+    let rule_custom_http_domain_2 =
+        RootRuleConfig::new(RegexRuleConfig::new("custom-http3").build())
+            .match_action(MatchAction::Redact {
+                replacement: "[CUSTOM HTTP2]".to_string(),
+            })
+            .third_party_active_checker(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new("http://localhost:8081".to_string())
+                    .build()
+                    .unwrap(),
+            ));
 
     let scanner = ScannerBuilder::new(&[
         rule_aws_id,
@@ -145,12 +144,11 @@ fn test_should_allocate_match_validator_depending_on_match_type() {
 
 #[test]
 fn test_aws_id_only_shall_not_validate() {
-    let rule_aws_id = RegexRuleConfig::new("aws_id")
+    let rule_aws_id = RootRuleConfig::new(RegexRuleConfig::new("aws_id").build())
         .match_action(MatchAction::Redact {
             replacement: "[AWS_ID]".to_string(),
         })
-        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsId))
-        .build();
+        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsId));
 
     let scanner = ScannerBuilder::new(&[rule_aws_id]).build().unwrap();
     let mut content = "this is an aws_id".to_string();
@@ -185,7 +183,7 @@ fn test_mock_same_http_validator_several_matches() {
         then.status(500).header("content-type", "text/html");
     });
 
-    let rule_valid_match = RegexRuleConfig::new("\\bvalid_match\\b")
+    let rule_valid_match = RootRuleConfig::new(RegexRuleConfig::new("\\bvalid_match\\b").build())
         .match_action(MatchAction::Redact {
             replacement: "[VALID]".to_string(),
         })
@@ -193,21 +191,20 @@ fn test_mock_same_http_validator_several_matches() {
             HttpValidatorConfigBuilder::new(server.url("/").to_string())
                 .build()
                 .unwrap(),
-        ))
-        .build();
+        ));
 
-    let rule_invalid_match = RegexRuleConfig::new("\\binvalid_match\\b")
-        .match_action(MatchAction::Redact {
-            replacement: "[INVALID]".to_string(),
-        })
-        .third_party_active_checker(MatchValidationType::CustomHttp(
-            HttpValidatorConfigBuilder::new(server.url("/").to_string())
-                .build()
-                .unwrap(),
-        ))
-        .build();
+    let rule_invalid_match =
+        RootRuleConfig::new(RegexRuleConfig::new("\\binvalid_match\\b").build())
+            .match_action(MatchAction::Redact {
+                replacement: "[INVALID]".to_string(),
+            })
+            .third_party_active_checker(MatchValidationType::CustomHttp(
+                HttpValidatorConfigBuilder::new(server.url("/").to_string())
+                    .build()
+                    .unwrap(),
+            ));
 
-    let rule_error_match = RegexRuleConfig::new("\\berror_match\\b")
+    let rule_error_match = RootRuleConfig::new(RegexRuleConfig::new("\\berror_match\\b").build())
         .match_action(MatchAction::Redact {
             replacement: "[ERROR]".to_string(),
         })
@@ -215,8 +212,7 @@ fn test_mock_same_http_validator_several_matches() {
             HttpValidatorConfigBuilder::new(server.url("/").to_string())
                 .build()
                 .unwrap(),
-        ))
-        .build();
+        ));
     let scanner = ScannerBuilder::new(&[rule_valid_match, rule_invalid_match, rule_error_match])
         .build()
         .unwrap();
@@ -250,7 +246,7 @@ fn test_mock_http_timeout() {
             .header("authorization", "Bearer valid_match");
         then.status(200);
     });
-    let rule_valid_match = RegexRuleConfig::new("\\bvalid_match\\b")
+    let rule_valid_match = RootRuleConfig::new(RegexRuleConfig::new("\\bvalid_match\\b").build())
         .match_action(MatchAction::Redact {
             replacement: "[VALID]".to_string(),
         })
@@ -259,8 +255,7 @@ fn test_mock_http_timeout() {
                 .set_timeout(Duration::from_micros(0))
                 .build()
                 .unwrap(),
-        ))
-        .build();
+        ));
 
     let scanner = ScannerBuilder::new(&[rule_valid_match]).build().unwrap();
 
@@ -291,7 +286,7 @@ fn test_mock_multiple_match_validators() {
         then.status(200);
     });
 
-    let rule_valid_match = RegexRuleConfig::new("\\bvalid_match\\b")
+    let rule_valid_match = RootRuleConfig::new(RegexRuleConfig::new("\\bvalid_match\\b").build())
         .match_action(MatchAction::Redact {
             replacement: "[VALID]".to_string(),
         })
@@ -299,17 +294,15 @@ fn test_mock_multiple_match_validators() {
             HttpValidatorConfigBuilder::new(server.url("/http-service").to_string())
                 .build()
                 .unwrap(),
-        ))
-        .build();
+        ));
 
-    let rule_aws_id = RegexRuleConfig::new("\\baws_id\\b")
+    let rule_aws_id = RootRuleConfig::new(RegexRuleConfig::new("\\baws_id\\b").build())
         .match_action(MatchAction::Redact {
             replacement: "[AWS_ID]".to_string(),
         })
-        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsId))
-        .build();
+        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsId));
 
-    let rule_aws_secret = RegexRuleConfig::new("\\baws_secret\\b")
+    let rule_aws_secret = RootRuleConfig::new(RegexRuleConfig::new("\\baws_secret\\b").build())
         .match_action(MatchAction::Redact {
             replacement: "[AWS_SECRET]".to_string(),
         })
@@ -317,8 +310,7 @@ fn test_mock_multiple_match_validators() {
             aws_sts_endpoint: server.url("/aws-service").to_string(),
             forced_datetime_utc: None,
             timeout: Duration::from_secs(1),
-        })))
-        .build();
+        })));
 
     let scanner = ScannerBuilder::new(&[rule_valid_match, rule_aws_id, rule_aws_secret])
         .build()
@@ -352,7 +344,7 @@ fn test_mock_endpoint_with_multiple_hosts() {
         when.method(GET).path("/eu-service");
         then.status(403);
     });
-    let rule_valid_match = RegexRuleConfig::new("\\bvalid_match\\b")
+    let rule_valid_match = RootRuleConfig::new(RegexRuleConfig::new("\\bvalid_match\\b").build())
         .match_action(MatchAction::Redact {
             replacement: "[VALID]".to_string(),
         })
@@ -361,8 +353,7 @@ fn test_mock_endpoint_with_multiple_hosts() {
                 .set_hosts(vec!["us".to_string(), "eu".to_string()])
                 .build()
                 .unwrap(),
-        ))
-        .build();
+        ));
 
     let scanner = ScannerBuilder::new(&[rule_valid_match]).build().unwrap();
     let mut content = "this is a content with a valid_match on multiple hosts".to_string();
@@ -438,28 +429,29 @@ fn test_mock_aws_validator() {
             .header("authorization", error_authorization_2.to_str().unwrap());
         then.status(500);
     });
-    let rule_aws_id = RegexRuleConfig::new("AKIA[0-9A-Z]{16}")
+    let rule_aws_id = RootRuleConfig::new(RegexRuleConfig::new("AKIA[0-9A-Z]{16}").build())
         .match_action(MatchAction::Redact {
             replacement: "[AWS_ID]".to_string(),
         })
-        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsId))
-        .build();
+        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsId));
 
-    let rule_aws_secret = RegexRuleConfig::new("[A-Za-z0-9/+]{40}")
-        .match_action(MatchAction::Redact {
-            replacement: "[AWS_SECRET]".to_string(),
-        })
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 30,
-            included_keywords: vec!["aws_secret".to_string()],
-            excluded_keywords: vec![],
-        })
-        .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
-            aws_sts_endpoint: server_url.clone(),
-            forced_datetime_utc: Some(datetime),
-            timeout: Duration::from_secs(5),
-        })))
-        .build();
+    let rule_aws_secret = RootRuleConfig::new(
+        RegexRuleConfig::new("[A-Za-z0-9/+]{40}")
+            .with_proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["aws_secret".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )
+    .third_party_active_checker(MatchValidationType::Aws(AwsType::AwsSecret(AwsConfig {
+        aws_sts_endpoint: server_url.clone(),
+        forced_datetime_utc: Some(datetime),
+        timeout: Duration::from_secs(5),
+    })))
+    .match_action(MatchAction::Redact {
+        replacement: "[AWS_SECRET]".to_string(),
+    });
 
     let scanner = ScannerBuilder::new(&[rule_aws_id, rule_aws_secret])
         .build()

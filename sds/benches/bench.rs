@@ -116,7 +116,7 @@ pub fn luhn_checksum(c: &mut Criterion) {
 
 pub fn included_keywords(c: &mut Criterion) {
     let scanner = Scanner::builder(&[RegexRuleConfig::new("[a-zA-z0-9]{4,25}")
-        .proximity_keywords(ProximityKeywordsConfig {
+        .with_proximity_keywords(ProximityKeywordsConfig {
             look_ahead_character_count: 30,
             included_keywords: vec![
                 "secret".to_string(),
@@ -182,7 +182,7 @@ pub fn included_keywords_on_path(c: &mut Criterion) {
     let mut event = SimpleEvent::Map(event_map);
 
     let scanner = Scanner::builder(&[RegexRuleConfig::new("value")
-        .proximity_keywords(ProximityKeywordsConfig {
+        .with_proximity_keywords(ProximityKeywordsConfig {
             look_ahead_character_count: 30,
             included_keywords: vec!["secret".to_string(), "ssn".to_string()],
             excluded_keywords: vec![],

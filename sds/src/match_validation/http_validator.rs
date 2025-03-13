@@ -2,7 +2,8 @@ use super::{
     config::{HttpValidatorConfig, HttpValidatorConfigBuilder, RequestHeader},
     match_validator::MatchValidator,
 };
-use crate::{match_validation::config::HttpMethod, CompiledRuleDyn, MatchStatus, RuleMatch};
+use crate::scanner::RootCompiledRule;
+use crate::{match_validation::config::HttpMethod, MatchStatus, RuleMatch};
 use ahash::AHashMap;
 use lazy_static::lazy_static;
 use rayon::prelude::*;
@@ -99,7 +100,7 @@ impl HttpValidatorHelper {
 }
 
 impl MatchValidator for HttpValidator {
-    fn validate(&self, matches: &mut Vec<RuleMatch>, _: &[Box<dyn CompiledRuleDyn>]) {
+    fn validate(&self, matches: &mut Vec<RuleMatch>, _: &[RootCompiledRule]) {
         // build a map of match status per endpoint and per match_idx
         let mut match_status_per_endpoint_and_match: AHashMap<_, _> = matches
             .iter()
