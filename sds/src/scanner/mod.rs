@@ -330,7 +330,6 @@ pub struct Scanner {
     labels: Labels,
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
     per_scanner_data: SharedData,
-    // group_configs: AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
 }
 
 impl Scanner {
