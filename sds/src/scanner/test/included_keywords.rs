@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 fn test_included_keywords_match_content() {
     let redact_test_rule = RootRuleConfig::new(
         RegexRuleConfig::new("world")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 30,
                 included_keywords: vec!["hello".to_string()],
                 excluded_keywords: vec![],
@@ -120,7 +120,7 @@ fn test_included_keywords_path_deep() {
 fn test_included_keyword_not_match_further_than_look_ahead_character_count() {
     let redact_test_rule = RootRuleConfig::new(
         RegexRuleConfig::new("world")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 30,
                 included_keywords: vec!["hello".to_string()],
                 excluded_keywords: vec![],
@@ -143,7 +143,7 @@ fn test_included_keyword_not_match_further_than_look_ahead_character_count() {
 fn test_included_keyword_multiple_matches_in_one_prefix() {
     let redact_test_rule = RootRuleConfig::new(
         RegexRuleConfig::new("world")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 30,
                 included_keywords: vec!["hello".to_string()],
                 excluded_keywords: vec![],
@@ -167,7 +167,7 @@ fn test_included_keyword_multiple_matches_in_one_prefix() {
 fn test_included_keyword_multiple_prefix_matches() {
     let redact_test_rule = RootRuleConfig::new(
         RegexRuleConfig::new("world")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 30,
                 included_keywords: vec!["hello".to_string()],
                 excluded_keywords: vec![],
@@ -193,7 +193,7 @@ fn test_included_keyword_multiple_prefix_matches() {
 fn test_included_keywords_on_start_boundary_with_space_including_word_boundary() {
     let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
         RegexRuleConfig::new("ab")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 30,
                 included_keywords: vec!["id".to_string()],
                 excluded_keywords: vec![],
@@ -215,7 +215,7 @@ fn test_included_keywords_on_start_boundary_with_space_including_word_boundary()
 fn test_included_keywords_on_end_boundary() {
     let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
         RegexRuleConfig::new("abc")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 30,
                 included_keywords: vec!["id".to_string()],
                 excluded_keywords: vec![],
@@ -235,7 +235,7 @@ fn test_included_keywords_on_end_boundary() {
 fn should_not_look_ahead_too_far() {
     let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
         RegexRuleConfig::new("x")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 10,
                 included_keywords: vec!["host".to_string()],
                 excluded_keywords: vec![],
@@ -262,7 +262,7 @@ fn should_not_look_ahead_too_far() {
 fn should_verify_included_keywords_on_path_even_if_included_keywords_are_in_string() {
     let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
         RegexRuleConfig::new("world")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 10,
                 included_keywords: vec!["hello".to_string()],
                 excluded_keywords: vec![],
@@ -286,7 +286,7 @@ fn should_verify_included_keywords_on_path_even_if_included_keywords_are_in_stri
 fn test_included_and_excluded_keyword() {
     let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
         RegexRuleConfig::new("world")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 11,
                 included_keywords: vec!["hey".to_string()],
                 excluded_keywords: vec!["hello".to_string()],

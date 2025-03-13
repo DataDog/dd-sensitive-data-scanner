@@ -290,7 +290,7 @@ fn test_indices() {
 fn build_test_scanner() -> Scanner {
     let redact_test_rule = RootRuleConfig::new(
         RegexRuleConfig::new("world")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 30,
                 included_keywords: vec!["awsAccess".to_string(), "access/key".to_string()],
                 excluded_keywords: vec![],
@@ -373,7 +373,7 @@ fn test_blocked_rules() {
 fn test_excluded_keywords() {
     let redact_test_rule = RootRuleConfig::new(
         RegexRuleConfig::new("world")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 30,
                 included_keywords: vec![],
                 excluded_keywords: vec!["hello".to_string()],
@@ -544,7 +544,7 @@ fn should_not_exclude_false_positive_matches() {
     // it is not saved in the excluded matches.
     let rule_0 = RootRuleConfig::new(
         RegexRuleConfig::new("b.*")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 30,
                 included_keywords: vec!["secret".to_string()],
                 excluded_keywords: vec![],
@@ -684,7 +684,7 @@ fn test_internal_overlapping_matches() {
     // A simple "credit-card rule is modified a bit to allow a multi-char character in the match
     let rule_0 = RootRuleConfig::new(
         RegexRuleConfig::new("([\\d€]+){1}(,\\d+){3}")
-            .validator(LuhnChecksum)
+            .with_validator(Some(LuhnChecksum))
             .build(),
     )
     .match_action(MatchAction::Redact {
@@ -713,7 +713,7 @@ fn test_next_regex_start_after_false_positive() {
 fn test_excluded_keyword_with_excluded_chars_in_content() {
     let rule_0 = RootRuleConfig::new(
         RegexRuleConfig::new("value")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 30,
                 included_keywords: vec![],
                 excluded_keywords: vec!["test".to_string()],

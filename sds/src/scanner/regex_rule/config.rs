@@ -11,6 +11,8 @@ use serde_with::serde_as;
 use serde_with::DefaultOnNull;
 use std::sync::Arc;
 
+pub const DEFAULT_KEYWORD_LOOKAHEAD: usize = 30;
+
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RegexRuleConfig {
@@ -33,19 +35,15 @@ impl RegexRuleConfig {
         }
     }
 
-    pub fn pattern(&self, pattern: String) -> Self {
-        self.mutate_clone(|x| x.pattern = pattern)
+    pub fn with_pattern(&self, pattern: &str) -> Self {
+        self.mutate_clone(|x| x.pattern = pattern.to_string())
     }
 
-    pub fn proximity_keywords(&self, proximity_keywords: ProximityKeywordsConfig) -> Self {
+    pub fn with_proximity_keywords(&self, proximity_keywords: ProximityKeywordsConfig) -> Self {
         self.mutate_clone(|x| x.proximity_keywords = Some(proximity_keywords))
     }
 
-    pub fn validator(&self, validator: SecondaryValidator) -> Self {
-        self.mutate_clone(|x| x.validator = Some(validator))
-    }
-
-    pub fn labels(&self, labels: Labels) -> Self {
+    pub fn with_labels(&self, labels: Labels) -> Self {
         self.mutate_clone(|x| x.labels = labels)
     }
 
@@ -57,6 +55,36 @@ impl RegexRuleConfig {
         let mut clone = self.clone();
         modify(&mut clone);
         clone
+    }
+
+    pub fn with_included_keywords(
+        &self,
+        keywords: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> Self {
+        let mut this = self.clone();
+        let mut config = self.get_or_create_proximity_keywords_config();
+        config.included_keywords = keywords
+            .into_iter()
+            .map(|x| x.as_ref().to_string())
+            .collect::<Vec<_>>();
+        this.proximity_keywords = Some(config);
+        this
+    }
+
+    pub fn with_validator(&self, validator: Option<SecondaryValidator>) -> Self {
+        let mut this = self.clone();
+        this.validator = validator;
+        this
+    }
+
+    fn get_or_create_proximity_keywords_config(&self) -> ProximityKeywordsConfig {
+        self.proximity_keywords
+            .clone()
+            .unwrap_or_else(|| ProximityKeywordsConfig {
+                look_ahead_character_count: DEFAULT_KEYWORD_LOOKAHEAD,
+                included_keywords: vec![],
+                excluded_keywords: vec![],
+            })
     }
 }
 
@@ -128,7 +156,7 @@ mod test {
 
     #[test]
     fn should_override_pattern() {
-        let rule_config = RegexRuleConfig::new("123").pattern("456".to_string());
+        let rule_config = RegexRuleConfig::new("123").with_pattern("456");
         assert_eq!(rule_config.pattern, "456");
     }
 

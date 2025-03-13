@@ -83,14 +83,7 @@ where
     }
 
     pub fn into_dyn(self) -> RootRuleConfig<Arc<dyn RuleConfig>> {
-        #[allow(deprecated)]
-        RootRuleConfig {
-            match_action: self.match_action,
-            scope: self.scope,
-            match_validation_type: self.match_validation_type,
-            third_party_active_checker: self.third_party_active_checker,
-            inner: Arc::new(self.inner),
-        }
+        self.map_inner(|x| Arc::new(x) as Arc<dyn RuleConfig>)
     }
 }
 
@@ -103,6 +96,17 @@ impl<T> RootRuleConfig<T> {
             match_validation_type: None,
             third_party_active_checker: None,
             inner,
+        }
+    }
+
+    pub fn map_inner<U>(self, func: impl FnOnce(T) -> U) -> RootRuleConfig<U> {
+        #[allow(deprecated)]
+        RootRuleConfig {
+            match_action: self.match_action,
+            scope: self.scope,
+            match_validation_type: self.match_validation_type,
+            third_party_active_checker: self.third_party_active_checker,
+            inner: func(self.inner),
         }
     }
 

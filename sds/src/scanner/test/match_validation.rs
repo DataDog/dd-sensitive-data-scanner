@@ -437,7 +437,7 @@ fn test_mock_aws_validator() {
 
     let rule_aws_secret = RootRuleConfig::new(
         RegexRuleConfig::new("[A-Za-z0-9/+]{40}")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 30,
                 included_keywords: vec!["aws_secret".to_string()],
                 excluded_keywords: vec![],

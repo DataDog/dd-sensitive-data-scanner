@@ -104,7 +104,7 @@ fn should_submit_excluded_keywords_metric() {
     metrics::with_local_recorder(&recorder, || {
         let redact_test_rule = RootRuleConfig::new(
             RegexRuleConfig::new("world")
-                .proximity_keywords(ProximityKeywordsConfig {
+                .with_proximity_keywords(ProximityKeywordsConfig {
                     look_ahead_character_count: 30,
                     included_keywords: vec![],
                     excluded_keywords: vec!["hello".to_string()],
@@ -143,7 +143,7 @@ fn should_submit_excluded_keywords_metric() {
 fn test_regex_match_and_included_keyword_same_index() {
     let email_rule = RootRuleConfig::new(
         RegexRuleConfig::new(".+")
-            .proximity_keywords(ProximityKeywordsConfig {
+            .with_proximity_keywords(ProximityKeywordsConfig {
                 look_ahead_character_count: 30,
                 included_keywords: vec!["email".to_string()],
                 excluded_keywords: vec![],
