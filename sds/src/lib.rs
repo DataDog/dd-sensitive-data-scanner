@@ -52,7 +52,8 @@ pub use scanner::{
 };
 pub use scoped_ruleset::ExclusionCheck;
 pub use validation::{
-    get_regex_complexity_estimate_very_slow, validate_regex, RegexValidationError,
+    get_regex_complexity_estimate_very_slow, validate_regex, validate_regex_and_get_ast,
+    RegexValidationError,
 };
 
 #[cfg(any(feature = "testing", feature = "bench"))]
