@@ -1,16 +1,16 @@
 use std::fmt;
 
-use crate::{CompiledRuleDyn, MatchStatus, RuleMatch};
-use ahash::AHashMap;
-use lazy_static::lazy_static;
-use rayon::prelude::*;
-use reqwest::Client;
-
 use super::{
     config::{AwsConfig, AwsType, MatchValidationType},
     match_validator::MatchValidator,
     validator_utils::generate_aws_headers_and_body,
 };
+use crate::scanner::RootCompiledRule;
+use crate::{MatchStatus, RuleMatch};
+use ahash::AHashMap;
+use lazy_static::lazy_static;
+use rayon::prelude::*;
+use reqwest::Client;
 
 lazy_static! {
     static ref AWS_CLIENT: Client = Client::new();
@@ -31,14 +31,14 @@ impl AwsValidator {
     fn get_match_status_per_pairs_of_matches_idx(
         &self,
         matches: &[RuleMatch],
-        scanner_rules: &[Box<dyn CompiledRuleDyn>],
+        scanner_rules: &[RootCompiledRule],
     ) -> AHashMap<(usize, usize), MatchStatus> {
         let mut aws_id_matches_idx = vec![];
         let mut aws_secret_matches_idx = vec![];
 
         for (idx, m) in matches.iter().enumerate() {
             let rule = &scanner_rules[m.rule_index];
-            if let Some(MatchValidationType::Aws(aws_type)) = rule.get_match_validation_type() {
+            if let Some(MatchValidationType::Aws(aws_type)) = &rule.match_validation_type {
                 match aws_type {
                     AwsType::AwsId => {
                         aws_id_matches_idx.push(idx);
@@ -116,7 +116,7 @@ fn handle_reqwest_response(match_status: &mut MatchStatus, val: &reqwest::blocki
 }
 
 impl MatchValidator for AwsValidator {
-    fn validate(&self, matches: &mut Vec<RuleMatch>, scanner_rules: &[Box<dyn CompiledRuleDyn>]) {
+    fn validate(&self, matches: &mut Vec<RuleMatch>, scanner_rules: &[RootCompiledRule]) {
         // Let's regroup matches per type
         let mut match_status_per_pairs_of_matches_idx: AHashMap<(usize, usize), MatchStatus> =
             self.get_match_status_per_pairs_of_matches_idx(matches, scanner_rules);

@@ -1,16 +1,16 @@
+use crate::scanner::RootRuleConfig;
 use crate::{MatchAction, MatchStatus, Path, RegexRuleConfig, RuleMatch, ScannerBuilder};
 
 #[test]
 fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
-    let rule_0 = RegexRuleConfig::new("...")
-        .match_action(MatchAction::None)
-        .build();
+    let rule_0 =
+        RootRuleConfig::new(RegexRuleConfig::new("...").build()).match_action(MatchAction::None);
 
-    let rule_1 = RegexRuleConfig::new("...")
-        .match_action(MatchAction::Redact {
+    let rule_1 = RootRuleConfig::new(RegexRuleConfig::new("...").build()).match_action(
+        MatchAction::Redact {
             replacement: "***".to_string(),
-        })
-        .build();
+        },
+    );
 
     let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
     let mut content = "hello world".to_string();
@@ -73,15 +73,14 @@ fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
 fn test_overlapping_mutation_higher_priority() {
     // A mutating match is a higher priority even if it starts after a non-mutating match
 
-    let rule_0 = RegexRuleConfig::new("abc")
-        .match_action(MatchAction::None)
-        .build();
+    let rule_0 =
+        RootRuleConfig::new(RegexRuleConfig::new("abc").build()).match_action(MatchAction::None);
 
-    let rule_1 = RegexRuleConfig::new("bcd")
-        .match_action(MatchAction::Redact {
+    let rule_1 = RootRuleConfig::new(RegexRuleConfig::new("bcd").build()).match_action(
+        MatchAction::Redact {
             replacement: "***".to_string(),
-        })
-        .build();
+        },
+    );
 
     let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
     let mut content = "abcdef".to_string();
@@ -112,13 +111,11 @@ fn test_overlapping_mutation_higher_priority() {
 fn test_overlapping_start_offset() {
     // The match that starts first is used (if the mutation is the same)
 
-    let rule_0 = RegexRuleConfig::new("abc")
-        .match_action(MatchAction::None)
-        .build();
+    let rule_0 =
+        RootRuleConfig::new(RegexRuleConfig::new("abc").build()).match_action(MatchAction::None);
 
-    let rule_1 = RegexRuleConfig::new("bcd")
-        .match_action(MatchAction::None)
-        .build();
+    let rule_1 =
+        RootRuleConfig::new(RegexRuleConfig::new("bcd").build()).match_action(MatchAction::None);
 
     let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
     let mut content = "abcdef".to_string();
@@ -149,13 +146,11 @@ fn test_overlapping_start_offset() {
 fn test_overlapping_length() {
     // If 2 matches have the same mutation and same start, the longer one is taken
 
-    let rule_0 = RegexRuleConfig::new("abc")
-        .match_action(MatchAction::None)
-        .build();
+    let rule_0 =
+        RootRuleConfig::new(RegexRuleConfig::new("abc").build()).match_action(MatchAction::None);
 
-    let rule_1 = RegexRuleConfig::new("abcd")
-        .match_action(MatchAction::None)
-        .build();
+    let rule_1 =
+        RootRuleConfig::new(RegexRuleConfig::new("abcd").build()).match_action(MatchAction::None);
 
     let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
     let mut content = "abcdef".to_string();
@@ -186,13 +181,11 @@ fn test_overlapping_length() {
 fn test_overlapping_rule_order() {
     // If 2 matches have the same mutation, same start, and the same length, the one with the lower rule index is used
 
-    let rule_0 = RegexRuleConfig::new("abc")
-        .match_action(MatchAction::None)
-        .build();
+    let rule_0 =
+        RootRuleConfig::new(RegexRuleConfig::new("abc").build()).match_action(MatchAction::None);
 
-    let rule_1 = RegexRuleConfig::new("abc")
-        .match_action(MatchAction::None)
-        .build();
+    let rule_1 =
+        RootRuleConfig::new(RegexRuleConfig::new("abc").build()).match_action(MatchAction::None);
 
     let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
     let mut content = "abcdef".to_string();
@@ -224,11 +217,11 @@ fn test_overlapping_mutations() {
     // This reproduces a bug where overlapping mutations weren't filtered out, resulting in invalid
     // UTF-8 indices being calculated which resulted in a panic if they were used.
 
-    let rule = RegexRuleConfig::new("hello")
-        .match_action(MatchAction::Redact {
+    let rule = RootRuleConfig::new(RegexRuleConfig::new("hello").build()).match_action(
+        MatchAction::Redact {
             replacement: "*".to_string(),
-        })
-        .build();
+        },
+    );
 
     let scanner = ScannerBuilder::new(&[rule.clone(), rule]).build().unwrap();
     let mut content = "hello world".to_string();

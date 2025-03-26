@@ -116,7 +116,7 @@ pub fn luhn_checksum(c: &mut Criterion) {
 
 pub fn included_keywords(c: &mut Criterion) {
     let scanner = Scanner::builder(&[RegexRuleConfig::new("[a-zA-z0-9]{4,25}")
-        .proximity_keywords(ProximityKeywordsConfig {
+        .with_proximity_keywords(ProximityKeywordsConfig {
             look_ahead_character_count: 30,
             included_keywords: vec![
                 "secret".to_string(),
@@ -162,9 +162,9 @@ pub fn included_keywords_on_path(c: &mut Criterion) {
 
     for i in 0..100 {
         let mut nested_event = BTreeMap::new();
-        for j in 0..1000 {
+        for _j in 0..1000 {
             let mut double_nested_event = BTreeMap::new();
-            for k in 0..100 {
+            for _k in 0..100 {
                 double_nested_event.insert(
                     "yet-another-key".to_string(),
                     SimpleEvent::String(format!("value-{}", i)),
@@ -182,7 +182,7 @@ pub fn included_keywords_on_path(c: &mut Criterion) {
     let mut event = SimpleEvent::Map(event_map);
 
     let scanner = Scanner::builder(&[RegexRuleConfig::new("value")
-        .proximity_keywords(ProximityKeywordsConfig {
+        .with_proximity_keywords(ProximityKeywordsConfig {
             look_ahead_character_count: 30,
             included_keywords: vec!["secret".to_string(), "ssn".to_string()],
             excluded_keywords: vec![],

@@ -22,7 +22,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
         .into_iter()
         .map(|(keywords, regex)| {
             RegexRuleConfig::new(&regex)
-                .proximity_keywords(ProximityKeywordsConfig {
+                .with_proximity_keywords(ProximityKeywordsConfig {
                     look_ahead_character_count: 30,
                     included_keywords: keywords,
                     excluded_keywords: vec![],

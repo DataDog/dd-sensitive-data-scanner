@@ -1,4 +1,3 @@
-use crate::match_validation::config::{InternalMatchValidationType, MatchValidationType};
 use crate::proximity_keywords::{
     contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
     CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
@@ -6,10 +5,10 @@ use crate::proximity_keywords::{
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::regex_store::SharedRegex;
 use crate::scanner::regex_rule::RegexCaches;
-use crate::scanner::scope::Scope;
+use crate::scanner::shared_data::SharedData;
 use crate::scanner::{get_next_regex_start, is_false_positive_match};
 use crate::secondary_validation::Validator;
-use crate::{CompiledRule, ExclusionCheck, Labels, MatchAction, MatchEmitter, Path, StringMatch};
+use crate::{CompiledRule, ExclusionCheck, MatchEmitter, Path, StringMatch};
 use ahash::AHashSet;
 use regex_automata::meta::Cache;
 use regex_automata::Input;
@@ -19,43 +18,21 @@ use std::sync::Arc;
 pub struct RegexCompiledRule {
     pub rule_index: usize,
     pub regex: SharedRegex,
-    pub match_action: MatchAction,
-    pub scope: Scope,
     pub included_keywords: Option<CompiledIncludedProximityKeywords>,
     pub excluded_keywords: Option<CompiledExcludedProximityKeywords>,
     pub validator: Option<Arc<dyn Validator>>,
     pub metrics: RuleMetrics,
-    pub match_validation_type: Option<MatchValidationType>,
-    pub internal_match_validation_type: Option<InternalMatchValidationType>,
 }
 
 impl CompiledRule for RegexCompiledRule {
-    // no special data
-    type GroupData = ();
-    type GroupConfig = ();
-    type RuleScanCache = ();
-
-    fn get_match_action(&self) -> &MatchAction {
-        &self.match_action
-    }
-    fn get_scope(&self) -> &Scope {
-        &self.scope
-    }
-    fn create_group_data(_: &Labels) {}
-    fn create_group_config() {}
-    fn create_rule_scan_cache() {}
-    fn get_included_keywords(&self) -> Option<&CompiledIncludedProximityKeywords> {
-        self.included_keywords.as_ref()
-    }
-
     fn get_string_matches(
         &self,
         content: &str,
         path: &Path,
         regex_caches: &mut RegexCaches,
-        _group_data: &mut (),
-        _group_config: &(),
-        _rule_scan_cache: &mut (),
+        _per_string_data: &mut SharedData,
+        _per_scanner_data: &SharedData,
+        _per_event_data: &mut SharedData,
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
@@ -95,23 +72,6 @@ impl CompiledRule for RegexCompiledRule {
 
     fn on_excluded_match_multipass_v0(&self) {
         self.metrics.false_positive_excluded_attributes.increment(1);
-    }
-
-    fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
-        match &self.match_validation_type {
-            Some(match_validation_type) => Some(match_validation_type),
-            None => None,
-        }
-    }
-
-    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
-        match &self.internal_match_validation_type {
-            Some(internal_match_validation_type) => Some(internal_match_validation_type),
-            None => None,
-        }
-    }
-    fn process_scanner_config(&self, _: &mut Self::GroupConfig) {
-        // no special processing
     }
 }
 

@@ -4,12 +4,10 @@ mod metrics;
 mod overlapping_matches;
 mod validators;
 
-use super::CompiledRuleDyn;
 use super::*;
 use super::{MatchEmitter, ScannerBuilder, StringMatch};
 use crate::match_action::{MatchAction, MatchActionValidationError};
 
-use crate::match_validation::config::MatchValidationType;
 use crate::observability::labels::Labels;
 use crate::scanner::regex_rule::config::{
     ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator::*,
@@ -31,52 +29,23 @@ use super::RuleConfig;
 
 pub struct DumbRuleConfig {}
 
-pub struct DumbCompiledRule {
-    pub match_action: MatchAction,
-    pub scope: Scope,
-}
+pub struct DumbCompiledRule {}
 
 impl CompiledRule for DumbCompiledRule {
-    type GroupData = ();
-    type GroupConfig = ();
-    type RuleScanCache = ();
-
-    fn get_match_action(&self) -> &MatchAction {
-        &self.match_action
-    }
-    fn get_scope(&self) -> &Scope {
-        &self.scope
-    }
-
-    fn create_group_data(_: &Labels) {}
-    fn create_group_config() {}
-    fn create_rule_scan_cache() {}
-
     fn get_string_matches(
         &self,
         _content: &str,
         _path: &Path,
         _regex_caches: &mut RegexCaches,
-        _group_data: &mut Self::GroupData,
-        _group_config: &Self::GroupConfig,
-        _rule_scan_cache: &mut Self::RuleScanCache,
+        _per_string_data: &mut SharedData,
+        _per_scanner_data: &SharedData,
+        _per_event_data: &mut SharedData,
         _exclusion_check: &ExclusionCheck<'_>,
         _excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         _: Option<&Vec<(usize, usize)>>,
     ) {
         match_emitter.emit(StringMatch { start: 10, end: 16 });
-    }
-
-    fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
-        None
-    }
-
-    fn get_internal_match_validation_type(&self) -> Option<&InternalMatchValidationType> {
-        None
-    }
-    fn process_scanner_config(&self, _: &mut Self::GroupConfig) {
-        // do nothing
     }
 }
 
@@ -85,25 +54,21 @@ impl RuleConfig for DumbRuleConfig {
         &self,
         _content: usize,
         _: Labels,
-    ) -> Result<Box<dyn CompiledRuleDyn>, CreateScannerError> {
-        Ok(Box::new(DumbCompiledRule {
-            match_action: MatchAction::Redact {
-                replacement: "[REDACTED]".to_string(),
-            },
-            scope: Scope::default(),
-        }))
-    }
-
-    fn get_match_validation_type(&self) -> Option<&MatchValidationType> {
-        None
+    ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
+        Ok(Box::new(DumbCompiledRule {}))
     }
 }
 
 #[test]
 fn dumb_custom_rule() {
-    let scanner = ScannerBuilder::new(&[Arc::new(DumbRuleConfig {})])
-        .build()
-        .unwrap();
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
+        Arc::new(DumbRuleConfig {}) as Arc<dyn RuleConfig>
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    })])
+    .build()
+    .unwrap();
 
     let mut input = "this is a secret with random data".to_owned();
 
@@ -116,12 +81,16 @@ fn dumb_custom_rule() {
 #[test]
 fn test_mixed_rules() {
     let scanner = ScannerBuilder::new(&[
-        Arc::new(DumbRuleConfig {}),
-        RegexRuleConfig::new("secret")
-            .match_action(MatchAction::Redact {
+        RootRuleConfig::new(Arc::new(DumbRuleConfig {}) as Arc<dyn RuleConfig>).match_action(
+            MatchAction::Redact {
+                replacement: "[REDACTED]".to_string(),
+            },
+        ),
+        RootRuleConfig::new(RegexRuleConfig::new("secret").build()).match_action(
+            MatchAction::Redact {
                 replacement: "[SECRET]".to_string(),
-            })
-            .build(),
+            },
+        ),
     ])
     .build()
     .unwrap();
@@ -139,11 +108,12 @@ fn test_mixed_rules() {
 
 #[test]
 fn simple_redaction() {
-    let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("secret")
-        .match_action(MatchAction::Redact {
-            replacement: "[REDACTED]".to_string(),
-        })
-        .build()])
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
+        RegexRuleConfig::new("secret").build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    })])
     .build()
     .unwrap();
 
@@ -157,11 +127,12 @@ fn simple_redaction() {
 
 #[test]
 fn simple_redaction_with_additional_labels() {
-    let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("secret")
-        .match_action(MatchAction::Redact {
-            replacement: "[REDACTED]".to_string(),
-        })
-        .build()])
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
+        RegexRuleConfig::new("secret").build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    })])
     .labels(Labels::new(&[("key".to_string(), "value".to_string())]))
     .build()
     .unwrap();
@@ -176,7 +147,8 @@ fn simple_redaction_with_additional_labels() {
 
 #[test]
 fn should_fail_on_compilation_error() {
-    let scanner_result = ScannerBuilder::new(&[RegexRuleConfig::new("\\u").build()]).build();
+    let scanner_result =
+        ScannerBuilder::new(&[RootRuleConfig::new(RegexRuleConfig::new("\\u").build())]).build();
     assert!(scanner_result.is_err());
     assert_eq!(
         scanner_result.err().unwrap(),
@@ -186,12 +158,13 @@ fn should_fail_on_compilation_error() {
 
 #[test]
 fn should_validate_zero_char_count_partial_redact() {
-    let scanner_result = ScannerBuilder::new(&[RegexRuleConfig::new("secret")
-        .match_action(MatchAction::PartialRedact {
-            direction: PartialRedactDirection::LastCharacters,
-            character_count: 0,
-        })
-        .build()])
+    let scanner_result = ScannerBuilder::new(&[RootRuleConfig::new(
+        RegexRuleConfig::new("secret").build(),
+    )
+    .match_action(MatchAction::PartialRedact {
+        direction: PartialRedactDirection::LastCharacters,
+        character_count: 0,
+    })])
     .build();
 
     assert!(scanner_result.is_err());
@@ -205,11 +178,10 @@ fn should_validate_zero_char_count_partial_redact() {
 
 #[test]
 fn multiple_replacements() {
-    let scanner = ScannerBuilder::new(&[RegexRuleConfig::new("\\d")
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(RegexRuleConfig::new("\\d").build())
         .match_action(MatchAction::Redact {
             replacement: "[REDACTED]".to_string(),
-        })
-        .build()])
+        })])
     .build()
     .unwrap();
 
@@ -224,8 +196,8 @@ fn multiple_replacements() {
 #[test]
 fn match_rule_index() {
     let scanner = ScannerBuilder::new(&[
-        RegexRuleConfig::new("a").build(),
-        RegexRuleConfig::new("b").build(),
+        RootRuleConfig::new(RegexRuleConfig::new("a").build()),
+        RootRuleConfig::new(RegexRuleConfig::new("b").build()),
     ])
     .build()
     .unwrap();
@@ -259,17 +231,16 @@ fn match_rule_index() {
 #[test]
 fn test_indices() {
     let test_builder = RegexRuleConfig::new("test");
-    let detect_test_rule = test_builder.build();
-    let redact_test_rule = test_builder
-        .match_action(MatchAction::Redact {
+    let detect_test_rule = RootRuleConfig::new(test_builder.build());
+    let redact_test_rule =
+        RootRuleConfig::new(test_builder.build()).match_action(MatchAction::Redact {
             replacement: "[test]".to_string(),
-        })
-        .build();
-    let redact_test_rule_2 = RegexRuleConfig::new("ab")
-        .match_action(MatchAction::Redact {
+        });
+
+    let redact_test_rule_2 =
+        RootRuleConfig::new(RegexRuleConfig::new("ab").build()).match_action(MatchAction::Redact {
             replacement: "[ab]".to_string(),
-        })
-        .build();
+        });
 
     let test_cases = vec![
         (vec![detect_test_rule.clone()], "test1", vec![(0, 4, 0)]),
@@ -317,18 +288,19 @@ fn test_indices() {
 }
 
 fn build_test_scanner() -> Scanner {
-    let redact_test_rule = RegexRuleConfig::new("world")
-        .match_action(MatchAction::Redact {
-            replacement: "[REDACTED]".to_string(),
-        })
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 30,
-            included_keywords: vec!["awsAccess".to_string(), "access/key".to_string()],
-            excluded_keywords: vec![],
-        })
-        .build();
-
-    return Scanner::builder(&[redact_test_rule]).build().unwrap();
+    let redact_test_rule = RootRuleConfig::new(
+        RegexRuleConfig::new("world")
+            .with_proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["awsAccess".to_string(), "access/key".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    });
+    Scanner::builder(&[redact_test_rule]).build().unwrap()
 }
 
 #[test]
@@ -371,11 +343,11 @@ fn test_included_keywords_path_not_matching() {
 
 #[test]
 fn test_blocked_rules() {
-    let redact_test_rule = RegexRuleConfig::new("world")
-        .match_action(MatchAction::Redact {
+    let redact_test_rule = RootRuleConfig::new(RegexRuleConfig::new("world").build()).match_action(
+        MatchAction::Redact {
             replacement: "[REDACTED]".to_string(),
-        })
-        .build();
+        },
+    );
 
     let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
     let mut content = "hello world".to_string();
@@ -399,16 +371,18 @@ fn test_blocked_rules() {
 
 #[test]
 fn test_excluded_keywords() {
-    let redact_test_rule = RegexRuleConfig::new("world")
-        .match_action(MatchAction::Redact {
-            replacement: "[REDACTED]".to_string(),
-        })
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 30,
-            included_keywords: vec![],
-            excluded_keywords: vec!["hello".to_string()],
-        })
-        .build();
+    let redact_test_rule = RootRuleConfig::new(
+        RegexRuleConfig::new("world")
+            .with_proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec![],
+                excluded_keywords: vec!["hello".to_string()],
+            })
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    });
 
     let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
     let mut content = "hello world".to_string();
@@ -424,12 +398,12 @@ fn test_excluded_keywords() {
 
 #[test]
 fn test_multiple_partial_redactions() {
-    let rule = RegexRuleConfig::new("...")
-        .match_action(MatchAction::PartialRedact {
+    let rule = RootRuleConfig::new(RegexRuleConfig::new("...").build()).match_action(
+        MatchAction::PartialRedact {
             direction: PartialRedactDirection::FirstCharacters,
             character_count: 1,
-        })
-        .build();
+        },
+    );
 
     let scanner = ScannerBuilder::new(&[rule.clone(), rule]).build().unwrap();
     let mut content = "hello world".to_string();
@@ -500,15 +474,13 @@ fn assert_scanner_is_sync_send() {
 #[test]
 fn should_skip_match_when_present_in_excluded_matches() {
     // If 2 matches have the same mutation and same start, the longer one is taken
-
-    let rule_0 = RegexRuleConfig::new("b.*")
+    let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("b.*").build())
         .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
             "test".into(),
         )])]))
         .match_action(MatchAction::Redact {
             replacement: "[scrub]".to_string(),
-        })
-        .build();
+        });
 
     let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
 
@@ -534,14 +506,13 @@ fn should_skip_match_when_present_in_excluded_matches() {
 
 #[test]
 fn should_be_able_to_disable_multipass_v0() {
-    let rule_0 = RegexRuleConfig::new("b.*")
+    let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("b.*").build())
         .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
             "test".into(),
         )])]))
         .match_action(MatchAction::Redact {
             replacement: "[scrub]".to_string(),
-        })
-        .build();
+        });
 
     let scanner = ScannerBuilder::new(&[rule_0])
         .with_multipass_v0(false)
@@ -571,20 +542,21 @@ fn should_be_able_to_disable_multipass_v0() {
 fn should_not_exclude_false_positive_matches() {
     // If a match in an excluded scope is a false-positive due to keyword proximity matching,
     // it is not saved in the excluded matches.
-
-    let rule_0 = RegexRuleConfig::new("b.*")
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 30,
-            included_keywords: vec!["secret".to_string()],
-            excluded_keywords: vec![],
-        })
-        .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
-            "test".into(),
-        )])]))
-        .match_action(MatchAction::Redact {
-            replacement: "[scrub]".to_string(),
-        })
-        .build();
+    let rule_0 = RootRuleConfig::new(
+        RegexRuleConfig::new("b.*")
+            .with_proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["secret".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )
+    .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
+        "test".into(),
+    )])]))
+    .match_action(MatchAction::Redact {
+        replacement: "[scrub]".to_string(),
+    });
 
     let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
 
@@ -659,8 +631,8 @@ fn test_calculate_indices_is_called_with_sorted_start_index() {
     }
 
     // `rule_0` has a match after `rule_1` (out of order)
-    let rule_0 = RegexRuleConfig::new("efg").build();
-    let rule_1 = RegexRuleConfig::new("abc").build();
+    let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("efg").build());
+    let rule_1 = RootRuleConfig::new(RegexRuleConfig::new("abc").build());
 
     let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
 
@@ -675,9 +647,8 @@ fn test_calculate_indices_is_called_with_sorted_start_index() {
 
 #[test]
 fn test_hash_with_leading_zero() {
-    let rule_0 = RegexRuleConfig::new(".+")
-        .match_action(MatchAction::Hash)
-        .build();
+    let rule_0 =
+        RootRuleConfig::new(RegexRuleConfig::new(".+").build()).match_action(MatchAction::Hash);
 
     let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
 
@@ -694,9 +665,8 @@ fn test_hash_with_leading_zero() {
 #[test]
 fn test_hash_with_leading_zero_utf16() {
     #[allow(deprecated)]
-    let rule_0 = RegexRuleConfig::new(".+")
-        .match_action(MatchAction::Utf16Hash)
-        .build();
+    let rule_0 = RootRuleConfig::new(RegexRuleConfig::new(".+").build())
+        .match_action(MatchAction::Utf16Hash);
 
     let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
 
@@ -712,12 +682,14 @@ fn test_hash_with_leading_zero_utf16() {
 #[test]
 fn test_internal_overlapping_matches() {
     // A simple "credit-card rule is modified a bit to allow a multi-char character in the match
-    let rule_0 = RegexRuleConfig::new("([\\d€]+){1}(,\\d+){3}")
-        .match_action(MatchAction::Redact {
-            replacement: "[credit card]".to_string(),
-        })
-        .validator(LuhnChecksum)
-        .build();
+    let rule_0 = RootRuleConfig::new(
+        RegexRuleConfig::new("([\\d€]+){1}(,\\d+){3}")
+            .with_validator(Some(LuhnChecksum))
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[credit card]".to_string(),
+    });
 
     let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
 
@@ -739,16 +711,18 @@ fn test_next_regex_start_after_false_positive() {
 
 #[test]
 fn test_excluded_keyword_with_excluded_chars_in_content() {
-    let rule_0 = RegexRuleConfig::new("value")
-        .match_action(MatchAction::Redact {
-            replacement: "[REDACTED]".to_string(),
-        })
-        .proximity_keywords(ProximityKeywordsConfig {
-            look_ahead_character_count: 30,
-            included_keywords: vec![],
-            excluded_keywords: vec!["test".to_string()],
-        })
-        .build();
+    let rule_0 = RootRuleConfig::new(
+        RegexRuleConfig::new("value")
+            .with_proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec![],
+                excluded_keywords: vec!["test".to_string()],
+            })
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    });
 
     let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
 
