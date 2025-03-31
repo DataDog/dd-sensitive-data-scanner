@@ -2,3 +2,5 @@
 target/
 tools/fuzz/out/
 **/.DS_Store
+
+**/.cursor/
