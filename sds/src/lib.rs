@@ -32,8 +32,8 @@ pub use match_action::{MatchAction, PartialRedactDirection};
 
 pub use match_validation::{
     config::AwsConfig, config::AwsType, config::CustomHttpConfig, config::HttpMethod,
-    config::HttpValidatorOption, config::InternalMatchValidationType, config::MatchValidationType,
-    config::RequestHeader, match_status::MatchStatus,
+    config::HttpStatusCodeRange, config::HttpValidatorOption, config::InternalMatchValidationType,
+    config::MatchValidationType, config::RequestHeader, match_status::MatchStatus,
 };
 pub use observability::labels::Labels;
 pub use path::{Path, PathSegment};
