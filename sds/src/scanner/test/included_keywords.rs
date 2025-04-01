@@ -190,6 +190,54 @@ fn test_included_keyword_multiple_prefix_matches() {
 }
 
 #[test]
+fn test_multi_word_underscore_separator() {
+    let redact_test_rule = RootRuleConfig::new(
+        RegexRuleConfig::new("secret")
+            .with_proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["hello world".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    });
+
+    let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
+
+    let mut content = "hello_world secret".to_string();
+    let matches = scanner.scan(&mut content);
+
+    // 1 match because "hello_world" matches "hello world" keyword
+    assert_eq!(matches.len(), 1);
+}
+
+#[test]
+fn test_multi_word_underscore_word_boundaries_separator() {
+    let redact_test_rule = RootRuleConfig::new(
+        RegexRuleConfig::new("secret")
+            .with_proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["hello world".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    });
+
+    let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
+
+    let mut content = "a_hello_world_b secret".to_string();
+    let matches = scanner.scan(&mut content);
+
+    // 1 match because "hello_world" matches "hello world" keyword
+    assert_eq!(matches.len(), 1);
+}
+
+#[test]
 fn test_included_keywords_on_start_boundary_with_space_including_word_boundary() {
     let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
         RegexRuleConfig::new("ab")

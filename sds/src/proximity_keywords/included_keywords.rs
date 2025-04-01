@@ -178,4 +178,14 @@ mod test {
             vec![5]
         );
     }
+
+    #[test]
+    fn multi_word_keyword_matches() {
+        let keywords = compile_keywords(30, &["hello world"]);
+
+        assert_eq!(
+            collect_keyword_matches(keywords.keyword_matches("hello-world secret")),
+            vec![0]
+        );
+    }
 }
