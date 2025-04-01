@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use std::{hash::Hash, ops::Range, time::Duration, vec};
 
 use super::aws_validator::AwsValidator;
@@ -7,22 +8,33 @@ use super::http_validator::HttpValidator;
 use super::match_validator::MatchValidator;
 
 pub const DEFAULT_HTTPS_TIMEOUT_SEC: u64 = 3;
+pub const DEFAULT_AWS_STS_ENDPOINT: &str = "https://sts.amazonaws.com";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AwsConfig {
     // Override default AWS STS endpoint for testing
+    #[serde(default = "default_aws_sts_endpoint")]
     pub aws_sts_endpoint: String,
     // Override default datetime for testing
     pub forced_datetime_utc: Option<DateTime<Utc>>,
+    #[serde(default = "default_timeout")]
     pub timeout: Duration,
+}
+
+fn default_aws_sts_endpoint() -> String {
+    DEFAULT_AWS_STS_ENDPOINT.to_string()
+}
+
+fn default_timeout() -> Duration {
+    Duration::from_secs(DEFAULT_HTTPS_TIMEOUT_SEC)
 }
 
 impl Default for AwsConfig {
     fn default() -> Self {
         AwsConfig {
-            aws_sts_endpoint: "https://sts.amazonaws.com".to_string(),
+            aws_sts_endpoint: default_aws_sts_endpoint(),
             forced_datetime_utc: None,
-            timeout: Duration::from_secs(DEFAULT_HTTPS_TIMEOUT_SEC),
+            timeout: default_timeout(),
         }
     }
 }
@@ -42,6 +54,21 @@ pub enum HttpMethod {
     Put,
     Delete,
     Patch,
+}
+
+impl FromStr for HttpMethod {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            "GET" => Ok(HttpMethod::Get),
+            "POST" => Ok(HttpMethod::Post),
+            "PUT" => Ok(HttpMethod::Put),
+            "DELETE" => Ok(HttpMethod::Delete),
+            "PATCH" => Ok(HttpMethod::Patch),
+            _ => Err(format!("Invalid HTTP method: {}", s)),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
