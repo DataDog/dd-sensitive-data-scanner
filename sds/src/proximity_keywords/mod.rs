@@ -255,6 +255,14 @@ fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
     if should_push_word_boundary(keyword.chars().next_back().unwrap()) {
         keyword_pattern.push(word_boundary_or_link_char())
     }
+    println!(
+        "Pattern: \"{}\"",
+        Ast::Concat(Concat {
+            span: span(),
+            asts: keyword_pattern.clone(),
+        })
+    );
+
     Ast::Concat(Concat {
         span: span(),
         asts: keyword_pattern,
@@ -821,6 +829,14 @@ mod test {
     fn test_calculate_multi_word_keyword_pattern() {
         assert_eq!(
             calculate_keyword_content_pattern("multi word-KEYWORD").to_string(),
+            "(?:(?-u:\\b)|(?:_))multi(?:\\-|_|\\.| |/)word(?:\\-|_|\\.| |/)KEYWORD(?:(?-u:\\b)|(?:_))"
+        )
+    }
+
+    #[test]
+    fn test_calculate_hello_world_pattern() {
+        assert_eq!(
+            calculate_keyword_content_pattern("hello world").to_string(),
             "(?:(?-u:\\b)|(?:_))multi(?:\\-|_|\\.| |/)word(?:\\-|_|\\.| |/)KEYWORD(?:(?-u:\\b)|(?:_))"
         )
     }
