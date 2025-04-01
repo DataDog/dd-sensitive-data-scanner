@@ -285,7 +285,7 @@ impl MatchValidationType {
 // This is the match validation type stored in the compiled rule
 // It is used to retrieve the MatchValidator. We don't need the full configuration for that purpose
 // as it would be heavy to compute hash and compare the full configuration.
-#[derive(PartialEq, Eq, Hash, Debug)]
+#[derive(PartialEq, Eq, Hash)]
 pub enum InternalMatchValidationType {
     Aws,
     CustomHttp(Vec<String>),
