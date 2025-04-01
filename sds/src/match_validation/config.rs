@@ -49,6 +49,7 @@ pub enum AwsType {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum HttpMethod {
     Get,
     Post,
