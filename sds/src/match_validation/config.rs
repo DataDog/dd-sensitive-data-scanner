@@ -102,10 +102,14 @@ pub struct CustomHttpConfig {
     pub endpoint: String,
     #[serde(default)]
     pub hosts: Vec<String>,
+    #[serde(default = "default_http_method")]
     pub http_method: HttpMethod,
     pub request_headers: BTreeMap<String, String>,
+    #[serde(default = "default_valid_http_status_code")]
     pub valid_http_status_code: Vec<HttpStatusCodeRange>,
+    #[serde(default = "default_invalid_http_status_code")]
     pub invalid_http_status_code: Vec<HttpStatusCodeRange>,
+    #[serde(default = "default_timeout_seconds")]
     pub timeout_seconds: u32,
 }
 
@@ -210,6 +214,28 @@ impl CustomHttpConfig {
     pub fn set_timeout_seconds(&mut self, timeout_seconds: u32) {
         self.timeout_seconds = timeout_seconds;
     }
+}
+
+fn default_timeout_seconds() -> u32 {
+    DEFAULT_HTTPS_TIMEOUT_SEC as u32
+}
+
+fn default_http_method() -> HttpMethod {
+    HttpMethod::Get
+}
+
+fn default_valid_http_status_code() -> Vec<HttpStatusCodeRange> {
+    vec![HttpStatusCodeRange {
+        start: 200,
+        end: 300,
+    }]
+}
+
+fn default_invalid_http_status_code() -> Vec<HttpStatusCodeRange> {
+    vec![HttpStatusCodeRange {
+        start: 400,
+        end: 500,
+    }]
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
