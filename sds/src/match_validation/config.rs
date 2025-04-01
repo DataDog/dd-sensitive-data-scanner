@@ -114,8 +114,8 @@ pub struct CustomHttpConfig {
     pub timeout_seconds: u32,
 }
 
-impl CustomHttpConfig {
-    pub fn default() -> Self {
+impl Default for CustomHttpConfig {
+    fn default() -> Self {
         CustomHttpConfig {
             endpoint: "".to_string(),
             hosts: vec![],
@@ -126,7 +126,9 @@ impl CustomHttpConfig {
             timeout_seconds: DEFAULT_HTTPS_TIMEOUT_SEC as u32,
         }
     }
+}
 
+impl CustomHttpConfig {
     pub fn get_endpoints(&self) -> Result<Vec<String>, String> {
         // Handle errors cases
         // - endpoint contains $HOST but no hosts are provided
