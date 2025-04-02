@@ -11,19 +11,6 @@ pub struct HttpValidatorHelper;
 ///
 /// The configurations include appropriate endpoints, headers, and status code ranges
 /// that indicate whether matches are valid or not.
-///
-/// # Examples
-///
-/// ```
-/// use crate::match_validation::helpers::HttpValidatorHelper;
-///
-/// // Create GitHub API validator config
-/// let github_config = HttpValidatorHelper::new_github_config();
-///
-/// // Create Datadog API validator config
-/// let datadog_config = HttpValidatorHelper::new_datadog_config();
-/// ```
-
 impl HttpValidatorHelper {
     #[allow(dead_code)]
     pub fn new_github_config() -> CustomHttpConfig {
