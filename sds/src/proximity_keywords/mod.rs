@@ -36,6 +36,10 @@ pub struct ProximityKeywordsRegex {
 /// Example: '.' in "my.path" is considered to be a link character.
 pub const MULTI_WORD_KEYWORDS_LINK_CHARS: &[char] = &['-', '_', '.', ' ', '/'];
 
+/// This is a list of all the link chars above that are also considered "word characters".
+/// These are added to the word boundary assertion in some cases
+pub const MULTI_WORD_KEYWORDS_WORD_BOUNDARY_LINK_CHARS: &[char] = &['_'];
+
 pub const UNIFIED_LINK_CHAR: char = '.';
 #[allow(dead_code)]
 pub const UNIFIED_LINK_STR: &str = ".";
@@ -235,19 +239,43 @@ fn should_push_word_boundary(c: char) -> bool {
 fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
     let mut keyword_pattern: Vec<Ast> = vec![];
     if should_push_word_boundary(keyword.chars().next().unwrap()) {
-        keyword_pattern.push(word_boundary())
+        keyword_pattern.push(word_boundary_or_link_char())
     }
 
     for c in keyword.chars() {
-        keyword_pattern.push(Ast::Literal(literal_ast(c)))
+        if MULTI_WORD_KEYWORDS_LINK_CHARS.contains(&c) {
+            // All "link chars" are treated the same, so the regex is built allowing any of them
+            // interchangeably
+            keyword_pattern.push(any_char(MULTI_WORD_KEYWORDS_LINK_CHARS))
+        } else {
+            keyword_pattern.push(Ast::Literal(literal_ast(c)))
+        }
     }
 
     if should_push_word_boundary(keyword.chars().next_back().unwrap()) {
-        keyword_pattern.push(word_boundary())
+        keyword_pattern.push(word_boundary_or_link_char())
     }
+
     Ast::Concat(Concat {
         span: span(),
         asts: keyword_pattern,
+    })
+}
+
+fn any_char(chars: &[char]) -> Ast {
+    let mut asts = vec![];
+
+    for c in chars {
+        asts.push(Ast::Literal(literal_ast(*c)));
+    }
+
+    Ast::Group(Group {
+        span: span(),
+        kind: GroupKind::NonCapturing(Flags {
+            span: span(),
+            items: vec![],
+        }),
+        ast: Box::new(Ast::Alternation(Alternation { span: span(), asts })),
     })
 }
 
@@ -399,28 +427,49 @@ fn span() -> Span {
     Span::new(Position::new(0, 0, 0), Position::new(0, 0, 0))
 }
 
-fn word_boundary() -> Ast {
-    // The "Unicode" flag is disabled to disable the equivalent of Hyperscans UCP flag
+fn word_boundary_or_link_char() -> Ast {
+    non_capturing_group(
+        Ast::Alternation(Alternation {
+            span: span(),
+            asts: vec![
+                word_boundary(),
+                any_char(MULTI_WORD_KEYWORDS_WORD_BOUNDARY_LINK_CHARS),
+            ],
+        }),
+        vec![],
+    )
+}
+
+fn non_capturing_group(inner: Ast, flags: Vec<FlagsItem>) -> Ast {
     Ast::Group(Group {
         span: span(),
         kind: GroupKind::NonCapturing(Flags {
             span: span(),
-            items: vec![
-                FlagsItem {
-                    span: span(),
-                    kind: FlagsItemKind::Negation,
-                },
-                FlagsItem {
-                    span: span(),
-                    kind: FlagsItemKind::Flag(Flag::Unicode),
-                },
-            ],
+            items: flags,
         }),
-        ast: Box::new(Ast::Assertion(Assertion {
-            span: span(),
-            kind: AssertionKind::WordBoundary,
-        })),
+        ast: Box::new(inner),
     })
+}
+
+fn word_boundary() -> Ast {
+    // The "Unicode" flag is disabled to disable the equivalent of Hyperscans UCP flag
+    let inner = Ast::Assertion(Assertion {
+        span: span(),
+        kind: AssertionKind::WordBoundary,
+    });
+
+    let flags = vec![
+        FlagsItem {
+            span: span(),
+            kind: FlagsItemKind::Negation,
+        },
+        FlagsItem {
+            span: span(),
+            kind: FlagsItemKind::Flag(Flag::Unicode),
+        },
+    ];
+
+    non_capturing_group(inner, flags)
 }
 
 #[derive(Debug, PartialEq, Eq, Error)]
@@ -757,7 +806,7 @@ mod test {
             _ => ("".to_string(), "".to_string()),
         };
 
-        assert_eq!(content_pattern, "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*|_aws(?-u:\\b)|(?-u:\\b)aws\\-access(?-u:\\b)");
+        assert_eq!(content_pattern, "(?:(?-u:\\b)|(?:_))hello(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))world\\*|(?:\\-|_|\\.| |/)aws(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))aws(?:\\-|_|\\.| |/)access(?:(?-u:\\b)|(?:_))");
         assert_eq!(path_pattern, "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*|_aws(?-u:\\b)|(?-u:\\b)aws\\.access(?-u:\\b)");
     }
 
@@ -765,7 +814,7 @@ mod test {
     fn test_calculate_keyword_pattern() {
         assert_eq!(
             calculate_keyword_content_pattern("test").to_string(),
-            "(?-u:\\b)test(?-u:\\b)".to_string()
+            "(?:(?-u:\\b)|(?:_))test(?:(?-u:\\b)|(?:_))".to_string()
         );
     }
 
@@ -773,7 +822,7 @@ mod test {
     fn test_calculate_multi_word_keyword_pattern() {
         assert_eq!(
             calculate_keyword_content_pattern("multi word-KEYWORD").to_string(),
-            "(?-u:\\b)multi word\\-KEYWORD(?-u:\\b)"
+            "(?:(?-u:\\b)|(?:_))multi(?:\\-|_|\\.| |/)word(?:\\-|_|\\.| |/)KEYWORD(?:(?-u:\\b)|(?:_))"
         )
     }
 
