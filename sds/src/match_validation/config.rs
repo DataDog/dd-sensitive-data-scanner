@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::str::FromStr;
-use std::{hash::Hash, ops::Range, time::Duration, vec};
+use std::{hash::Hash, time::Duration};
 
 use super::aws_validator::AwsValidator;
 use super::http_validator::HttpValidator;
@@ -48,6 +49,7 @@ pub enum AwsType {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum HttpMethod {
     Get,
     Post,
@@ -88,7 +90,6 @@ impl RequestHeader {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-
 pub struct HttpValidatorOption {
     pub timeout: Duration,
     // TODO(trosenblatt) add more options
@@ -97,127 +98,159 @@ pub struct HttpValidatorOption {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct HttpValidatorConfig {
-    pub endpoints: Vec<String>,
-    pub method: HttpMethod,
-    pub request_header: Vec<RequestHeader>,
-    pub valid_http_status_code: Vec<Range<u16>>,
-    pub invalid_http_status_code: Vec<Range<u16>>,
-    pub options: HttpValidatorOption,
+pub struct CustomHttpConfig {
+    pub endpoint: String,
+    #[serde(default)]
+    pub hosts: Vec<String>,
+    #[serde(default = "default_http_method")]
+    pub http_method: HttpMethod,
+    pub request_headers: BTreeMap<String, String>,
+    #[serde(default = "default_valid_http_status_code")]
+    pub valid_http_status_code: Vec<HttpStatusCodeRange>,
+    #[serde(default = "default_invalid_http_status_code")]
+    pub invalid_http_status_code: Vec<HttpStatusCodeRange>,
+    #[serde(default = "default_timeout_seconds")]
+    pub timeout_seconds: u32,
 }
 
-impl HttpValidatorConfig {
-    fn new(endpoint: &str, hosts: Vec<String>) -> Result<Self, String> {
+impl Default for CustomHttpConfig {
+    fn default() -> Self {
+        CustomHttpConfig {
+            endpoint: "".to_string(),
+            hosts: vec![],
+            http_method: HttpMethod::Get,
+            request_headers: BTreeMap::new(),
+            valid_http_status_code: vec![],
+            invalid_http_status_code: vec![],
+            timeout_seconds: DEFAULT_HTTPS_TIMEOUT_SEC as u32,
+        }
+    }
+}
+
+impl CustomHttpConfig {
+    pub fn get_endpoints(&self) -> Result<Vec<String>, String> {
         // Handle errors cases
         // - endpoint contains $HOST but no hosts are provided
         // - endpoint does not contain $HOST but hosts are provided
-        if endpoint.contains("$HOST") && hosts.is_empty() {
+        if self.endpoint.contains("$HOST") && self.hosts.is_empty() {
             return Err("Endpoint contains $HOST but no hosts are provided".to_string());
         }
-        if !endpoint.contains("$HOST") && !hosts.is_empty() {
+        if !self.endpoint.contains("$HOST") && !self.hosts.is_empty() {
             return Err("Endpoint does not contain $HOST but hosts are provided".to_string());
         }
 
         // Replace $HOST in endpoint and build the endpoints vector
         let mut endpoints = vec![];
-        for host in hosts {
-            endpoints.push(endpoint.replace("$HOST", &host));
+        for host in self.hosts.clone() {
+            endpoints.push(self.endpoint.replace("$HOST", &host));
         }
         if endpoints.is_empty() {
             // If no hosts are provided, use the endpoint as is
-            endpoints.push(endpoint.to_string());
+            endpoints.push(self.endpoint.to_string());
         }
-        Ok(HttpValidatorConfig {
-            endpoints,
-            method: HttpMethod::Get,
-            request_header: vec![],
-            #[allow(clippy::single_range_in_vec_init)]
-            valid_http_status_code: vec![200..300],
-            #[allow(clippy::single_range_in_vec_init)]
-            invalid_http_status_code: vec![400..500],
-            options: HttpValidatorOption {
-                timeout: Duration::from_secs(DEFAULT_HTTPS_TIMEOUT_SEC),
-            },
-        })
+        Ok(endpoints)
     }
-}
 
-pub struct HttpValidatorConfigBuilder {
-    endpoint: String,
-    hosts: Vec<String>,
-    method: HttpMethod,
-    request_header: Vec<RequestHeader>,
-    valid_http_status_code: Vec<Range<u16>>,
-    invalid_http_status_code: Vec<Range<u16>>,
-    options: HttpValidatorOption,
-}
+    // Builders
 
-impl HttpValidatorConfigBuilder {
-    pub fn new(endpoint: String) -> Self {
-        HttpValidatorConfigBuilder {
-            endpoint,
-            hosts: vec![],
-            method: HttpMethod::Get,
-            request_header: vec![RequestHeader {
-                key: "Authorization".to_string(),
-                value: "Bearer $MATCH".to_string(),
-            }],
-            #[allow(clippy::single_range_in_vec_init)]
-            valid_http_status_code: vec![200..300],
-            #[allow(clippy::single_range_in_vec_init)]
-            invalid_http_status_code: vec![400..500],
-            options: HttpValidatorOption {
-                timeout: Duration::from_secs(DEFAULT_HTTPS_TIMEOUT_SEC),
-            },
-        }
-    }
-    pub fn set_request_header(&mut self, request_header: Vec<RequestHeader>) -> &mut Self {
-        self.request_header = request_header;
+    pub fn with_endpoint(mut self, endpoint: String) -> Self {
+        self.endpoint = endpoint;
         self
     }
-    pub fn set_hosts(&mut self, hosts: Vec<String>) -> &mut Self {
+
+    pub fn with_hosts(mut self, hosts: Vec<String>) -> Self {
         self.hosts = hosts;
         self
     }
-    pub fn set_method(&mut self, method: HttpMethod) -> &mut Self {
-        self.method = method;
+
+    pub fn with_request_headers(mut self, request_headers: BTreeMap<String, String>) -> Self {
+        self.request_headers = request_headers;
         self
     }
-    pub fn set_valid_http_status_code(
-        &mut self,
-        valid_http_status_code: Vec<Range<u16>>,
-    ) -> &mut Self {
+
+    pub fn with_valid_http_status_code(
+        mut self,
+        valid_http_status_code: Vec<HttpStatusCodeRange>,
+    ) -> Self {
         self.valid_http_status_code = valid_http_status_code;
         self
     }
-    pub fn set_invalid_http_status_code(
-        &mut self,
-        invalid_http_status_code: Vec<Range<u16>>,
-    ) -> &mut Self {
+
+    pub fn with_invalid_http_status_code(
+        mut self,
+        invalid_http_status_code: Vec<HttpStatusCodeRange>,
+    ) -> Self {
         self.invalid_http_status_code = invalid_http_status_code;
         self
     }
-    pub fn set_timeout(&mut self, timeout: Duration) -> &mut Self {
-        self.options.timeout = timeout;
-        self
+
+    // Setters
+
+    pub fn set_endpoint(&mut self, endpoint: String) {
+        self.endpoint = endpoint;
     }
-    pub fn build(&self) -> Result<HttpValidatorConfig, String> {
-        let mut config = HttpValidatorConfig::new(self.endpoint.as_str(), self.hosts.clone())?;
-        config.invalid_http_status_code = self.invalid_http_status_code.clone();
-        config.method = self.method.clone();
-        config.request_header = self.request_header.clone();
-        config.valid_http_status_code = self.valid_http_status_code.clone();
-        config.options = self.options.clone();
-        config.invalid_http_status_code = self.invalid_http_status_code.clone();
-        Ok(config)
+
+    pub fn set_hosts(&mut self, hosts: Vec<String>) {
+        self.hosts = hosts;
     }
+
+    pub fn set_http_method(&mut self, http_method: HttpMethod) {
+        self.http_method = http_method;
+    }
+
+    pub fn set_request_headers(&mut self, request_headers: BTreeMap<String, String>) {
+        self.request_headers = request_headers;
+    }
+
+    pub fn set_valid_http_status_code(&mut self, valid_http_status_code: Vec<HttpStatusCodeRange>) {
+        self.valid_http_status_code = valid_http_status_code;
+    }
+
+    pub fn set_invalid_http_status_code(
+        &mut self,
+        invalid_http_status_code: Vec<HttpStatusCodeRange>,
+    ) {
+        self.invalid_http_status_code = invalid_http_status_code;
+    }
+
+    pub fn set_timeout_seconds(&mut self, timeout_seconds: u32) {
+        self.timeout_seconds = timeout_seconds;
+    }
+}
+
+fn default_timeout_seconds() -> u32 {
+    DEFAULT_HTTPS_TIMEOUT_SEC as u32
+}
+
+fn default_http_method() -> HttpMethod {
+    HttpMethod::Get
+}
+
+fn default_valid_http_status_code() -> Vec<HttpStatusCodeRange> {
+    vec![HttpStatusCodeRange {
+        start: 200,
+        end: 300,
+    }]
+}
+
+fn default_invalid_http_status_code() -> Vec<HttpStatusCodeRange> {
+    vec![HttpStatusCodeRange {
+        start: 400,
+        end: 500,
+    }]
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct HttpStatusCodeRange {
+    pub start: u16,
+    pub end: u16,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "type", content = "config")]
 pub enum MatchValidationType {
     Aws(AwsType),
-    CustomHttp(HttpValidatorConfig),
+    CustomHttp(CustomHttpConfig),
 }
 
 impl MatchValidationType {
@@ -232,7 +265,7 @@ impl MatchValidationType {
         match self {
             MatchValidationType::Aws(_) => InternalMatchValidationType::Aws,
             MatchValidationType::CustomHttp(http_config) => {
-                InternalMatchValidationType::CustomHttp(http_config.endpoints.clone())
+                InternalMatchValidationType::CustomHttp(http_config.get_endpoints().unwrap())
             }
         }
     }
@@ -258,66 +291,4 @@ impl MatchValidationType {
 pub enum InternalMatchValidationType {
     Aws,
     CustomHttp(Vec<String>),
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_http_validator_config_no_hosts() {
-        let config = HttpValidatorConfig::new("http://localhost/test", vec![]).unwrap();
-        assert_eq!(config.endpoints, vec!["http://localhost/test"]);
-    }
-
-    #[test]
-    fn test_http_validator_config_with_hosts() {
-        let config = HttpValidatorConfig::new(
-            "http://localhost/$HOST",
-            vec!["us".to_string(), "eu".to_string()],
-        )
-        .unwrap();
-        assert_eq!(
-            config.endpoints,
-            vec!["http://localhost/us", "http://localhost/eu"]
-        );
-    }
-
-    #[test]
-    fn test_http_validator_config_error_cases() {
-        let config = HttpValidatorConfig::new("http://localhost/$HOST", vec![]).unwrap_err();
-        assert_eq!(
-            config,
-            "Endpoint contains $HOST but no hosts are provided".to_string()
-        );
-    }
-
-    #[test]
-    fn test_http_validator_config_error_cases_with_hosts() {
-        let config =
-            HttpValidatorConfig::new("http://localhost/test", vec!["us".to_string()]).unwrap_err();
-        assert_eq!(
-            config,
-            "Endpoint does not contain $HOST but hosts are provided".to_string()
-        );
-    }
-    #[test]
-    fn test_http_validator_builder_config_no_hosts() {
-        let config = HttpValidatorConfigBuilder::new("http://localhost/test".to_string())
-            .build()
-            .unwrap();
-        assert_eq!(config.endpoints, vec!["http://localhost/test"]);
-    }
-
-    #[test]
-    fn test_http_validator_builder_config_with_hosts() {
-        let config = HttpValidatorConfigBuilder::new("http://localhost/$HOST".to_string())
-            .set_hosts(vec!["us".to_string(), "eu".to_string()])
-            .build()
-            .unwrap();
-        assert_eq!(
-            config.endpoints,
-            vec!["http://localhost/us", "http://localhost/eu"]
-        );
-    }
 }

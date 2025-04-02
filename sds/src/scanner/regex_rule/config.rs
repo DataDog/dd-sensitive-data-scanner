@@ -150,7 +150,7 @@ pub enum SecondaryValidator {
 
 #[cfg(test)]
 mod test {
-    use crate::{AwsType, HttpValidatorConfigBuilder, MatchValidationType, RootRuleConfig};
+    use crate::{AwsType, CustomHttpConfig, MatchValidationType, RootRuleConfig};
 
     use super::*;
 
@@ -204,9 +204,7 @@ mod test {
     #[allow(deprecated)]
     fn test_third_party_active_checker() {
         // Test setting only the new field
-        let http_config = HttpValidatorConfigBuilder::new("http://test.com".to_string())
-            .build()
-            .unwrap();
+        let http_config = CustomHttpConfig::default().with_endpoint("http://test.com".to_string());
         let validation_type = MatchValidationType::CustomHttp(http_config.clone());
         let rule_config = RootRuleConfig::new(RegexRuleConfig::new("123"))
             .third_party_active_checker(validation_type.clone());

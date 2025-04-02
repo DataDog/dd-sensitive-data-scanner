@@ -1,26 +1,26 @@
+use crate::match_validation::config::HttpStatusCodeRange;
 use crate::match_validation::validator_utils::generate_aws_headers_and_body;
 use crate::scanner::RootRuleConfig;
 use crate::{
-    AwsConfig, AwsType, HttpValidatorConfigBuilder, InternalMatchValidationType, MatchAction,
-    MatchStatus, MatchValidationType, ProximityKeywordsConfig, RegexRuleConfig, ScannerBuilder,
+    AwsConfig, AwsType, CustomHttpConfig, InternalMatchValidationType, MatchAction, MatchStatus,
+    MatchValidationType, ProximityKeywordsConfig, RegexRuleConfig, ScannerBuilder,
 };
 use httpmock::Method::{GET, POST};
 use httpmock::MockServer;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::time::Duration;
 
 #[test]
 fn test_should_return_match_with_match_validation() {
+    let mut http_config = CustomHttpConfig::default();
+    http_config.set_endpoint("http://localhost:8080".to_string());
     let scanner =
         ScannerBuilder::new(&[RootRuleConfig::new(RegexRuleConfig::new("world").build())
             .match_action(MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
             })
-            .third_party_active_checker(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
-                    .build()
-                    .unwrap(),
-            ))])
+            .third_party_active_checker(MatchValidationType::CustomHttp(http_config))])
         .build()
         .unwrap();
 
@@ -68,37 +68,33 @@ fn test_should_allocate_match_validator_depending_on_match_type() {
             AwsConfig::default(),
         )));
 
+    let http_config = CustomHttpConfig::default()
+        .with_endpoint("http://localhost:8080".to_string())
+        .with_request_headers(BTreeMap::from([(
+            "authorization".to_string(),
+            "Bearer $MATCH".to_string(),
+        )]));
     let rule_custom_http_1_domain_1 =
         RootRuleConfig::new(RegexRuleConfig::new("custom-http1").build())
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP1]".to_string(),
             })
-            .third_party_active_checker(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
-                    .build()
-                    .unwrap(),
-            ));
+            .third_party_active_checker(MatchValidationType::CustomHttp(http_config.clone()));
 
     let rule_custom_http_2_domain_1 =
         RootRuleConfig::new(RegexRuleConfig::new("custom-http2").build())
             .match_action(MatchAction::Redact {
                 replacement: "[CUSTOM HTTP2]".to_string(),
             })
-            .third_party_active_checker(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new("http://localhost:8080".to_string())
-                    .build()
-                    .unwrap(),
-            ));
+            .third_party_active_checker(MatchValidationType::CustomHttp(http_config.clone()));
 
-    let rule_custom_http_domain_2 =
+    let rule_custom_http_3_domain_2 =
         RootRuleConfig::new(RegexRuleConfig::new("custom-http3").build())
             .match_action(MatchAction::Redact {
-                replacement: "[CUSTOM HTTP2]".to_string(),
+                replacement: "[CUSTOM HTTP3]".to_string(),
             })
             .third_party_active_checker(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new("http://localhost:8081".to_string())
-                    .build()
-                    .unwrap(),
+                CustomHttpConfig::default().with_endpoint("http://localhost:8081".to_string()),
             ));
 
     let scanner = ScannerBuilder::new(&[
@@ -106,7 +102,7 @@ fn test_should_allocate_match_validator_depending_on_match_type() {
         rule_aws_secret,
         rule_custom_http_1_domain_1,
         rule_custom_http_2_domain_1,
-        rule_custom_http_domain_2,
+        rule_custom_http_3_domain_2,
     ])
     .build()
     .unwrap();
@@ -183,36 +179,39 @@ fn test_mock_same_http_validator_several_matches() {
         then.status(500).header("content-type", "text/html");
     });
 
+    let http_config = CustomHttpConfig::default()
+        .with_endpoint(server.url("/").to_string())
+        .with_request_headers(BTreeMap::from([(
+            "authorization".to_string(),
+            "Bearer $MATCH".to_string(),
+        )]))
+        .with_valid_http_status_code(vec![HttpStatusCodeRange {
+            start: 200,
+            end: 300,
+        }])
+        .with_invalid_http_status_code(vec![HttpStatusCodeRange {
+            start: 403,
+            end: 500,
+        }]);
+
     let rule_valid_match = RootRuleConfig::new(RegexRuleConfig::new("\\bvalid_match\\b").build())
         .match_action(MatchAction::Redact {
             replacement: "[VALID]".to_string(),
         })
-        .third_party_active_checker(MatchValidationType::CustomHttp(
-            HttpValidatorConfigBuilder::new(server.url("/").to_string())
-                .build()
-                .unwrap(),
-        ));
+        .third_party_active_checker(MatchValidationType::CustomHttp(http_config.clone()));
 
     let rule_invalid_match =
         RootRuleConfig::new(RegexRuleConfig::new("\\binvalid_match\\b").build())
             .match_action(MatchAction::Redact {
                 replacement: "[INVALID]".to_string(),
             })
-            .third_party_active_checker(MatchValidationType::CustomHttp(
-                HttpValidatorConfigBuilder::new(server.url("/").to_string())
-                    .build()
-                    .unwrap(),
-            ));
+            .third_party_active_checker(MatchValidationType::CustomHttp(http_config.clone()));
 
     let rule_error_match = RootRuleConfig::new(RegexRuleConfig::new("\\berror_match\\b").build())
         .match_action(MatchAction::Redact {
             replacement: "[ERROR]".to_string(),
         })
-        .third_party_active_checker(MatchValidationType::CustomHttp(
-            HttpValidatorConfigBuilder::new(server.url("/").to_string())
-                .build()
-                .unwrap(),
-        ));
+        .third_party_active_checker(MatchValidationType::CustomHttp(http_config.clone()));
     let scanner = ScannerBuilder::new(&[rule_valid_match, rule_invalid_match, rule_error_match])
         .build()
         .unwrap();
@@ -246,16 +245,13 @@ fn test_mock_http_timeout() {
             .header("authorization", "Bearer valid_match");
         then.status(200);
     });
+    let mut http_config = CustomHttpConfig::default().with_endpoint(server.url("/").to_string());
+    http_config.set_timeout_seconds(0);
     let rule_valid_match = RootRuleConfig::new(RegexRuleConfig::new("\\bvalid_match\\b").build())
         .match_action(MatchAction::Redact {
             replacement: "[VALID]".to_string(),
         })
-        .third_party_active_checker(MatchValidationType::CustomHttp(
-            HttpValidatorConfigBuilder::new(server.url("/").to_string())
-                .set_timeout(Duration::from_micros(0))
-                .build()
-                .unwrap(),
-        ));
+        .third_party_active_checker(MatchValidationType::CustomHttp(http_config));
 
     let scanner = ScannerBuilder::new(&[rule_valid_match]).build().unwrap();
 
@@ -291,9 +287,12 @@ fn test_mock_multiple_match_validators() {
             replacement: "[VALID]".to_string(),
         })
         .third_party_active_checker(MatchValidationType::CustomHttp(
-            HttpValidatorConfigBuilder::new(server.url("/http-service").to_string())
-                .build()
-                .unwrap(),
+            CustomHttpConfig::default()
+                .with_endpoint(server.url("/http-service").to_string())
+                .with_valid_http_status_code(vec![HttpStatusCodeRange {
+                    start: 200,
+                    end: 300,
+                }]),
         ));
 
     let rule_aws_id = RootRuleConfig::new(RegexRuleConfig::new("\\baws_id\\b").build())
@@ -349,10 +348,13 @@ fn test_mock_endpoint_with_multiple_hosts() {
             replacement: "[VALID]".to_string(),
         })
         .third_party_active_checker(MatchValidationType::CustomHttp(
-            HttpValidatorConfigBuilder::new(server.url("/$HOST-service").to_string())
-                .set_hosts(vec!["us".to_string(), "eu".to_string()])
-                .build()
-                .unwrap(),
+            CustomHttpConfig::default()
+                .with_endpoint(server.url("/$HOST-service").to_string())
+                .with_hosts(vec!["us".to_string(), "eu".to_string()])
+                .with_valid_http_status_code(vec![HttpStatusCodeRange {
+                    start: 200,
+                    end: 300,
+                }]),
         ));
 
     let scanner = ScannerBuilder::new(&[rule_valid_match]).build().unwrap();
