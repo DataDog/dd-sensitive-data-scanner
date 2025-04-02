@@ -90,7 +90,6 @@ impl RequestHeader {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-
 pub struct HttpValidatorOption {
     pub timeout: Duration,
     // TODO(trosenblatt) add more options
