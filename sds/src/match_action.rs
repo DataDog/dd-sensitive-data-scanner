@@ -73,10 +73,10 @@ impl MatchAction {
         match self {
             MatchAction::None => false,
             MatchAction::Redact { .. } => true,
-            MatchAction::Hash { .. } => true,
+            MatchAction::Hash => true,
             #[cfg(any(test, feature = "utf16_hash_match_action"))]
             #[allow(deprecated)]
-            MatchAction::Utf16Hash { .. } => true,
+            MatchAction::Utf16Hash => true,
             MatchAction::PartialRedact { .. } => true,
         }
     }
@@ -85,10 +85,10 @@ impl MatchAction {
         match self {
             MatchAction::None => ReplacementType::None,
             MatchAction::Redact { .. } => ReplacementType::Placeholder,
-            MatchAction::Hash { .. } => ReplacementType::Hash,
+            MatchAction::Hash => ReplacementType::Hash,
             #[cfg(any(test, feature = "utf16_hash_match_action"))]
             #[allow(deprecated)]
-            MatchAction::Utf16Hash { .. } => ReplacementType::Hash,
+            MatchAction::Utf16Hash => ReplacementType::Hash,
             MatchAction::PartialRedact { direction, .. } => match direction {
                 PartialRedactDirection::FirstCharacters => ReplacementType::PartialStart,
                 PartialRedactDirection::LastCharacters => ReplacementType::PartialEnd,
