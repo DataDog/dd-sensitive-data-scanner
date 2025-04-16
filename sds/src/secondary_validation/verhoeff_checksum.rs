@@ -61,11 +61,8 @@ mod test {
 
             let verhoeff_digit = number.chars().last().unwrap();
             let non_checksum_digits = &number[..number.len() - 1];
-            let invalid_number = format!(
-                "{}{}",
-                non_checksum_digits,
-                (verhoeff_digit.to_digit(10).unwrap() + 1) % 10
-            );
+            let mut invalid_number = non_checksum_digits.to_string();
+            invalid_number.push_str(&((verhoeff_digit.to_digit(10).unwrap() + 1) % 10).to_string());
             println!("invalid verhoeff number: {}", invalid_number);
             assert!(!VerhoeffChecksum.is_valid_match(&invalid_number));
         }

@@ -17,18 +17,23 @@ impl Validator for LuxembourgIndividualNINChecksum {
             return false;
         }
 
-        let verhoeff_digit = regex_match.chars().last().unwrap();
-        let luhn_digit = regex_match.chars().nth(regex_match.len() - 2).unwrap();
-        let nin_without_checksum = &regex_match[..regex_match.len() - 2];
-
-        if !LuhnChecksum.is_valid_match(format!("{}{}", nin_without_checksum, luhn_digit).as_str())
-        {
+        if !regex_match.chars().all(|c| c.is_ascii_digit()) {
             return false;
         }
 
-        if !VerhoeffChecksum
-            .is_valid_match(format!("{}{}", nin_without_checksum, verhoeff_digit).as_str())
-        {
+        let verhoeff_digit = regex_match.chars().last().unwrap();
+        let luhn_digit = regex_match.chars().nth_back(1).unwrap();
+        let nin_without_checksum = &regex_match[..regex_match.len() - 2];
+
+        let mut with_luhn_checksum = nin_without_checksum.to_string();
+        with_luhn_checksum.push_str(&luhn_digit.to_string());
+        if !LuhnChecksum.is_valid_match(&with_luhn_checksum) {
+            return false;
+        }
+
+        let mut with_verhoeff_checksum = nin_without_checksum.to_string();
+        with_verhoeff_checksum.push_str(&verhoeff_digit.to_string());
+        if !VerhoeffChecksum.is_valid_match(&with_verhoeff_checksum) {
             return false;
         }
 
@@ -62,24 +67,19 @@ mod test {
             let luhn_digit = nin.chars().nth(nin.len() - 2).unwrap();
             let nin_without_checksum = &nin[..nin.len() - 2];
 
-            let invalid_verhoeff_nin = format!(
-                "{}{}{}",
-                nin_without_checksum,
-                luhn_digit,
-                (verhoeff_digit.to_digit(10).unwrap() + 1) % 10
-            );
+            let mut invalid_verhoeff_nin = nin_without_checksum.to_string();
+            invalid_verhoeff_nin.push_str(&luhn_digit.to_string());
+            invalid_verhoeff_nin
+                .push_str(&((verhoeff_digit.to_digit(10).unwrap() + 1) % 10).to_string());
             println!(
                 "luxembourg national identification number with invalid verhoeff checksum: {}",
                 invalid_verhoeff_nin
             );
             assert!(!LuxembourgIndividualNINChecksum.is_valid_match(&invalid_verhoeff_nin));
 
-            let invalid_luhn_nin = format!(
-                "{}{}{}",
-                nin_without_checksum,
-                (luhn_digit.to_digit(10).unwrap() + 1) % 10,
-                verhoeff_digit
-            );
+            let mut invalid_luhn_nin = nin_without_checksum.to_string();
+            invalid_luhn_nin.push_str(&((luhn_digit.to_digit(10).unwrap() + 1) % 10).to_string());
+            invalid_luhn_nin.push_str(&verhoeff_digit.to_string());
             println!(
                 "luxembourg national identification number with invalid luhn checksum: {}",
                 invalid_luhn_nin
