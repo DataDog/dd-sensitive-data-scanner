@@ -20,8 +20,8 @@ impl Validator for GithubTokenChecksum {
             return false;
         }
 
-        let computed_checksum = crc32fast::hash(last_part[..last_part.len() - 6].as_bytes());
-        let checksum = base62::decode(last_part[last_part.len() - 6..].as_bytes());
+        let computed_checksum = crc32fast::hash(&last_part.as_bytes()[..last_part.len() - 6]);
+        let checksum = base62::decode(&last_part.as_bytes()[last_part.len() - 6..]);
 
         if checksum.is_err() {
             return false;
