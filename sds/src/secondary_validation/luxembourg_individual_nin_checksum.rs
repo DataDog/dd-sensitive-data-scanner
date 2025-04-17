@@ -26,13 +26,13 @@ impl Validator for LuxembourgIndividualNINChecksum {
         let nin_without_checksum = &regex_match[..regex_match.len() - 2];
 
         let mut with_luhn_checksum = nin_without_checksum.to_string();
-        with_luhn_checksum.push_str(&luhn_digit.to_string());
+        with_luhn_checksum.push(luhn_digit);
         if !LuhnChecksum.is_valid_match(&with_luhn_checksum) {
             return false;
         }
 
         let mut with_verhoeff_checksum = nin_without_checksum.to_string();
-        with_verhoeff_checksum.push_str(&verhoeff_digit.to_string());
+        with_verhoeff_checksum.push(verhoeff_digit);
         if !VerhoeffChecksum.is_valid_match(&with_verhoeff_checksum) {
             return false;
         }
