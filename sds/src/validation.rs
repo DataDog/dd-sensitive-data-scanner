@@ -1,4 +1,6 @@
-use crate::normalization::rust_regex_adapter::{convert_to_rust_regex, QUANTIFIER_LIMIT};
+use crate::normalization::rust_regex_adapter::{
+    convert_to_ast, convert_to_rust_regex, QUANTIFIER_LIMIT,
+};
 use crate::parser::error::ParseError;
 use regex_automata::meta::{self};
 use thiserror::Error;
@@ -38,6 +40,17 @@ pub fn validate_regex(input: &str) -> Result<(), RegexValidationError> {
     // This is the same as `validate_and_create_regex`, but removes the actual Regex type
     // to create a more stable API for external users of the crate.
     validate_and_create_regex(input).map(|_| ())
+}
+
+/// Checks that a regex pattern is valid for using in an SDS scanner
+pub fn validate_regex_and_get_ast(
+    input: &str,
+) -> Result<crate::parser::ast::Ast, RegexValidationError> {
+    // This is the same as `validate_and_create_regex`, but removes the actual Regex type
+    // to create a more stable API for external users of the crate.
+    validate_and_create_regex(input)?;
+    let ast = convert_to_ast(input)?;
+    Ok(ast)
 }
 
 pub fn get_regex_complexity_estimate_very_slow(input: &str) -> Result<usize, RegexValidationError> {
@@ -113,6 +126,7 @@ fn build_regex(
 
 #[cfg(test)]
 mod test {
+    use crate::validate_regex_and_get_ast;
     use crate::validation::{
         get_regex_complexity_estimate_very_slow, validate_and_create_regex, validate_regex,
         RegexValidationError,
@@ -133,6 +147,14 @@ mod test {
 
         // A subset of the regex _can_ match the empty string, as long as the entire pattern does not
         assert!(validate_regex("(a|)b").is_ok(),);
+    }
+
+    #[test]
+    fn test_ast() {
+        // simple case that matches (only) empty string
+        assert_eq!(
+            validate_regex_and_get_ast("(a|.{2,4})b").map(|ast| {serde_json::to_string(&ast).unwrap()}).unwrap(),
+            "{\"type\":\"Concat\",\"content\":[{\"type\":\"Group\",\"content\":{\"Capturing\":{\"inner\":{\"type\":\"Alternation\",\"content\":[{\"type\":\"Literal\",\"content\":{\"value\":\"a\",\"escaped\":false}},{\"type\":\"Repetition\",\"content\":{\"quantifier\":{\"lazy\":false,\"kind\":{\"RangeMinMax\":[2,4]}},\"inner\":{\"type\":\"CharacterClass\",\"content\":\"Dot\"}}}]}}}},{\"type\":\"Literal\",\"content\":{\"value\":\"b\",\"escaped\":false}}]}");
     }
 
     #[test]
