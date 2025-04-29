@@ -691,6 +691,8 @@ impl ScannerBuilder<'_> {
                         if !match_validators_per_type.contains_key(&internal_type) {
                             match_validators_per_type.insert(internal_type, match_validator);
                             // Let's add return_matches to the scanner features
+                            // TODO Fixme, this implicit behavior could cause issue in case the config is reloaded.
+                            // The scanner features should only be enabled at build time and not based on custom rules.
                             scanner_features.return_matches = true;
                         }
                     } else {

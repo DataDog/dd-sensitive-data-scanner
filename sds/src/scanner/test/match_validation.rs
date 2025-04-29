@@ -268,6 +268,29 @@ fn test_mock_http_timeout() {
         _ => assert!(false),
     }
 }
+
+#[test]
+fn test_matches_from_rule_without_validation_are_ignored() {
+    let rule_valid_match = RootRuleConfig::new(RegexRuleConfig::new("\\bvalid_match\\b").build())
+        .match_action(MatchAction::Redact {
+            replacement: "[VALID]".to_string(),
+        });
+
+    let scanner = ScannerBuilder::new(&[rule_valid_match])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
+
+    let mut content = "this is a content with a valid_match".to_string();
+    let mut matches = scanner.scan(&mut content);
+    assert_eq!(matches.len(), 1);
+    assert_eq!(content, "this is a content with a [VALID]");
+    assert!(scanner.validate_matches(&mut matches).is_ok());
+    //TODO FIXME This is a bug, the rule should be returned with an unverified match validation
+    // status
+    assert_eq!(matches.len(), 0);
+}
+
 #[test]
 fn test_mock_multiple_match_validators() {
     let server = MockServer::start();
