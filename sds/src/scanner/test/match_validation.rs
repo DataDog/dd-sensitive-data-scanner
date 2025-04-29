@@ -268,6 +268,30 @@ fn test_mock_http_timeout() {
         _ => assert!(false),
     }
 }
+
+#[test]
+fn test_matches_from_rule_without_validation_are_not_ignored() {
+    let rule_valid_match = RootRuleConfig::new(RegexRuleConfig::new("\\bvalid_match\\b").build())
+        .match_action(MatchAction::Redact {
+            replacement: "[VALID]".to_string(),
+        });
+
+    let scanner = ScannerBuilder::new(&[rule_valid_match])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
+
+    let mut content = "this is a content with a valid_match".to_string();
+    let mut matches = scanner.scan(&mut content);
+    assert_eq!(matches.len(), 1);
+    assert_eq!(content, "this is a content with a [VALID]");
+    assert!(scanner.validate_matches(&mut matches).is_ok());
+
+    // Even though the match doesn't have a match-validator, it is still returned, with a `NotAvailable` status
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].match_status, MatchStatus::NotAvailable);
+}
+
 #[test]
 fn test_mock_multiple_match_validators() {
     let server = MockServer::start();

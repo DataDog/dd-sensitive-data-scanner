@@ -1,5 +1,6 @@
 #[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Clone)]
 pub enum MatchStatus {
+    // The ordering here is important, values further down the list have a higher priority when merging.
     NotChecked,
     NotAvailable,
     Invalid,
@@ -9,7 +10,7 @@ pub enum MatchStatus {
 
 impl MatchStatus {
     // Order matters as we want to update the match_status only if the new match_status has higher priority.
-    // (in case of split key where we try different combinations of id and secret (aws usecase))
+    // (in case of split key where we try different combinations of id and secret (aws use-case))
     pub fn merge(&mut self, new_status: MatchStatus) {
         if new_status > *self {
             *self = new_status;
