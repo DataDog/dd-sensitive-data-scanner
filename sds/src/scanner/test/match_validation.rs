@@ -286,9 +286,10 @@ fn test_matches_from_rule_without_validation_are_ignored() {
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "this is a content with a [VALID]");
     assert!(scanner.validate_matches(&mut matches).is_ok());
-    //TODO FIXME This is a bug, the rule should be returned with an unverified match validation
-    // status
-    assert_eq!(matches.len(), 0);
+
+    // Even though the match doesn't have a match-validator, it is still returned, with a `NotAvailable` status
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].match_status, MatchStatus::NotAvailable);
 }
 
 #[test]
