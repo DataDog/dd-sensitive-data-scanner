@@ -270,7 +270,7 @@ fn test_mock_http_timeout() {
 }
 
 #[test]
-fn test_matches_from_rule_without_validation_are_ignored() {
+fn test_matches_from_rule_without_validation_are_not_ignored() {
     let rule_valid_match = RootRuleConfig::new(RegexRuleConfig::new("\\bvalid_match\\b").build())
         .match_action(MatchAction::Redact {
             replacement: "[VALID]".to_string(),
