@@ -100,6 +100,7 @@ mod test {
         }
     }
 
+    #[test]
     fn test_valid_11_2() {
         let valid_ids = vec![
             "513231200012121657",
