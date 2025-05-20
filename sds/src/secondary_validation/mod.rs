@@ -84,7 +84,7 @@ impl Validator for SecondaryValidator {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
-            SecondaryValidator::IrisPPS => IrishPpsChecksum.is_valid_match(regex_match),
+            SecondaryValidator::IrishPpsChecksum => IrishPpsChecksum.is_valid_match(regex_match),
         }
     }
 }
