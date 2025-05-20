@@ -9,7 +9,7 @@ impl Validator for RomanianPersonalNumericCode {
             return false;
         }
         for c in regex_match.chars() {
-            if !c.is_digit(10) {
+            if !c.is_ascii_digit() {
                 return false;
             }
         }
@@ -35,7 +35,6 @@ impl Validator for RomanianPersonalNumericCode {
             return false;
         };
 
-        println!("Calculated checksum: {}", calculated_checksum);
         calculated_checksum == actual_checksum
     }
 }
