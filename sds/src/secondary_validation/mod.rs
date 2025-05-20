@@ -5,6 +5,7 @@ mod chinese_id_checksum;
 mod france_ssn_checksum;
 mod github_token_checksum;
 mod iban_checker;
+mod irish_pps_checksum;
 mod jwt_expiration_checker;
 mod luhn_checksum;
 mod luxembourg_individual_nin_checksum;
