@@ -7,10 +7,12 @@ impl Validator for SlovenianPINChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         /*
          * Slovenian Persional Identification Number uses a 13-digit identification code,
-         * consisting of the birth date formatted as YYYYMMDD followed by a number XXX
-         * ensuring persons born on the same date have a unique national ID,
-         * then a first check on YYYYMMDDXXX using the Luhn10 algorithm,
-         * and finally a check on YYYYMMDDXXX using the Verhoeff algorithm.
+         * The format is: DDMMYYYRRBBBK, where:
+         * DDMMYYY: Date of birth (day, month, year)
+         * RR: Register code (place of registration)
+         * BBB: Serial number (includes sex and sequence for people born on the same day)
+         * K: Checksum digit
+         * The checksum is calculated using the first 12 digits.
          */
         if regex_match.len() != SLOVENIAN_PIN_LENGTH {
             return false;
