@@ -9,7 +9,7 @@ impl Validator for CoordinationNumberChecksum {
         // https://docs.swedenconnect.se/technical-framework/mirror/skv/skv707-2.pdf
         let valid_chars = regex_match.chars().filter(|c| c.is_ascii_digit());
         // convert each char in the regex match to a number
-        let mut numbers: Vec<u32> = valid_chars.map(|c| c.to_digit(10).unwrap()).collect();
+        let mut numbers: Vec<char> = valid_chars.filter(|c| c.is_ascii_digit()).collect();
 
         if numbers.len() > COORDINATION_NUMBER_LENGTH {
             // take the last 10 digits
@@ -17,12 +17,13 @@ impl Validator for CoordinationNumberChecksum {
         }
 
         // the rest is luhn checksum
-        return LuhnChecksum.is_valid_match(regex_match);
+        return LuhnChecksum.is_valid_match(numbers.iter().collect::<String>().as_str());
     }
 }
 
+#[cfg(test)]
 mod test {
-    use super::*;
+    use crate::secondary_validation::*;
 
     #[test]
     fn test_coordination_number_checksum() {
