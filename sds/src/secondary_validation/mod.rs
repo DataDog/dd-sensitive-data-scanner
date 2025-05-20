@@ -21,6 +21,7 @@ pub use crate::secondary_validation::aba_rtn_checksum::AbaRtnChecksum;
 pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjChecksum;
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
+pub use crate::secondary_validation::dutch_passport_checksum::DutchPassportChecksum;
 pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
@@ -82,6 +83,9 @@ impl Validator for SecondaryValidator {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
+            SecondaryValidator::DutchPassportChecksum => {
+                DutchPassportChecksum.is_valid_match(regex_match)
+            }
         }
     }
 }
