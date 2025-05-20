@@ -11,6 +11,7 @@ mod luxembourg_individual_nin_checksum;
 mod nhs_check_digit;
 mod nir_checksum;
 mod polish_national_id_checksum;
+mod romania_personal_numeric_code;
 mod verhoeff_checksum;
 
 #[cfg(test)]
