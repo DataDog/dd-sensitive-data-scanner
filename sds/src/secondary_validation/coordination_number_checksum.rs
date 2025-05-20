@@ -17,7 +17,7 @@ impl Validator for CoordinationNumberChecksum {
         }
 
         // the rest is luhn checksum
-        return LuhnChecksum.is_valid_match(numbers.iter().collect::<String>().as_str());
+        LuhnChecksum.is_valid_match(numbers.iter().collect::<String>().as_str());
     }
 }
 
