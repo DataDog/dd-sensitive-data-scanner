@@ -60,7 +60,8 @@ impl Validator for DutchPassportChecksum {
         let weights = [7, 3, 1, 7, 3, 1, 7, 3];
 
         // Calculate weighted sum
-        let sum: u32 = numeric_values.iter()
+        let sum: u32 = numeric_values
+            .iter()
             .zip(weights.iter())
             .map(|(&value, &weight)| value * weight)
             .sum();
