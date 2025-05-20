@@ -13,7 +13,6 @@ impl Validator for DutchPassportChecksum {
          * - Last character is a checksum digit calculated using the ICAO 9303 algorithm
          */
         if regex_match.len() != DUTCH_PASSPORT_LENGTH {
-            println!("Dutch passport number length is not 9: {}", regex_match);
             return false;
         }
 
@@ -22,7 +21,6 @@ impl Validator for DutchPassportChecksum {
             let upper = c.to_ascii_uppercase();
             upper.is_ascii_alphabetic() && upper != 'O'
         }) {
-            println!("Dutch passport number first two characters are not valid: {}", regex_match);
             return false;
         }
 
