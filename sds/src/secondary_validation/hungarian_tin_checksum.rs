@@ -4,6 +4,7 @@ pub struct HungarianTinChecksum;
 
 impl Validator for HungarianTinChecksum {
     // https://ec.europa.eu/taxation_customs/tin/#/check-tin
+    // 10 digits, last digit is a checksum
     fn is_valid_match(&self, regex_match: &str) -> bool {
         let numbers: Vec<u32> = regex_match
             .chars()
