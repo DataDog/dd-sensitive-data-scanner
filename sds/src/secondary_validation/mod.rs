@@ -2,6 +2,7 @@ mod aba_rtn_checksum;
 mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
 mod chinese_id_checksum;
+mod dutch_passport_checksum;
 mod france_ssn_checksum;
 mod github_token_checksum;
 mod iban_checker;
