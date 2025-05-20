@@ -1,9 +1,9 @@
 use crate::secondary_validation::Validator;
-pub struct RomaniaPersonalNumericCode;
+pub struct RomanianPersonalNumericCode;
 
 const CHECKSUM_WEIGHTS: &[u32] = &[2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9];
 
-impl Validator for RomaniaPersonalNumericCode {
+impl Validator for RomanianPersonalNumericCode {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         if !regex_match.is_ascii() {
             return false;
@@ -42,7 +42,7 @@ impl Validator for RomaniaPersonalNumericCode {
 
 #[cfg(test)]
 mod test {
-    use crate::secondary_validation::romania_personal_numeric_code::RomaniaPersonalNumericCode;
+    use crate::secondary_validation::romanian_personal_numeric_code::RomanianPersonalNumericCode;
     use crate::secondary_validation::*;
 
     #[test]
@@ -57,7 +57,7 @@ mod test {
             "6120131011233",
         ];
         for x in valid_matches {
-            assert!(RomaniaPersonalNumericCode.is_valid_match(x));
+            assert!(RomanianPersonalNumericCode.is_valid_match(x));
         }
     }
 
@@ -74,7 +74,7 @@ mod test {
             "ABC0523456789",
         ];
         for x in invalid_matches {
-            assert!(!RomaniaPersonalNumericCode.is_valid_match(x));
+            assert!(!RomanianPersonalNumericCode.is_valid_match(x));
         }
     }
 }
