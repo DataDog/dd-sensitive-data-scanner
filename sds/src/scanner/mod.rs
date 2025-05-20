@@ -431,17 +431,23 @@ impl Scanner {
         }
         // Create MatchValidatorRuleMatch per match_validator_type to pass it to each match_validator
         let mut match_validator_rule_match_per_type = AHashMap::new();
-        for rule_match in rule_matches.drain(..) {
+
+        let mut validated_rule_matches = vec![];
+
+        for mut rule_match in rule_matches.drain(..) {
             let rule = &self.rules[rule_match.rule_index];
             if let Some(match_validation_type) = rule.internal_match_validation_type() {
                 match_validator_rule_match_per_type
                     .entry(match_validation_type)
                     .or_insert_with(Vec::new)
                     .push(rule_match)
+            } else {
+                // There is no match validator for this rule, so mark it as not available.
+                rule_match.match_status.merge(MatchStatus::NotAvailable);
+                validated_rule_matches.push(rule_match);
             }
         }
 
-        // Call the validate per match_validator_type with their matches and the RuleMatch list and collect the results
         match_validator_rule_match_per_type.par_iter_mut().for_each(
             |(match_validation_type, matches_per_type)| {
                 let match_validator = self.match_validators_per_type.get(match_validation_type);
@@ -455,11 +461,12 @@ impl Scanner {
 
         // Refill the rule_matches with the validated matches
         for (_, mut matches) in match_validator_rule_match_per_type {
-            rule_matches.append(&mut matches);
+            validated_rule_matches.append(&mut matches);
         }
 
         // Sort rule_matches by start index
-        rule_matches.sort_by_key(|rule_match| rule_match.start_index);
+        validated_rule_matches.sort_by_key(|rule_match| rule_match.start_index);
+        *rule_matches = validated_rule_matches;
         Ok(())
     }
 
@@ -691,6 +698,8 @@ impl ScannerBuilder<'_> {
                         if !match_validators_per_type.contains_key(&internal_type) {
                             match_validators_per_type.insert(internal_type, match_validator);
                             // Let's add return_matches to the scanner features
+                            // TODO Fixme, this implicit behavior could cause issue in case the config is reloaded.
+                            // The scanner features should only be enabled at build time and not based on custom rules.
                             scanner_features.return_matches = true;
                         }
                     } else {
