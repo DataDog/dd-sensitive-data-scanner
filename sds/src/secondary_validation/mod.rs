@@ -6,6 +6,7 @@ mod france_ssn_checksum;
 mod github_token_checksum;
 mod iban_checker;
 mod jwt_expiration_checker;
+mod latvia_national_id_checksum;
 mod luhn_checksum;
 mod luxembourg_individual_nin_checksum;
 mod nhs_check_digit;
@@ -25,6 +26,7 @@ pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
 pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecker;
+pub use crate::secondary_validation::latvia_national_id_checksum::LatviaNationalIdChecksum;
 pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
 pub use crate::secondary_validation::luxembourg_individual_nin_checksum::LuxembourgIndividualNINChecksum;
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
@@ -82,6 +84,9 @@ impl Validator for SecondaryValidator {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
+            SecondaryValidator::LatviaNationalIdChecksum => {
+                LatviaNationalIdChecksum.is_valid_match(regex_match)
+            }
         }
     }
 }
