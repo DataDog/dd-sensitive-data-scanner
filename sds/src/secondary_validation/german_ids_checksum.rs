@@ -1,10 +1,11 @@
 use crate::secondary_validation::Validator;
 
-pub struct GermanPassportChecksum;
+pub struct GermanIdsChecksum;
 const MULTIPLIERS: &[u32] = &[7, 3, 1];
 
 // https://en.wikipedia.org/wiki/German_passport
-impl Validator for GermanPassportChecksum {
+// https://de.wikipedia.org/wiki/Personalausweis_(Deutschland)
+impl Validator for GermanIdsChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         let mut valid_chars = regex_match.chars().filter(|c| c.is_ascii_alphanumeric());
 
@@ -21,15 +22,13 @@ impl Validator for GermanPassportChecksum {
         let check_digit = valid_chars
             .by_ref()
             .take(1)
-            .map(|c| c.to_digit(10))
-            .flatten()
+            .filter_map(|c| c.to_digit(10))
             .next();
 
         // If Missing check digit, then assume the match is valid.
         if check_digit.is_none() {
             return true;
         }
-        println!("{}, {}", check_digit.unwrap(), sum);
         check_digit.unwrap() == sum % 10
     }
 }
@@ -46,10 +45,21 @@ mod test {
             "C01X00T478D", // With check digit and optional D
             "CZ6311T472D",
             "CZ63351X73D", // https://www.consilium.europa.eu/prado/en/DEU-AO-04004/image-371462.html
+            "cz63351x73d",
+            // IDs
+            "2406055684",
+            "2406055684d",
+            "2406055684D",
+            "T220001293D",
+            "T220001293",
+            // https://de.wikipedia.org/wiki/Personalausweis_(Deutschland)
+            "LZ6311T475",
+            "lz6311t475",
+            "👍lz6311t475", // ignored character
         ];
         for id in valid_ids {
             println!("testing for input {}", id);
-            assert!(GermanPassportChecksum.is_valid_match(id));
+            assert!(GermanIdsChecksum.is_valid_match(id));
         }
     }
 
@@ -58,13 +68,10 @@ mod test {
         let invalid_ids = vec![
             // wrong checksum
             "C01X00T470",
-            // wrong length
-            "000000000000000000",
-            "0",
         ];
         for id in invalid_ids {
             println!("testing for input {}", id);
-            assert!(!GermanPassportChecksum.is_valid_match(id));
+            assert!(!GermanIdsChecksum.is_valid_match(id));
         }
     }
 }

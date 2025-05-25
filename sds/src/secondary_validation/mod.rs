@@ -3,7 +3,7 @@ mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
 mod chinese_id_checksum;
 mod france_ssn_checksum;
-mod german_passport_checksum;
+mod german_ids_checksum;
 mod github_token_checksum;
 mod iban_checker;
 mod jwt_expiration_checker;
@@ -23,7 +23,7 @@ pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjCheck
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
-pub use crate::secondary_validation::german_passport_checksum::GermanPassportChecksum;
+pub use crate::secondary_validation::german_ids_checksum::GermanIdsChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
 pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecker;
@@ -84,9 +84,7 @@ impl Validator for SecondaryValidator {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
-            SecondaryValidator::GermanPassportChecksum => {
-                GermanPassportChecksum.is_valid_match(regex_match)
-            }
+            SecondaryValidator::GermanIdsChecksum => GermanIdsChecksum.is_valid_match(regex_match),
         }
     }
 }
