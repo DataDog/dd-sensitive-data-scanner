@@ -10,7 +10,7 @@ for path in "${paths[@]}"; do
   dd-rust-license-tool -c $license_config write
 done
 
-expected=$(cat "${root}"/*/**/LICENSE-3rdparty.csv | LC_COLLATE=C  sort -u)
+expected=$(cat "${root}"/*/**/LICENSE-3rdparty.csv | LC_COLLATE=C sort -u)
 
 for path in "${paths[@]}"; do
   cd "${root}${path}"
