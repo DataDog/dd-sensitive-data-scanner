@@ -12,7 +12,7 @@ mod nhs_check_digit;
 mod nir_checksum;
 mod polish_national_id_checksum;
 mod verhoeff_checksum;
-
+mod slovakia_pin_checksum;
 #[cfg(test)]
 pub use jwt_expiration_checker::generate_jwt;
 
@@ -31,6 +31,7 @@ pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 pub use crate::secondary_validation::nir_checksum::NirChecksum;
 pub use crate::secondary_validation::polish_national_id_checksum::PolishNationalIdChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
+pub use crate::secondary_validation::slovakia_pin_checksum::SlovakPersonalIdentificationNumberChecksum;
 use std::str::Chars;
 
 pub trait Validator: Send + Sync {
@@ -82,6 +83,9 @@ impl Validator for SecondaryValidator {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
+            SecondaryValidator::SlovakPersonalIdentificationNumberChecksum => {
+                SlovakPersonalIdentificationNumberChecksum.is_valid_match(regex_match)
+            }
         }
     }
 }
