@@ -33,12 +33,12 @@ impl Validator for LatviaNationalIdChecksum {
         // Checksum validation for the old format ABCDEF-XGHIZ
         // Z must equal to (1101-(1*A + 6*B + 3*C + 7*D + 9*E + 10*F + 5*X + 8*G + 4*H + 2*I)) | Mod 11 | Mod 10.
         let mut sum = 0;
-        for i in 0..10 {
+        for mult in LATVIA_NATIONAL_ID_OLD_FORMAT_MULTIPLIERS {
             let digit = match get_next_digit(&mut digits) {
                 Some(d) => d,
                 None => return false,
             };
-            sum += digit * LATVIA_NATIONAL_ID_OLD_FORMAT_MULTIPLIERS[i];
+            sum += digit * mult;
         }
 
         let checksum = ((1101 - sum) % 11) % 10;
