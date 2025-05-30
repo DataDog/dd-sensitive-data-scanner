@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DefaultOnNull;
 use std::sync::Arc;
+use strum::EnumIter;
 
 pub const DEFAULT_KEYWORD_LOOKAHEAD: usize = 30;
 
@@ -132,7 +133,7 @@ pub struct ProximityKeywordsConfig {
     pub excluded_keywords: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumIter)]
 #[serde(tag = "type")]
 pub enum SecondaryValidator {
     AbaRtnChecksum,
@@ -153,6 +154,7 @@ pub enum SecondaryValidator {
 #[cfg(test)]
 mod test {
     use crate::{AwsType, CustomHttpConfig, MatchValidationType, RootRuleConfig};
+    use strum::IntoEnumIterator;
 
     use super::*;
 
@@ -244,5 +246,27 @@ mod test {
             rule_config.get_third_party_active_checker(),
             Some(&MatchValidationType::CustomHttp(http_config.clone()))
         );
+    }
+
+    #[test]
+    fn test_secondary_validator_enum_iter() {
+        // Test that we can iterate over all SecondaryValidator variants
+        let validators: Vec<SecondaryValidator> = SecondaryValidator::iter().collect();
+
+        // Verify we have all expected variants
+        assert_eq!(validators.len(), 13);
+        assert!(validators.contains(&SecondaryValidator::AbaRtnChecksum));
+        assert!(validators.contains(&SecondaryValidator::BrazilianCpfChecksum));
+        assert!(validators.contains(&SecondaryValidator::BrazilianCnpjChecksum));
+        assert!(validators.contains(&SecondaryValidator::ChineseIdChecksum));
+        assert!(validators.contains(&SecondaryValidator::GithubTokenChecksum));
+        assert!(validators.contains(&SecondaryValidator::IbanChecker));
+        assert!(validators.contains(&SecondaryValidator::JwtExpirationChecker));
+        assert!(validators.contains(&SecondaryValidator::LuhnChecksum));
+        assert!(validators.contains(&SecondaryValidator::NhsCheckDigit));
+        assert!(validators.contains(&SecondaryValidator::NirChecksum));
+        assert!(validators.contains(&SecondaryValidator::PolishNationalIdChecksum));
+        assert!(validators.contains(&SecondaryValidator::LuxembourgIndividualNINChecksum));
+        assert!(validators.contains(&SecondaryValidator::FranceSsnChecksum));
     }
 }
