@@ -11,6 +11,7 @@ mod luxembourg_individual_nin_checksum;
 mod nhs_check_digit;
 mod nir_checksum;
 mod polish_national_id_checksum;
+mod spanish_nuss_checksum;
 mod verhoeff_checksum;
 
 #[cfg(test)]
@@ -30,6 +31,7 @@ pub use crate::secondary_validation::luxembourg_individual_nin_checksum::Luxembo
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 pub use crate::secondary_validation::nir_checksum::NirChecksum;
 pub use crate::secondary_validation::polish_national_id_checksum::PolishNationalIdChecksum;
+pub use crate::secondary_validation::spanish_nuss_checksum::SpanishNussChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
 use std::str::Chars;
 
@@ -82,6 +84,9 @@ impl Validator for SecondaryValidator {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
+            SecondaryValidator::SpanishNussChecksum => {
+                SpanishNussChecksum.is_valid_match(regex_match)
+            }
         }
     }
 }
