@@ -39,12 +39,6 @@ pub enum CreateScannerError {
     InvalidMatchValidator(#[from] MatchValidatorCreationError),
 }
 
-#[derive(Debug, PartialEq, Eq, Error)]
-pub enum MatchValidationError {
-    #[error("No MatchValidationType provided")]
-    NoMatchValidationType,
-}
-
 #[cfg(test)]
 mod test {
     use crate::match_action::MatchActionValidationError;

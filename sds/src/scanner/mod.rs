@@ -7,7 +7,7 @@ use crate::match_validation::{
 };
 use rayon::prelude::*;
 
-use error::{MatchValidationError, MatchValidatorCreationError};
+use error::MatchValidatorCreationError;
 
 use crate::observability::labels::Labels;
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
@@ -258,7 +258,6 @@ where
 struct ScannerFeatures {
     pub add_implicit_index_wildcards: bool,
     pub multipass_v0_enabled: bool,
-    pub return_matches: bool,
 }
 
 impl Default for ScannerFeatures {
@@ -266,7 +265,6 @@ impl Default for ScannerFeatures {
         Self {
             add_implicit_index_wildcards: false,
             multipass_v0_enabled: true,
-            return_matches: false,
         }
     }
 }
@@ -422,13 +420,7 @@ impl Scanner {
         self.scan_with_options(event, ScanOptions::default())
     }
 
-    pub fn validate_matches(
-        &self,
-        rule_matches: &mut Vec<RuleMatch>,
-    ) -> Result<(), MatchValidationError> {
-        if !self.scanner_features.return_matches {
-            return Err(MatchValidationError::NoMatchValidationType);
-        }
+    pub fn validate_matches(&self, rule_matches: &mut Vec<RuleMatch>) {
         // Create MatchValidatorRuleMatch per match_validator_type to pass it to each match_validator
         let mut match_validator_rule_match_per_type = AHashMap::new();
 
@@ -467,7 +459,6 @@ impl Scanner {
         // Sort rule_matches by start index
         validated_rule_matches.sort_by_key(|rule_match| rule_match.start_index);
         *rule_matches = validated_rule_matches;
-        Ok(())
     }
 
     /// Apply mutations from actions, and shift indices to match the mutated values.
@@ -511,21 +502,16 @@ impl Scanner {
             (<E>::get_index(&rule_match.custom_start, rule_match.utf8_start) as isize
                 + <E>::get_shift(custom_index_delta, *utf8_byte_delta)) as usize;
 
-        let mut matched_content_copy = None;
+        // This copies part of the is_mutating block but is seperate since can't mix compilation condition and code condition
+        let mutated_utf8_match_start = (rule_match.utf8_start as isize + *utf8_byte_delta) as usize;
+        let mutated_utf8_match_end = (rule_match.utf8_end as isize + *utf8_byte_delta) as usize;
 
-        if self.scanner_features.return_matches {
-            // This copies part of the is_mutating block but is seperate since can't mix compilation condition and code condition
-            let mutated_utf8_match_start =
-                (rule_match.utf8_start as isize + *utf8_byte_delta) as usize;
-            let mutated_utf8_match_end = (rule_match.utf8_end as isize + *utf8_byte_delta) as usize;
+        // Matches for mutating rules must have valid indices
+        debug_assert!(content.is_char_boundary(mutated_utf8_match_start));
+        debug_assert!(content.is_char_boundary(mutated_utf8_match_end));
 
-            // Matches for mutating rules must have valid indices
-            debug_assert!(content.is_char_boundary(mutated_utf8_match_start));
-            debug_assert!(content.is_char_boundary(mutated_utf8_match_end));
-
-            let matched_content = &content[mutated_utf8_match_start..mutated_utf8_match_end];
-            matched_content_copy = Some(matched_content.to_string());
-        }
+        let matched_content = &content[mutated_utf8_match_start..mutated_utf8_match_end];
+        let matched_content_copy = Some(matched_content.to_string());
 
         if rule.match_action.is_mutating() {
             let mutated_utf8_match_start =
@@ -672,11 +658,6 @@ impl ScannerBuilder<'_> {
         self
     }
 
-    pub fn with_return_matches(mut self, value: bool) -> Self {
-        self.scanner_features.return_matches = value;
-        self
-    }
-
     /// Enables/Disables the Multipass V0 feature. This defaults to TRUE.
     /// Multipass V0 saves matches from excluded scopes, and marks any identical
     /// matches in included scopes as a false positive.
@@ -686,7 +667,6 @@ impl ScannerBuilder<'_> {
     }
 
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
-        let mut scanner_features = self.scanner_features.clone();
         let mut match_validators_per_type = AHashMap::new();
 
         for rule in self.rules.iter() {
@@ -697,10 +677,6 @@ impl ScannerBuilder<'_> {
                     if let Ok(match_validator) = match_validator {
                         if !match_validators_per_type.contains_key(&internal_type) {
                             match_validators_per_type.insert(internal_type, match_validator);
-                            // Let's add return_matches to the scanner features
-                            // TODO Fixme, this implicit behavior could cause issue in case the config is reloaded.
-                            // The scanner features should only be enabled at build time and not based on custom rules.
-                            scanner_features.return_matches = true;
                         }
                     } else {
                         return Err(CreateScannerError::InvalidMatchValidator(

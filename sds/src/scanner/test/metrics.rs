@@ -154,10 +154,7 @@ fn test_regex_match_and_included_keyword_same_index() {
         replacement: "[REDACTED]".to_string(),
     });
 
-    let scanner = ScannerBuilder::new(&[email_rule])
-        .with_return_matches(true)
-        .build()
-        .unwrap();
+    let scanner = ScannerBuilder::new(&[email_rule]).build().unwrap();
     let mut content = SimpleEvent::Map(BTreeMap::from([(
         "message".to_string(),
         SimpleEvent::String("email=firstname.lastname@acme.com&page2".to_string()),
@@ -165,8 +162,5 @@ fn test_regex_match_and_included_keyword_same_index() {
     let matches = scanner.scan(&mut content);
     assert_eq!(matches.len(), 1);
 
-    assert_eq!(
-        matches[0].match_value,
-        Some("=firstname.lastname@acme.com&page2".to_string())
-    );
+    assert_eq!(matches[0].match_value, None);
 }

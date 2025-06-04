@@ -30,7 +30,7 @@ pub struct RuleMatch {
     ///  performed.
     pub shift_offset: isize,
 
-    // matched string copied from content. If scanner has the return_matches set to true
+    // matched string copied from content.
     pub match_value: Option<String>,
 
     // match status updated by the validate_matches scanner method

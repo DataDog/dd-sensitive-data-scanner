@@ -2,7 +2,8 @@ use ahash::AHashMap;
 use criterion::Criterion;
 use dd_sds::Scanner;
 use dd_sds::{
-    Event, EventVisitor, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig, Utf8Encoding,
+    Event, EventVisitor, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
+    RootRuleConfig, Utf8Encoding,
 };
 use std::fs::File;
 use std::io::Read;
@@ -12,7 +13,7 @@ use threadpool::ThreadPool;
 pub fn multithread_scanning(c: &mut Criterion) {
     let rules: Vec<_> = sample_regexes()
         .into_iter()
-        .map(|regex| RegexRuleConfig::new(&regex).build())
+        .map(|regex| RootRuleConfig::new(RegexRuleConfig::new(&regex).build()))
         .collect();
 
     let scanner = Arc::new(Scanner::builder(&rules).build().unwrap());
@@ -21,13 +22,15 @@ pub fn multithread_scanning(c: &mut Criterion) {
     let rules_with_keywords: Vec<_> = regex_with_keywords
         .into_iter()
         .map(|(keywords, regex)| {
-            RegexRuleConfig::new(&regex)
-                .with_proximity_keywords(ProximityKeywordsConfig {
-                    look_ahead_character_count: 30,
-                    included_keywords: keywords,
-                    excluded_keywords: vec![],
-                })
-                .build()
+            RootRuleConfig::new(
+                RegexRuleConfig::new(&regex)
+                    .with_proximity_keywords(ProximityKeywordsConfig {
+                        look_ahead_character_count: 30,
+                        included_keywords: keywords,
+                        excluded_keywords: vec![],
+                    })
+                    .build(),
+            )
         })
         .collect();
 

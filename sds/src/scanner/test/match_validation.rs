@@ -32,7 +32,7 @@ fn test_should_return_match_with_match_validation() {
 }
 
 #[test]
-fn test_should_error_if_no_match_validation() {
+fn test_should_do_nothing_if_no_match_validation() {
     let scanner =
         ScannerBuilder::new(&[RootRuleConfig::new(RegexRuleConfig::new("world").build())
             .match_action(MatchAction::Redact {
@@ -46,9 +46,9 @@ fn test_should_error_if_no_match_validation() {
     assert_eq!(rule_match.len(), 1);
     assert_eq!(content, "hey [REDACTED]");
     assert_eq!(rule_match[0].match_value, None);
-    // Let's call validate and check that it panics
-    let err = scanner.validate_matches(&mut rule_match);
-    assert!(err.is_err());
+    // Let's call validate and check that it does nothing
+    scanner.validate_matches(&mut rule_match);
+    assert_eq!(rule_match[0].match_value, None);
 }
 
 #[test]
@@ -151,7 +151,7 @@ fn test_aws_id_only_shall_not_validate() {
     let mut matches = scanner.scan(&mut content);
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "this is an [AWS_ID]");
-    assert!(scanner.validate_matches(&mut matches).is_err());
+    scanner.validate_matches(&mut matches);
     assert_eq!(matches[0].match_status, MatchStatus::NotChecked);
 }
 
@@ -224,7 +224,7 @@ fn test_mock_same_http_validator_several_matches() {
         content,
         "this is a content with a [VALID] an [INVALID] and an [ERROR]"
     );
-    assert!(scanner.validate_matches(&mut matches).is_ok());
+    scanner.validate_matches(&mut matches);
     mock_service_valid.assert();
     mock_service_invalid.assert();
     mock_service_error.assert();
@@ -259,7 +259,7 @@ fn test_mock_http_timeout() {
     let mut matches = scanner.scan(&mut content);
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "this is a content with a [VALID]");
-    assert!(scanner.validate_matches(&mut matches).is_ok());
+    scanner.validate_matches(&mut matches);
     // This will be in the form "Error making HTTP request: "
     match &matches[0].match_status {
         MatchStatus::Error(val) => {
@@ -276,16 +276,13 @@ fn test_matches_from_rule_without_validation_are_not_ignored() {
             replacement: "[VALID]".to_string(),
         });
 
-    let scanner = ScannerBuilder::new(&[rule_valid_match])
-        .with_return_matches(true)
-        .build()
-        .unwrap();
+    let scanner = ScannerBuilder::new(&[rule_valid_match]).build().unwrap();
 
     let mut content = "this is a content with a valid_match".to_string();
     let mut matches = scanner.scan(&mut content);
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "this is a content with a [VALID]");
-    assert!(scanner.validate_matches(&mut matches).is_ok());
+    scanner.validate_matches(&mut matches);
 
     // Even though the match doesn't have a match-validator, it is still returned, with a `NotAvailable` status
     assert_eq!(matches.len(), 1);
@@ -347,7 +344,7 @@ fn test_mock_multiple_match_validators() {
         content,
         "this is a content with a [VALID] an [AWS_ID] and an [AWS_SECRET]"
     );
-    assert!(scanner.validate_matches(&mut matches).is_ok());
+    scanner.validate_matches(&mut matches);
     mock_http_service_valid.assert();
     mock_aws_service_valid.assert();
     assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -389,7 +386,7 @@ fn test_mock_endpoint_with_multiple_hosts() {
         content,
         "this is a content with a [VALID] on multiple hosts"
     );
-    assert!(scanner.validate_matches(&mut matches).is_ok());
+    scanner.validate_matches(&mut matches);
     mock_http_service_us.assert();
     mock_http_service_eu.assert();
     assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -491,7 +488,7 @@ fn test_mock_aws_validator() {
         content,
         "content with a valid aws_id [AWS_ID], an invalid aws_id [AWS_ID], an error aws_id [AWS_ID] and an aws_secret [AWS_SECRET] and an other aws_secret [AWS_SECRET]"
     );
-    assert!(scanner.validate_matches(&mut matches).is_ok());
+    scanner.validate_matches(&mut matches);
     mock_service_valid.assert();
     mock_service_invalid_1.assert();
     mock_service_invalid_2.assert();
