@@ -5,6 +5,7 @@ mod chinese_id_checksum;
 mod france_ssn_checksum;
 mod github_token_checksum;
 mod iban_checker;
+mod italian_national_id_checksum;
 mod jwt_expiration_checker;
 mod luhn_checksum;
 mod luxembourg_individual_nin_checksum;
@@ -24,6 +25,7 @@ pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
+pub use crate::secondary_validation::italian_national_id_checksum::ItalianNationalIdChecksum;
 pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecker;
 pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
 pub use crate::secondary_validation::luxembourg_individual_nin_checksum::LuxembourgIndividualNINChecksum;
@@ -65,6 +67,9 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::NhsCheckDigit => NhsCheckDigit.is_valid_match(regex_match),
             SecondaryValidator::IbanChecker => IbanChecker.is_valid_match(regex_match),
             SecondaryValidator::NirChecksum => NirChecksum.is_valid_match(regex_match),
+            SecondaryValidator::ItalianNationalIdChecksum => {
+                ItalianNationalIdChecksum.is_valid_match(regex_match)
+            }
             SecondaryValidator::JwtExpirationChecker => {
                 JwtExpirationChecker.is_valid_match(regex_match)
             }
