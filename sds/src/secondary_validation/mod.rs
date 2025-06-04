@@ -56,6 +56,18 @@ fn get_next_digit(chars: &mut Chars<'_>) -> Option<u32> {
     None
 }
 
+/// Sum all the digits from a number
+#[inline]
+fn sum_all_digits(digits: u32) -> u32 {
+    let mut sum = 0;
+    let mut num = digits;
+    while num > 0 {
+        sum += num % 10;
+        num /= 10;
+    }
+    sum
+}
+
 impl Validator for SecondaryValidator {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         match self {
