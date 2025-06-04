@@ -3,7 +3,6 @@ use crate::secondary_validation::{sum_all_digits, Validator};
 
 const MULTIPLIERS: [u32; 9] = [2, 1, 2, 1, 2, 1, 2, 1, 2];
 
-
 impl Validator for SwedenPINChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         /*
@@ -12,21 +11,19 @@ impl Validator for SwedenPINChecksum {
          * Each product has its digits summed up and added to a total.
          * The total is used to compute a checksum, which is compared to the last digit of the input.
          */
-        let valid_chars = regex_match.chars().filter(|c| c.is_ascii_digit());
+        let valid_digits = regex_match.chars().filter_map(|c| c.to_digit(10));
 
         let mut total = 0;
         let mut checksum_digit = 0;
 
-        for (index, char) in valid_chars.enumerate() {
-            if let Some(digit) = char.to_digit(10) {
-                if index == MULTIPLIERS.len() {
-                    // We have all the digits we need
-                    checksum_digit = digit;
-                    break;
-                }
-                let product = digit * MULTIPLIERS[index];
-                total += sum_all_digits(product);
+        for (index, digit) in valid_digits.enumerate() {
+            if index == MULTIPLIERS.len() {
+                // We have all the digits we need
+                checksum_digit = digit;
+                break;
             }
+            let product = digit * MULTIPLIERS[index];
+            total += sum_all_digits(product);
         }
 
         let checksum = (10 - (total % 10)) % 10;
