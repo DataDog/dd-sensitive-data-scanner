@@ -4,7 +4,6 @@ use std::collections::HashMap;
 pub struct ItalianNationalIdChecksum;
 
 const ITALIAN_NATIONAL_ID_LENGTH: usize = 16;
-const ALLOWED_CHARACTERS: &str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 use lazy_static::lazy_static;
 
@@ -51,24 +50,19 @@ lazy_static! {
 
 impl Validator for ItalianNationalIdChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
-        if regex_match.len() != ITALIAN_NATIONAL_ID_LENGTH {
-            return false;
-        }
-
-        // Check if the string contains only allowed characters
-        if !regex_match.chars().all(|c| ALLOWED_CHARACTERS.contains(c)) {
-            return false;
-        }
+        let valid_chars = regex_match
+            .chars()
+            .filter(|c| ODD_CHARACTERS_MAPPING.contains_key(c));
 
         let mut checksum_char = '0';
         let mut checksum_value = 0;
 
-        for (idx, c) in regex_match.chars().enumerate() {
+        for (idx, c) in valid_chars.enumerate() {
             let position = idx + 1;
             if position == ITALIAN_NATIONAL_ID_LENGTH {
                 // Skip the last character which is the checksum character
                 checksum_char = c;
-                continue;
+                break;
             }
 
             if position % 2 == 1 {
@@ -76,9 +70,8 @@ impl Validator for ItalianNationalIdChecksum {
                 checksum_value += ODD_CHARACTERS_MAPPING[&c];
             } else {
                 // In case of even position, we need to handle the character differently
-                if c.is_ascii_digit() {
-                    // If the character is a digit, add it to the checksum value
-                    checksum_value += c.to_digit(10).unwrap();
+                if let Some(digit) = c.to_digit(10) {
+                    checksum_value += digit
                 } else {
                     // If the character is a letter, add the position of the letter in the alphabet to the checksum value
                     checksum_value += (c as u8 - b'A') as u32;
@@ -101,9 +94,9 @@ mod test {
     fn test_valid_italian_national_id() {
         let validator = ItalianNationalIdChecksum;
 
-        assert!(validator.is_valid_match("MRTMTT91D08F205J"));
-        assert!(validator.is_valid_match("MLLSNT82P65Z404U"));
-        assert!(validator.is_valid_match("LKJLDJ00E20D635F"));
+        assert!(validator.is_valid_match("MRTMTT91D08 F205J"));
+        assert!(validator.is_valid_match("MLLSNT82P65-Z404U"));
+        assert!(validator.is_valid_match("LKJLDJ/00E20/D635F"));
     }
 
     #[test]
