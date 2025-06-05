@@ -25,7 +25,7 @@ pub fn access_regex_caches<T>(func: impl FnOnce(&mut RegexCaches) -> T) -> T {
 
 pub enum CacheHandle<'a> {
     Borrowed(&'a mut Cache),
-    Owned(Cache),
+    Owned(Box<Cache>),
 }
 
 impl<'a> AsMut<Cache> for CacheHandle<'a> {
@@ -56,7 +56,7 @@ impl RegexCaches {
             // one-off cache is created. This will work but can be slow if it happens often.
             // This is tracked by a new metric since otherwise this would no longer be visible.
             GLOBAL_STATS.regex_store_errors.increment(1);
-            CacheHandle::Owned(shared_regex.create_cache())
+            CacheHandle::Owned(Box::new(shared_regex.create_cache()))
         }
     }
 
