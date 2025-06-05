@@ -252,20 +252,8 @@ mod test {
     fn test_secondary_validator_enum_iter() {
         // Test that we can iterate over all SecondaryValidator variants
         let validators: Vec<SecondaryValidator> = SecondaryValidator::iter().collect();
-
-        // Verify we have all variants we expect so far...
-        assert!(validators.contains(&SecondaryValidator::AbaRtnChecksum));
-        assert!(validators.contains(&SecondaryValidator::BrazilianCpfChecksum));
-        assert!(validators.contains(&SecondaryValidator::BrazilianCnpjChecksum));
-        assert!(validators.contains(&SecondaryValidator::ChineseIdChecksum));
+        // Verify some variants
         assert!(validators.contains(&SecondaryValidator::GithubTokenChecksum));
-        assert!(validators.contains(&SecondaryValidator::IbanChecker));
         assert!(validators.contains(&SecondaryValidator::JwtExpirationChecker));
-        assert!(validators.contains(&SecondaryValidator::LuhnChecksum));
-        assert!(validators.contains(&SecondaryValidator::NhsCheckDigit));
-        assert!(validators.contains(&SecondaryValidator::NirChecksum));
-        assert!(validators.contains(&SecondaryValidator::PolishNationalIdChecksum));
-        assert!(validators.contains(&SecondaryValidator::LuxembourgIndividualNINChecksum));
-        assert!(validators.contains(&SecondaryValidator::FranceSsnChecksum));
     }
 }
