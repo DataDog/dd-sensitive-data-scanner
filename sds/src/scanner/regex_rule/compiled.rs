@@ -51,10 +51,11 @@ impl CompiledRule for RegexCompiledRule {
                 );
             }
             None => {
+                let mut cache = regex_caches.get(&self.regex);
                 let true_positive_search = self.true_positive_matches(
                     content,
                     0,
-                    regex_caches.get(&self.regex),
+                    cache.as_mut(),
                     true,
                     exclusion_check,
                     excluded_matches,
@@ -92,10 +93,11 @@ impl RegexCompiledRule {
         'included_keyword_search: while let Some(included_keyword_match) =
             included_keyword_matches.next(regex_caches)
         {
+            let mut cache = regex_caches.get(&self.regex);
             let true_positive_search = self.true_positive_matches(
                 content,
                 included_keyword_match.end,
-                regex_caches.get(&self.regex),
+                cache.as_mut(),
                 false,
                 exclusion_check,
                 excluded_matches,
@@ -140,11 +142,8 @@ impl RegexCompiledRule {
 
         {
             let input = Input::new(content);
-            if self
-                .regex
-                .search_with(regex_caches.get(&self.regex), &input)
-                .is_some()
-            {
+            let mut cache = regex_caches.get(&self.regex);
+            if self.regex.search_with(cache.as_mut(), &input).is_some() {
                 has_verified_kws_in_path = Some(contains_keyword_in_path(
                     &path.sanitize(),
                     &included_keywords.keywords_pattern,
@@ -158,10 +157,11 @@ impl RegexCompiledRule {
             return;
         }
 
+        let mut cache = regex_caches.get(&self.regex);
         let true_positive_search = self.true_positive_matches(
             content,
             0,
-            regex_caches.get(&self.regex),
+            cache.as_mut(),
             false,
             exclusion_check,
             excluded_matches,

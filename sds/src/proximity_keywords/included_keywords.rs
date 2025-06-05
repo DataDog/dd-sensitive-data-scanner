@@ -34,11 +34,12 @@ impl IncludedKeywordSearch<'_> {
     pub fn next(&mut self, regex_caches: &mut RegexCaches) -> Option<Range<usize>> {
         let input = Input::new(self.content).range(self.start..).earliest(true);
 
-        if let Some(included_keyword_match) =
-            self.keywords.keywords_pattern.content_regex.search_with(
-                regex_caches.get(&self.keywords.keywords_pattern.content_regex),
-                &input,
-            )
+        let mut cache = regex_caches.get(&self.keywords.keywords_pattern.content_regex);
+        if let Some(included_keyword_match) = self
+            .keywords
+            .keywords_pattern
+            .content_regex
+            .search_with(cache.as_mut(), &input)
         {
             // The next scan starts at the next character after the start of the keyword since
             // multi-word keywords can overlap

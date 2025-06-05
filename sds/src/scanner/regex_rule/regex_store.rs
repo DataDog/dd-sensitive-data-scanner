@@ -125,8 +125,8 @@ impl RegexStore {
             existing_regex
         } else {
             let shared_regex = Arc::new(regex);
-
             let regex_cache = shared_regex.create_cache();
+
             let cache_key = self.key_map.insert(WeakSharedRegex {
                 regex: Arc::downgrade(&shared_regex),
                 cache_size: regex_cache.memory_usage() + std::mem::size_of::<Cache>(),
@@ -155,7 +155,8 @@ mod test {
         get_memoized_regex_with_custom_store, RegexStore, GC_FREQUENCY,
     };
     use regex_automata::meta::Regex;
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
 
     #[test]
     fn dropped_regexes_should_be_removed_from_global_store() {
@@ -189,5 +190,28 @@ mod test {
         }
         // The insertion that triggered the GC is itself not cleaned up yet, but everything else is
         assert_eq!(store.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_remove_while_in_use() {
+        let store = Arc::new(Mutex::new(RegexStore::new()));
+
+        // First, get a SharedRegex and keep it alive
+        let shared_regex =
+            get_memoized_regex_with_custom_store("test_pattern", Regex::new, &store).unwrap();
+
+        // Spawn a thread that will try to insert the same pattern while the first SharedRegex is still alive
+        let store_clone = store.clone();
+        let handle = thread::spawn(move || {
+            // This should NOT remove the old cache key because shared_regex is still alive
+            let _ = get_memoized_regex_with_custom_store("test_pattern", Regex::new, &store_clone)
+                .unwrap();
+        });
+
+        // Wait for the thread to complete
+        handle.join().unwrap();
+
+        // The original shared_regex should still be valid
+        let _ = shared_regex.regex.is_match("test_pattern");
     }
 }

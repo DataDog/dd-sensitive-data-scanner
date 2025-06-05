@@ -19,6 +19,8 @@ pub struct Stats {
 
     total_regex_cache_size_count: AtomicI64,
     total_regex_cache_size: Gauge,
+
+    pub regex_store_errors: Counter,
 }
 
 impl Stats {
@@ -31,6 +33,7 @@ impl Stats {
             total_regexes: gauge!("scanner.total_regexes"),
             total_regex_cache_size_count: AtomicI64::new(0),
             total_regex_cache_size: gauge!("scanner.total_regex_cache_size"),
+            regex_store_errors: counter!("scanner.regex_store_error"),
         }
     }
 
