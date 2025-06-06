@@ -686,7 +686,6 @@ impl ScannerBuilder<'_> {
     }
 
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
-        let mut scanner_features = self.scanner_features.clone();
         let mut match_validators_per_type = AHashMap::new();
 
         for rule in self.rules.iter() {
@@ -697,10 +696,6 @@ impl ScannerBuilder<'_> {
                     if let Ok(match_validator) = match_validator {
                         if !match_validators_per_type.contains_key(&internal_type) {
                             match_validators_per_type.insert(internal_type, match_validator);
-                            // Let's add return_matches to the scanner features
-                            // TODO Fixme, this implicit behavior could cause issue in case the config is reloaded.
-                            // The scanner features should only be enabled at build time and not based on custom rules.
-                            scanner_features.return_matches = true;
                         }
                     } else {
                         return Err(CreateScannerError::InvalidMatchValidator(
@@ -750,7 +745,7 @@ impl ScannerBuilder<'_> {
         Ok(Scanner {
             rules: compiled_rules,
             scoped_ruleset,
-            scanner_features,
+            scanner_features: self.scanner_features,
             metrics: ScannerMetrics::new(&self.labels),
             match_validators_per_type,
             labels: self.labels,
