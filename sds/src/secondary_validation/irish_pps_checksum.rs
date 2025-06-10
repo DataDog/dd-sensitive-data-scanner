@@ -8,11 +8,6 @@ impl Validator for IrishPpsChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         let mut chars = regex_match.chars().filter(|c| c.is_alphanumeric());
 
-        // all chars are ASCII so byte len is valid here
-        if regex_match.len() < WEIGHTS.len() + 1 {
-            return false;
-        }
-
         let mut checksum = 0;
 
         for (i, c) in chars.by_ref().take(WEIGHTS.len()).enumerate() {
