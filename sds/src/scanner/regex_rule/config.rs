@@ -144,6 +144,7 @@ pub enum SecondaryValidator {
     IbanChecker,
     JwtExpirationChecker,
     LuhnChecksum,
+    MoneroChecksum,
     NhsCheckDigit,
     NirChecksum,
     PolishNationalIdChecksum,

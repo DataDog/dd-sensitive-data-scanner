@@ -10,6 +10,7 @@ mod iban_checker;
 mod jwt_expiration_checker;
 mod luhn_checksum;
 mod luxembourg_individual_nin_checksum;
+mod monero_checksum;
 mod nhs_check_digit;
 mod nir_checksum;
 mod polish_national_id_checksum;
@@ -30,6 +31,7 @@ pub use crate::secondary_validation::iban_checker::IbanChecker;
 pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecker;
 pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
 pub use crate::secondary_validation::luxembourg_individual_nin_checksum::LuxembourgIndividualNINChecksum;
+pub use crate::secondary_validation::monero_checksum::MoneroChecksum;
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 pub use crate::secondary_validation::nir_checksum::NirChecksum;
 pub use crate::secondary_validation::polish_national_id_checksum::PolishNationalIdChecksum;
@@ -78,6 +80,7 @@ impl Validator for SecondaryValidator {
                 BrazilianCnpjChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::BtcChecksum => BtcChecksum.is_valid_match(regex_match),
+            SecondaryValidator::MoneroChecksum => MoneroChecksum.is_valid_match(regex_match),
             SecondaryValidator::AbaRtnChecksum => AbaRtnChecksum.is_valid_match(regex_match),
             SecondaryValidator::PolishNationalIdChecksum => {
                 PolishNationalIdChecksum.is_valid_match(regex_match)
