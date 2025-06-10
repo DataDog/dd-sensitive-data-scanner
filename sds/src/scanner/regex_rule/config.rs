@@ -152,6 +152,7 @@ pub enum SecondaryValidator {
     FranceSsnChecksum,
     IrishPpsChecksum,
     PortugueseTaxIdChecksum,
+    RomanianPersonalNumericCode,
 }
 
 #[cfg(test)]
