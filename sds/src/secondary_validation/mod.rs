@@ -2,6 +2,7 @@ mod aba_rtn_checksum;
 mod base58;
 mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
+mod btc_checksum;
 mod chinese_id_checksum;
 mod france_ssn_checksum;
 mod github_token_checksum;
@@ -21,6 +22,7 @@ use crate::scanner::regex_rule::config::SecondaryValidator;
 pub use crate::secondary_validation::aba_rtn_checksum::AbaRtnChecksum;
 pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjChecksum;
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
+pub use crate::secondary_validation::btc_checksum::BtcChecksum;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
@@ -75,6 +77,7 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::BrazilianCnpjChecksum => {
                 BrazilianCnpjChecksum.is_valid_match(regex_match)
             }
+            SecondaryValidator::BtcChecksum => BtcChecksum.is_valid_match(regex_match),
             SecondaryValidator::AbaRtnChecksum => AbaRtnChecksum.is_valid_match(regex_match),
             SecondaryValidator::PolishNationalIdChecksum => {
                 PolishNationalIdChecksum.is_valid_match(regex_match)
