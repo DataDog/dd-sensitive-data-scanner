@@ -1,49 +1,48 @@
 use crate::secondary_validation::Validator;
 pub struct IrishPpsChecksum;
 
+const WEIGHTS: [u32; 7] = [8, 7, 6, 5, 4, 3, 2];
+const MODULUS: u32 = 23;
+
 impl Validator for IrishPpsChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
-        let mut chars = regex_match.chars();
-        if chars.clone().any(|c| !c.is_alphanumeric()) {
-            return false;
-        }
+        let mut chars = regex_match.chars().filter(|c| c.is_alphanumeric());
 
         // all chars are ASCII so byte len is valid here
-        if regex_match.len() < 8 {
+        if regex_match.len() < WEIGHTS.len() + 1 {
             return false;
         }
 
         let mut checksum = 0;
 
-        let weights = [8, 7, 6, 5, 4, 3, 2];
-        for (i, c) in chars.by_ref().take(7).enumerate() {
-            checksum += checksum_value(c) * weights[i];
+        for (i, c) in chars.by_ref().take(WEIGHTS.len()).enumerate() {
+            if let Some(digit) = c.to_digit(10) {
+                checksum += digit * WEIGHTS[i];
+            } else {
+                return false;
+            }
         }
 
-        let checksum_char = chars.next().unwrap();
-        let expected_checksum = checksum_char.to_ascii_uppercase() as u32 - b'A' as u32 + 1;
+        let expected_checksum = match chars.next() {
+            Some(c) => convert_to_digit(c),
+            None => return false,
+        };
 
         // optional 9th char
         if let Some(c) = chars.next() {
-            checksum += 9 * checksum_value(c);
+            checksum += 9 * convert_to_digit(c);
         }
 
-        checksum % 23 == expected_checksum
+        checksum % MODULUS == expected_checksum
     }
 }
 
-fn checksum_value(c: char) -> u32 {
-    if let Some(x) = c.to_digit(10) {
-        x
-    } else {
-        if c.to_ascii_uppercase() == 'W' || c == ' ' {
-            0
-        } else {
-            c.to_ascii_uppercase() as u32 - (b'A' as u32) + 1
-        }
+fn convert_to_digit(c: char) -> u32 {
+    if c.eq_ignore_ascii_case(&'W') {
+        return 0;
     }
+    c.to_ascii_uppercase() as u32 - (b'A' as u32) + 1
 }
-
 #[cfg(test)]
 mod test {
     use crate::secondary_validation::irish_pps_checksum::IrishPpsChecksum;
@@ -51,7 +50,16 @@ mod test {
 
     #[test]
     fn test_valid_pps() {
-        let valid = vec!["1234567FA", "1084633RB"];
+        let valid = vec![
+            "1234567FA",
+            "1084633RB",
+            "6433435FW",
+            "1084633WW",
+            // Additional character is ignored
+            "1084633WWX",
+            // Ignore non-alphanumeric characters
+            "1234567F/A",
+        ];
         for example in valid {
             assert!(IrishPpsChecksum.is_valid_match(example));
         }
@@ -60,10 +68,6 @@ mod test {
     #[test]
     fn test_invalid_pps() {
         let invalid = vec![
-            // wrong checksum
-            "1084633WW",
-            // too long
-            "1084633WWX",
             // too short
             "1084633",
             "1234567😊A",
