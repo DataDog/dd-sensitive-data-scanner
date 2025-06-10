@@ -5,22 +5,10 @@ const CHECKSUM_WEIGHTS: &[u32] = &[2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9];
 
 impl Validator for RomanianPersonalNumericCode {
     fn is_valid_match(&self, regex_match: &str) -> bool {
-        if !regex_match.is_ascii() {
-            return false;
-        }
-        for c in regex_match.chars() {
-            if !c.is_ascii_digit() {
-                return false;
-            }
-        }
+        let mut digits = regex_match.chars().filter_map(|c| c.to_digit(10));
 
         let mut calculated_checksum = 0;
-        for (i, c) in regex_match.chars().take(12).enumerate() {
-            let digit = if let Some(digit) = c.to_digit(10) {
-                digit
-            } else {
-                return false;
-            };
+        for (i, digit) in digits.by_ref().take(CHECKSUM_WEIGHTS.len()).enumerate() {
             calculated_checksum += CHECKSUM_WEIGHTS[i] * digit;
         }
 
@@ -29,13 +17,10 @@ impl Validator for RomanianPersonalNumericCode {
             calculated_checksum = 1;
         }
 
-        let actual_checksum = if let Some(c) = regex_match.chars().last().unwrap().to_digit(10) {
-            c
-        } else {
-            return false;
-        };
-
-        calculated_checksum == actual_checksum
+        if let Some(actual_checksum) = digits.next() {
+            return calculated_checksum == actual_checksum;
+        }
+        false
     }
 }
 
