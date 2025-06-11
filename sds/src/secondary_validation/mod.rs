@@ -11,6 +11,7 @@ mod iban_checker;
 mod irish_pps_checksum;
 mod italian_national_id_checksum;
 mod jwt_expiration_checker;
+mod lithuanian_personal_identification_number_checksum;
 mod luhn_checksum;
 mod luxembourg_individual_nin_checksum;
 mod nhs_check_digit;
@@ -40,6 +41,7 @@ pub use crate::secondary_validation::iban_checker::IbanChecker;
 pub use crate::secondary_validation::irish_pps_checksum::IrishPpsChecksum;
 pub use crate::secondary_validation::italian_national_id_checksum::ItalianNationalIdChecksum;
 pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecker;
+use crate::secondary_validation::lithuanian_personal_identification_number_checksum::LithuanianPersonalIdentificationNumberChecksum;
 pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
 pub use crate::secondary_validation::luxembourg_individual_nin_checksum::LuxembourgIndividualNINChecksum;
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
@@ -107,6 +109,9 @@ impl Validator for SecondaryValidator {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
+            SecondaryValidator::LithuanianPersonalIdentificationNumberChecksum => {
+                LithuanianPersonalIdentificationNumberChecksum.is_valid_match(regex_match)
+            }
             SecondaryValidator::GermanIdsChecksum => GermanIdsChecksum.is_valid_match(regex_match),
             SecondaryValidator::SpanishDniChecksum => {
                 SpanishDniChecksum.is_valid_match(regex_match)
