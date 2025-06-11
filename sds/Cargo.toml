@@ -12,7 +12,7 @@ members = ["tools/fuzz"]
 default = []
 testing = []
 
-# Depreacted - Support hash from UTF-16 encoded bytes for backward compatibility. Users should use instead standalone hash match action
+# Deprecated - Support hash from UTF-16 encoded bytes for backward compatibility. Users should use instead standalone hash match action
 utf16_hash_match_action = []
 bench = []
 match_validation = []
@@ -29,6 +29,7 @@ regex-automata-fork = { git = "https://github.com/fbryden/regex", rev = "6952250
 regex-syntax = "0.7.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_with = "3.6.1"
+strum = { version = "0.25", features = ["derive"] }
 thiserror = "1.0.58"
 metrics = "0.24.0"
 metrics-util = "0.18.0"
