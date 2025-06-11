@@ -1,49 +1,26 @@
 pub struct SlovenianPINChecksum;
 use crate::secondary_validation::Validator;
 
-const SLOVENIAN_PIN_LENGTH: usize = 13;
+const WEIGHT_FACTORS: [u32; 12] = [7, 6, 5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
 
 impl Validator for SlovenianPINChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
-        /*
-         * Slovenian Persional Identification Number uses a 13-digit identification code,
-         * The format is: DDMMYYYRRBBBK, where:
-         * DDMMYYY: Date of birth (day, month, year)
-         * RR: Register code (place of registration)
-         * BBB: Serial number (includes sex and sequence for people born on the same day)
-         * K: Checksum digit
-         * The checksum is calculated using the first 12 digits.
-         */
-        if regex_match.len() != SLOVENIAN_PIN_LENGTH {
-            return false;
+        // https://en.wikipedia.org/wiki/Unique_Master_Citizen_Number
+        let mut digits = regex_match.chars().filter_map(|c| c.to_digit(10));
+
+        let mut sum = 0;
+        for (i, digit) in digits.by_ref().take(WEIGHT_FACTORS.len()).enumerate() {
+            sum += digit * WEIGHT_FACTORS[i];
         }
 
-        let mut digits = [0; 13];
-
-        for (i, char) in regex_match.chars().enumerate() {
-            match char.to_digit(10) {
-                Some(digit) => {
-                    digits[i] = digit;
-                }
-                None => return false,
+        if let Some(actual_checksum) = digits.next() {
+            let mut computed_checksum = 11 - (sum % 11);
+            if computed_checksum == 11 || computed_checksum == 10 {
+                computed_checksum = 0;
             }
+            return computed_checksum == actual_checksum;
         }
-
-        let m = 11
-            - (7 * (digits[0] + digits[6])
-                + 6 * (digits[1] + digits[7])
-                + 5 * (digits[2] + digits[8])
-                + 4 * (digits[3] + digits[9])
-                + 3 * (digits[4] + digits[10])
-                + 2 * (digits[5] + digits[11]))
-                % 11;
-
-        let mut k = m;
-        if k == 10 || k == 1 {
-            k = 0;
-        }
-
-        k == digits[12]
+        false
     }
 }
 
@@ -53,7 +30,14 @@ mod test {
 
     #[test]
     fn validate_slovenian_pins() {
-        let slovenian_pins = vec!["0101006500006"];
+        let slovenian_pins = vec![
+            "0101006500006",
+            "01-01-006-50-000-6",
+            "01.01.006.50.000.6",
+            "01🙏01006500006",
+            "1212995504350",
+            "2001939010010",
+        ];
         for pin in slovenian_pins {
             assert!(SlovenianPINChecksum.is_valid_match(pin));
         }
