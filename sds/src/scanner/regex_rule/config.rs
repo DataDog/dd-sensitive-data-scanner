@@ -141,6 +141,7 @@ pub enum SecondaryValidator {
     BrazilianCnpjChecksum,
     ChineseIdChecksum,
     GithubTokenChecksum,
+    GreekTinChecksum,
     IbanChecker,
     ItalianNationalIdChecksum,
     JwtExpirationChecker,

@@ -4,6 +4,7 @@ mod brazilian_cpf_checksum;
 mod chinese_id_checksum;
 mod france_ssn_checksum;
 mod github_token_checksum;
+mod greece_tin_checksum;
 mod iban_checker;
 mod irish_pps_checksum;
 mod italian_national_id_checksum;
@@ -28,6 +29,7 @@ pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksu
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
+pub use crate::secondary_validation::greece_tin_checksum::GreekTinChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
 use crate::secondary_validation::irish_pps_checksum::IrishPpsChecksum;
 pub use crate::secondary_validation::italian_national_id_checksum::ItalianNationalIdChecksum;
@@ -75,6 +77,7 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::NhsCheckDigit => NhsCheckDigit.is_valid_match(regex_match),
             SecondaryValidator::IbanChecker => IbanChecker.is_valid_match(regex_match),
             SecondaryValidator::NirChecksum => NirChecksum.is_valid_match(regex_match),
+            SecondaryValidator::GreekTinChecksum => GreekTinChecksum.is_valid_match(regex_match),
             SecondaryValidator::ItalianNationalIdChecksum => {
                 ItalianNationalIdChecksum.is_valid_match(regex_match)
             }
