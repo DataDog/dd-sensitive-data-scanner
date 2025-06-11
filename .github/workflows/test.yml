@@ -1,9 +1,10 @@
 name: Test Suite
 
+
 on:
   pull_request:
   merge_group:
-    types: [checks_requested]
+    types: [ checks_requested ]
   push:
     branches:
       - main
