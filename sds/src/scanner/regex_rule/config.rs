@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DefaultOnNull;
 use std::sync::Arc;
+use strum::EnumIter;
 
 pub const DEFAULT_KEYWORD_LOOKAHEAD: usize = 30;
 
@@ -132,7 +133,7 @@ pub struct ProximityKeywordsConfig {
     pub excluded_keywords: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumIter)]
 #[serde(tag = "type")]
 pub enum SecondaryValidator {
     AbaRtnChecksum,
@@ -140,7 +141,9 @@ pub enum SecondaryValidator {
     BrazilianCnpjChecksum,
     ChineseIdChecksum,
     GithubTokenChecksum,
+    GreekTinChecksum,
     IbanChecker,
+    ItalianNationalIdChecksum,
     JwtExpirationChecker,
     LuhnChecksum,
     Mod11_2checksum,
@@ -154,13 +157,22 @@ pub enum SecondaryValidator {
     NhsCheckDigit,
     NirChecksum,
     PolishNationalIdChecksum,
+    PolishNipChecksum,
     LuxembourgIndividualNINChecksum,
     FranceSsnChecksum,
+    GermanIdsChecksum,
+    SpanishDniChecksum,
+    SlovenianPINChecksum,
+    FinnishHetuChecksum,
+    IrishPpsChecksum,
+    PortugueseTaxIdChecksum,
+    RomanianPersonalNumericCode,
 }
 
 #[cfg(test)]
 mod test {
     use crate::{AwsType, CustomHttpConfig, MatchValidationType, RootRuleConfig};
+    use strum::IntoEnumIterator;
 
     use super::*;
 
@@ -252,5 +264,14 @@ mod test {
             rule_config.get_third_party_active_checker(),
             Some(&MatchValidationType::CustomHttp(http_config.clone()))
         );
+    }
+
+    #[test]
+    fn test_secondary_validator_enum_iter() {
+        // Test that we can iterate over all SecondaryValidator variants
+        let validators: Vec<SecondaryValidator> = SecondaryValidator::iter().collect();
+        // Verify some variants
+        assert!(validators.contains(&SecondaryValidator::GithubTokenChecksum));
+        assert!(validators.contains(&SecondaryValidator::JwtExpirationChecker));
     }
 }
