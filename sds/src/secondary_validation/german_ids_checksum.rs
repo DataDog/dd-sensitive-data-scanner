@@ -19,17 +19,14 @@ impl Validator for GermanIdsChecksum {
             }
         }
 
-        let check_digit = valid_chars
-            .by_ref()
-            .take(1)
-            .filter_map(|c| c.to_digit(10))
-            .next();
+        let check_digit = valid_chars.take(1).filter_map(|c| c.to_digit(10)).next();
 
-        // If Missing check digit, then assume the match is valid.
-        if check_digit.is_none() {
+        if let Some(check_digit) = check_digit {
+            check_digit == sum % 10
+        } else {
+            // If missing check digit, then assume the match is valid.
             return true;
         }
-        check_digit.unwrap() == sum % 10
     }
 }
 
