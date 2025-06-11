@@ -141,15 +141,23 @@ pub enum SecondaryValidator {
     BrazilianCnpjChecksum,
     ChineseIdChecksum,
     GithubTokenChecksum,
+    GreekTinChecksum,
     IbanChecker,
+    ItalianNationalIdChecksum,
     JwtExpirationChecker,
     LuhnChecksum,
     NhsCheckDigit,
     NirChecksum,
     PolishNationalIdChecksum,
+    PolishNipChecksum,
     LuxembourgIndividualNINChecksum,
     FranceSsnChecksum,
     GermanIdsChecksum,
+    SlovenianPINChecksum,
+    FinnishHetuChecksum,
+    IrishPpsChecksum,
+    PortugueseTaxIdChecksum,
+    RomanianPersonalNumericCode,
 }
 
 #[cfg(test)]
