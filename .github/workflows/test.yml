@@ -1,6 +1,5 @@
 name: Test Suite
 
-
 on:
   pull_request:
   merge_group:
@@ -55,7 +54,8 @@ jobs:
       - name: "Run the Go linter"
         run: |
           cd go
-          go install honnef.co/go/tools/cmd/staticcheck@v0.5.1
+          go version
+          go install honnef.co/go/tools/cmd/staticcheck@latest
           export PATH=$PATH:$(go env GOPATH)/bin
           LD_LIBRARY_PATH=../rust/target/release staticcheck ./...
           gofmt -s -w . && git diff --exit-code
