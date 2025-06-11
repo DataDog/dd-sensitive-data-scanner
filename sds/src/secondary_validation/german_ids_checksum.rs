@@ -25,7 +25,7 @@ impl Validator for GermanIdsChecksum {
             check_digit == sum % 10
         } else {
             // If missing check digit, then assume the match is valid.
-            return true;
+            true
         }
     }
 }
