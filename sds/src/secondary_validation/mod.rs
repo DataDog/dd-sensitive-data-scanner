@@ -8,8 +8,8 @@ mod german_ids_checksum;
 mod github_token_checksum;
 mod greece_tin_checksum;
 mod iban_checker;
-mod iso_7064_checksum;
 mod irish_pps_checksum;
+mod iso_7064_checksum;
 mod italian_national_id_checksum;
 mod jwt_expiration_checker;
 mod luhn_checksum;
@@ -38,11 +38,11 @@ pub use crate::secondary_validation::german_ids_checksum::GermanIdsChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
 pub use crate::secondary_validation::greece_tin_checksum::GreekTinChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
+pub use crate::secondary_validation::irish_pps_checksum::IrishPpsChecksum;
 pub use crate::secondary_validation::iso_7064_checksum::{
     Mod11_10checksum, Mod11_2checksum, Mod1271_36Checksum, Mod27_26checksum, Mod37_2checksum,
     Mod37_36checksum, Mod661_26checksum, Mod97_10checksum,
 };
-pub use crate::secondary_validation::irish_pps_checksum::IrishPpsChecksum;
 pub use crate::secondary_validation::italian_national_id_checksum::ItalianNationalIdChecksum;
 pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecker;
 pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
