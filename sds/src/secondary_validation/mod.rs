@@ -2,9 +2,13 @@ mod aba_rtn_checksum;
 mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
 mod chinese_id_checksum;
+mod finnish_hetu_checksum;
 mod france_ssn_checksum;
 mod github_token_checksum;
+mod greece_tin_checksum;
 mod iban_checker;
+mod irish_pps_checksum;
+mod italian_national_id_checksum;
 mod jwt_expiration_checker;
 mod luhn_checksum;
 mod luxembourg_individual_nin_checksum;
@@ -12,6 +16,9 @@ mod nhs_check_digit;
 mod nir_checksum;
 mod polish_national_id_checksum;
 mod slovenian_pin_checksum;
+mod polish_nip_checksum;
+mod portuguese_tax_id_checksum;
+mod romanian_personal_numeric_code;
 mod verhoeff_checksum;
 
 #[cfg(test)]
@@ -22,9 +29,13 @@ pub use crate::secondary_validation::aba_rtn_checksum::AbaRtnChecksum;
 pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjChecksum;
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
+pub use crate::secondary_validation::finnish_hetu_checksum::FinnishHetuChecksum;
 pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
+pub use crate::secondary_validation::greece_tin_checksum::GreekTinChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
+use crate::secondary_validation::irish_pps_checksum::IrishPpsChecksum;
+pub use crate::secondary_validation::italian_national_id_checksum::ItalianNationalIdChecksum;
 pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecker;
 pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
 pub use crate::secondary_validation::luxembourg_individual_nin_checksum::LuxembourgIndividualNINChecksum;
@@ -32,6 +43,9 @@ pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 pub use crate::secondary_validation::nir_checksum::NirChecksum;
 pub use crate::secondary_validation::polish_national_id_checksum::PolishNationalIdChecksum;
 pub use crate::secondary_validation::slovenian_pin_checksum::SlovenianPINChecksum;
+pub use crate::secondary_validation::polish_nip_checksum::PolishNipChecksum;
+pub use crate::secondary_validation::portuguese_tax_id_checksum::PortugueseTaxIdChecksum;
+pub use crate::secondary_validation::romanian_personal_numeric_code::RomanianPersonalNumericCode;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
 use std::str::Chars;
 
@@ -67,6 +81,10 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::NhsCheckDigit => NhsCheckDigit.is_valid_match(regex_match),
             SecondaryValidator::IbanChecker => IbanChecker.is_valid_match(regex_match),
             SecondaryValidator::NirChecksum => NirChecksum.is_valid_match(regex_match),
+            SecondaryValidator::GreekTinChecksum => GreekTinChecksum.is_valid_match(regex_match),
+            SecondaryValidator::ItalianNationalIdChecksum => {
+                ItalianNationalIdChecksum.is_valid_match(regex_match)
+            }
             SecondaryValidator::JwtExpirationChecker => {
                 JwtExpirationChecker.is_valid_match(regex_match)
             }
@@ -80,12 +98,23 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::PolishNationalIdChecksum => {
                 PolishNationalIdChecksum.is_valid_match(regex_match)
             }
+            SecondaryValidator::PolishNipChecksum => PolishNipChecksum.is_valid_match(regex_match),
             SecondaryValidator::LuxembourgIndividualNINChecksum => {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
             SecondaryValidator::SlovenianPINChecksum => {
                 SlovenianPINChecksum.is_valid_match(regex_match)
+            }
+            SecondaryValidator::FinnishHetuChecksum => {
+                FinnishHetuChecksum.is_valid_match(regex_match)
+            }
+            SecondaryValidator::IrishPpsChecksum => IrishPpsChecksum.is_valid_match(regex_match),
+            SecondaryValidator::PortugueseTaxIdChecksum => {
+                PortugueseTaxIdChecksum.is_valid_match(regex_match)
+            }
+            SecondaryValidator::RomanianPersonalNumericCode => {
+                RomanianPersonalNumericCode.is_valid_match(regex_match)
             }
         }
     }
