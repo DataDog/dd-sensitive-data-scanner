@@ -109,7 +109,7 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
             SecondaryValidator::LithuanianPersonalIdentificationNumberChecksum => {
                 LithuanianPersonalIdentificationNumberChecksum.is_valid_match(regex_match)
-          }
+            }
             SecondaryValidator::SpanishDniChecksum => {
                 SpanishDniChecksum.is_valid_match(regex_match)
             }
