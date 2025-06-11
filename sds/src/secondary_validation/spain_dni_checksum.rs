@@ -2,12 +2,11 @@ use crate::secondary_validation::Validator;
 
 pub struct SpanishDniChecksum;
 
-const LETTER_TABLE: [&str; 23] = [
-    "T", "R", "W", "A", "G", "M", "Y", "F", "P", "D", "X", "B", "N", "J", "Z", "S", "Q", "V", "H",
-    "L", "C", "K", "E",
+const LETTER_TABLE: [char; 23] = [
+    'T', 'R', 'W', 'A', 'G', 'M', 'Y', 'F', 'P', 'D', 'X', 'B', 'N', 'J', 'Z', 'S', 'Q', 'V', 'H',
+    'L', 'C', 'K', 'E',
 ];
 
-const DNI_LENGTH: usize = 9;
 const NUMBER_LENGTH: usize = 8;
 impl Validator for SpanishDniChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
@@ -17,25 +16,26 @@ impl Validator for SpanishDniChecksum {
          * The letter is calculated by taking the number modulo 23 and using it as an index
          * into LETTER_TABLE
          */
-        if regex_match.len() != DNI_LENGTH {
-            return false;
-        }
+        let mut input = regex_match.chars().filter(|c| c.is_ascii_alphanumeric());
 
-        // Get the number and letter parts
-        let (number_part, letter_part) = regex_match.split_at(8);
-
-        // Check if first 8 chars are digits and last is a letter
-        if !number_part.chars().all(|c| c.is_ascii_digit()) {
-            return false;
-        }
-
-        let number_part: u32 = regex_match[..NUMBER_LENGTH].parse().unwrap();
+        let number_part: usize = match input
+            .by_ref()
+            .take(NUMBER_LENGTH)
+            .collect::<String>()
+            .parse()
+        {
+            Ok(number) => number,
+            Err(_) => return false,
+        };
 
         // Calculate expected letter
-        let index = number_part % 23;
-        let expected_letter = LETTER_TABLE[index as usize];
+        let index = number_part % LETTER_TABLE.len();
+        let expected_letter = LETTER_TABLE[index];
 
-        letter_part == expected_letter
+        if let Some(letter_part) = input.next() {
+            return letter_part.eq_ignore_ascii_case(&expected_letter);
+        }
+        false
     }
 }
 
