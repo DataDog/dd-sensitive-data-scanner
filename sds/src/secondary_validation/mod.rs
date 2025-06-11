@@ -18,6 +18,7 @@ mod polish_national_id_checksum;
 mod polish_nip_checksum;
 mod portuguese_tax_id_checksum;
 mod romanian_personal_numeric_code;
+mod slovenian_pin_checksum;
 mod verhoeff_checksum;
 
 #[cfg(test)]
@@ -44,6 +45,7 @@ pub use crate::secondary_validation::polish_national_id_checksum::PolishNational
 pub use crate::secondary_validation::polish_nip_checksum::PolishNipChecksum;
 pub use crate::secondary_validation::portuguese_tax_id_checksum::PortugueseTaxIdChecksum;
 pub use crate::secondary_validation::romanian_personal_numeric_code::RomanianPersonalNumericCode;
+pub use crate::secondary_validation::slovenian_pin_checksum::SlovenianPINChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
 use std::str::Chars;
 
@@ -101,6 +103,9 @@ impl Validator for SecondaryValidator {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
+            SecondaryValidator::SlovenianPINChecksum => {
+                SlovenianPINChecksum.is_valid_match(regex_match)
+            }
             SecondaryValidator::FinnishHetuChecksum => {
                 FinnishHetuChecksum.is_valid_match(regex_match)
             }
