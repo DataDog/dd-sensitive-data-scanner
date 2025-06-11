@@ -2,12 +2,17 @@ use crate::secondary_validation::Validator;
 
 pub struct FinnishHetuChecksum;
 
-const CONTROL_CHARS: &[char] = &['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y'];
+const CONTROL_CHARS: &[char] = &[
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'H', 'J', 'K',
+    'L', 'M', 'N', 'P', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y',
+];
 
 impl Validator for FinnishHetuChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         // https://en.wikipedia.org/wiki/National_identification_number#Finland
-         let mut processed_match = regex_match.chars().filter(|c| c.is_alphanumeric() || *c == '-' || *c == '+');
+        let mut processed_match = regex_match
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '+');
         // Split the components
         let date_part = processed_match.by_ref().take(6).collect::<String>();
         let individual_number = processed_match.by_ref().skip(1).take(3).collect::<String>();
@@ -15,7 +20,6 @@ impl Validator for FinnishHetuChecksum {
             Some(c) => c,
             None => return false,
         };
-
 
         let numeric_value = format!("{}{}", date_part, individual_number);
         let numeric_value = match numeric_value.parse::<usize>() {
@@ -25,7 +29,7 @@ impl Validator for FinnishHetuChecksum {
 
         // Calculate the expected control character
         let remainder = numeric_value % 31;
-        if let Some(expected_control)  = CONTROL_CHARS.get(remainder) { 
+        if let Some(expected_control) = CONTROL_CHARS.get(remainder) {
             return control_char == expected_control.to_ascii_uppercase();
         }
         false
