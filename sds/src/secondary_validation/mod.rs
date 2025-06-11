@@ -4,6 +4,7 @@ mod brazilian_cpf_checksum;
 mod chinese_id_checksum;
 mod finnish_hetu_checksum;
 mod france_ssn_checksum;
+mod german_ids_checksum;
 mod github_token_checksum;
 mod greece_tin_checksum;
 mod iban_checker;
@@ -33,6 +34,7 @@ pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksu
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::finnish_hetu_checksum::FinnishHetuChecksum;
 pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
+pub use crate::secondary_validation::german_ids_checksum::GermanIdsChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
 pub use crate::secondary_validation::greece_tin_checksum::GreekTinChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
@@ -110,6 +112,7 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::LithuanianPersonalIdentificationNumberChecksum => {
                 LithuanianPersonalIdentificationNumberChecksum.is_valid_match(regex_match)
             }
+            SecondaryValidator::GermanIdsChecksum => GermanIdsChecksum.is_valid_match(regex_match),
             SecondaryValidator::SpanishDniChecksum => {
                 SpanishDniChecksum.is_valid_match(regex_match)
             }

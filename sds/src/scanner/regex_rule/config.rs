@@ -153,6 +153,7 @@ pub enum SecondaryValidator {
     LuxembourgIndividualNINChecksum,
     FranceSsnChecksum,
     LithuanianPersonalIdentificationNumberChecksum,
+    GermanIdsChecksum,
     SpanishDniChecksum,
     SlovenianPINChecksum,
     FinnishHetuChecksum,
