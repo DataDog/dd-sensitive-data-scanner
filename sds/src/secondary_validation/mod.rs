@@ -9,6 +9,7 @@ mod github_token_checksum;
 mod greece_tin_checksum;
 mod iban_checker;
 mod irish_pps_checksum;
+mod iso_7064_checksum;
 mod italian_national_id_checksum;
 mod jwt_expiration_checker;
 mod lithuanian_personal_identification_number_checksum;
@@ -39,6 +40,10 @@ pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
 pub use crate::secondary_validation::greece_tin_checksum::GreekTinChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
 pub use crate::secondary_validation::irish_pps_checksum::IrishPpsChecksum;
+pub use crate::secondary_validation::iso_7064_checksum::{
+    Mod11_10checksum, Mod11_2checksum, Mod1271_36Checksum, Mod27_26checksum, Mod37_2checksum,
+    Mod37_36checksum, Mod661_26checksum, Mod97_10checksum,
+};
 pub use crate::secondary_validation::italian_national_id_checksum::ItalianNationalIdChecksum;
 pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecker;
 use crate::secondary_validation::lithuanian_personal_identification_number_checksum::LithuanianPersonalIdentificationNumberChecksum;
@@ -86,6 +91,17 @@ impl Validator for SecondaryValidator {
             }
             SecondaryValidator::NhsCheckDigit => NhsCheckDigit.is_valid_match(regex_match),
             SecondaryValidator::IbanChecker => IbanChecker.is_valid_match(regex_match),
+            SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
+            SecondaryValidator::Mod11_2checksum => Mod11_2checksum.is_valid_match(regex_match),
+            SecondaryValidator::Mod37_2checksum => Mod37_2checksum.is_valid_match(regex_match),
+            SecondaryValidator::Mod1271_36Checksum => {
+                Mod1271_36Checksum.is_valid_match(regex_match)
+            }
+            SecondaryValidator::Mod661_26checksum => Mod661_26checksum.is_valid_match(regex_match),
+            SecondaryValidator::Mod97_10checksum => Mod97_10checksum.is_valid_match(regex_match),
+            SecondaryValidator::Mod11_10checksum => Mod11_10checksum.is_valid_match(regex_match),
+            SecondaryValidator::Mod27_26checksum => Mod27_26checksum.is_valid_match(regex_match),
+            SecondaryValidator::Mod37_36checksum => Mod37_36checksum.is_valid_match(regex_match),
             SecondaryValidator::NirChecksum => NirChecksum.is_valid_match(regex_match),
             SecondaryValidator::GreekTinChecksum => GreekTinChecksum.is_valid_match(regex_match),
             SecondaryValidator::ItalianNationalIdChecksum => {
@@ -108,7 +124,6 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::LuxembourgIndividualNINChecksum => {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
-            SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
             SecondaryValidator::LithuanianPersonalIdentificationNumberChecksum => {
                 LithuanianPersonalIdentificationNumberChecksum.is_valid_match(regex_match)
             }
