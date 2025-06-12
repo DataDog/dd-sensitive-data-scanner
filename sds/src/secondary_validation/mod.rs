@@ -2,6 +2,7 @@ mod aba_rtn_checksum;
 mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
 mod chinese_id_checksum;
+mod coordination_number_checksum;
 mod finnish_hetu_checksum;
 mod france_ssn_checksum;
 mod german_ids_checksum;
@@ -13,6 +14,7 @@ mod irish_pps_checksum;
 mod iso_7064_checksum;
 mod italian_national_id_checksum;
 mod jwt_expiration_checker;
+mod latvia_national_id_checksum;
 mod lithuanian_personal_identification_number_checksum;
 mod luhn_checksum;
 mod luxembourg_individual_nin_checksum;
@@ -24,6 +26,7 @@ mod portuguese_tax_id_checksum;
 mod romanian_personal_numeric_code;
 mod slovenian_pin_checksum;
 mod spain_dni_checksum;
+mod sweden_pin_checksum;
 mod verhoeff_checksum;
 
 #[cfg(test)]
@@ -34,6 +37,7 @@ pub use crate::secondary_validation::aba_rtn_checksum::AbaRtnChecksum;
 pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjChecksum;
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
+pub use crate::secondary_validation::coordination_number_checksum::CoordinationNumberChecksum;
 pub use crate::secondary_validation::finnish_hetu_checksum::FinnishHetuChecksum;
 pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
 pub use crate::secondary_validation::german_ids_checksum::GermanIdsChecksum;
@@ -48,6 +52,7 @@ pub use crate::secondary_validation::iso_7064_checksum::{
 };
 pub use crate::secondary_validation::italian_national_id_checksum::ItalianNationalIdChecksum;
 pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecker;
+pub use crate::secondary_validation::latvia_national_id_checksum::LatviaNationalIdChecksum;
 use crate::secondary_validation::lithuanian_personal_identification_number_checksum::LithuanianPersonalIdentificationNumberChecksum;
 pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
 pub use crate::secondary_validation::luxembourg_individual_nin_checksum::LuxembourgIndividualNINChecksum;
@@ -59,6 +64,7 @@ pub use crate::secondary_validation::portuguese_tax_id_checksum::PortugueseTaxId
 pub use crate::secondary_validation::romanian_personal_numeric_code::RomanianPersonalNumericCode;
 pub use crate::secondary_validation::slovenian_pin_checksum::SlovenianPINChecksum;
 pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
+pub use crate::secondary_validation::sweden_pin_checksum::SwedenPINChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
 use std::str::Chars;
 
@@ -81,6 +87,18 @@ fn get_next_digit(chars: &mut Chars<'_>) -> Option<u32> {
         }
     }
     None
+}
+
+/// Sum all the digits from a number
+#[inline]
+fn sum_all_digits(digits: u32) -> u32 {
+    let mut sum = 0;
+    let mut num = digits;
+    while num > 0 {
+        sum += num % 10;
+        num /= 10;
+    }
+    sum
 }
 
 impl Validator for SecondaryValidator {
@@ -126,8 +144,13 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::LuxembourgIndividualNINChecksum => {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
-            SecondaryValidator::GermanSvnrChecksum => {
-                GermanSvnrChecksum.is_valid_match(regex_match)
+            SecondaryValidator::GermanSvnrChecksum => GermanSvnrChecksum.is_valid_match(regex_match),
+            SecondaryValidator::SwedenPINChecksum => SwedenPINChecksum.is_valid_match(regex_match),
+            SecondaryValidator::LatviaNationalIdChecksum => {
+                LatviaNationalIdChecksum.is_valid_match(regex_match)
+            }
+            SecondaryValidator::CoordinationNumberChecksum => {
+                CoordinationNumberChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::LithuanianPersonalIdentificationNumberChecksum => {
                 LithuanianPersonalIdentificationNumberChecksum.is_valid_match(regex_match)
