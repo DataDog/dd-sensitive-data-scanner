@@ -25,6 +25,7 @@ mod portuguese_tax_id_checksum;
 mod romanian_personal_numeric_code;
 mod slovenian_pin_checksum;
 mod spain_dni_checksum;
+mod sweden_pin_checksum;
 mod verhoeff_checksum;
 
 #[cfg(test)]
@@ -61,6 +62,7 @@ pub use crate::secondary_validation::portuguese_tax_id_checksum::PortugueseTaxId
 pub use crate::secondary_validation::romanian_personal_numeric_code::RomanianPersonalNumericCode;
 pub use crate::secondary_validation::slovenian_pin_checksum::SlovenianPINChecksum;
 pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
+pub use crate::secondary_validation::sweden_pin_checksum::SwedenPINChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
 use std::str::Chars;
 
@@ -83,6 +85,18 @@ fn get_next_digit(chars: &mut Chars<'_>) -> Option<u32> {
         }
     }
     None
+}
+
+/// Sum all the digits from a number
+#[inline]
+fn sum_all_digits(digits: u32) -> u32 {
+    let mut sum = 0;
+    let mut num = digits;
+    while num > 0 {
+        sum += num % 10;
+        num /= 10;
+    }
+    sum
 }
 
 impl Validator for SecondaryValidator {
@@ -128,6 +142,8 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::LuxembourgIndividualNINChecksum => {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
+
+            SecondaryValidator::SwedenPINChecksum => SwedenPINChecksum.is_valid_match(regex_match),
             SecondaryValidator::LatviaNationalIdChecksum => {
                 LatviaNationalIdChecksum.is_valid_match(regex_match)
             }
