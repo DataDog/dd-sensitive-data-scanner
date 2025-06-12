@@ -3,6 +3,7 @@ mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
 mod chinese_id_checksum;
 mod coordination_number_checksum;
+mod czech_pin_checksum;
 mod finnish_hetu_checksum;
 mod france_ssn_checksum;
 mod german_ids_checksum;
@@ -27,7 +28,6 @@ mod slovenian_pin_checksum;
 mod spain_dni_checksum;
 mod sweden_pin_checksum;
 mod verhoeff_checksum;
-mod czech_pin_checksum;
 #[cfg(test)]
 pub use jwt_expiration_checker::generate_jwt;
 
@@ -37,6 +37,7 @@ pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjCheck
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::coordination_number_checksum::CoordinationNumberChecksum;
+pub use crate::secondary_validation::czech_pin_checksum::CzechAndSlovakPersonalIdentificationNumberChecksum;
 pub use crate::secondary_validation::finnish_hetu_checksum::FinnishHetuChecksum;
 pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
 pub use crate::secondary_validation::german_ids_checksum::GermanIdsChecksum;
@@ -64,7 +65,6 @@ pub use crate::secondary_validation::slovenian_pin_checksum::SlovenianPINChecksu
 pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
 pub use crate::secondary_validation::sweden_pin_checksum::SwedenPINChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
-pub use crate::secondary_validation::czech_pin_checksum::CzechPersonalIdentificationNumberChecksum;
 use std::str::Chars;
 
 pub trait Validator: Send + Sync {
@@ -144,8 +144,8 @@ impl Validator for SecondaryValidator {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::CzechPersonalIdentificationNumberChecksum => {
-                CzechPersonalIdentificationNumberChecksum.is_valid_match(regex_match)
-            }  
+                CzechAndSlovakPersonalIdentificationNumberChecksum.is_valid_match(regex_match)
+            }
             SecondaryValidator::SwedenPINChecksum => SwedenPINChecksum.is_valid_match(regex_match),
             SecondaryValidator::LatviaNationalIdChecksum => {
                 LatviaNationalIdChecksum.is_valid_match(regex_match)

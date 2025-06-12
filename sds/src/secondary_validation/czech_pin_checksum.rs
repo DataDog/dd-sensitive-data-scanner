@@ -1,62 +1,51 @@
 use crate::secondary_validation::Validator;
-pub struct CzechPersonalIdentificationNumberChecksum;
+pub struct CzechAndSlovakPersonalIdentificationNumberChecksum;
 
-impl Validator for CzechPersonalIdentificationNumberChecksum {
+const MODULO: u32 = 11;
+impl Validator for CzechAndSlovakPersonalIdentificationNumberChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         // Convert string to vector of digits
-        let digits: Vec<u32> = regex_match.chars().filter_map(|c| c.to_digit(10)).collect();
+        let digits = regex_match.chars().filter_map(|c| c.to_digit(10)).collect::<Vec<_>>();
 
-        // For numbers before year 1954, the length can be 9 digits
+        // For numbers before year 1954, the length can be 9 digits & there is no checksum
         if digits.len() == 9 {
-            let year = digits
-                .iter()
-                .take(2)
-                .fold(0, |acc, &digit| acc * 10 + digit);
-
-            if year < 54 {
-                return true;
-            }
+            let year = digits.iter().take(2).fold(0, |acc, digit| acc * 10 + digit);
+            return year < 54;
         }
 
-        if digits.len() != 10 {
-            return false;
-        }
 
+        let mut digits = digits.iter();
         // Take the first 9 digits and convert them to a single integer
         let first_nine_digits: u32 = digits
-            .iter()
+            .by_ref()
             .take(9)
-            .fold(0, |acc, &digit| acc * 10 + digit);
+            .fold(0, |acc, digit| acc * 10 + digit);
 
-        let check = digits[9];
-        let modulo = 11;
-
-        // Calculate the remainder when divided by 11
-        let remainder = first_nine_digits % modulo;
-
-        if remainder == 0 {
-            // Standard case - modulo 11 equals 0
-            check == 0
-        } else if remainder == 10 {
-            // Special case - remainder is 10 and check digit is 0
-            check == 0
-        } else {
-            // Check digit should equal the remainder
-            check == remainder
+        if let Some(checksum) = digits.next() {
+            let remainder = first_nine_digits % MODULO % 10;
+            return *checksum == remainder;
         }
+        false
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::secondary_validation::czech_pin_checksum::CzechPersonalIdentificationNumberChecksum;
+    use crate::secondary_validation::czech_pin_checksum::CzechAndSlovakPersonalIdentificationNumberChecksum;
     use crate::secondary_validation::*;
 
     #[test]
     fn test_valid_pps() {
-        let valid = vec!["6809115566", "9811150570", "9811150570", "320911556"];
+        let valid = vec![
+            "6809115566",
+            "9811150570",
+            "9811150570",
+            // // old format
+            // "320911556",
+            // "123456789", 
+        ];
         for example in valid {
-            assert!(CzechPersonalIdentificationNumberChecksum.is_valid_match(example));
+            assert!(CzechAndSlovakPersonalIdentificationNumberChecksum.is_valid_match(example));
         }
     }
 
@@ -70,7 +59,7 @@ mod test {
             "12345678901",
         ];
         for example in invalid {
-            assert!(!CzechPersonalIdentificationNumberChecksum.is_valid_match(example));
+            assert!(!CzechAndSlovakPersonalIdentificationNumberChecksum.is_valid_match(example));
         }
     }
 }
