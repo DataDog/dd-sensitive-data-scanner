@@ -24,12 +24,12 @@ mod luxembourg_individual_nin_checksum;
 mod nhs_check_digit;
 mod nir_checksum;
 mod polish_national_id_checksum;
-mod spanish_nuss_checksum;
 mod polish_nip_checksum;
 mod portuguese_tax_id_checksum;
 mod romanian_personal_numeric_code;
 mod slovenian_pin_checksum;
 mod spain_dni_checksum;
+mod spanish_nuss_checksum;
 mod sweden_pin_checksum;
 mod verhoeff_checksum;
 
@@ -66,12 +66,12 @@ pub use crate::secondary_validation::luxembourg_individual_nin_checksum::Luxembo
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 pub use crate::secondary_validation::nir_checksum::NirChecksum;
 pub use crate::secondary_validation::polish_national_id_checksum::PolishNationalIdChecksum;
-pub use crate::secondary_validation::spanish_nuss_checksum::SpanishNussChecksum;
 pub use crate::secondary_validation::polish_nip_checksum::PolishNipChecksum;
 pub use crate::secondary_validation::portuguese_tax_id_checksum::PortugueseTaxIdChecksum;
 pub use crate::secondary_validation::romanian_personal_numeric_code::RomanianPersonalNumericCode;
 pub use crate::secondary_validation::slovenian_pin_checksum::SlovenianPINChecksum;
 pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
+pub use crate::secondary_validation::spanish_nuss_checksum::SpanishNussChecksum;
 pub use crate::secondary_validation::sweden_pin_checksum::SwedenPINChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
 use std::str::Chars;
@@ -152,7 +152,9 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::LuxembourgIndividualNINChecksum => {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
-            SecondaryValidator::SpanishNussChecksum => SpanishNussChecksum.is_valid_match(regex_match),
+            SecondaryValidator::SpanishNussChecksum => {
+                SpanishNussChecksum.is_valid_match(regex_match)
+            }
             SecondaryValidator::DutchPassportChecksum => {
                 DutchPassportChecksum.is_valid_match(regex_match)
             }
