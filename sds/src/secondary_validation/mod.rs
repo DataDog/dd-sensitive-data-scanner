@@ -13,6 +13,7 @@ mod irish_pps_checksum;
 mod iso_7064_checksum;
 mod italian_national_id_checksum;
 mod jwt_expiration_checker;
+mod latvia_national_id_checksum;
 mod lithuanian_personal_identification_number_checksum;
 mod luhn_checksum;
 mod luxembourg_individual_nin_checksum;
@@ -48,6 +49,7 @@ pub use crate::secondary_validation::iso_7064_checksum::{
 };
 pub use crate::secondary_validation::italian_national_id_checksum::ItalianNationalIdChecksum;
 pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecker;
+pub use crate::secondary_validation::latvia_national_id_checksum::LatviaNationalIdChecksum;
 use crate::secondary_validation::lithuanian_personal_identification_number_checksum::LithuanianPersonalIdentificationNumberChecksum;
 pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
 pub use crate::secondary_validation::luxembourg_individual_nin_checksum::LuxembourgIndividualNINChecksum;
@@ -125,6 +127,9 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::PolishNipChecksum => PolishNipChecksum.is_valid_match(regex_match),
             SecondaryValidator::LuxembourgIndividualNINChecksum => {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
+            }
+            SecondaryValidator::LatviaNationalIdChecksum => {
+                LatviaNationalIdChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::CoordinationNumberChecksum => {
                 CoordinationNumberChecksum.is_valid_match(regex_match)
