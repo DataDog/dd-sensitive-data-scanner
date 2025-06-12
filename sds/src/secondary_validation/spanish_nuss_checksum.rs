@@ -17,12 +17,13 @@ impl Validator for SpanishNussChecksum {
          * 2. Calculate the remainder when divided by 97
          * 3. The checksum is the remainder (2 digits)
          */
-        if regex_match.len() != NUSS_LENGTH {
-            return false;
-        }
 
         // Check if all characters are digits
         if !regex_match.chars().all(|c| c.is_ascii_digit()) {
+            return false;
+        }
+
+        if regex_match.len() != NUSS_LENGTH {
             return false;
         }
 
@@ -31,13 +32,22 @@ impl Validator for SpanishNussChecksum {
         let checksum_part = &regex_match[NUMBER_LENGTH..];
 
         // Parse the number and checksum
-        let number: u32 = number_part.parse().unwrap();
-        let checksum: u32 = checksum_part.parse().unwrap();
+        // A 10-digit number does not fit in a u32, u64 is used.
+        let number: u64 = if let Ok(x) = number_part.parse() {
+            x
+        } else {
+            return false;
+        };
+
+        let checksum: u32 = if let Ok(x) = checksum_part.parse() {
+            x
+        } else {
+            return false;
+        };
 
         // Calculate expected checksum
         let expected_checksum = number % 97;
-
-        checksum == expected_checksum
+        checksum == (expected_checksum as u32)
     }
 }
 
@@ -51,6 +61,7 @@ mod test {
             "281234567840", // Example valid NUSS
             "281294567895", // Example valid NUSS
             "281234577843", // Example valid NUSS
+            "981234577887", // Large value that will overflow a u32
         ];
 
         for nuss in valid_nuss {
