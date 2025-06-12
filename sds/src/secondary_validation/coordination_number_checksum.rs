@@ -7,17 +7,15 @@ const COORDINATION_NUMBER_LENGTH: usize = 10;
 impl Validator for CoordinationNumberChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         // https://docs.swedenconnect.se/technical-framework/mirror/skv/skv707-2.pdf
-        let valid_chars = regex_match.chars().filter(|c| c.is_ascii_digit());
-        // convert each char in the regex match to a number
-        let mut numbers: Vec<char> = valid_chars.filter(|c| c.is_ascii_digit()).collect();
+        let mut valid_chars: Vec<char> =
+            regex_match.chars().filter(|c| c.is_ascii_digit()).collect();
 
-        if numbers.len() > COORDINATION_NUMBER_LENGTH {
+        if valid_chars.len() > COORDINATION_NUMBER_LENGTH {
             // take the last 10 digits
-            numbers = numbers[numbers.len() - COORDINATION_NUMBER_LENGTH..].to_vec();
+            valid_chars = valid_chars[valid_chars.len() - COORDINATION_NUMBER_LENGTH..].to_vec();
         }
 
-        // the rest is luhn checksum
-        LuhnChecksum.is_valid_match(numbers.iter().collect::<String>().as_str())
+        LuhnChecksum.is_valid_match(valid_chars.iter().collect::<String>().as_str())
     }
 }
 
