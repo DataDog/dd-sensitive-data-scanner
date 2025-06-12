@@ -21,7 +21,7 @@ impl Validator for HungarianTinChecksum {
             .map(|(i, n)| n * (i as u32 + 1))
             .sum();
         let checksum = sum % 11;
-        return checksum == numbers[numbers.len() - 1];
+        checksum == numbers[numbers.len() - 1]
     }
 }
 
