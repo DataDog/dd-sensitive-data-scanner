@@ -3,7 +3,7 @@ mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
 mod chinese_id_checksum;
 mod coordination_number_checksum;
-mod czech_pin_checksum;
+mod rodne_cislo_checksum;
 mod finnish_hetu_checksum;
 mod france_ssn_checksum;
 mod german_ids_checksum;
@@ -37,7 +37,7 @@ pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjCheck
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::coordination_number_checksum::CoordinationNumberChecksum;
-pub use crate::secondary_validation::czech_pin_checksum::CzechAndSlovakPersonalIdentificationNumberChecksum;
+pub use crate::secondary_validation::rodne_cislo_checksum::RodneCisloNumberChecksum;
 pub use crate::secondary_validation::finnish_hetu_checksum::FinnishHetuChecksum;
 pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
 pub use crate::secondary_validation::german_ids_checksum::GermanIdsChecksum;
@@ -144,7 +144,7 @@ impl Validator for SecondaryValidator {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::CzechPersonalIdentificationNumberChecksum => {
-                CzechAndSlovakPersonalIdentificationNumberChecksum.is_valid_match(regex_match)
+                RodneCisloNumberChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::SwedenPINChecksum => SwedenPINChecksum.is_valid_match(regex_match),
             SecondaryValidator::LatviaNationalIdChecksum => {

@@ -1,8 +1,8 @@
 use crate::secondary_validation::Validator;
-pub struct CzechAndSlovakPersonalIdentificationNumberChecksum;
+pub struct RodneCisloNumberChecksum;
 
 const MODULO: u32 = 11;
-impl Validator for CzechAndSlovakPersonalIdentificationNumberChecksum {
+impl Validator for RodneCisloNumberChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         // Convert string to vector of digits
         let digits = regex_match.chars().filter_map(|c| c.to_digit(10)).collect::<Vec<_>>();
@@ -31,7 +31,7 @@ impl Validator for CzechAndSlovakPersonalIdentificationNumberChecksum {
 
 #[cfg(test)]
 mod test {
-    use crate::secondary_validation::czech_pin_checksum::CzechAndSlovakPersonalIdentificationNumberChecksum;
+    use crate::secondary_validation::rodne_cislo_checksum::RodneCisloNumberChecksum;
     use crate::secondary_validation::*;
 
     #[test]
@@ -45,7 +45,7 @@ mod test {
             // "123456789", 
         ];
         for example in valid {
-            assert!(CzechAndSlovakPersonalIdentificationNumberChecksum.is_valid_match(example));
+            assert!(RodneCisloNumberChecksum.is_valid_match(example));
         }
     }
 
@@ -59,7 +59,7 @@ mod test {
             "12345678901",
         ];
         for example in invalid {
-            assert!(!CzechAndSlovakPersonalIdentificationNumberChecksum.is_valid_match(example));
+            assert!(!RodneCisloNumberChecksum.is_valid_match(example));
         }
     }
 }
