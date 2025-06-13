@@ -21,7 +21,7 @@ impl Validator for DutchPassportChecksum {
             sum += value * weight;
         }
 
-        if let Some(checksum) = chars.next().map(|c| c.to_digit(10)).flatten() {
+        if let Some(checksum) = chars.next().and_then(|c| c.to_digit(10)) {
             return checksum == sum % 10;
         }
         false

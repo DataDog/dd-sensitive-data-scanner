@@ -5,14 +5,16 @@ const MODULO: u32 = 11;
 impl Validator for RodneCisloNumberChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         // Convert string to vector of digits
-        let digits = regex_match.chars().filter_map(|c| c.to_digit(10)).collect::<Vec<_>>();
+        let digits = regex_match
+            .chars()
+            .filter_map(|c| c.to_digit(10))
+            .collect::<Vec<_>>();
 
         // For numbers before year 1954, the length can be 9 digits & there is no checksum
         if digits.len() == 9 {
             let year = digits.iter().take(2).fold(0, |acc, digit| acc * 10 + digit);
             return year < 54;
         }
-
 
         let mut digits = digits.iter();
         // Take the first 9 digits and convert them to a single integer
@@ -42,7 +44,7 @@ mod test {
             "9811150570",
             // // old format
             // "320911556",
-            // "123456789", 
+            // "123456789",
         ];
         for example in valid {
             assert!(RodneCisloNumberChecksum.is_valid_match(example));
