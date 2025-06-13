@@ -3,7 +3,6 @@ mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
 mod chinese_id_checksum;
 mod coordination_number_checksum;
-mod rodne_cislo_checksum;
 mod dutch_bsn_checksum;
 mod dutch_passport_checksum;
 mod finnish_hetu_checksum;
@@ -12,8 +11,8 @@ mod france_ssn_checksum;
 mod german_ids_checksum;
 mod german_svnr_checksum;
 mod github_token_checksum;
-mod hungarian_tin_checksum;
 mod greece_tin_checksum;
+mod hungarian_tin_checksum;
 mod iban_checker;
 mod irish_pps_checksum;
 mod iso_7064_checksum;
@@ -28,6 +27,7 @@ mod nir_checksum;
 mod polish_national_id_checksum;
 mod polish_nip_checksum;
 mod portuguese_tax_id_checksum;
+mod rodne_cislo_checksum;
 mod romanian_personal_numeric_code;
 mod slovenian_pin_checksum;
 mod spain_dni_checksum;
@@ -43,7 +43,6 @@ pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjCheck
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::coordination_number_checksum::CoordinationNumberChecksum;
-pub use crate::secondary_validation::rodne_cislo_checksum::RodneCisloNumberChecksum;
 pub use crate::secondary_validation::dutch_bsn_checksum::DutchDsnChecksum;
 pub use crate::secondary_validation::dutch_passport_checksum::DutchPassportChecksum;
 pub use crate::secondary_validation::finnish_hetu_checksum::FinnishHetuChecksum;
@@ -52,8 +51,8 @@ pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
 pub use crate::secondary_validation::german_ids_checksum::GermanIdsChecksum;
 pub use crate::secondary_validation::german_svnr_checksum::GermanSvnrChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
-pub use crate::secondary_validation::hungarian_tin_checksum::HungarianTinChecksum;
 pub use crate::secondary_validation::greece_tin_checksum::GreekTinChecksum;
+pub use crate::secondary_validation::hungarian_tin_checksum::HungarianTinChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
 pub use crate::secondary_validation::irish_pps_checksum::IrishPpsChecksum;
 pub use crate::secondary_validation::iso_7064_checksum::{
@@ -71,6 +70,7 @@ pub use crate::secondary_validation::nir_checksum::NirChecksum;
 pub use crate::secondary_validation::polish_national_id_checksum::PolishNationalIdChecksum;
 pub use crate::secondary_validation::polish_nip_checksum::PolishNipChecksum;
 pub use crate::secondary_validation::portuguese_tax_id_checksum::PortugueseTaxIdChecksum;
+pub use crate::secondary_validation::rodne_cislo_checksum::RodneCisloNumberChecksum;
 pub use crate::secondary_validation::romanian_personal_numeric_code::RomanianPersonalNumericCode;
 pub use crate::secondary_validation::slovenian_pin_checksum::SlovenianPINChecksum;
 pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
@@ -155,7 +155,6 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::LuxembourgIndividualNINChecksum => {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
-            SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
             SecondaryValidator::HungarianTinChecksum => {
                 HungarianTinChecksum.is_valid_match(regex_match)
             }
