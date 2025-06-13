@@ -12,6 +12,7 @@ mod german_ids_checksum;
 mod german_svnr_checksum;
 mod github_token_checksum;
 mod greece_tin_checksum;
+mod hungarian_tin_checksum;
 mod iban_checker;
 mod irish_pps_checksum;
 mod iso_7064_checksum;
@@ -51,6 +52,7 @@ pub use crate::secondary_validation::german_ids_checksum::GermanIdsChecksum;
 pub use crate::secondary_validation::german_svnr_checksum::GermanSvnrChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
 pub use crate::secondary_validation::greece_tin_checksum::GreekTinChecksum;
+pub use crate::secondary_validation::hungarian_tin_checksum::HungarianTinChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
 pub use crate::secondary_validation::irish_pps_checksum::IrishPpsChecksum;
 pub use crate::secondary_validation::iso_7064_checksum::{
@@ -152,6 +154,9 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::PolishNipChecksum => PolishNipChecksum.is_valid_match(regex_match),
             SecondaryValidator::LuxembourgIndividualNINChecksum => {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
+            }
+            SecondaryValidator::HungarianTinChecksum => {
+                HungarianTinChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::CzechPersonalIdentificationNumberChecksum => {
                 RodneCisloNumberChecksum.is_valid_match(regex_match)
