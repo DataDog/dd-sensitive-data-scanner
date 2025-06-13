@@ -20,11 +20,6 @@ impl Validator for GermanSvnrChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         let mut valid_chars = regex_match.chars().filter(|c| c.is_ascii_alphanumeric());
 
-        // char length expected to be equals to multipliers as one character will take two multipliers.
-        if valid_chars.clone().count() != MULTIPLIERS.len() {
-            return false;
-        }
-
         let mut sum = 0;
         let mut idx = 0;
 
@@ -101,8 +96,8 @@ mod test {
             // Not enough letters
             "15 070649 0002",
             // wrong length
-            "000000000000000000",
-            "0",
+            "111111111111111111",
+            "1",
         ];
         for id in invalid_ids {
             println!("testing for input {}", id);

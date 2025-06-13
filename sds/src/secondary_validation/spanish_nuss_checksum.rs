@@ -2,8 +2,8 @@ use crate::secondary_validation::Validator;
 
 pub struct SpanishNussChecksum;
 
-const NUSS_LENGTH: usize = 12;
-const NUMBER_LENGTH: usize = 10;
+const NUSS_LENGTH: usize = 12;const NUMBER_LENGTH: usize = 10;
+const CHECKSUM_LENGTH: usize = 2;
 
 impl Validator for SpanishNussChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
@@ -23,23 +23,18 @@ impl Validator for SpanishNussChecksum {
             return false;
         }
 
-        if regex_match.len() != NUSS_LENGTH {
-            return false;
-        }
-
-        // Get the number and checksum parts
-        let number_part = &regex_match[..NUMBER_LENGTH];
-        let checksum_part = &regex_match[NUMBER_LENGTH..];
+        let mut digits_stream = regex_match.chars().filter(|c| c.is_ascii_digit());
+    
 
         // Parse the number and checksum
         // A 10-digit number does not fit in a u32, u64 is used.
-        let number: u64 = if let Ok(x) = number_part.parse() {
+        let number: u64 = if let Ok(x) = digits_stream.by_ref().take(NUMBER_LENGTH).collect::<String>().parse() {
             x
         } else {
             return false;
         };
 
-        let checksum: u32 = if let Ok(x) = checksum_part.parse() {
+        let checksum: u32 = if let Ok(x) = digits_stream.take(CHECKSUM_LENGTH).collect::<String>().parse() {
             x
         } else {
             return false;
