@@ -34,6 +34,7 @@ mod spain_dni_checksum;
 mod spanish_nuss_checksum;
 mod sweden_pin_checksum;
 mod verhoeff_checksum;
+mod czech_tin_checksum;
 #[cfg(test)]
 pub use jwt_expiration_checker::generate_jwt;
 
@@ -77,6 +78,7 @@ pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
 pub use crate::secondary_validation::spanish_nuss_checksum::SpanishNussChecksum;
 pub use crate::secondary_validation::sweden_pin_checksum::SwedenPINChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
+pub use crate::secondary_validation::czech_tin_checksum::CzechTaxIdentificationNumberChecksum;
 use std::str::Chars;
 
 pub trait Validator: Send + Sync {
@@ -155,6 +157,8 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::LuxembourgIndividualNINChecksum => {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
+            SecondaryValidator::CzechTaxIdentificationNumberChecksum => {
+                CzechTaxIdentificationNumberChecksum.is_valid_match(regex_match)
             SecondaryValidator::HungarianTinChecksum => {
                 HungarianTinChecksum.is_valid_match(regex_match)
             }
