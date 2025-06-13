@@ -1,61 +1,47 @@
-use crate::secondary_validation::Validator;
+use crate::secondary_validation::{RodneCisloNumberChecksum, Validator};
+use nom::lib::std::cmp::max;
 pub struct CzechTaxIdentificationNumberChecksum;
 
 impl Validator for CzechTaxIdentificationNumberChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
-        // Remove "CZ" or "cz" prefix if present
-        let cleaned_match = regex_match.trim_start().to_lowercase();
-        let cleaned_match = if cleaned_match.starts_with("cz") {
-            cleaned_match.trim_start_matches("cz").trim()
-        } else {
-            cleaned_match.as_str()
-        };
-
-        // Convert string to vector of digits
-        let digits: Vec<u32> = cleaned_match
+        let digits = regex_match
             .chars()
             .filter_map(|c| c.to_digit(10))
-            .collect();
+            .collect::<Vec<u32>>();
 
-        // For numbers before year 1954, the length can be 9 digits
-        if digits.len() == 9 {
-            let year = digits
-                .iter()
-                .take(2)
-                .fold(0, |acc, &digit| acc * 10 + digit);
-
-            if year < 54 {
-                return true;
-            }
+        // legal entities
+        if digits.len() == 8 {
+            let mut digits = digits.iter();
+            return has_valid_checksum(&mut digits, |sum| max(sum, 1) % 10);
         }
 
-        if digits.len() != 10 {
-            return false;
+        // individuals without a RČ
+        if digits.len() == 9 && digits[0] == 6 {
+            let mut digits = digits.iter().skip(1);
+            return has_valid_checksum(&mut digits, |sum| (8 - ((10 - sum) % 11)) % 10);
         }
 
-        // Take the first 9 digits and convert them to a single integer
-        let first_nine_digits: u32 = digits
-            .iter()
-            .take(9)
-            .fold(0, |acc, &digit| acc * 10 + digit);
-
-        let check = digits[9];
-        let modulo = 11;
-
-        // Calculate the remainder when divided by 11
-        let remainder = first_nine_digits % modulo;
-
-        if remainder == 0 {
-            // Standard case - modulo 11 equals 0
-            check == 0
-        } else if remainder == 10 {
-            // Special case - remainder is 10 and check digit is 0
-            check == 0
-        } else {
-            // Check digit should equal the remainder
-            check == remainder
-        }
+        RodneCisloNumberChecksum.is_valid_match(regex_match)
     }
+}
+
+fn has_valid_checksum<'a>(
+    digits: &mut impl Iterator<Item = &'a u32>,
+    sum_to_checksum: fn(u32) -> u32,
+) -> bool {
+    let sum = digits
+        .by_ref()
+        .take(7)
+        .enumerate()
+        .fold(0, |acc, (i, digit)| acc + (8 - i) as u32 * digit)
+        % 11;
+
+    let checksum = match digits.next() {
+        Some(digit) => digit,
+        None => return false,
+    };
+
+    sum_to_checksum(sum) == *checksum
 }
 
 #[cfg(test)]
@@ -65,7 +51,16 @@ mod test {
 
     #[test]
     fn test_valid_pps() {
-        let valid = vec!["6809115566", "9811150570", "cz9811150570", "CZ 320911556"];
+        let valid = vec![
+            // 8 digits
+            "CZ 251238/91",
+            // 9 digits special case
+            "CZ 640903/926",
+            // 10 digits
+            "6809115566",
+            "9811150570",
+            "CZ 710319/2745",
+        ];
         for example in valid {
             assert!(CzechTaxIdentificationNumberChecksum.is_valid_match(example));
         }
@@ -76,6 +71,7 @@ mod test {
         let invalid = vec![
             // wrong checksum
             "9909116450",
+            "25123890",
             // wrong length
             "12345678",
             "12345678901",
