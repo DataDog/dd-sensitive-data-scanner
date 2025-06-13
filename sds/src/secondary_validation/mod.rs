@@ -3,6 +3,7 @@ mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
 mod chinese_id_checksum;
 mod coordination_number_checksum;
+mod czech_tin_checksum;
 mod dutch_bsn_checksum;
 mod dutch_passport_checksum;
 mod finnish_hetu_checksum;
@@ -34,7 +35,6 @@ mod spain_dni_checksum;
 mod spanish_nuss_checksum;
 mod sweden_pin_checksum;
 mod verhoeff_checksum;
-mod czech_tin_checksum;
 #[cfg(test)]
 pub use jwt_expiration_checker::generate_jwt;
 
@@ -44,6 +44,7 @@ pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjCheck
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::coordination_number_checksum::CoordinationNumberChecksum;
+pub use crate::secondary_validation::czech_tin_checksum::CzechTaxIdentificationNumberChecksum;
 pub use crate::secondary_validation::dutch_bsn_checksum::DutchDsnChecksum;
 pub use crate::secondary_validation::dutch_passport_checksum::DutchPassportChecksum;
 pub use crate::secondary_validation::finnish_hetu_checksum::FinnishHetuChecksum;
@@ -78,7 +79,6 @@ pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
 pub use crate::secondary_validation::spanish_nuss_checksum::SpanishNussChecksum;
 pub use crate::secondary_validation::sweden_pin_checksum::SwedenPINChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
-pub use crate::secondary_validation::czech_tin_checksum::CzechTaxIdentificationNumberChecksum;
 use std::str::Chars;
 
 pub trait Validator: Send + Sync {
@@ -159,6 +159,7 @@ impl Validator for SecondaryValidator {
             }
             SecondaryValidator::CzechTaxIdentificationNumberChecksum => {
                 CzechTaxIdentificationNumberChecksum.is_valid_match(regex_match)
+            }
             SecondaryValidator::HungarianTinChecksum => {
                 HungarianTinChecksum.is_valid_match(regex_match)
             }
