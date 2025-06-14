@@ -61,6 +61,8 @@ httpmock = "0.7.0"
 tokio = { version = "1", features = ["full"] }
 dd-sds = { path = ".", features = ["bench"] }
 threadpool = "1.8.1"
+tokio-shared-rt = "0.1.0"
+
 
 [[bench]]
 name = "bench"
