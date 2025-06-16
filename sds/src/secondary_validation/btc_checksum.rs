@@ -1,184 +1,22 @@
 use crate::secondary_validation::Validator;
-use sha2::{Digest, Sha256};
-use std::collections::HashMap;
-
-use crate::secondary_validation::base58::decode_base58;
+use bitcoin::{Address, Network};
+use std::str::FromStr;
 
 pub struct BtcChecksum;
 
-const BECH32_CHARSET: &str = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-const BECH32_CONST: u32 = 1;
-const BECH32M_CONST: u32 = 0x2bc830a3;
-const BASE58_CHECKSUM_LENGTH: usize = 4;
-
-use lazy_static::lazy_static;
-
-lazy_static! {
-    static ref BECH32_MAP: HashMap<char, u8> = {
-        let mut m = HashMap::new();
-        for (i, c) in BECH32_CHARSET.chars().enumerate() {
-            m.insert(c, i as u8);
-        }
-        m
-    };
-}
-
 impl Validator for BtcChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
-        // Strip any whitespace and convert to bytes for validation
+        // Strip any whitespace or separators
         let clean_input = regex_match
             .chars()
             .filter(|c| c.is_alphanumeric())
             .collect::<String>();
 
-        if clean_input
-            .chars()
-            .next()
-            .filter(|c| c.is_ascii_digit())
-            .is_some()
-        {
-            return decode_base58_check(&clean_input);
-        }
-        bech32_check(&clean_input)
+        let address = Address::from_str(&clean_input);
+        address.is_ok_and(|addr| addr.is_valid_for_network(Network::Bitcoin))
     }
 }
 
-/// Decode a Base58Check encoded string
-fn decode_base58_check(input: &str) -> bool {
-    // https://github.com/bitcoin/bips/blob/master/bip-0013.mediawiki
-    // First decode the base58 string
-    let decoded = match decode_base58(input) {
-        Ok(decoded) => decoded,
-        Err(_) => return false,
-    };
-
-    // Check minimum length (payload + 4 byte checksum)
-    if decoded.len() < BASE58_CHECKSUM_LENGTH {
-        return false;
-    }
-
-    // Split payload and checksum
-    let (payload, checksum) = decoded.split_at(decoded.len() - BASE58_CHECKSUM_LENGTH);
-
-    // Calculate double SHA256 hash of payload
-    let hash1 = Sha256::digest(payload);
-    let hash2 = Sha256::digest(hash1);
-
-    // Compare first 4 bytes of hash with provided checksum
-    &hash2[0..4] == checksum
-}
-
-fn bech32_check(input: &str) -> bool {
-    if let Some(bech32_spec) = bech32_decode(input) {
-        if let Some(fourth_char) = input.chars().nth(3) {
-            return bech32_spec
-                .get_fourth_char()
-                .eq_ignore_ascii_case(&fourth_char);
-        }
-    }
-    false
-}
-
-#[derive(Debug, PartialEq)]
-enum Bech32Spec {
-    Bech32,
-    Bech32m,
-}
-
-impl Bech32Spec {
-    fn get_fourth_char(&self) -> char {
-        match self {
-            Bech32Spec::Bech32 => 'q',
-            Bech32Spec::Bech32m => 'p',
-        }
-    }
-}
-
-/// Decode a Bech32/Bech32m string and determine HRP and data
-fn bech32_decode(input: &str) -> Option<Bech32Spec> {
-    // https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
-    // https://github.com/bitcoin/bips/blob/master/bip-0350.mediawiki
-    // Check case consistency
-    let has_lower = input.chars().any(|c| c.is_lowercase());
-    let has_upper = input.chars().any(|c| c.is_uppercase());
-    if has_lower && has_upper {
-        return None;
-    }
-
-    let bech = input.to_lowercase();
-
-    let parts: Vec<&str> = bech.rsplitn(2, '1').collect();
-    let hrp = parts[1];
-    let data_part = parts[0];
-    if hrp.is_empty() || data_part.len() < 6 {
-        return None;
-    }
-
-    let mut data: Vec<u8> = vec![];
-    for c in data_part.chars() {
-        if let Some(value) = BECH32_MAP.get(&c) {
-            data.push(*value);
-        } else {
-            return None;
-        }
-    }
-    bech32_verify_checksum(hrp, &data)
-}
-
-/// Verify a Bech32 checksum given HRP and converted data characters
-fn bech32_verify_checksum(hrp: &str, data: &[u8]) -> Option<Bech32Spec> {
-    let mut values = bech32_hrp_expand(hrp);
-    values.extend_from_slice(data);
-
-    let const_value = bech32_poly_mod(&values);
-
-    if const_value == BECH32_CONST {
-        Some(Bech32Spec::Bech32)
-    } else if const_value == BECH32M_CONST {
-        Some(Bech32Spec::Bech32m)
-    } else {
-        None
-    }
-}
-
-/// Expand the HRP into values for checksum computation
-fn bech32_hrp_expand(hrp: &str) -> Vec<u8> {
-    let mut result = Vec::new();
-
-    // High bits
-    for c in hrp.chars() {
-        result.push((c as u8) >> 5);
-    }
-
-    result.push(0);
-
-    // Low bits
-    for c in hrp.chars() {
-        result.push((c as u8) & 31);
-    }
-
-    result
-}
-
-/// Compute the Bech32 checksum
-fn bech32_poly_mod(values: &[u8]) -> u32 {
-    const GENERATOR: [u32; 5] = [0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3];
-
-    let mut chk: u32 = 1;
-
-    for &value in values {
-        let top = chk >> 25;
-        chk = (chk & 0x1FFFFFF) << 5 ^ (value as u32);
-
-        for (idx, value) in GENERATOR.iter().enumerate() {
-            if (top >> idx) & 1 != 0 {
-                chk ^= value;
-            }
-        }
-    }
-
-    chk
-}
 #[cfg(test)]
 mod test {
     use crate::secondary_validation::*;
@@ -277,8 +115,8 @@ mod test {
         assert!(BtcChecksum
             .is_valid_match("bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0"));
 
-        // Testnet addresses
-        assert!(BtcChecksum.is_valid_match("tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"));
+        // Invalid: Testnet addresses
+        assert!(!BtcChecksum.is_valid_match("tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"));
 
         // Invalid: mixed case
         assert!(!BtcChecksum.is_valid_match("bc1QW508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"));

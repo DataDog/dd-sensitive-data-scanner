@@ -12,6 +12,10 @@ aws-sign-v4,https://github.com/psnszsn/aws-sign-v4,BSD-2-Clause,"Vlad Pănăzan 
 backtrace,https://github.com/rust-lang/backtrace-rs,MIT OR Apache-2.0,The Rust Project Developers
 base62,https://github.com/fbernier/base62,MIT,"François Bernier <frankbernier@gmail.com>, Chai T. Rex <ChaiTRex@users.noreply.github.com>"
 base64,https://github.com/marshallpierce/rust-base64,MIT OR Apache-2.0,Marshall Pierce <marshall@mpierce.org>
+bech32,https://github.com/rust-bitcoin/rust-bech32,MIT,"Clark Moody, Andrew Poelstra, Tobin Harding"
+bitcoin,https://github.com/rust-bitcoin/rust-bitcoin,CC0-1.0,Andrew Poelstra <apoelstra@wpsoftware.net>
+bitcoin-internals,https://github.com/rust-bitcoin/rust-bitcoin,CC0-1.0,"Andrew Poelstra <apoelstra@wpsoftware.net>, The Rust Bitcoin developers"
+bitcoin-io,https://github.com/rust-bitcoin/rust-bitcoin,CC0-1.0,Matt Corallo <birchneutea@mattcorallo.com>
 bitflags,https://github.com/bitflags/bitflags,MIT OR Apache-2.0,The Rust Project Developers
 block-buffer,https://github.com/RustCrypto/utils,MIT OR Apache-2.0,RustCrypto Developers
 bumpalo,https://github.com/fitzgen/bumpalo,MIT OR Apache-2.0,Nick Fitzgerald <fitzgen@gmail.com>
@@ -51,6 +55,8 @@ hashbrown,https://github.com/rust-lang/hashbrown,MIT OR Apache-2.0,Amanieu d'Ant
 heck,https://github.com/withoutboats/heck,MIT OR Apache-2.0,Without Boats <woboats@gmail.com>
 hermit-abi,https://github.com/hermit-os/hermit-rs,MIT OR Apache-2.0,Stefan Lankes
 hex,https://github.com/KokaKiwi/rust-hex,MIT OR Apache-2.0,KokaKiwi <kokakiwi@kokakiwi.net>
+hex-conservative,https://github.com/rust-bitcoin/hex-conservative,CC0-1.0,"Martin Habovštiak <martin.habovstiak@gmail.com>, Andrew Poelstra <apoelstra@wpsoftware.net>"
+hex_lit,https://github.com/Kixunil/hex_lit,MITNFA,Martin Habovstiak <martin.habovstiak@gmail.com>
 http,https://github.com/hyperium/http,MIT OR Apache-2.0,"Alex Crichton <alex@alexcrichton.com>, Carl Lerche <me@carllerche.com>, Sean McArthur <sean@seanmonstar.com>"
 http-body,https://github.com/hyperium/http-body,MIT,"Carl Lerche <me@carllerche.com>, Lucio Franco <luciofranco14@gmail.com>, Sean McArthur <sean@seanmonstar.com>"
 httparse,https://github.com/seanmonstar/httparse,MIT OR Apache-2.0,Sean McArthur <sean@seanmonstar.com>
@@ -127,6 +133,8 @@ rustls-webpki,https://github.com/rustls/webpki,ISC,The rustls-webpki Authors
 rustversion,https://github.com/dtolnay/rustversion,MIT OR Apache-2.0,David Tolnay <dtolnay@gmail.com>
 ryu,https://github.com/dtolnay/ryu,Apache-2.0 OR BSL-1.0,David Tolnay <dtolnay@gmail.com>
 schannel,https://github.com/steffengy/schannel-rs,MIT,"Steven Fackler <sfackler@gmail.com>, Steffen Butzer <steffen.butzer@outlook.com>"
+secp256k1,https://github.com/rust-bitcoin/rust-secp256k1,CC0-1.0,"Dawid Ciężarkiewicz <dpc@ucore.info>, Andrew Poelstra <apoelstra@wpsoftware.net>"
+secp256k1-sys,https://github.com/rust-bitcoin/rust-secp256k1,CC0-1.0,"Dawid Ciężarkiewicz <dpc@ucore.info>, Andrew Poelstra <apoelstra@wpsoftware.net>, Steven Roose <steven@stevenroose.org>"
 security-framework,https://github.com/kornelski/rust-security-framework,MIT OR Apache-2.0,"Steven Fackler <sfackler@gmail.com>, Kornel <kornel@geekhood.net>"
 serde,https://github.com/serde-rs/serde,MIT OR Apache-2.0,"Erick Tryzelaar <erick.tryzelaar@gmail.com>, David Tolnay <dtolnay@gmail.com>"
 serde_json,https://github.com/serde-rs/json,MIT OR Apache-2.0,"Erick Tryzelaar <erick.tryzelaar@gmail.com>, David Tolnay <dtolnay@gmail.com>"

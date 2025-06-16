@@ -1,5 +1,4 @@
 mod aba_rtn_checksum;
-mod base58;
 mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
 mod btc_checksum;
