@@ -21,6 +21,7 @@ fn test_should_return_match_with_match_validation() {
                 replacement: "[REDACTED]".to_string(),
             })
             .third_party_active_checker(MatchValidationType::CustomHttp(http_config))])
+        .with_return_matches(true)
         .build()
         .unwrap();
 
@@ -213,6 +214,7 @@ fn test_mock_same_http_validator_several_matches() {
         })
         .third_party_active_checker(MatchValidationType::CustomHttp(http_config.clone()));
     let scanner = ScannerBuilder::new(&[rule_valid_match, rule_invalid_match, rule_error_match])
+        .with_return_matches(true)
         .build()
         .unwrap();
 
@@ -253,7 +255,10 @@ fn test_mock_http_timeout() {
         })
         .third_party_active_checker(MatchValidationType::CustomHttp(http_config));
 
-    let scanner = ScannerBuilder::new(&[rule_valid_match]).build().unwrap();
+    let scanner = ScannerBuilder::new(&[rule_valid_match])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
 
     let mut content = "this is a content with a valid_match".to_string();
     let mut matches = scanner.scan(&mut content);
@@ -336,6 +341,7 @@ fn test_mock_multiple_match_validators() {
         })));
 
     let scanner = ScannerBuilder::new(&[rule_valid_match, rule_aws_id, rule_aws_secret])
+        .with_return_matches(true)
         .build()
         .unwrap();
 
@@ -381,7 +387,10 @@ fn test_mock_endpoint_with_multiple_hosts() {
                 }]),
         ));
 
-    let scanner = ScannerBuilder::new(&[rule_valid_match]).build().unwrap();
+    let scanner = ScannerBuilder::new(&[rule_valid_match])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
     let mut content = "this is a content with a valid_match on multiple hosts".to_string();
     let mut matches = scanner.scan(&mut content);
     assert_eq!(matches.len(), 1);
@@ -480,6 +489,7 @@ fn test_mock_aws_validator() {
     });
 
     let scanner = ScannerBuilder::new(&[rule_aws_id, rule_aws_secret])
+        .with_return_matches(true)
         .build()
         .unwrap();
 

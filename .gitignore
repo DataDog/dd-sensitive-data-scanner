@@ -3,4 +3,13 @@ target/
 tools/fuzz/out/
 **/.DS_Store
 
-.cursor/
+# Cursor Profiles
+.cursor
+# VSCode Profiles
+.vscode
+
+# Compiled Object files, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+*.so
+*.dylib
