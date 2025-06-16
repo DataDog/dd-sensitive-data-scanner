@@ -3,6 +3,7 @@ mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
 mod chinese_id_checksum;
 mod coordination_number_checksum;
+mod czech_tin_checksum;
 mod dutch_bsn_checksum;
 mod dutch_passport_checksum;
 mod finnish_hetu_checksum;
@@ -43,6 +44,7 @@ pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjCheck
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::coordination_number_checksum::CoordinationNumberChecksum;
+pub use crate::secondary_validation::czech_tin_checksum::CzechTaxIdentificationNumberChecksum;
 pub use crate::secondary_validation::dutch_bsn_checksum::DutchDsnChecksum;
 pub use crate::secondary_validation::dutch_passport_checksum::DutchPassportChecksum;
 pub use crate::secondary_validation::finnish_hetu_checksum::FinnishHetuChecksum;
@@ -154,6 +156,9 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::PolishNipChecksum => PolishNipChecksum.is_valid_match(regex_match),
             SecondaryValidator::LuxembourgIndividualNINChecksum => {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
+            }
+            SecondaryValidator::CzechTaxIdentificationNumberChecksum => {
+                CzechTaxIdentificationNumberChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::HungarianTinChecksum => {
                 HungarianTinChecksum.is_valid_match(regex_match)
