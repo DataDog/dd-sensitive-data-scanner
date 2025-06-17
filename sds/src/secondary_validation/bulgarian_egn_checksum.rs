@@ -1,4 +1,4 @@
-use crate::secondary_validation::{get_next_digit, Validator};
+use crate::secondary_validation::Validator;
 
 pub struct BulgarianEGNChecksum;
 
@@ -12,12 +12,15 @@ impl Validator for BulgarianEGNChecksum {
 
         // Convert the string to a vector of digits
         let digits: Vec<u32> = regex_match.chars().filter_map(|c| c.to_digit(10)).collect();
-        if digits.len() != 10 { // any non-digit character would mark this invalid
+        if digits.len() != 10 {
+            // All 10 characters must be digits; otherwise invalid
             return false;
         }
 
         // calculate sum(chars[i] * BULGARIAN_EGN_MULTIPLIERS[i]) for i in [0,9)
-        let sum: u32 = digits.iter().take(9)
+        let sum: u32 = digits
+            .iter()
+            .take(9)
             .zip(BULGARIAN_EGN_MULTIPLIERS.iter())
             .map(|(d, w)| d * w)
             .sum();
@@ -46,24 +49,32 @@ mod test {
         ];
         let validator = BulgarianEGNChecksum;
         for egn in &valid_egns {
-            assert!(validator.is_valid_match(egn), "EGN should be valid: {}", egn);
+            assert!(
+                validator.is_valid_match(egn),
+                "EGN should be valid: {}",
+                egn
+            );
         }
     }
 
     #[test]
     fn test_invalid_egn() {
         let invalid_egns = [
-            "7523169264", // wrong check digit
-            "8032056032", // wrong check digit
-            "6101057500", // wrong check digit
-            "8001010000", // wrong check digit
-            "abcdefghij", // not digits
-            "123456789",  // too short
-            "12345678901",// too long
+            "7523169264",  // wrong check digit
+            "8032056032",  // wrong check digit
+            "6101057500",  // wrong check digit
+            "8001010000",  // wrong check digit
+            "abcdefghij",  // not digits
+            "123456789",   // too short
+            "12345678901", // too long
         ];
         let validator = BulgarianEGNChecksum;
         for egn in &invalid_egns {
-            assert!(!validator.is_valid_match(egn), "EGN should be invalid: {}", egn);
+            assert!(
+                !validator.is_valid_match(egn),
+                "EGN should be invalid: {}",
+                egn
+            );
         }
     }
 }

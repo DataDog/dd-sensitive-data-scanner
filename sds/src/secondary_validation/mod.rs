@@ -1,6 +1,7 @@
 mod aba_rtn_checksum;
 mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
+mod bulgarian_egn_checksum;
 mod chinese_id_checksum;
 mod france_ssn_checksum;
 mod github_token_checksum;
@@ -12,7 +13,6 @@ mod nhs_check_digit;
 mod nir_checksum;
 mod polish_national_id_checksum;
 mod verhoeff_checksum;
-mod bulgarian_egn_checksum;
 
 #[cfg(test)]
 pub use jwt_expiration_checker::generate_jwt;
@@ -21,6 +21,7 @@ use crate::scanner::regex_rule::config::SecondaryValidator;
 pub use crate::secondary_validation::aba_rtn_checksum::AbaRtnChecksum;
 pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjChecksum;
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
+pub use crate::secondary_validation::bulgarian_egn_checksum::BulgarianEGNChecksum;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
@@ -32,7 +33,6 @@ pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 pub use crate::secondary_validation::nir_checksum::NirChecksum;
 pub use crate::secondary_validation::polish_national_id_checksum::PolishNationalIdChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
-pub use crate::secondary_validation::bulgarian_egn_checksum::BulgarianEGNChecksum;
 
 use std::str::Chars;
 
@@ -85,7 +85,9 @@ impl Validator for SecondaryValidator {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
-            SecondaryValidator::BulgarianEGNChecksum => BulgarianEGNChecksum.is_valid_match(regex_match),
+            SecondaryValidator::BulgarianEGNChecksum => {
+                BulgarianEGNChecksum.is_valid_match(regex_match)
+            }
         }
     }
 }
