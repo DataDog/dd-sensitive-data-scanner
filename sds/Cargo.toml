@@ -38,6 +38,7 @@ base62 = "2.0.2"
 iban_validate = "4"
 async-trait = "0.1.82"
 num_cpus = "1.16.0"
+ethereum-types = "0.12.1"
 
 # This is deprecated and may switch to `serde_yml` in the future. Waiting for it to mature a bit first.
 serde_yaml = "0.9.34"
@@ -51,6 +52,7 @@ serde_json = "1.0.114"
 rayon = "1.10.0"
 bitcoin = "0.32.6"
 iso_iec_7064 = "0.1.1"
+ethaddr = "0.2.2"
 
 [dev-dependencies]
 rand = "0.8.5"
