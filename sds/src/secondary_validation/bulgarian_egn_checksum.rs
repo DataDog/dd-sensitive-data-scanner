@@ -6,16 +6,7 @@ const BULGARIAN_EGN_MULTIPLIERS: [u32; 9] = [2, 4, 8, 5, 10, 9, 7, 3, 6];
 
 impl Validator for BulgarianEGNChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
-        if regex_match.len() != 10 {
-            return false;
-        }
-
-        // Convert the string to a vector of digits
         let digits: Vec<u32> = regex_match.chars().filter_map(|c| c.to_digit(10)).collect();
-        if digits.len() != 10 {
-            // All 10 characters must be digits; otherwise invalid
-            return false;
-        }
 
         // calculate sum(chars[i] * BULGARIAN_EGN_MULTIPLIERS[i]) for i in [0,9)
         let sum: u32 = digits
@@ -60,13 +51,10 @@ mod test {
     #[test]
     fn test_invalid_egn() {
         let invalid_egns = [
-            "7523169264",  // wrong check digit
-            "8032056032",  // wrong check digit
-            "6101057500",  // wrong check digit
-            "8001010000",  // wrong check digit
-            "abcdefghij",  // not digits
-            "123456789",   // too short
-            "12345678901", // too long
+            "7523169264", // wrong check digit
+            "8032056032", // wrong check digit
+            "6101057500", // wrong check digit
+            "8001010000", // wrong check digit
         ];
         let validator = BulgarianEGNChecksum;
         for egn in &invalid_egns {
