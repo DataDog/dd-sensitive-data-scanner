@@ -6,22 +6,25 @@ const BULGARIAN_EGN_MULTIPLIERS: [u32; 9] = [2, 4, 8, 5, 10, 9, 7, 3, 6];
 
 impl Validator for BulgarianEGNChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
-        let digits: Vec<u32> = regex_match.chars().filter_map(|c| c.to_digit(10)).collect();
+        let mut chars = regex_match.chars().filter_map(|c| c.to_digit(10));
 
-        // calculate sum(chars[i] * BULGARIAN_EGN_MULTIPLIERS[i]) for i in [0,9)
-        let sum: u32 = digits
-            .iter()
-            .take(9)
-            .zip(BULGARIAN_EGN_MULTIPLIERS.iter())
-            .map(|(d, w)| d * w)
-            .sum();
-
-        // The check digit is the last digit of the sum modulo 11, with a special case for 10
-        let mut check_digit = sum % 11;
-        if check_digit == 10 {
-            check_digit = 0;
+        let mut sum = 0;
+        for w in BULGARIAN_EGN_MULTIPLIERS.iter() {
+            match chars.next() {
+                Some(digit) => sum += digit * w,
+                None => return false,
+            }
         }
-        digits[9] == check_digit
+
+        let mut expected_check_digit = sum % 11;
+        if expected_check_digit == 10 {
+            expected_check_digit = 0;
+        }
+
+        match chars.next() {
+            Some(actual_check_digit) => actual_check_digit == expected_check_digit,
+            None => false,
+        }
     }
 }
 
