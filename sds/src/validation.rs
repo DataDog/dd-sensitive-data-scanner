@@ -1,5 +1,6 @@
 use crate::normalization::rust_regex_adapter::{convert_to_rust_regex, QUANTIFIER_LIMIT};
 use crate::parser::error::ParseError;
+use crate::parser::regex_parser::parse_regex_pattern;
 use regex_automata::meta::{self};
 use thiserror::Error;
 
@@ -38,6 +39,16 @@ pub fn validate_regex(input: &str) -> Result<(), RegexValidationError> {
     // This is the same as `validate_and_create_regex`, but removes the actual Regex type
     // to create a more stable API for external users of the crate.
     validate_and_create_regex(input).map(|_| ())
+}
+
+/// Checks that a regex pattern is valid for using in an SDS scanner and return the AST if valid.
+pub fn validate_regex_and_get_ast(
+    input: &str,
+) -> Result<crate::parser::ast::Ast, RegexValidationError> {
+    // This is the same as `validate_and_create_regex`, but removes the actual Regex type
+    // to create a more stable API for external users of the crate.
+    let sds_ast = parse_regex_pattern(input)?;
+    Ok(sds_ast)
 }
 
 pub fn get_regex_complexity_estimate_very_slow(input: &str) -> Result<usize, RegexValidationError> {
@@ -115,7 +126,7 @@ fn build_regex(
 mod test {
     use crate::validation::{
         get_regex_complexity_estimate_very_slow, validate_and_create_regex, validate_regex,
-        RegexValidationError,
+        validate_regex_and_get_ast, RegexValidationError,
     };
 
     #[test]
@@ -181,6 +192,64 @@ mod test {
         assert_eq!(
             get_regex_complexity_estimate_very_slow(".{1,1000}"),
             Ok(1_040_136)
+        );
+    }
+
+    #[test]
+    fn test_parse_regex_pattern() {
+        let pattern: &'static str = "^(?:\\w|b)?";
+        let ast = validate_regex_and_get_ast(pattern).unwrap();
+        let json = serde_json::to_string_pretty(&ast).unwrap();
+        assert_eq!(
+            r###"{
+  "type": "Concat",
+  "content": [
+    {
+      "type": "Assertion",
+      "content": "startline"
+    },
+    {
+      "type": "Repetition",
+      "content": {
+        "quantifier": {
+          "lazy": false,
+          "kind": "ZeroOrOne"
+        },
+        "expression": {
+          "type": "Group",
+          "content": {
+            "group_type": "NonCapturing",
+            "content": {
+              "flags": {
+                "add": [],
+                "remove": []
+              },
+              "inner": {
+                "type": "Alternation",
+                "content": [
+                  {
+                    "type": "CharacterClass",
+                    "content": {
+                      "Perl": "Word"
+                    }
+                  },
+                  {
+                    "type": "Literal",
+                    "content": {
+                      "value": "b",
+                      "escaped": false
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}"###,
+            json
         );
     }
 }

@@ -40,6 +40,7 @@ pub use path::{Path, PathSegment};
 pub use rule_match::{ReplacementType, RuleMatch};
 pub use scanner::shared_pool::{SharedPool, SharedPoolGuard};
 
+pub use parser::{ast::Ast, regex_parser::parse_regex_pattern};
 pub use scanner::error::MatchValidationError;
 pub use scanner::{
     config::RuleConfig,
@@ -52,7 +53,8 @@ pub use scanner::{
 };
 pub use scoped_ruleset::ExclusionCheck;
 pub use validation::{
-    get_regex_complexity_estimate_very_slow, validate_regex, RegexValidationError,
+    get_regex_complexity_estimate_very_slow, validate_regex, validate_regex_and_get_ast,
+    RegexValidationError,
 };
 
 #[cfg(any(feature = "testing", feature = "bench"))]
