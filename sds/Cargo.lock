@@ -708,6 +708,7 @@ dependencies = [
  "farmhash",
  "httpmock",
  "iban_validate",
+ "iso_iec_7064",
  "lazy_static",
  "luhn",
  "metrics",
@@ -1568,6 +1569,12 @@ dependencies = [
  "libc",
  "windows-sys 0.59.0",
 ]
+
+[[package]]
+name = "iso_iec_7064"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b50ce82efa43b36f28a91b8769a458f6f1c0a7e4c493011a1664834147ed6ff5"
 
 [[package]]
 name = "itertools"
