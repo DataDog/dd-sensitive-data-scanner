@@ -25,6 +25,7 @@ mod latvia_national_id_checksum;
 mod lithuanian_personal_identification_number_checksum;
 mod luhn_checksum;
 mod luxembourg_individual_nin_checksum;
+mod monero_address;
 mod nhs_check_digit;
 mod nir_checksum;
 mod polish_national_id_checksum;
@@ -71,6 +72,7 @@ pub use crate::secondary_validation::latvia_national_id_checksum::LatviaNational
 use crate::secondary_validation::lithuanian_personal_identification_number_checksum::LithuanianPersonalIdentificationNumberChecksum;
 pub use crate::secondary_validation::luhn_checksum::LuhnChecksum;
 pub use crate::secondary_validation::luxembourg_individual_nin_checksum::LuxembourgIndividualNINChecksum;
+pub use crate::secondary_validation::monero_address::MoneroAddress;
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 pub use crate::secondary_validation::nir_checksum::NirChecksum;
 pub use crate::secondary_validation::polish_national_id_checksum::PolishNationalIdChecksum;
@@ -210,6 +212,7 @@ impl Validator for SecondaryValidator {
                 RomanianPersonalNumericCode.is_valid_match(regex_match)
             }
             SecondaryValidator::EthereumChecksum => EthereumChecksum.is_valid_match(regex_match),
+            SecondaryValidator::MoneroAddress => MoneroAddress.is_valid_match(regex_match),
         }
     }
 }
