@@ -2,6 +2,7 @@ mod aba_rtn_checksum;
 mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
 mod btc_checksum;
+mod bulgarian_egn_checksum;
 mod chinese_id_checksum;
 mod coordination_number_checksum;
 mod czech_tin_checksum;
@@ -46,6 +47,7 @@ pub use crate::secondary_validation::aba_rtn_checksum::AbaRtnChecksum;
 pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjChecksum;
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
 pub use crate::secondary_validation::btc_checksum::BtcChecksum;
+pub use crate::secondary_validation::bulgarian_egn_checksum::BulgarianEGNChecksum;
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::coordination_number_checksum::CoordinationNumberChecksum;
 pub use crate::secondary_validation::czech_tin_checksum::CzechTaxIdentificationNumberChecksum;
@@ -85,6 +87,7 @@ pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
 pub use crate::secondary_validation::spanish_nuss_checksum::SpanishNussChecksum;
 pub use crate::secondary_validation::sweden_pin_checksum::SwedenPINChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
+
 use std::str::Chars;
 
 pub trait Validator: Send + Sync {
@@ -163,6 +166,9 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::PolishNipChecksum => PolishNipChecksum.is_valid_match(regex_match),
             SecondaryValidator::LuxembourgIndividualNINChecksum => {
                 LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
+            }
+            SecondaryValidator::BulgarianEGNChecksum => {
+                BulgarianEGNChecksum.is_valid_match(regex_match)
             }
             SecondaryValidator::CzechTaxIdentificationNumberChecksum => {
                 CzechTaxIdentificationNumberChecksum.is_valid_match(regex_match)
