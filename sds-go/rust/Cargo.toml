@@ -12,5 +12,5 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dd-sds = { path = "../../sds" }
 sds-bindings-utils = { path = "../../sds-bindings-utils" }
-ahash = "0.8.11"
+
 
