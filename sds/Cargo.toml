@@ -36,12 +36,8 @@ metrics-util = "0.18.0"
 crc32fast = "1.4.0"
 base62 = "2.0.2"
 iban_validate = "4"
-async-trait = "0.1.82"
 num_cpus = "1.16.0"
-ethereum-types = "0.12.1"
 
-# This is deprecated and may switch to `serde_yml` in the future. Waiting for it to mature a bit first.
-serde_yaml = "0.9.34"
 lazy_static = "1.5.0"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "charset", "http2", "rustls-tls-native-roots"] }
 aws-sign-v4 = "0.3.0"
@@ -56,14 +52,10 @@ ethaddr = "0.2.2"
 monero = "0.21.0"
 
 [dev-dependencies]
-rand = "0.8.5"
-regex_generate = "0.2.3"
 criterion = { version = "0.5.1", features = ["html_reports"] }
-luhn = "1.0.1"
 serde_json = "1.0.114"
 serde_test = "1.0.176"
 httpmock = "0.7.0"
-tokio = { version = "1", features = ["full"] }
 dd-sds = { path = ".", features = ["bench"] }
 threadpool = "1.8.1"
 
