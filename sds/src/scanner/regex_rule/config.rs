@@ -156,6 +156,7 @@ pub enum SecondaryValidator {
     Mod11_10checksum,
     Mod27_26checksum,
     Mod37_36checksum,
+    MoneroAddress,
     NhsCheckDigit,
     NirChecksum,
     PolishNationalIdChecksum,
