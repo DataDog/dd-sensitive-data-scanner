@@ -2,3 +2,5 @@
 # These crates do not specify a homepage in their metadata.
 "openssl-macros" = { origin = "https://github.com/sfackler/rust-openssl" }
 "ring" = { origin = "https://github.com/briansmith/ring", license = "ISC/Apache License v2"}
+"parity-scale-codec-derive" = { origin = "https://github.com/paritytech/parity-scale-codec", license = "Apache-2.0"}
+ 

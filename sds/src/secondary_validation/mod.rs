@@ -7,6 +7,7 @@ mod coordination_number_checksum;
 mod czech_tin_checksum;
 mod dutch_bsn_checksum;
 mod dutch_passport_checksum;
+mod ethereum_checksum;
 mod finnish_hetu_checksum;
 mod france_nif_checksum;
 mod france_ssn_checksum;
@@ -49,6 +50,7 @@ pub use crate::secondary_validation::coordination_number_checksum::CoordinationN
 pub use crate::secondary_validation::czech_tin_checksum::CzechTaxIdentificationNumberChecksum;
 pub use crate::secondary_validation::dutch_bsn_checksum::DutchDsnChecksum;
 pub use crate::secondary_validation::dutch_passport_checksum::DutchPassportChecksum;
+pub use crate::secondary_validation::ethereum_checksum::EthereumChecksum;
 pub use crate::secondary_validation::finnish_hetu_checksum::FinnishHetuChecksum;
 use crate::secondary_validation::france_nif_checksum::FranceNifChecksum;
 pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
@@ -207,6 +209,7 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::RomanianPersonalNumericCode => {
                 RomanianPersonalNumericCode.is_valid_match(regex_match)
             }
+            SecondaryValidator::EthereumChecksum => EthereumChecksum.is_valid_match(regex_match),
         }
     }
 }
