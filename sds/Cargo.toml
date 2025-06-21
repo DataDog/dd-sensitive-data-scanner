@@ -27,7 +27,7 @@ regex-automata = "0.4.7"
 # Switch over to the original repo when this issue is resolved: https://github.com/rust-lang/regex/issues/1241
 regex-automata-fork = { git = "https://github.com/fbryden/regex", rev = "6952250af962ca3e364da47382b16dba9c703431", package = "regex-automata" }
 regex-syntax = "0.7.5"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
 serde_with = "3.6.1"
 strum = { version = "0.25", features = ["derive"] }
 thiserror = "1.0.58"
