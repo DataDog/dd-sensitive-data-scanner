@@ -44,8 +44,9 @@ impl CompiledRule for DumbCompiledRule {
         _excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         _: Option<&Vec<(usize, usize)>>,
-    ) {
+    ) -> Result<(), ScannerError> {
         match_emitter.emit(StringMatch { start: 10, end: 16 });
+        Ok(())
     }
 }
 

@@ -3,7 +3,7 @@ mod bool_set;
 use crate::event::{EventVisitor, VisitStringResult};
 use crate::scanner::scope::Scope;
 use crate::scoped_ruleset::bool_set::BoolSet;
-use crate::{Event, Path, PathSegment};
+use crate::{Event, Path, PathSegment, ScannerError};
 use ahash::AHashMap;
 
 /// A `ScopedRuleSet` determines which rules will be used to scan each field of an event, and which
@@ -110,7 +110,7 @@ pub trait ContentVisitor<'path> {
         content: &str,
         rules: RuleIndexVisitor,
         is_excluded: ExclusionCheck<'content_visitor>,
-    ) -> bool;
+    ) -> Result<bool, ScannerError>;
 }
 
 // This is just a reference to a RuleTree with some additional information
@@ -215,7 +215,8 @@ where
             bool_set.reset();
         }
         VisitStringResult {
-            might_mutate: will_mutate,
+            // TODO: is there a risk with defaulting to false?
+            might_mutate: will_mutate.unwrap_or(false),
             path: &self.path,
         }
     }
@@ -348,7 +349,7 @@ mod test {
                 content: &str,
                 mut rule_iter: RuleIndexVisitor,
                 exclusion_check: ExclusionCheck<'content_visitor>,
-            ) -> bool {
+            ) -> Result<bool, ScannerError> {
                 let mut rules = vec![];
                 rule_iter.visit_rule_indices(|rule_index| {
                     rules.push(VisitedRule {
@@ -362,7 +363,7 @@ mod test {
                     content: content.to_string(),
                     rules,
                 });
-                true
+                Ok(true)
             }
         }
 
