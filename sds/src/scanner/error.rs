@@ -45,6 +45,14 @@ pub enum MatchValidationError {
     NoMatchValidationType,
 }
 
+#[derive(Debug, PartialEq, Eq, Error)]
+pub enum ScannerError {
+    #[error("Unrecoverable permanent error while scanning")]
+    Permanent,
+    #[error("Transient error while scanning")]
+    Transient,
+}
+
 #[cfg(test)]
 mod test {
     use crate::match_action::MatchActionValidationError;

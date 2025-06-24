@@ -5,6 +5,7 @@ use crate::match_validation::{
     config::InternalMatchValidationType, config::MatchValidationType, match_status::MatchStatus,
     match_validator::MatchValidator,
 };
+use crate::scanner::error::ScannerError;
 use rayon::prelude::*;
 
 use error::{MatchValidationError, MatchValidatorCreationError};
@@ -193,7 +194,7 @@ pub trait CompiledRule: Send + Sync {
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         wildcard_indices: Option<&Vec<(usize, usize)>>,
-    );
+    ) -> Result<(), ScannerError>;
 
     /// Determines if this rule has a match, without determining the exact position,
     /// or finding multiple matches. The default implementation just calls
@@ -211,7 +212,7 @@ pub trait CompiledRule: Send + Sync {
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         wildcard_indices: Option<&Vec<(usize, usize)>>,
-    ) -> bool {
+    ) -> Result<bool, ScannerError> {
         let mut found_match = false;
         let mut match_emitter = |_| found_match = true;
         self.get_string_matches(
@@ -225,8 +226,8 @@ pub trait CompiledRule: Send + Sync {
             excluded_matches,
             &mut match_emitter,
             wildcard_indices,
-        );
-        found_match
+        )
+        .map(|_| found_match)
     }
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
@@ -814,7 +815,8 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     self.excluded_matches,
                     &mut emitter,
                     wildcard_indices_per_path,
-                );
+                )
+                .unwrap();
             }
         });
 
