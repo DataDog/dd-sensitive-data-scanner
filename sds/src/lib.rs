@@ -43,7 +43,7 @@ pub use scanner::shared_pool::{SharedPool, SharedPoolGuard};
 pub use scanner::error::MatchValidationError;
 pub use scanner::{
     config::RuleConfig,
-    error::CreateScannerError,
+    error::{CreateScannerError, ScannerError},
     regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator},
     regex_rule::RegexCaches,
     scope::Scope,
