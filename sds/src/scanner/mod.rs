@@ -822,9 +822,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         });
 
         // If any of the rules returned an error, return that (last) error
-        if result.is_err() {
-            return result;
-        }
+        result?;
 
         // calculate_indices requires that matches are sorted by start index
         path_rules_matches.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
