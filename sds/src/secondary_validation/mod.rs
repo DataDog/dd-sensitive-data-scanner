@@ -206,6 +206,9 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::PortugueseTaxIdChecksum => {
                 PortugueseTaxIdChecksum.is_valid_match(regex_match)
             }
+            SecondaryValidator::RodneCisloNumberChecksum => {
+                RodneCisloNumberChecksum.is_valid_match(regex_match)
+            }
             SecondaryValidator::RomanianPersonalNumericCode => {
                 RomanianPersonalNumericCode.is_valid_match(regex_match)
             }
