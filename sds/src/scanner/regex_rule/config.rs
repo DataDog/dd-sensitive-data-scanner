@@ -60,7 +60,7 @@ impl RegexRuleConfig {
 
     pub fn with_included_keywords(
         &self,
-        keywords: impl IntoIterator<Item=impl AsRef<str>>,
+        keywords: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> Self {
         let mut this = self.clone();
         let mut config = self.get_or_create_proximity_keywords_config();
