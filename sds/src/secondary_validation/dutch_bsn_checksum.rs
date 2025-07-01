@@ -1,11 +1,11 @@
 use crate::secondary_validation::Validator;
 
-pub struct DutchDsnChecksum;
+pub struct DutchBsnChecksum;
 const MULTIPLIERS: &[i32] = &[-1, 2, 3, 4, 5, 6, 7, 8, 9];
 const MODULO: i32 = 11;
 
 // https://nl.wikipedia.org/wiki/Burgerservicenummer
-impl Validator for DutchDsnChecksum {
+impl Validator for DutchBsnChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         let valid_chars = regex_match.chars().filter(|c| c.is_ascii_alphanumeric());
 
@@ -37,7 +37,7 @@ mod test {
         ];
         for id in valid_ids {
             println!("testing for input {}", id);
-            assert!(DutchDsnChecksum.is_valid_match(id));
+            assert!(DutchBsnChecksum.is_valid_match(id));
         }
     }
 
@@ -54,7 +54,7 @@ mod test {
         ];
         for id in invalid_ids {
             println!("testing for input {}", id);
-            assert!(!DutchDsnChecksum.is_valid_match(id));
+            assert!(!DutchBsnChecksum.is_valid_match(id));
         }
     }
 }
