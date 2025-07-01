@@ -142,7 +142,6 @@ mod test {
         get_regex_complexity_estimate_very_slow, validate_and_create_regex, validate_regex,
         RegexValidationError,
     };
-    use crate::{MatchAction, RegexRuleConfig, RootRuleConfig, ScannerBuilder};
 
     #[test]
     fn pattern_matching_empty_string_is_invalid() {
