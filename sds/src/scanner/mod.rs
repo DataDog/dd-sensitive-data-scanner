@@ -689,6 +689,12 @@ impl ScannerBuilder<'_> {
         self
     }
 
+    pub fn with_skip_rules_with_regex_matching_empty_string(mut self, value: bool) -> Self {
+        self.scanner_features
+            .skip_rules_with_regex_matching_empty_string = value;
+        self
+    }
+
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
         let mut match_validators_per_type = AHashMap::new();
 
