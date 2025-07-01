@@ -789,6 +789,10 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
             {
                 // creating the emitter is basically free, it will get mostly optimized away
                 let mut emitter = |rule_match: StringMatch| {
+                    // This should never happen, but to ensure no empty match is ever generated
+                    // (which may cause an infinite loop), this will panic instead.
+                    assert_ne!(rule_match.start, rule_match.end, "empty match detected");
+
                     path_rules_matches.push(InternalRuleMatch {
                         rule_index,
                         utf8_start: rule_match.start,
