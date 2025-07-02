@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DefaultOnNull;
 use std::sync::Arc;
-use strum::EnumIter;
+use strum::{AsRefStr, EnumIter};
 
 pub const DEFAULT_KEYWORD_LOOKAHEAD: usize = 30;
 
@@ -133,56 +133,57 @@ pub struct ProximityKeywordsConfig {
     pub excluded_keywords: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumIter)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumIter, AsRefStr)]
 #[serde(tag = "type")]
 pub enum SecondaryValidator {
     AbaRtnChecksum,
-    BrazilianCpfChecksum,
     BrazilianCnpjChecksum,
+    BrazilianCpfChecksum,
     BtcChecksum,
+    BulgarianEGNChecksum,
     ChineseIdChecksum,
+    CoordinationNumberChecksum,
+    CzechPersonalIdentificationNumberChecksum,
+    CzechTaxIdentificationNumberChecksum,
+    DutchBsnChecksum,
+    DutchPassportChecksum,
     EthereumChecksum,
+    FinnishHetuChecksum,
+    FranceNifChecksum,
+    FranceSsnChecksum,
+    GermanIdsChecksum,
+    GermanSvnrChecksum,
     GithubTokenChecksum,
     GreekTinChecksum,
+    HungarianTinChecksum,
     IbanChecker,
+    IrishPpsChecksum,
     ItalianNationalIdChecksum,
     JwtExpirationChecker,
+    LatviaNationalIdChecksum,
+    LithuanianPersonalIdentificationNumberChecksum,
     LuhnChecksum,
+    LuxembourgIndividualNINChecksum,
+    Mod11_10checksum,
     Mod11_2checksum,
-    Mod37_2checksum,
     Mod1271_36Checksum,
+    Mod27_26checksum,
+    Mod37_2checksum,
+    Mod37_36checksum,
     Mod661_26checksum,
     Mod97_10checksum,
-    Mod11_10checksum,
-    Mod27_26checksum,
-    Mod37_36checksum,
     MoneroAddress,
     NhsCheckDigit,
     NirChecksum,
     PolishNationalIdChecksum,
     PolishNipChecksum,
-    LuxembourgIndividualNINChecksum,
-    DutchPassportChecksum,
-    FranceSsnChecksum,
-    BulgarianEGNChecksum,
-    CzechTaxIdentificationNumberChecksum,
-    HungarianTinChecksum,
-    CzechPersonalIdentificationNumberChecksum,
-    SpanishNussChecksum,
-    DutchDsnChecksum,
-    FranceNifChecksum,
-    GermanSvnrChecksum,
-    SwedenPINChecksum,
-    LatviaNationalIdChecksum,
-    CoordinationNumberChecksum,
-    LithuanianPersonalIdentificationNumberChecksum,
-    GermanIdsChecksum,
-    SpanishDniChecksum,
-    SlovenianPINChecksum,
-    FinnishHetuChecksum,
-    IrishPpsChecksum,
     PortugueseTaxIdChecksum,
+    RodneCisloNumberChecksum,
     RomanianPersonalNumericCode,
+    SlovenianPINChecksum,
+    SpanishDniChecksum,
+    SpanishNussChecksum,
+    SwedenPINChecksum,
 }
 
 #[cfg(test)]
@@ -289,5 +290,15 @@ mod test {
         // Verify some variants
         assert!(validators.contains(&SecondaryValidator::GithubTokenChecksum));
         assert!(validators.contains(&SecondaryValidator::JwtExpirationChecker));
+    }
+
+    #[test]
+    fn test_secondary_validator_are_sorted() {
+        let validator_names: Vec<String> = SecondaryValidator::iter()
+            .map(|a| a.as_ref().to_string())
+            .collect();
+        let mut sorted_validator_names = validator_names.clone();
+        sorted_validator_names.sort();
+        assert_eq!(sorted_validator_names, validator_names, "Secondary validators should be sorted by alphabetical order, but it's not the case, expected order:");
     }
 }
