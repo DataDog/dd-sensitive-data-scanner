@@ -37,9 +37,13 @@ pub const QUANTIFIER_LIMIT: u32 = 3000;
 /// makes no attempt to preserve the exact syntax used. This is only intended
 /// to feed directly into a regex engine, and not intended for human readability.
 pub fn convert_to_rust_regex(pattern: &str) -> Result<String, ParseError> {
+    convert_to_rust_regex_ast(pattern).map(|s| s.to_string())
+}
+
+pub fn convert_to_rust_regex_ast(pattern: &str) -> Result<RegexAst, ParseError> {
     let sds_ast = parse_regex_pattern(pattern)?;
     let regex_ast = convert_ast(&sds_ast)?;
-    Ok(regex_ast.to_string())
+    Ok(regex_ast)
 }
 
 // This is private since only ASTs generated from the parser are supported.

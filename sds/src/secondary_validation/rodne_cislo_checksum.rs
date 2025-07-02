@@ -42,9 +42,9 @@ mod test {
             "6809115566",
             "9811150570",
             "9811150570",
-            // // old format
-            // "320911556",
-            // "123456789",
+            // old format
+            "320911556",
+            "123456789",
         ];
         for example in valid {
             assert!(RodneCisloNumberChecksum.is_valid_match(example));

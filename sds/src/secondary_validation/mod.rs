@@ -51,7 +51,7 @@ pub use crate::secondary_validation::bulgarian_egn_checksum::BulgarianEGNChecksu
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::coordination_number_checksum::CoordinationNumberChecksum;
 pub use crate::secondary_validation::czech_tin_checksum::CzechTaxIdentificationNumberChecksum;
-pub use crate::secondary_validation::dutch_bsn_checksum::DutchDsnChecksum;
+pub use crate::secondary_validation::dutch_bsn_checksum::DutchBsnChecksum;
 pub use crate::secondary_validation::dutch_passport_checksum::DutchPassportChecksum;
 pub use crate::secondary_validation::ethereum_checksum::EthereumChecksum;
 pub use crate::secondary_validation::finnish_hetu_checksum::FinnishHetuChecksum;
@@ -147,7 +147,7 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::CzechTaxIdentificationNumberChecksum => {
                 CzechTaxIdentificationNumberChecksum.is_valid_match(regex_match)
             }
-            SecondaryValidator::DutchDsnChecksum => DutchDsnChecksum.is_valid_match(regex_match),
+            SecondaryValidator::DutchBsnChecksum => DutchBsnChecksum.is_valid_match(regex_match),
             SecondaryValidator::DutchPassportChecksum => {
                 DutchPassportChecksum.is_valid_match(regex_match)
             }

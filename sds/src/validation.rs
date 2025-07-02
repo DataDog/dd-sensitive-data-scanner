@@ -1,6 +1,10 @@
-use crate::normalization::rust_regex_adapter::{convert_to_rust_regex, QUANTIFIER_LIMIT};
+use crate::normalization::rust_regex_adapter::{
+    convert_to_rust_regex, convert_to_rust_regex_ast, QUANTIFIER_LIMIT,
+};
 use crate::parser::error::ParseError;
 use regex_automata::meta::{self};
+use regex_syntax::ast::Ast;
+use regex_syntax::hir::translate::Translator;
 use thiserror::Error;
 
 #[derive(Debug, PartialEq, Eq, Error)]
@@ -63,12 +67,33 @@ pub fn get_regex_complexity_estimate_very_slow(input: &str) -> Result<usize, Reg
 
 pub fn validate_and_create_regex(input: &str) -> Result<meta::Regex, RegexValidationError> {
     // This validates that the syntax is valid and normalizes behavior.
-    let converted_pattern = convert_to_rust_regex(input)?;
-    let regex = build_regex(&converted_pattern, REGEX_COMPLEXITY_LIMIT)?;
-    if regex.is_match("") {
-        return Err(RegexValidationError::MatchesEmptyString);
-    }
+    let ast = convert_to_rust_regex_ast(input)?;
+    let pattern = ast.to_string();
+
+    // Ensure that zero-length matches are not possible
+    check_minimum_match_length(&ast, &pattern)?;
+
+    let regex = build_regex(&pattern.to_string(), REGEX_COMPLEXITY_LIMIT)?;
     Ok(regex)
+}
+
+fn check_minimum_match_length(ast: &Ast, ast_str: &str) -> Result<(), RegexValidationError> {
+    let hir = Translator::new()
+        .translate(ast_str, ast)
+        .map_err(|_| RegexValidationError::InvalidSyntax)?;
+    match hir.properties().minimum_len() {
+        None => {
+            // This pattern cannot ever match
+            Err(RegexValidationError::InvalidSyntax)
+        }
+        Some(min_length) => {
+            if min_length == 0 {
+                Err(RegexValidationError::MatchesEmptyString)
+            } else {
+                Ok(())
+            }
+        }
+    }
 }
 
 fn is_regex_within_complexity_limit(
@@ -181,6 +206,14 @@ mod test {
         assert_eq!(
             get_regex_complexity_estimate_very_slow(".{1,1000}"),
             Ok(1_040_136)
+        );
+    }
+
+    #[test]
+    fn test_empty_match_without_empty_string() {
+        assert_eq!(
+            validate_regex("\\bx{0,2}\\b"),
+            Err(RegexValidationError::MatchesEmptyString)
         );
     }
 }
