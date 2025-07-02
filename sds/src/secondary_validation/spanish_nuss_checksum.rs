@@ -68,14 +68,14 @@ mod test {
         ];
 
         for nuss in valid_nuss {
-            println!("Spanish NUSS: {}", nuss);
+            println!("Spanish NUSS: {nuss}");
             assert!(SpanishNussChecksum.is_valid_match(nuss));
 
             // Test with invalid checksum
             let mut invalid_nuss = nuss[..10].to_string();
             let new_checksum = ((nuss[10..].parse::<u32>().unwrap() + 1) % 100).to_string();
-            invalid_nuss.push_str(&format!("{:0>2}", new_checksum));
-            println!("Spanish NUSS with invalid checksum: {}", invalid_nuss);
+            invalid_nuss.push_str(&format!("{new_checksum:0>2}"));
+            println!("Spanish NUSS with invalid checksum: {invalid_nuss}");
             assert!(!SpanishNussChecksum.is_valid_match(&invalid_nuss));
         }
 
@@ -88,7 +88,7 @@ mod test {
         ];
 
         for nuss in invalid_formats {
-            println!("Invalid format NUSS: {}", nuss);
+            println!("Invalid format NUSS: {nuss}");
             assert!(!SpanishNussChecksum.is_valid_match(nuss));
         }
     }

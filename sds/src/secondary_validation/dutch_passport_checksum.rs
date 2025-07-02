@@ -39,7 +39,7 @@ mod test {
         ];
 
         for passport in valid_passports {
-            println!("Dutch passport number: {}", passport);
+            println!("Dutch passport number: {passport}");
             assert!(DutchPassportChecksum.is_valid_match(passport));
         }
 
@@ -49,7 +49,7 @@ mod test {
         ];
 
         for passport in invalid_formats {
-            println!("Invalid format passport number: {}", passport);
+            println!("Invalid format passport number: {passport}");
             assert!(!DutchPassportChecksum.is_valid_match(passport));
         }
     }

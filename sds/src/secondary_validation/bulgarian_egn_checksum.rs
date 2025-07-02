@@ -45,8 +45,7 @@ mod test {
         for egn in &valid_egns {
             assert!(
                 validator.is_valid_match(egn),
-                "EGN should be valid: {}",
-                egn
+                "EGN should be valid: {egn}"
             );
         }
     }
@@ -63,8 +62,7 @@ mod test {
         for egn in &invalid_egns {
             assert!(
                 !validator.is_valid_match(egn),
-                "EGN should be invalid: {}",
-                egn
+                "EGN should be invalid: {egn}"
             );
         }
     }

@@ -81,7 +81,7 @@ mod test {
             "212 40284 M 032", // https://www.settle-in-berlin.com/health-insurance-germany/social-security-number-germany/#your-yearly-summary-sent-by-your-krankenkasse
         ];
         for id in valid_ids {
-            println!("testing for input {}", id);
+            println!("testing for input {id}");
             assert!(GermanSvnrChecksum.is_valid_match(id));
         }
     }
@@ -100,7 +100,7 @@ mod test {
             "1",
         ];
         for id in invalid_ids {
-            println!("testing for input {}", id);
+            println!("testing for input {id}");
             assert!(!GermanSvnrChecksum.is_valid_match(id));
         }
     }

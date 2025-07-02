@@ -21,7 +21,7 @@ impl Validator for FinnishHetuChecksum {
             None => return false,
         };
 
-        let numeric_value = format!("{}{}", date_part, individual_number);
+        let numeric_value = format!("{date_part}{individual_number}");
         let numeric_value = match numeric_value.parse::<usize>() {
             Ok(value) => value,
             Err(_) => return false,
@@ -49,15 +49,14 @@ mod test {
         ];
 
         for hetu in valid_hetus {
-            println!("Finnish HETU: {}", hetu);
+            println!("Finnish HETU: {hetu}");
             assert!(FinnishHetuChecksum.is_valid_match(hetu));
 
             // Test with invalid control character
             let mut invalid_hetu = hetu[..10].to_string();
             invalid_hetu.push('X'); // Invalid control character
             println!(
-                "Finnish HETU with invalid control character: {}",
-                invalid_hetu
+                "Finnish HETU with invalid control character: {invalid_hetu}"
             );
             assert!(!FinnishHetuChecksum.is_valid_match(&invalid_hetu));
         }
@@ -74,7 +73,7 @@ mod test {
         ];
 
         for hetu in invalid_formats {
-            println!("Invalid format HETU: {}", hetu);
+            println!("Invalid format HETU: {hetu}");
             assert!(!FinnishHetuChecksum.is_valid_match(hetu));
         }
     }
