@@ -43,10 +43,7 @@ mod test {
         ];
         let validator = BulgarianEGNChecksum;
         for egn in &valid_egns {
-            assert!(
-                validator.is_valid_match(egn),
-                "EGN should be valid: {egn}"
-            );
+            assert!(validator.is_valid_match(egn), "EGN should be valid: {egn}");
         }
     }
 

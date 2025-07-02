@@ -55,9 +55,7 @@ mod test {
             // Test with invalid control character
             let mut invalid_hetu = hetu[..10].to_string();
             invalid_hetu.push('X'); // Invalid control character
-            println!(
-                "Finnish HETU with invalid control character: {invalid_hetu}"
-            );
+            println!("Finnish HETU with invalid control character: {invalid_hetu}");
             assert!(!FinnishHetuChecksum.is_valid_match(&invalid_hetu));
         }
 
