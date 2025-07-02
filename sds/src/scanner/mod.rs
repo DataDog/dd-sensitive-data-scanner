@@ -13,7 +13,9 @@ use crate::observability::labels::Labels;
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
-use crate::{CreateScannerError, EncodeIndices, MatchAction, Path, ScannerError, RegexValidationError};
+use crate::{
+    CreateScannerError, EncodeIndices, MatchAction, Path, RegexValidationError, ScannerError,
+};
 use std::ops::Deref;
 use std::sync::Arc;
 
