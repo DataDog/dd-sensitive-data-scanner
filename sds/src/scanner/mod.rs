@@ -733,7 +733,10 @@ impl ScannerBuilder<'_> {
                                 )
                         {
                             // this is a temporary feature to skip rules that should be considered invalid.
-                            println!("skipping rule that matches empty string: rule_index={}, labels={:?}", rule_index, self.labels.clone());
+                            #[allow(clippy::print_stdout)]
+                            {
+                                println!("skipping rule that matches empty string: rule_index={}, labels={:?}", rule_index, self.labels.clone());
+                            }
                             return None;
                         } else {
                             Err(err)
