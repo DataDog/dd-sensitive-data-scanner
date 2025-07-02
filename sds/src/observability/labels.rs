@@ -67,14 +67,12 @@ impl<'de> Deserialize<'de> for Labels {
                 while let Some(element) = seq.next_element::<Vec<String>>()? {
                     if element.len() < 2 {
                         return Err(Error::custom(format!(
-                            "list `{:?}` contains a single element, two elements (key and value) are required",
-                            element
+                            "list `{element:?}` contains a single element, two elements (key and value) are required"
                         )));
                     }
                     if element.len() > 2 {
                         return Err(Error::custom(format!(
-                            "list `{:?}` contains more than two elements, only two elements (key and value) are allowed",
-                            element
+                            "list `{element:?}` contains more than two elements, only two elements (key and value) are allowed"
                         )));
                     }
                     label_list.push((

@@ -43,8 +43,7 @@ mod test {
         for address in valid_addresses {
             assert!(
                 BtcChecksum.is_valid_match(address),
-                "Failed for address: {}",
-                address
+                "Failed for address: {address}"
             );
         }
     }
@@ -86,8 +85,7 @@ mod test {
         for address in invalid_addresses {
             assert!(
                 !BtcChecksum.is_valid_match(address),
-                "Should be invalid: {}",
-                address
+                "Should be invalid: {address}"
             );
         }
     }

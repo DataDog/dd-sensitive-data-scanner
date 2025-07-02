@@ -63,7 +63,7 @@ mod test {
         ];
 
         for nuss in valid_nuss {
-            println!("Spanish NUSS: {}", nuss);
+            println!("Spanish NUSS: {nuss}");
             assert!(SpanishNussChecksum.is_valid_match(nuss));
         }
 
@@ -76,7 +76,7 @@ mod test {
         ];
 
         for nuss in invalid_formats {
-            println!("Invalid format NUSS: {}", nuss);
+            println!("Invalid format NUSS: {nuss}");
             assert!(!SpanishNussChecksum.is_valid_match(nuss));
         }
     }

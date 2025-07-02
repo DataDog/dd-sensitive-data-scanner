@@ -161,8 +161,7 @@ impl MatchValidator for AwsValidator {
                     Ok(val) => handle_reqwest_response(match_status, &val),
                     Err(err) => {
                         *match_status = MatchStatus::Error(fmt::format(format_args!(
-                            "Error making HTTP request: {}",
-                            err
+                            "Error making HTTP request: {err}"
                         )));
                     }
                 };

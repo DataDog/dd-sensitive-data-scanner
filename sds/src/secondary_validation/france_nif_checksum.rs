@@ -34,7 +34,7 @@ mod test {
             "07-01😇987.765C493", // Allow any non-digit character
         ];
         for id in valid_ids {
-            println!("testing for input {}", id);
+            println!("testing for input {id}");
             assert!(FranceNifChecksum.is_valid_match(id));
         }
     }
@@ -49,7 +49,7 @@ mod test {
             "1",
         ];
         for id in invalid_ids {
-            println!("testing for input {}", id);
+            println!("testing for input {id}");
             assert!(!FranceNifChecksum.is_valid_match(id));
         }
     }
