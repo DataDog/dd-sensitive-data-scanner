@@ -36,7 +36,7 @@ mod test {
             "1112 22 333", // BSN
         ];
         for id in valid_ids {
-            println!("testing for input {}", id);
+            println!("testing for input {id}");
             assert!(DutchBsnChecksum.is_valid_match(id));
         }
     }
@@ -53,7 +53,7 @@ mod test {
             "1",
         ];
         for id in invalid_ids {
-            println!("testing for input {}", id);
+            println!("testing for input {id}");
             assert!(!DutchBsnChecksum.is_valid_match(id));
         }
     }

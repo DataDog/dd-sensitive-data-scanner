@@ -830,7 +830,7 @@ mod test {
 
         // add all unicode categories to tests
         for property_name in UNICODE_PROPERTY_NAMES {
-            let pattern = format!("\\p{{{}}}", property_name);
+            let pattern = format!("\\p{{{property_name}}}");
             dynamic_test_cases.push((pattern.clone(), pattern));
         }
 
@@ -842,8 +842,8 @@ mod test {
             let actual_output = match catch_unwind(|| convert_to_rust_regex(&input).unwrap()) {
                 Ok(x) => x,
                 Err(err) => {
-                    println!("Input caused a panic: {:?}", input);
-                    panic!("{:?}", err);
+                    println!("Input caused a panic: {input:?}");
+                    panic!("{err:?}");
                 }
             };
 
@@ -854,8 +854,7 @@ mod test {
                     expected_output.to_string().into_bytes()
                 );
                 panic!(
-                    "Conversion failed for input: {}\n  Actual: {}\nExpected: {}",
-                    input, actual_output, expected_output
+                    "Conversion failed for input: {input}\n  Actual: {actual_output}\nExpected: {expected_output}"
                 );
             }
 
@@ -867,7 +866,7 @@ mod test {
     #[test]
     fn test_validation() {
         // exact repetition
-        assert!(convert_to_rust_regex(&format!("x{{{}}}", QUANTIFIER_LIMIT)).is_ok());
+        assert!(convert_to_rust_regex(&format!("x{{{QUANTIFIER_LIMIT}}}")).is_ok());
         assert_eq!(
             convert_to_rust_regex(&format!("x{{{}}}", QUANTIFIER_LIMIT + 1)),
             Err(ParseError::ExceededQuantifierLimit)
@@ -890,7 +889,7 @@ mod test {
         );
 
         // min range repetition
-        assert!(convert_to_rust_regex(&format!("x{{{},}}", QUANTIFIER_LIMIT)).is_ok());
+        assert!(convert_to_rust_regex(&format!("x{{{QUANTIFIER_LIMIT},}}")).is_ok());
         assert_eq!(
             convert_to_rust_regex(&format!("x{{{},}}", QUANTIFIER_LIMIT + 1)),
             Err(ParseError::ExceededQuantifierLimit)

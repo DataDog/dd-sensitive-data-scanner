@@ -68,7 +68,7 @@ impl FromStr for HttpMethod {
             "PUT" => Ok(HttpMethod::Put),
             "DELETE" => Ok(HttpMethod::Delete),
             "PATCH" => Ok(HttpMethod::Patch),
-            _ => Err(format!("Invalid HTTP method: {}", s)),
+            _ => Err(format!("Invalid HTTP method: {s}")),
         }
     }
 }
