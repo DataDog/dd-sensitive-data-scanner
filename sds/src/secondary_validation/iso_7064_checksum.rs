@@ -86,7 +86,7 @@ mod test {
             "26954371827",
         ];
         for numbers in valid_numbers {
-            println!("testing for input {}", numbers);
+            println!("testing for input {numbers}");
             assert!(Mod11_10checksum.is_valid_match(numbers));
         }
     }
@@ -95,7 +95,7 @@ mod test {
     fn test_invalid_11_10() {
         let valid_numbers = vec!["00 000 000 000.", "30405607809"];
         for numbers in valid_numbers {
-            println!("testing for input {}", numbers);
+            println!("testing for input {numbers}");
             assert!(!Mod11_10checksum.is_valid_match(numbers));
         }
     }
@@ -121,7 +121,7 @@ mod test {
             "513231200012121892",
         ];
         for id in valid_ids {
-            println!("testing for input {}", id);
+            println!("testing for input {id}");
             assert!(Mod11_2checksum.is_valid_match(id));
         }
     }
@@ -139,7 +139,7 @@ mod test {
             "513231200012Àñô",
         ];
         for id in invalid_ids {
-            println!("testing for input {}", id);
+            println!("testing for input {id}");
             assert!(!Mod11_2checksum.is_valid_match(id));
         }
     }

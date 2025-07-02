@@ -33,7 +33,7 @@ mod test {
             "513231200012121892",
         ];
         for id in valid_ids {
-            println!("testing for input {}", id);
+            println!("testing for input {id}");
             assert!(ChineseIdChecksum.is_valid_match(id));
         }
     }
@@ -51,7 +51,7 @@ mod test {
             "513231200012Àñô",
         ];
         for id in invalid_ids {
-            println!("testing for input {}", id);
+            println!("testing for input {id}");
             assert!(!ChineseIdChecksum.is_valid_match(id));
         }
     }

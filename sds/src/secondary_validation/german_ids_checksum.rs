@@ -55,7 +55,7 @@ mod test {
             "👍lz6311t475", // ignored character
         ];
         for id in valid_ids {
-            println!("testing for input {}", id);
+            println!("testing for input {id}");
             assert!(GermanIdsChecksum.is_valid_match(id));
         }
     }
@@ -67,7 +67,7 @@ mod test {
             "C01X00T470",
         ];
         for id in invalid_ids {
-            println!("testing for input {}", id);
+            println!("testing for input {id}");
             assert!(!GermanIdsChecksum.is_valid_match(id));
         }
     }
