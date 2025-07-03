@@ -147,10 +147,10 @@ impl Display for Path<'_> {
                     if i != 0 {
                         write!(f, ".")?;
                     }
-                    write!(f, "{}", field)?;
+                    write!(f, "{field}")?;
                 }
                 PathSegment::Index(i) => {
-                    write!(f, "[{}]", i)?;
+                    write!(f, "[{i}]")?;
                 }
             }
         }

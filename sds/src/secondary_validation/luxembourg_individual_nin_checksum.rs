@@ -60,7 +60,7 @@ mod test {
             "1966051507682",
         ];
         for nin in luxembourg_nins {
-            println!("luxembourg national identification number: {}", nin);
+            println!("luxembourg national identification number: {nin}");
             assert!(LuxembourgIndividualNINChecksum.is_valid_match(nin));
 
             let verhoeff_digit = nin.chars().last().unwrap();
@@ -68,21 +68,19 @@ mod test {
             let nin_without_checksum = &nin[..nin.len() - 2];
 
             let mut invalid_verhoeff_nin = nin_without_checksum.to_string();
-            invalid_verhoeff_nin.push_str(&luhn_digit.to_string());
+            invalid_verhoeff_nin.push(luhn_digit);
             invalid_verhoeff_nin
                 .push_str(&((verhoeff_digit.to_digit(10).unwrap() + 1) % 10).to_string());
             println!(
-                "luxembourg national identification number with invalid verhoeff checksum: {}",
-                invalid_verhoeff_nin
+                "luxembourg national identification number with invalid verhoeff checksum: {invalid_verhoeff_nin}"
             );
             assert!(!LuxembourgIndividualNINChecksum.is_valid_match(&invalid_verhoeff_nin));
 
             let mut invalid_luhn_nin = nin_without_checksum.to_string();
             invalid_luhn_nin.push_str(&((luhn_digit.to_digit(10).unwrap() + 1) % 10).to_string());
-            invalid_luhn_nin.push_str(&verhoeff_digit.to_string());
+            invalid_luhn_nin.push(verhoeff_digit);
             println!(
-                "luxembourg national identification number with invalid luhn checksum: {}",
-                invalid_luhn_nin
+                "luxembourg national identification number with invalid luhn checksum: {invalid_luhn_nin}"
             );
             assert!(!LuxembourgIndividualNINChecksum.is_valid_match(&invalid_luhn_nin));
         }

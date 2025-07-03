@@ -494,7 +494,7 @@ fn test_mock_aws_validator() {
         .unwrap();
 
     let mut content = fmt::format(format_args!(
-        "content with a valid aws_id {}, an invalid aws_id {}, an error aws_id {} and an aws_secret {} and an other aws_secret {}", aws_id_valid, aws_id_invalid, aws_id_error, aws_secret_1, aws_secret_2));
+        "content with a valid aws_id {aws_id_valid}, an invalid aws_id {aws_id_invalid}, an error aws_id {aws_id_error} and an aws_secret {aws_secret_1} and an other aws_secret {aws_secret_2}"));
     let mut matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 5);
     assert_eq!(

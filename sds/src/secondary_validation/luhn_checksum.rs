@@ -62,7 +62,7 @@ mod test {
             "6331101999990016",
         ];
         for credit_card in credit_cards {
-            println!("credit card input: {}", credit_card);
+            println!("credit card input: {credit_card}");
             assert!(LuhnChecksum.is_valid_match(credit_card));
 
             let (split_credit_card, last_digit) = credit_card.split_at(credit_card.len() - 1);
@@ -70,7 +70,7 @@ mod test {
             wrong_credit_card
                 .push_str(&((last_digit.parse::<u32>().unwrap() + 1) * 2 % 10).to_string());
 
-            println!("wrong credit card input: {}", wrong_credit_card);
+            println!("wrong credit card input: {wrong_credit_card}");
 
             assert!(!LuhnChecksum.is_valid_match(&wrong_credit_card));
         }

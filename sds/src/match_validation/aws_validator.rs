@@ -5,11 +5,11 @@ use super::{
     match_validator::MatchValidator,
     validator_utils::generate_aws_headers_and_body,
 };
+use crate::match_validation::match_validator::RAYON_THREAD_POOL;
 use crate::scanner::RootCompiledRule;
 use crate::{MatchStatus, RuleMatch};
 use ahash::AHashMap;
 use lazy_static::lazy_static;
-use rayon::prelude::*;
 use reqwest::Client;
 
 lazy_static! {
@@ -122,51 +122,55 @@ impl MatchValidator for AwsValidator {
             self.get_match_status_per_pairs_of_matches_idx(matches, scanner_rules);
 
         // Let's try all combination of aws_id and aws_secret
-        match_status_per_pairs_of_matches_idx
-            .par_iter_mut()
-            .for_each(|((id_index, secret_index), match_status)| {
-                let match_id = &matches[*id_index].match_value;
-                let match_secret = &matches[*secret_index].match_value;
-                if match_secret.is_none() {
-                    *match_status =
-                        MatchStatus::Error("Missing match value for aws_secret".to_string());
-                    return;
-                }
-                if match_id.is_none() {
-                    *match_status =
-                        MatchStatus::Error("Missing match value for aws_id".to_string());
-                    return;
-                }
-                let match_secret = extract_aws_secret_from_match(match_secret.as_ref().unwrap());
-                let match_id = match_id.as_ref().unwrap();
-                // Let's reqwest the HTTP API endpoint to validate the matches
-                let mut datetime = chrono::Utc::now();
-                if self.config.forced_datetime_utc.is_some() {
-                    datetime = self.config.forced_datetime_utc.unwrap()
-                }
-                let (body, headers) = generate_aws_headers_and_body(
-                    &datetime,
-                    &self.config.aws_sts_endpoint,
-                    match_id,
-                    &match_secret,
-                );
-                let res = AWS_BLOCKING_CLIENT
-                    .post(self.config.aws_sts_endpoint.as_str())
-                    .headers(headers)
-                    .body(body)
-                    .timeout(self.config.timeout)
-                    .send();
+        RAYON_THREAD_POOL.install(|| {
+            use rayon::prelude::*;
 
-                match res {
-                    Ok(val) => handle_reqwest_response(match_status, &val),
-                    Err(err) => {
-                        *match_status = MatchStatus::Error(fmt::format(format_args!(
-                            "Error making HTTP request: {}",
-                            err
-                        )));
+            match_status_per_pairs_of_matches_idx
+                .par_iter_mut()
+                .for_each(|((id_index, secret_index), match_status)| {
+                    let match_id = &matches[*id_index].match_value;
+                    let match_secret = &matches[*secret_index].match_value;
+                    if match_secret.is_none() {
+                        *match_status =
+                            MatchStatus::Error("Missing match value for aws_secret".to_string());
+                        return;
                     }
-                };
-            });
+                    if match_id.is_none() {
+                        *match_status =
+                            MatchStatus::Error("Missing match value for aws_id".to_string());
+                        return;
+                    }
+                    let match_secret =
+                        extract_aws_secret_from_match(match_secret.as_ref().unwrap());
+                    let match_id = match_id.as_ref().unwrap();
+                    // Let's reqwest the HTTP API endpoint to validate the matches
+                    let mut datetime = chrono::Utc::now();
+                    if self.config.forced_datetime_utc.is_some() {
+                        datetime = self.config.forced_datetime_utc.unwrap()
+                    }
+                    let (body, headers) = generate_aws_headers_and_body(
+                        &datetime,
+                        &self.config.aws_sts_endpoint,
+                        match_id,
+                        &match_secret,
+                    );
+                    let res = AWS_BLOCKING_CLIENT
+                        .post(self.config.aws_sts_endpoint.as_str())
+                        .headers(headers)
+                        .body(body)
+                        .timeout(self.config.timeout)
+                        .send();
+
+                    match res {
+                        Ok(val) => handle_reqwest_response(match_status, &val),
+                        Err(err) => {
+                            *match_status = MatchStatus::Error(fmt::format(format_args!(
+                                "Error making HTTP request: {err}"
+                            )));
+                        }
+                    };
+                });
+        });
 
         merge_returned_match_status_with_better_status(
             matches,

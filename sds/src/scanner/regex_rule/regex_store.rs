@@ -183,7 +183,7 @@ mod test {
         // insert enough new patterns to trigger a GC
         for i in 0..(GC_FREQUENCY - 1) {
             let regex =
-                get_memoized_regex_with_custom_store(&format!("test-{}", i), Regex::new, &store)
+                get_memoized_regex_with_custom_store(&format!("test-{i}"), Regex::new, &store)
                     .unwrap();
             drop(regex)
         }

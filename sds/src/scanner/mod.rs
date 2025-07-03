@@ -5,7 +5,6 @@ use crate::match_validation::{
     config::InternalMatchValidationType, config::MatchValidationType, match_status::MatchStatus,
     match_validator::MatchValidator,
 };
-use rayon::prelude::*;
 
 use error::{MatchValidationError, MatchValidatorCreationError};
 
@@ -20,6 +19,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use self::metrics::ScannerMetrics;
+use crate::match_validation::match_validator::RAYON_THREAD_POOL;
 use crate::scanner::config::RuleConfig;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::{access_regex_caches, RegexCaches};
@@ -466,16 +466,20 @@ impl Scanner {
             }
         }
 
-        match_validator_rule_match_per_type.par_iter_mut().for_each(
-            |(match_validation_type, matches_per_type)| {
-                let match_validator = self.match_validators_per_type.get(match_validation_type);
-                if let Some(match_validator) = match_validator {
-                    match_validator
-                        .as_ref()
-                        .validate(matches_per_type, &self.rules)
-                }
-            },
-        );
+        RAYON_THREAD_POOL.install(|| {
+            use rayon::prelude::*;
+
+            match_validator_rule_match_per_type.par_iter_mut().for_each(
+                |(match_validation_type, matches_per_type)| {
+                    let match_validator = self.match_validators_per_type.get(match_validation_type);
+                    if let Some(match_validator) = match_validator {
+                        match_validator
+                            .as_ref()
+                            .validate(matches_per_type, &self.rules)
+                    }
+                },
+            );
+        });
 
         // Refill the rule_matches with the validated matches
         for (_, mut matches) in match_validator_rule_match_per_type {
@@ -746,6 +750,11 @@ impl ScannerBuilder<'_> {
                                     RegexValidationError::MatchesEmptyString,
                                 )
                         {
+                            // this is a temporary feature to skip rules that should be considered invalid.
+                            #[allow(clippy::print_stdout)]
+                            {
+                                println!("skipping rule that matches empty string: rule_index={}, labels={:?}", rule_index, self.labels.clone());
+                            }
                             return None;
                         } else {
                             Err(err)

@@ -44,7 +44,7 @@ mod test {
             "280794-12344",
         ];
         for id in old_latvia_national_ids {
-            println!("Old latvia national identification number: {}", id);
+            println!("Old latvia national identification number: {id}");
             assert!(LatviaNationalIdChecksum.is_valid_match(id));
 
             let checksum = id.chars().last().unwrap();
@@ -53,8 +53,7 @@ mod test {
             let mut invalid_checksum = id_without_checksum.to_string();
             invalid_checksum.push_str(&((checksum.to_digit(10).unwrap() + 1) % 10).to_string());
             println!(
-                "latvia national identification number with invalid checksum: {}",
-                invalid_checksum
+                "latvia national identification number with invalid checksum: {invalid_checksum}"
             );
             assert!(!LatviaNationalIdChecksum.is_valid_match(&invalid_checksum));
         }
@@ -65,7 +64,7 @@ mod test {
             "32001010003",
         ];
         for id in new_latvia_national_ids {
-            println!("New latvia national identification number: {}", id);
+            println!("New latvia national identification number: {id}");
             assert!(LatviaNationalIdChecksum.is_valid_match(id));
         }
     }
