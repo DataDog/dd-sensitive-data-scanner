@@ -25,7 +25,6 @@ use crate::scanner::scope::Scope;
 pub use crate::scanner::shared_data::SharedData;
 use crate::stats::GLOBAL_STATS;
 use ahash::{AHashMap, AHashSet};
-use rayon::iter::IntoParallelRefMutIterator;
 use regex_automata::Match;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;

@@ -10,7 +10,6 @@ use crate::scanner::RootCompiledRule;
 use crate::{MatchStatus, RuleMatch};
 use ahash::AHashMap;
 use lazy_static::lazy_static;
-use rayon::iter::IntoParallelRefMutIterator;
 use reqwest::Client;
 
 lazy_static! {

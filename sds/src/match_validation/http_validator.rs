@@ -7,7 +7,6 @@ use crate::{match_validation::config::HttpMethod, MatchStatus, RuleMatch};
 use crate::{scanner::RootCompiledRule, HttpValidatorOption};
 use ahash::AHashMap;
 use lazy_static::lazy_static;
-use rayon::iter::IntoParallelRefMutIterator;
 use reqwest::blocking::Response;
 use std::{fmt, ops::Range, time::Duration};
 
