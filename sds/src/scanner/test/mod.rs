@@ -360,7 +360,6 @@ fn test_blocked_rules() {
 
     // Scan with blocked rules
     let mut content = "hello world".to_string();
-    println!("We're going to scan with options");
     let matches = scanner
         .scan_with_options(
             &mut content,
@@ -369,7 +368,6 @@ fn test_blocked_rules() {
                 .build(),
         )
         .unwrap();
-    println!("Matches: {:?}", matches);
     assert_eq!(content, "hello world");
     assert_eq!(matches.len(), 0);
 }
