@@ -24,13 +24,13 @@ fn test_luhn_checksum() {
             .build()
             .unwrap();
     let mut content = "4556997807150071  4111 1111 1111 1111".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 2);
     assert_eq!(content, "[credit card]  [credit card]");
 
     let scanner = ScannerBuilder::new(&[rule_with_checksum]).build().unwrap();
     let mut content = "4556997807150071  4111 1111 1111 1111".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "4556997807150071  [credit card]");
 }
@@ -52,13 +52,13 @@ fn test_chinese_id_checksum() {
             .build()
             .unwrap();
     let mut content = "513231200012121657 513231200012121651".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 2);
     assert_eq!(content, "[IDCARD] [IDCARD]");
 
     let scanner = ScannerBuilder::new(&[rule_with_checksum]).build().unwrap();
     let mut content = "513231200012121657 513231200012121651".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "[IDCARD] 513231200012121651");
 }
@@ -79,7 +79,7 @@ fn test_iban_checksum() {
     let scanner = ScannerBuilder::new(&[rule_with_checksum.clone()])
         .build()
         .unwrap();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "number=[IBAN]");
 
@@ -88,7 +88,7 @@ fn test_iban_checksum() {
     let scanner = ScannerBuilder::new(&[rule_with_checksum.clone()])
         .build()
         .unwrap();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 0);
     assert_eq!(content, "number=DE34500105175407324931");
 }
@@ -112,7 +112,7 @@ fn test_github_token_checksum() {
     let mut content =
         "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 ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5"
             .to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 2);
     assert_eq!(content, "[GITHUB] [GITHUB]");
 
@@ -120,7 +120,7 @@ fn test_github_token_checksum() {
     let mut content =
         "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 ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5"
             .to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "[GITHUB] ghp_M7H4jxUDDWHP4kZ6A4dxlQYsQIWJuq11T4V5");
 }
@@ -140,13 +140,13 @@ fn test_jwt_expiration_checker() {
     let future_time_as_string = (Utc::now().timestamp() + 1000000).to_string();
 
     let mut content = generate_jwt(future_time_as_string).to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "[JWT]");
 
     let past_time_as_string = (Utc::now().timestamp() - 1000000).to_string();
     let mut content = generate_jwt(past_time_as_string).to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 0);
 }
 
@@ -166,7 +166,7 @@ fn test_nhs_checksum() {
     let scanner = ScannerBuilder::new(&[rule_with_checksum.clone()])
         .build()
         .unwrap();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "[NHS]");
 }

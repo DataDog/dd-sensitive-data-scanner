@@ -73,7 +73,7 @@ fn dumb_custom_rule() {
 
     let mut input = "this is a secret with random data".to_owned();
 
-    let matched_rules = scanner.scan(&mut input);
+    let matched_rules = scanner.scan(&mut input).unwrap();
 
     assert_eq!(matched_rules.len(), 1);
     assert_eq!(input, "this is a [REDACTED] with random data");
@@ -98,7 +98,7 @@ fn test_mixed_rules() {
 
     let mut input = "this is a dumbss with random data and a secret".to_owned();
 
-    let matched_rules = scanner.scan(&mut input);
+    let matched_rules = scanner.scan(&mut input).unwrap();
 
     assert_eq!(matched_rules.len(), 2);
     assert_eq!(
@@ -120,7 +120,7 @@ fn simple_redaction() {
 
     let mut input = "text with secret".to_owned();
 
-    let matched_rules = scanner.scan(&mut input);
+    let matched_rules = scanner.scan(&mut input).unwrap();
 
     assert_eq!(matched_rules.len(), 1);
     assert_eq!(input, "text with [REDACTED]");
@@ -140,7 +140,7 @@ fn simple_redaction_with_additional_labels() {
 
     let mut input = "text with secret".to_owned();
 
-    let matched_rules = scanner.scan(&mut input);
+    let matched_rules = scanner.scan(&mut input).unwrap();
 
     assert_eq!(matched_rules.len(), 1);
     assert_eq!(input, "text with [REDACTED]");
@@ -188,7 +188,7 @@ fn multiple_replacements() {
 
     let mut content = "testing 1 2 3".to_string();
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
 
     assert_eq!(content, "testing [REDACTED] [REDACTED] [REDACTED]");
     assert_eq!(matches.len(), 3);
@@ -205,7 +205,7 @@ fn match_rule_index() {
 
     let mut content = "a b".to_string();
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
 
     assert_eq!(content, "a b");
     assert_eq!(matches.len(), 2);
@@ -272,7 +272,7 @@ fn test_indices() {
     for (rule_config, input, expected_indices) in test_cases {
         let scanner = ScannerBuilder::new(rule_config.leak()).build().unwrap();
         let mut input = input.to_string();
-        let matches = scanner.scan(&mut input);
+        let matches = scanner.scan(&mut input).unwrap();
 
         assert_eq!(matches.len(), expected_indices.len());
         for (rule_match, expected_range) in matches.iter().zip(expected_indices) {
@@ -316,7 +316,7 @@ fn test_included_keywords_match_path_case_insensitive() {
         )])),
     )]));
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
 }
 
@@ -338,7 +338,7 @@ fn test_included_keywords_path_not_matching() {
         ]),
     )]));
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 0);
 }
 
@@ -354,19 +354,21 @@ fn test_blocked_rules() {
     let mut content = "hello world".to_string();
 
     // Scan with no blocked rules
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(content, "hello [REDACTED]");
     assert_eq!(matches.len(), 1);
 
     // Scan with blocked rules
     let mut content = "hello world".to_string();
     println!("We're going to scan with options");
-    let matches = scanner.scan_with_options(
-        &mut content,
-        ScanOptionBuilder::new()
-            .with_blocked_rules_idx(vec![0])
-            .build(),
-    );
+    let matches = scanner
+        .scan_with_options(
+            &mut content,
+            ScanOptionBuilder::new()
+                .with_blocked_rules_idx(vec![0])
+                .build(),
+        )
+        .unwrap();
     println!("Matches: {:?}", matches);
     assert_eq!(content, "hello world");
     assert_eq!(matches.len(), 0);
@@ -389,12 +391,12 @@ fn test_excluded_keywords() {
 
     let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
     let mut content = "hello world".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(content, "hello world");
     assert_eq!(matches.len(), 0);
 
     let mut content = "he**o world".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(content, "he**o [REDACTED]");
     assert_eq!(matches.len(), 1);
 }
@@ -410,7 +412,7 @@ fn test_multiple_partial_redactions() {
 
     let scanner = ScannerBuilder::new(&[rule.clone(), rule]).build().unwrap();
     let mut content = "hello world".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
 
     assert_eq!(matches.len(), 3);
     assert_eq!(content, "*el*o *orld");
@@ -499,7 +501,7 @@ fn should_skip_match_when_present_in_excluded_matches() {
         ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
     ]));
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
 
     // "test" is excluded because it matches the excluded scope.
     // Both "a-match" and "z-match" are excluded due to having the
@@ -534,7 +536,7 @@ fn should_be_able_to_disable_multipass_v0() {
         ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
     ]));
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
 
     // "test" is excluded because it matches the excluded scope.
     // Both "a-match" and "z-match" are kept since multipass V0 is disabled
@@ -571,7 +573,8 @@ fn should_not_exclude_false_positive_matches() {
         ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
     ]));
 
-    let matches = scanner.scan(&mut content);
+    // This is a regex so we're safe to unwrap
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
 }
 
@@ -583,8 +586,11 @@ fn test_calculate_indices_is_called_with_sorted_start_index() {
     impl crate::Event for OrderAssertEvent {
         type Encoding = AssertOrderEncoding;
 
-        fn visit_event<'a>(&'a mut self, visitor: &mut impl crate::EventVisitor<'a>) {
-            self.0.visit_event(visitor)
+        fn visit_event<'a>(
+            &'a mut self,
+            visitor: &mut impl crate::EventVisitor<'a>,
+        ) -> Result<(), crate::ScannerError> {
+            self.0.visit_event(visitor).map(|_| {})
         }
 
         fn visit_string_mut(&mut self, path: &Path, visit: impl FnMut(&mut String) -> bool) {
@@ -644,7 +650,7 @@ fn test_calculate_indices_is_called_with_sorted_start_index() {
         SimpleEvent::String("abc-efg".to_string()),
     )])));
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 2);
 }
 
@@ -658,7 +664,7 @@ fn test_hash_with_leading_zero() {
     let mut content =
         SimpleEvent::String("rand string that has a leading zero after hashing: y".to_string());
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
 
     // normally 09d99e4b6ad0d289, but the leading 0 is removed
@@ -675,7 +681,7 @@ fn test_hash_with_leading_zero_utf16() {
 
     let mut content = "rand string that has a leading zero after hashing: S".to_string();
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
 
     // normally 08c3ad1a22e2edb1, but the leading 0 is removed
@@ -700,7 +706,7 @@ fn test_internal_overlapping_matches() {
     // The last 4 numbers (which overlap with the first match) pass the checksum.
     let mut content = "[5€184,5185,5252,5052,5005]".to_string();
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     // This is mostly asserting that the scanner doesn't panic when encountering multibyte characters
     assert_eq!(matches.len(), 1);
 }
@@ -733,7 +739,7 @@ fn test_excluded_keyword_with_excluded_chars_in_content() {
     // boundary shouldn't match here
     let mut content = "x-test=value".to_string();
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     // This should match because "test" is not found, so it's not a false-positive
     assert_eq!(matches.len(), 1);
 }

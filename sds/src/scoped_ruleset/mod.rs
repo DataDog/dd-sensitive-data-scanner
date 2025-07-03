@@ -369,12 +369,14 @@ mod test {
             }
         }
 
-        ruleset.visit_string_rule_combinations(
-            event,
-            RecordingContentVisitor {
-                visited: &mut visited,
-            },
-        );
+        ruleset
+            .visit_string_rule_combinations(
+                event,
+                RecordingContentVisitor {
+                    visited: &mut visited,
+                },
+            )
+            .unwrap();
         visited.paths.sort();
         visited
     }

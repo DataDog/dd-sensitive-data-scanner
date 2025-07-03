@@ -2,36 +2,43 @@ use core::panic;
 use std::collections::HashMap;
 use std::hash::RandomState;
 
-use crate::{Event, EventVisitor, Path, PathSegment, Utf8Encoding};
+use crate::{Event, EventVisitor, Path, PathSegment, ScannerError, Utf8Encoding};
 
 impl Event for serde_json::Value {
     type Encoding = Utf8Encoding;
 
-    fn visit_event<'a>(&'a mut self, visitor: &mut impl EventVisitor<'a>) {
+    fn visit_event<'a>(
+        &'a mut self,
+        visitor: &mut impl EventVisitor<'a>,
+    ) -> Result<(), ScannerError> {
         match self {
-            serde_json::Value::Null => {}
+            serde_json::Value::Null => Ok(()),
             serde_json::Value::Bool(value) => {
-                let _result = visitor.visit_string(value.to_string().as_str());
+                visitor.visit_string(value.to_string().as_str()).map(|_| {})
             }
-            serde_json::Value::Number(number) => {
-                let _result = visitor.visit_string(number.to_string().as_str());
-            }
-            serde_json::Value::String(s) => {
-                let _result = visitor.visit_string(s);
-            }
+            serde_json::Value::Number(number) => visitor
+                .visit_string(number.to_string().as_str())
+                .map(|_| {}),
+            serde_json::Value::String(s) => visitor.visit_string(s).map(|_| {}),
             serde_json::Value::Object(map) => {
                 for (k, child) in map.iter_mut() {
                     visitor.push_segment(k.as_str().into());
-                    child.visit_event(visitor);
+                    if let Err(e) = child.visit_event(visitor) {
+                        return Err(e);
+                    }
                     visitor.pop_segment();
                 }
+                Ok(())
             }
             serde_json::Value::Array(values) => {
                 for (i, value) in values.iter_mut().enumerate() {
                     visitor.push_segment(PathSegment::Index(i));
-                    value.visit_event(visitor);
+                    if let Err(e) = value.visit_event(visitor) {
+                        return Err(e);
+                    }
                     visitor.pop_segment();
                 }
+                Ok(())
             }
         }
     }
@@ -64,12 +71,18 @@ impl Event for serde_json::Value {
 impl Event for HashMap<String, serde_json::Value, RandomState> {
     type Encoding = Utf8Encoding;
 
-    fn visit_event<'a>(&'a mut self, visitor: &mut impl EventVisitor<'a>) {
+    fn visit_event<'a>(
+        &'a mut self,
+        visitor: &mut impl EventVisitor<'a>,
+    ) -> Result<(), ScannerError> {
         for (k, v) in self.iter_mut() {
             visitor.push_segment(PathSegment::Field(k.as_str().into()));
-            v.visit_event(visitor);
+            if let Err(e) = v.visit_event(visitor) {
+                return Err(e);
+            }
             visitor.pop_segment();
         }
+        Ok(())
     }
 
     fn visit_string_mut(&mut self, path: &Path, mut visit: impl FnMut(&mut String) -> bool) {
@@ -114,12 +127,15 @@ mod test {
             self.ops.push(VisitOp::Pop);
         }
 
-        fn visit_string<'s>(&'s mut self, value: &str) -> VisitStringResult<'s, 'path> {
+        fn visit_string<'s>(
+            &'s mut self,
+            value: &str,
+        ) -> Result<VisitStringResult<'s, 'path>, ScannerError> {
             self.ops.push(VisitOp::Visit(value.to_string()));
-            VisitStringResult {
+            Ok(VisitStringResult {
                 might_mutate: true,
                 path: &self.path,
-            }
+            })
         }
     }
 
@@ -151,7 +167,7 @@ mod test {
             ops: vec![],
             path: Path::root(),
         };
-        event.visit_event(&mut visitor);
+        event.visit_event(&mut visitor).unwrap();
 
         assert_eq!(
             visitor.ops,

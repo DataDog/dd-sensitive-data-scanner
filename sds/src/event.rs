@@ -80,12 +80,15 @@ pub(crate) mod test {
             self.ops.push(VisitOp::Pop);
         }
 
-        fn visit_string<'s>(&'s mut self, value: &str) -> VisitStringResult<'s, 'path> {
+        fn visit_string<'s>(
+            &'s mut self,
+            value: &str,
+        ) -> Result<VisitStringResult<'s, 'path>, ScannerError> {
             self.ops.push(VisitOp::Visit(value.to_string()));
-            VisitStringResult {
+            Ok(VisitStringResult {
                 might_mutate: true,
                 path: &self.path,
-            }
+            })
         }
     }
 
@@ -96,7 +99,7 @@ pub(crate) mod test {
             ops: vec![],
             path: Path::root(),
         };
-        value.to_string().visit_event(&mut visitor);
+        value.to_string().visit_event(&mut visitor).unwrap();
         assert_eq!(visitor.ops, vec![VisitOp::Visit(value.into()),]);
     }
 
@@ -126,7 +129,7 @@ pub(crate) mod test {
             ops: vec![],
             path: Path::root(),
         };
-        event.visit_event(&mut visitor);
+        event.visit_event(&mut visitor).unwrap();
 
         assert_eq!(
             visitor.ops,
