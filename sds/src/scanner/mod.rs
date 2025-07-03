@@ -343,7 +343,7 @@ impl Scanner {
         ScannerBuilder::new(rules)
     }
 
-    fn record_metrics(&self, output_rule_matches: &Vec<RuleMatch>, start: std::time::Instant) {
+    fn record_metrics(&self, output_rule_matches: &[RuleMatch], start: std::time::Instant) {
         // Record detection time
         self.metrics
             .duration_ns
@@ -387,7 +387,7 @@ impl Scanner {
         // If we were not able to scan, no need to go any further.
         // Don't forget to record the metrics though!
         if let Err(e) = result {
-            self.record_metrics(&vec![], start);
+            self.record_metrics(&[], start);
             return Err(e);
         }
 

@@ -25,9 +25,7 @@ impl Event for SimpleEvent {
             Self::List(list) => {
                 for (i, child) in list.iter_mut().enumerate() {
                     visitor.push_segment(PathSegment::Index(i));
-                    if let Err(e) = child.visit_event(visitor) {
-                        return Err(e);
-                    }
+                    child.visit_event(visitor)?;
                     visitor.pop_segment();
                 }
                 Ok(())
@@ -38,9 +36,7 @@ impl Event for SimpleEvent {
                 for (key, child) in map.iter_mut() {
                     if key == FIRST_VISIT_KEY {
                         visitor.push_segment(key.as_str().into());
-                        if let Err(e) = child.visit_event(visitor) {
-                            return Err(e);
-                        }
+                        child.visit_event(visitor)?;
                         visitor.pop_segment();
                     } else {
                         key_to_post_process.push((key, child));
@@ -48,9 +44,7 @@ impl Event for SimpleEvent {
                 }
                 for (key, child) in key_to_post_process {
                     visitor.push_segment(key.as_str().into());
-                    if let Err(e) = child.visit_event(visitor) {
-                        return Err(e);
-                    }
+                    child.visit_event(visitor)?;
                     visitor.pop_segment();
                 }
                 Ok(())
