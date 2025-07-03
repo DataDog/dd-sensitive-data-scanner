@@ -2,11 +2,11 @@ use super::{
     config::{CustomHttpConfig, RequestHeader},
     match_validator::MatchValidator,
 };
+use crate::match_validation::match_validator::RAYON_THREAD_POOL;
 use crate::{match_validation::config::HttpMethod, MatchStatus, RuleMatch};
 use crate::{scanner::RootCompiledRule, HttpValidatorOption};
 use ahash::AHashMap;
 use lazy_static::lazy_static;
-use rayon::prelude::*;
 use reqwest::blocking::Response;
 use std::{fmt, ops::Range, time::Duration};
 
@@ -109,38 +109,41 @@ impl MatchValidator for HttpValidator {
             })
             .collect();
 
-        match_status_per_endpoint_and_match.par_iter_mut().for_each(
-            |((match_idx, endpoint), match_status)| {
-                let match_value = matches[*match_idx].match_value.as_ref().unwrap();
-                let mut request_builder = match self.config.method {
-                    HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(*endpoint),
-                    HttpMethod::Post => BLOCKING_HTTP_CLIENT.post(*endpoint),
-                    HttpMethod::Put => BLOCKING_HTTP_CLIENT.put(*endpoint),
-                    HttpMethod::Delete => BLOCKING_HTTP_CLIENT.delete(*endpoint),
-                    HttpMethod::Patch => BLOCKING_HTTP_CLIENT.patch(*endpoint),
-                };
-                request_builder = request_builder.timeout(self.config.options.timeout);
+        RAYON_THREAD_POOL.install(|| {
+            use rayon::prelude::*;
 
-                // Add headers
-                for header in &self.config.request_header {
-                    request_builder = request_builder
-                        .header(&header.key, &header.get_value_with_match(match_value));
-                }
-                let res = request_builder.send();
-                match res {
-                    Ok(val) => {
-                        self.handle_reqwest_response(match_status, &val);
+            match_status_per_endpoint_and_match.par_iter_mut().for_each(
+                |((match_idx, endpoint), match_status)| {
+                    let match_value = matches[*match_idx].match_value.as_ref().unwrap();
+                    let mut request_builder = match self.config.method {
+                        HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(*endpoint),
+                        HttpMethod::Post => BLOCKING_HTTP_CLIENT.post(*endpoint),
+                        HttpMethod::Put => BLOCKING_HTTP_CLIENT.put(*endpoint),
+                        HttpMethod::Delete => BLOCKING_HTTP_CLIENT.delete(*endpoint),
+                        HttpMethod::Patch => BLOCKING_HTTP_CLIENT.patch(*endpoint),
+                    };
+                    request_builder = request_builder.timeout(self.config.options.timeout);
+
+                    // Add headers
+                    for header in &self.config.request_header {
+                        request_builder = request_builder
+                            .header(&header.key, &header.get_value_with_match(match_value));
                     }
-                    Err(err) => {
-                        // TODO(trosenblatt) emit a metrics for this
-                        *match_status = MatchStatus::Error(fmt::format(format_args!(
-                            "Error making HTTP request: {}",
-                            err
-                        )));
+                    let res = request_builder.send();
+                    match res {
+                        Ok(val) => {
+                            self.handle_reqwest_response(match_status, &val);
+                        }
+                        Err(err) => {
+                            // TODO(trosenblatt) emit a metrics for this
+                            *match_status = MatchStatus::Error(fmt::format(format_args!(
+                                "Error making HTTP request: {err}"
+                            )));
+                        }
                     }
-                }
-            },
-        );
+                },
+            );
+        });
 
         // Update the match status with this highest priority returned
         for ((match_idx, _), status) in match_status_per_endpoint_and_match {

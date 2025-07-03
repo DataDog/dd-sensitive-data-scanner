@@ -12,7 +12,7 @@ fn check_patterns_can_be_parsed(patterns: &[String]) {
     for (i, pattern) in patterns.iter().enumerate() {
         if let Err(err) = parse_regex_pattern(pattern) {
             println!("Input {}: {}", i + 1, pattern);
-            panic!("Failed to parse input: {:?}", err);
+            panic!("Failed to parse input: {err:?}");
         }
     }
 }

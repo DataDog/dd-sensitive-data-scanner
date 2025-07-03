@@ -601,7 +601,7 @@ mod test {
         ];
         for pattern in patterns {
             if parse_regex_pattern(pattern).is_ok() {
-                panic!("Expected pattern to fail parsing:\n{}", pattern);
+                panic!("Expected pattern to fail parsing:\n{pattern}");
             }
         }
     }

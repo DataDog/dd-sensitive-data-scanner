@@ -58,10 +58,10 @@ fn decode_segment(segment: &str) -> Option<JsonValue> {
 #[cfg(test)]
 pub fn generate_jwt(exp: String) -> String {
     let header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
-    let payload = format!("{{\"exp\":{}}}", exp);
+    let payload = format!("{{\"exp\":{exp}}}");
     let payload_encoded = URL_SAFE_NO_PAD.encode(payload.as_bytes());
     let signature = "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
-    format!("{}.{}.{}", header, payload_encoded, signature)
+    format!("{header}.{payload_encoded}.{signature}")
 }
 
 #[cfg(test)]
@@ -102,10 +102,10 @@ mod tests {
     fn test_is_valid_match_jwt_without_expiration() {
         let future_time_as_string = (Utc::now().timestamp() + 1000000).to_string();
         let header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
-        let payload = format!("{{\"no_exp\":{}}}", future_time_as_string);
+        let payload = format!("{{\"no_exp\":{future_time_as_string}}}");
         let payload_encoded = URL_SAFE_NO_PAD.encode(payload.as_bytes());
         let signature = "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
-        let json = format!("{}.{}.{}", header, payload_encoded, signature);
+        let json = format!("{header}.{payload_encoded}.{signature}");
         let checker = JwtExpirationChecker;
         assert!(checker.is_valid_match(&json));
     }
