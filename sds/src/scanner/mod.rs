@@ -343,11 +343,24 @@ impl Scanner {
         ScannerBuilder::new(rules)
     }
 
+    fn record_metrics(&self, output_rule_matches: &Vec<RuleMatch>, start: std::time::Instant) {
+        // Record detection time
+        self.metrics
+            .duration_ns
+            .increment(start.elapsed().as_nanos() as u64);
+        // Add number of scanned events
+        self.metrics.num_scanned_events.increment(1);
+        // Add number of matches
+        self.metrics
+            .match_count
+            .increment(output_rule_matches.len() as u64);
+    }
+
     pub fn scan_with_options<E: Event>(
         &self,
         event: &mut E,
         options: ScanOptions,
-    ) -> Vec<RuleMatch> {
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
         // All matches, after some (but not all) false-positives have been removed.
         // This is a vec of vecs, where each inner vec is a set of matches for a single path.
         let mut rule_matches_list = vec![];
@@ -356,7 +369,7 @@ impl Scanner {
 
         // Measure detection time
         let start = std::time::Instant::now();
-        access_regex_caches(|regex_caches| {
+        let result = access_regex_caches(|regex_caches| {
             self.scoped_ruleset.visit_string_rule_combinations(
                 event,
                 ScannerContentVisitor {
@@ -368,8 +381,15 @@ impl Scanner {
                     per_event_data: SharedData::new(),
                     wildcarded_indexes: &options.wildcarded_indices,
                 },
-            );
+            )
         });
+
+        // If we were not able to scan, no need to go any further.
+        // Don't forget to record the metrics though!
+        if let Err(e) = result {
+            self.record_metrics(&vec![], start);
+            return Err(e);
+        }
 
         let mut output_rule_matches = vec![];
 
@@ -407,24 +427,16 @@ impl Scanner {
                 will_mutate
             });
         }
-        // Record detection time
-        self.metrics
-            .duration_ns
-            .increment(start.elapsed().as_nanos() as u64);
-        // Add number of scanned events
-        self.metrics.num_scanned_events.increment(1);
-        // Add number of matches
-        self.metrics
-            .match_count
-            .increment(output_rule_matches.len() as u64);
 
-        output_rule_matches
+        self.record_metrics(&output_rule_matches, start);
+
+        Ok(output_rule_matches)
     }
 
     // This function scans the given event with the rules configured in the scanner.
     // The event parameter is a mutable reference to the event that should be scanned (implemented the Event trait).
     // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
-    pub fn scan<E: Event>(&self, event: &mut E) -> Vec<RuleMatch> {
+    pub fn scan<E: Event>(&self, event: &mut E) -> Result<Vec<RuleMatch>, ScannerError> {
         self.scan_with_options(event, ScanOptions::default())
     }
 

@@ -56,7 +56,7 @@ impl ScopedRuleSet {
         &'c self,
         event: &'path mut impl Event,
         content_visitor: impl ContentVisitor<'path>,
-    ) {
+    ) -> Result<(), ScannerError> {
         let bool_set = if self.add_implicit_index_wildcards {
             Some(BoolSet::new(self.num_rules))
         } else {
@@ -199,7 +199,10 @@ where
         self.path.segments.pop();
     }
 
-    fn visit_string<'s>(&'s mut self, value: &str) -> VisitStringResult<'s, 'path> {
+    fn visit_string<'s>(
+        &'s mut self,
+        value: &str,
+    ) -> Result<VisitStringResult<'s, 'path>, ScannerError> {
         let will_mutate = self.content_visitor.visit_content(
             &self.path,
             value,
@@ -214,11 +217,10 @@ where
         if let Some(bool_set) = &mut self.bool_set {
             bool_set.reset();
         }
-        VisitStringResult {
-            // TODO: is there a risk with defaulting to false?
-            might_mutate: will_mutate.unwrap_or(false),
+        will_mutate.map(|will_mutate| VisitStringResult {
+            might_mutate: will_mutate,
             path: &self.path,
-        }
+        })
     }
 }
 

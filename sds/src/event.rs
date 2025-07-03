@@ -1,5 +1,6 @@
 use crate::encoding::{Encoding, Utf8Encoding};
 use crate::path::Path;
+use crate::scanner::error::ScannerError;
 use crate::PathSegment;
 
 /// Any object that can be scanned by SDS needs to implement `Event`.
@@ -10,7 +11,10 @@ pub trait Event: Sized {
     type Encoding: Encoding;
 
     /// Recursively visit all strings contained in the object.
-    fn visit_event<'a>(&'a mut self, visitor: &mut impl EventVisitor<'a>);
+    fn visit_event<'a>(
+        &'a mut self,
+        visitor: &mut impl EventVisitor<'a>,
+    ) -> Result<(), ScannerError>;
 
     /// Visit the string at the specified path. The path is guaranteed to be valid, it will be a path
     /// that was previously used in `visit_event'. This is used to replace redacted content.
@@ -21,7 +25,10 @@ pub trait Event: Sized {
 pub trait EventVisitor<'path> {
     fn push_segment(&mut self, segment: PathSegment<'path>);
     fn pop_segment(&mut self);
-    fn visit_string<'s>(&'s mut self, value: &str) -> VisitStringResult<'s, 'path>;
+    fn visit_string<'s>(
+        &'s mut self,
+        value: &str,
+    ) -> Result<VisitStringResult<'s, 'path>, ScannerError>;
 }
 
 pub struct VisitStringResult<'s, 'path> {
@@ -34,8 +41,11 @@ pub struct VisitStringResult<'s, 'path> {
 impl Event for String {
     type Encoding = Utf8Encoding;
 
-    fn visit_event<'path>(&'path mut self, visitor: &mut impl EventVisitor<'path>) {
-        let _result = visitor.visit_string(self);
+    fn visit_event<'path>(
+        &'path mut self,
+        visitor: &mut impl EventVisitor<'path>,
+    ) -> Result<(), ScannerError> {
+        visitor.visit_string(self).map(|_| {})
     }
 
     fn visit_string_mut(&mut self, _path: &Path, mut visit: impl FnMut(&mut String) -> bool) {

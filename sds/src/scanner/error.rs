@@ -47,8 +47,6 @@ pub enum MatchValidationError {
 
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum ScannerError {
-    #[error("Unrecoverable permanent error while scanning")]
-    Permanent,
     #[error("Transient error while scanning")]
     Transient,
 }
