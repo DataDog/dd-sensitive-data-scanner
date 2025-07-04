@@ -28,7 +28,7 @@ pub extern "C" fn scan(
         // TODO: we might want to forward the error to go in the future
         let matches = match scanner.scan(&mut event) {
             Ok(matches) => matches,
-            Err(e) => &[],
+            Err(e) => vec![],
         };
 
         if let Some(encoded_response) = encode_response(&event.storage, &matches, false) {
