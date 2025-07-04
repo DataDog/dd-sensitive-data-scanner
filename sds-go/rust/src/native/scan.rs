@@ -26,10 +26,7 @@ pub extern "C" fn scan(
         let mut event = BinaryEvent::<Utf8Encoding>::new(data, false);
 
         // TODO: we might want to forward the error to go in the future
-        let matches = match scanner.scan(&mut event) {
-            Ok(matches) => matches,
-            Err(e) => vec![],
-        };
+        let matches = scanner.scan(&mut event).unwrap_or_default();
 
         if let Some(encoded_response) = encode_response(&event.storage, &matches, false) {
             let mut str = std::mem::ManuallyDrop::new(encoded_response);

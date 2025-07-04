@@ -362,7 +362,8 @@ mod test {
                         rule_index,
                         is_excluded: exclusion_check.is_excluded(rule_index),
                     });
-                });
+                    Ok(())
+                })?;
                 rules.sort();
                 self.visited.paths.push(VisitedPath {
                     path: path.into_static(),
