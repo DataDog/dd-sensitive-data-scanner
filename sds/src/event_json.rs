@@ -73,9 +73,7 @@ impl Event for HashMap<String, serde_json::Value, RandomState> {
     ) -> Result<(), ScannerError> {
         for (k, v) in self.iter_mut() {
             visitor.push_segment(PathSegment::Field(k.as_str().into()));
-            if let Err(e) = v.visit_event(visitor) {
-                return Err(e);
-            }
+            v.visit_event(visitor)?;
             visitor.pop_segment();
         }
         Ok(())
