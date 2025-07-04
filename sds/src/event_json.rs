@@ -23,9 +23,7 @@ impl Event for serde_json::Value {
             serde_json::Value::Object(map) => {
                 for (k, child) in map.iter_mut() {
                     visitor.push_segment(k.as_str().into());
-                    if let Err(e) = child.visit_event(visitor) {
-                        return Err(e);
-                    }
+                    child.visit_event(visitor)?;
                     visitor.pop_segment();
                 }
                 Ok(())
@@ -33,9 +31,7 @@ impl Event for serde_json::Value {
             serde_json::Value::Array(values) => {
                 for (i, value) in values.iter_mut().enumerate() {
                     visitor.push_segment(PathSegment::Index(i));
-                    if let Err(e) = value.visit_event(visitor) {
-                        return Err(e);
-                    }
+                    value.visit_event(visitor)?;
                     visitor.pop_segment();
                 }
                 Ok(())
