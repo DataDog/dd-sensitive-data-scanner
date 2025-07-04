@@ -12,7 +12,9 @@ use crate::observability::labels::Labels;
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
-use crate::{CreateScannerError, EncodeIndices, MatchAction, Path, RegexValidationError};
+use crate::{
+    CreateScannerError, EncodeIndices, MatchAction, Path, RegexValidationError, ScannerError,
+};
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -193,7 +195,7 @@ pub trait CompiledRule: Send + Sync {
         excluded_matches: &mut AHashSet<String>,
         match_emitter: &mut dyn MatchEmitter,
         wildcard_indices: Option<&Vec<(usize, usize)>>,
-    );
+    ) -> Result<(), ScannerError>;
 
     /// Determines if this rule has a match, without determining the exact position,
     /// or finding multiple matches. The default implementation just calls
@@ -211,7 +213,7 @@ pub trait CompiledRule: Send + Sync {
         exclusion_check: &ExclusionCheck<'_>,
         excluded_matches: &mut AHashSet<String>,
         wildcard_indices: Option<&Vec<(usize, usize)>>,
-    ) -> bool {
+    ) -> Result<bool, ScannerError> {
         let mut found_match = false;
         let mut match_emitter = |_| found_match = true;
         self.get_string_matches(
@@ -225,8 +227,8 @@ pub trait CompiledRule: Send + Sync {
             excluded_matches,
             &mut match_emitter,
             wildcard_indices,
-        );
-        found_match
+        )
+        .map(|_| found_match)
     }
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
@@ -341,11 +343,24 @@ impl Scanner {
         ScannerBuilder::new(rules)
     }
 
+    fn record_metrics(&self, output_rule_matches: &[RuleMatch], start: std::time::Instant) {
+        // Record detection time
+        self.metrics
+            .duration_ns
+            .increment(start.elapsed().as_nanos() as u64);
+        // Add number of scanned events
+        self.metrics.num_scanned_events.increment(1);
+        // Add number of matches
+        self.metrics
+            .match_count
+            .increment(output_rule_matches.len() as u64);
+    }
+
     pub fn scan_with_options<E: Event>(
         &self,
         event: &mut E,
         options: ScanOptions,
-    ) -> Vec<RuleMatch> {
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
         // All matches, after some (but not all) false-positives have been removed.
         // This is a vec of vecs, where each inner vec is a set of matches for a single path.
         let mut rule_matches_list = vec![];
@@ -354,7 +369,7 @@ impl Scanner {
 
         // Measure detection time
         let start = std::time::Instant::now();
-        access_regex_caches(|regex_caches| {
+        let result = access_regex_caches(|regex_caches| {
             self.scoped_ruleset.visit_string_rule_combinations(
                 event,
                 ScannerContentVisitor {
@@ -366,8 +381,15 @@ impl Scanner {
                     per_event_data: SharedData::new(),
                     wildcarded_indexes: &options.wildcarded_indices,
                 },
-            );
+            )
         });
+
+        // If we were not able to scan, no need to go any further.
+        // Don't forget to record the metrics though!
+        if let Err(e) = result {
+            self.record_metrics(&[], start);
+            return Err(e);
+        }
 
         let mut output_rule_matches = vec![];
 
@@ -405,24 +427,16 @@ impl Scanner {
                 will_mutate
             });
         }
-        // Record detection time
-        self.metrics
-            .duration_ns
-            .increment(start.elapsed().as_nanos() as u64);
-        // Add number of scanned events
-        self.metrics.num_scanned_events.increment(1);
-        // Add number of matches
-        self.metrics
-            .match_count
-            .increment(output_rule_matches.len() as u64);
 
-        output_rule_matches
+        self.record_metrics(&output_rule_matches, start);
+
+        Ok(output_rule_matches)
     }
 
     // This function scans the given event with the rules configured in the scanner.
     // The event parameter is a mutable reference to the event that should be scanned (implemented the Event trait).
     // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
-    pub fn scan<E: Event>(&self, event: &mut E) -> Vec<RuleMatch> {
+    pub fn scan<E: Event>(&self, event: &mut E) -> Result<Vec<RuleMatch>, ScannerError> {
         self.scan_with_options(event, ScanOptions::default())
     }
 
@@ -811,7 +825,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         content: &str,
         mut rule_visitor: crate::scoped_ruleset::RuleIndexVisitor,
         exclusion_check: ExclusionCheck<'b>,
-    ) -> bool {
+    ) -> Result<bool, ScannerError> {
         // matches for a single path
         let mut path_rules_matches = vec![];
 
@@ -821,7 +835,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 
         rule_visitor.visit_rule_indices(|rule_index| {
             if self.blocked_rules.contains(&rule_index) {
-                return;
+                return Ok(());
             }
             let rule = &self.scanner.rules[rule_index];
             {
@@ -856,9 +870,10 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     self.excluded_matches,
                     &mut emitter,
                     wildcard_indices_per_path,
-                );
+                )?;
             }
-        });
+            Ok(())
+        })?;
 
         // calculate_indices requires that matches are sorted by start index
         path_rules_matches.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
@@ -884,7 +899,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 .push((path.into_static(), path_rules_matches));
         }
 
-        has_match
+        Ok(has_match)
     }
 }
 

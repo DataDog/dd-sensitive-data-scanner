@@ -3,7 +3,7 @@ mod bool_set;
 use crate::event::{EventVisitor, VisitStringResult};
 use crate::scanner::scope::Scope;
 use crate::scoped_ruleset::bool_set::BoolSet;
-use crate::{Event, Path, PathSegment};
+use crate::{Event, Path, PathSegment, ScannerError};
 use ahash::AHashMap;
 
 /// A `ScopedRuleSet` determines which rules will be used to scan each field of an event, and which
@@ -56,7 +56,7 @@ impl ScopedRuleSet {
         &'c self,
         event: &'path mut impl Event,
         content_visitor: impl ContentVisitor<'path>,
-    ) {
+    ) -> Result<(), ScannerError> {
         let bool_set = if self.add_implicit_index_wildcards {
             Some(BoolSet::new(self.num_rules))
         } else {
@@ -110,7 +110,7 @@ pub trait ContentVisitor<'path> {
         content: &str,
         rules: RuleIndexVisitor,
         is_excluded: ExclusionCheck<'content_visitor>,
-    ) -> bool;
+    ) -> Result<bool, ScannerError>;
 }
 
 // This is just a reference to a RuleTree with some additional information
@@ -199,7 +199,10 @@ where
         self.path.segments.pop();
     }
 
-    fn visit_string<'s>(&'s mut self, value: &str) -> VisitStringResult<'s, 'path> {
+    fn visit_string<'s>(
+        &'s mut self,
+        value: &str,
+    ) -> Result<VisitStringResult<'s, 'path>, ScannerError> {
         let will_mutate = self.content_visitor.visit_content(
             &self.path,
             value,
@@ -214,10 +217,10 @@ where
         if let Some(bool_set) = &mut self.bool_set {
             bool_set.reset();
         }
-        VisitStringResult {
+        will_mutate.map(|will_mutate| VisitStringResult {
             might_mutate: will_mutate,
             path: &self.path,
-        }
+        })
     }
 }
 
@@ -229,7 +232,10 @@ pub struct RuleIndexVisitor<'a> {
 impl RuleIndexVisitor<'_> {
     /// Visits all rules associated with the current string. This may
     /// potentially return no rule indices at all.
-    pub fn visit_rule_indices(&mut self, mut visit: impl FnMut(usize)) {
+    pub fn visit_rule_indices(
+        &mut self,
+        mut visit: impl FnMut(usize) -> Result<(), ScannerError>,
+    ) -> Result<(), ScannerError> {
         // visit rules with an `Include` scope
         for include_node in self.tree_nodes {
             if include_node.index_wildcard_match {
@@ -241,16 +247,17 @@ impl RuleIndexVisitor<'_> {
                     RuleChange::Add(rule_index) => {
                         if let Some(used_rule_set) = &mut self.used_rule_set {
                             if !used_rule_set.get_and_set(*rule_index) {
-                                (visit)(*rule_index);
+                                (visit)(*rule_index)?;
                             }
                         } else {
-                            (visit)(*rule_index);
+                            (visit)(*rule_index)?;
                         }
                     }
                     RuleChange::Remove(_) => { /* Nothing to do here */ }
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -348,30 +355,33 @@ mod test {
                 content: &str,
                 mut rule_iter: RuleIndexVisitor,
                 exclusion_check: ExclusionCheck<'content_visitor>,
-            ) -> bool {
+            ) -> Result<bool, ScannerError> {
                 let mut rules = vec![];
                 rule_iter.visit_rule_indices(|rule_index| {
                     rules.push(VisitedRule {
                         rule_index,
                         is_excluded: exclusion_check.is_excluded(rule_index),
                     });
-                });
+                    Ok(())
+                })?;
                 rules.sort();
                 self.visited.paths.push(VisitedPath {
                     path: path.into_static(),
                     content: content.to_string(),
                     rules,
                 });
-                true
+                Ok(true)
             }
         }
 
-        ruleset.visit_string_rule_combinations(
-            event,
-            RecordingContentVisitor {
-                visited: &mut visited,
-            },
-        );
+        ruleset
+            .visit_string_rule_combinations(
+                event,
+                RecordingContentVisitor {
+                    visited: &mut visited,
+                },
+            )
+            .unwrap();
         visited.paths.sort();
         visited
     }

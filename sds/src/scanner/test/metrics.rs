@@ -34,7 +34,7 @@ fn should_submit_scanning_metrics() {
             ),
         ]));
 
-        scanner.scan(&mut content);
+        scanner.scan(&mut content).unwrap();
     });
 
     let snapshot = snapshotter.snapshot().into_hashmap();
@@ -83,7 +83,7 @@ fn should_submit_excluded_match_metric() {
             ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
         ]));
 
-        scanner.scan(&mut content);
+        scanner.scan(&mut content).unwrap();
     });
 
     let snapshot = snapshotter.snapshot().into_hashmap();
@@ -120,7 +120,7 @@ fn should_submit_excluded_keywords_metric() {
             "test".to_string(),
             SimpleEvent::String("hello world".to_string()),
         )]));
-        scanner.scan(&mut content);
+        scanner.scan(&mut content).unwrap();
     });
 
     let snapshot = snapshotter.snapshot().into_hashmap();
@@ -162,7 +162,7 @@ fn test_regex_match_and_included_keyword_same_index() {
         "message".to_string(),
         SimpleEvent::String("email=firstname.lastname@acme.com&page2".to_string()),
     )]));
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
 
     assert_eq!(

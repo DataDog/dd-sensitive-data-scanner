@@ -26,7 +26,7 @@ fn test_should_return_match_with_match_validation() {
         .unwrap();
 
     let mut content = "hey world".to_string();
-    let rule_match = scanner.scan(&mut content);
+    let rule_match = scanner.scan(&mut content).unwrap();
     assert_eq!(rule_match.len(), 1);
     assert_eq!(content, "hey [REDACTED]");
     assert_eq!(rule_match[0].match_value, Some("world".to_string()));
@@ -43,7 +43,7 @@ fn test_should_error_if_no_match_validation() {
         .unwrap();
 
     let mut content = "hey world".to_string();
-    let mut rule_match = scanner.scan(&mut content);
+    let mut rule_match = scanner.scan(&mut content).unwrap();
     assert_eq!(rule_match.len(), 1);
     assert_eq!(content, "hey [REDACTED]");
     assert_eq!(rule_match[0].match_value, None);
@@ -149,7 +149,7 @@ fn test_aws_id_only_shall_not_validate() {
 
     let scanner = ScannerBuilder::new(&[rule_aws_id]).build().unwrap();
     let mut content = "this is an aws_id".to_string();
-    let mut matches = scanner.scan(&mut content);
+    let mut matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "this is an [AWS_ID]");
     assert!(scanner.validate_matches(&mut matches).is_err());
@@ -220,7 +220,7 @@ fn test_mock_same_http_validator_several_matches() {
 
     let mut content =
         "this is a content with a valid_match an invalid_match and an error_match".to_string();
-    let mut matches = scanner.scan(&mut content);
+    let mut matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 3);
     assert_eq!(
         content,
@@ -261,7 +261,7 @@ fn test_mock_http_timeout() {
         .unwrap();
 
     let mut content = "this is a content with a valid_match".to_string();
-    let mut matches = scanner.scan(&mut content);
+    let mut matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "this is a content with a [VALID]");
     assert!(scanner.validate_matches(&mut matches).is_ok());
@@ -287,7 +287,7 @@ fn test_matches_from_rule_without_validation_are_not_ignored() {
         .unwrap();
 
     let mut content = "this is a content with a valid_match".to_string();
-    let mut matches = scanner.scan(&mut content);
+    let mut matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "this is a content with a [VALID]");
     assert!(scanner.validate_matches(&mut matches).is_ok());
@@ -347,7 +347,7 @@ fn test_mock_multiple_match_validators() {
 
     let mut content =
         "this is a content with a valid_match an aws_id and an aws_secret".to_string();
-    let mut matches = scanner.scan(&mut content);
+    let mut matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 3);
     assert_eq!(
         content,
@@ -392,7 +392,7 @@ fn test_mock_endpoint_with_multiple_hosts() {
         .build()
         .unwrap();
     let mut content = "this is a content with a valid_match on multiple hosts".to_string();
-    let mut matches = scanner.scan(&mut content);
+    let mut matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(
         content,
@@ -495,7 +495,7 @@ fn test_mock_aws_validator() {
 
     let mut content = fmt::format(format_args!(
         "content with a valid aws_id {aws_id_valid}, an invalid aws_id {aws_id_invalid}, an error aws_id {aws_id_error} and an aws_secret {aws_secret_1} and an other aws_secret {aws_secret_2}"));
-    let mut matches = scanner.scan(&mut content);
+    let mut matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 5);
     assert_eq!(
         content,

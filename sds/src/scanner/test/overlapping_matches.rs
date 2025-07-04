@@ -14,7 +14,7 @@ fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
 
     let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
     let mut content = "hello world".to_string();
-    let mut matches = scanner.scan(&mut content);
+    let mut matches = scanner.scan(&mut content).unwrap();
     matches.sort();
 
     assert_eq!(matches.len(), 3);
@@ -84,7 +84,7 @@ fn test_overlapping_mutation_higher_priority() {
 
     let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
     let mut content = "abcdef".to_string();
-    let mut matches = scanner.scan(&mut content);
+    let mut matches = scanner.scan(&mut content).unwrap();
     matches.sort();
 
     assert_eq!(matches.len(), 1);
@@ -119,7 +119,7 @@ fn test_overlapping_start_offset() {
 
     let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
     let mut content = "abcdef".to_string();
-    let mut matches = scanner.scan(&mut content);
+    let mut matches = scanner.scan(&mut content).unwrap();
     matches.sort();
 
     assert_eq!(matches.len(), 1);
@@ -154,7 +154,7 @@ fn test_overlapping_length() {
 
     let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
     let mut content = "abcdef".to_string();
-    let mut matches = scanner.scan(&mut content);
+    let mut matches = scanner.scan(&mut content).unwrap();
     matches.sort();
 
     assert_eq!(matches.len(), 1);
@@ -189,7 +189,7 @@ fn test_overlapping_rule_order() {
 
     let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
     let mut content = "abcdef".to_string();
-    let mut matches = scanner.scan(&mut content);
+    let mut matches = scanner.scan(&mut content).unwrap();
     matches.sort();
 
     assert_eq!(matches.len(), 1);
@@ -225,7 +225,7 @@ fn test_overlapping_mutations() {
 
     let scanner = ScannerBuilder::new(&[rule.clone(), rule]).build().unwrap();
     let mut content = "hello world".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(content, "* world");
 
     // The rule was cloned, so if this is only 1, the 2nd was filtered out

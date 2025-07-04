@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::{encoding::Utf8Encoding, Event, EventVisitor, Path, PathSegment};
+use crate::{encoding::Utf8Encoding, Event, EventVisitor, Path, PathSegment, ScannerError};
 
 static FIRST_VISIT_KEY: &str = "message";
 
@@ -16,17 +16,19 @@ pub enum SimpleEvent {
 impl Event for SimpleEvent {
     type Encoding = Utf8Encoding;
 
-    fn visit_event<'path>(&'path mut self, visitor: &mut impl EventVisitor<'path>) {
+    fn visit_event<'path>(
+        &'path mut self,
+        visitor: &mut impl EventVisitor<'path>,
+    ) -> Result<(), ScannerError> {
         match self {
-            Self::String(value) => {
-                let _result = visitor.visit_string(value);
-            }
+            Self::String(value) => visitor.visit_string(value).map(|_| {}),
             Self::List(list) => {
                 for (i, child) in list.iter_mut().enumerate() {
                     visitor.push_segment(PathSegment::Index(i));
-                    child.visit_event(visitor);
+                    child.visit_event(visitor)?;
                     visitor.pop_segment();
                 }
+                Ok(())
             }
             Self::Map(map) => {
                 // Create a data structure holding the key that will be processed after the message key
@@ -34,7 +36,7 @@ impl Event for SimpleEvent {
                 for (key, child) in map.iter_mut() {
                     if key == FIRST_VISIT_KEY {
                         visitor.push_segment(key.as_str().into());
-                        child.visit_event(visitor);
+                        child.visit_event(visitor)?;
                         visitor.pop_segment();
                     } else {
                         key_to_post_process.push((key, child));
@@ -42,9 +44,10 @@ impl Event for SimpleEvent {
                 }
                 for (key, child) in key_to_post_process {
                     visitor.push_segment(key.as_str().into());
-                    child.visit_event(visitor);
+                    child.visit_event(visitor)?;
                     visitor.pop_segment();
                 }
+                Ok(())
             }
         }
     }

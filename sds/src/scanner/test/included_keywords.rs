@@ -20,17 +20,18 @@ fn test_included_keywords_match_content() {
 
     let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
     let mut content = "hello world".to_string();
-    let matches = scanner.scan(&mut content);
+    // These are regexes so we're safe to unwrap
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(content, "hello [REDACTED]");
     assert_eq!(matches.len(), 1);
 
     let mut content = "he**o world".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(content, "he**o world");
     assert_eq!(matches.len(), 0);
 
     let mut content = "world hello world".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(content, "world hello [REDACTED]");
     assert_eq!(matches.len(), 1);
 }
@@ -47,7 +48,7 @@ fn test_included_keywords_match_path() {
         )])),
     )]));
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
 }
 
@@ -60,7 +61,7 @@ fn test_included_keywords_match_path_camel_case() {
         SimpleEvent::String("hello world".to_string()),
     )]));
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
 
     let mut content = SimpleEvent::Map(BTreeMap::from([(
@@ -68,7 +69,7 @@ fn test_included_keywords_match_path_camel_case() {
         SimpleEvent::String("hello world".to_string()),
     )]));
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
 }
 
@@ -81,7 +82,7 @@ fn test_included_keywords_path_with_uncaught_separator_symbol() {
         SimpleEvent::String("hello".to_string()),
     )]));
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 0);
 }
 
@@ -112,7 +113,7 @@ fn test_included_keywords_path_deep() {
         ]),
     )]));
 
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
 }
 
@@ -134,7 +135,7 @@ fn test_included_keyword_not_match_further_than_look_ahead_character_count() {
     let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
 
     let mut content = "hello [this block is exactly 37 chars long] world".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
 
     assert_eq!(matches.len(), 0);
 }
@@ -157,7 +158,7 @@ fn test_included_keyword_multiple_matches_in_one_prefix() {
     let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
 
     let mut content = "hello world world".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
 
     // Both "world" matches fit within the 30 char prefix.
     assert_eq!(matches.len(), 2);
@@ -183,7 +184,7 @@ fn test_included_keyword_multiple_prefix_matches() {
     let mut content =
         "hello world [this takes up enough space to separate the prefixes] world hello world"
             .to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
 
     // Both "worlds" after a "hello" should match
     assert_eq!(matches.len(), 2);
@@ -207,7 +208,7 @@ fn test_multi_word_underscore_separator() {
     let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
 
     let mut content = "hello_world secret".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
 
     // 1 match because "hello_world" matches "hello world" keyword
     assert_eq!(matches.len(), 1);
@@ -231,7 +232,7 @@ fn test_multi_word_underscore_word_boundaries_separator() {
     let scanner = ScannerBuilder::new(&[redact_test_rule]).build().unwrap();
 
     let mut content = "a_hello_world_b secret".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
 
     // 1 match because "hello_world" matches "hello world" keyword
     assert_eq!(matches.len(), 1);
@@ -252,7 +253,7 @@ fn test_included_keywords_on_start_boundary_with_space_including_word_boundary()
     .unwrap();
 
     let mut content = "users id   ab".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
 
     assert_eq!(matches.len(), 1);
     assert_eq!(matches[0].start_index, 11);
@@ -274,7 +275,7 @@ fn test_included_keywords_on_end_boundary() {
     .unwrap();
 
     let mut content = "users idabc".to_string();
-    let matches = scanner.scan(&mut content);
+    let matches = scanner.scan(&mut content).unwrap();
 
     assert_eq!(matches.len(), 0);
 }
@@ -294,16 +295,16 @@ fn should_not_look_ahead_too_far() {
     .unwrap();
 
     let mut content = "host           x".to_string();
-    assert_eq!(scanner.scan(&mut content).len(), 0);
+    assert_eq!(scanner.scan(&mut content).unwrap().len(), 0);
 
     let mut content = "host      x".to_string();
-    assert_eq!(scanner.scan(&mut content).len(), 1);
+    assert_eq!(scanner.scan(&mut content).unwrap().len(), 1);
 
     let mut content = "host       x".to_string();
-    assert_eq!(scanner.scan(&mut content).len(), 0);
+    assert_eq!(scanner.scan(&mut content).unwrap().len(), 0);
 
     let mut content = " host      x".to_string();
-    assert_eq!(scanner.scan(&mut content).len(), 1);
+    assert_eq!(scanner.scan(&mut content).unwrap().len(), 1);
 }
 
 #[test]
@@ -327,7 +328,7 @@ fn should_verify_included_keywords_on_path_even_if_included_keywords_are_in_stri
 
     // Even though the included keywords are too far from the match in the string
     // the keyword is present in the path and that should validate the match.
-    assert_eq!(scanner.scan(&mut event).len(), 1);
+    assert_eq!(scanner.scan(&mut event).unwrap().len(), 1);
 }
 
 #[test]
@@ -346,17 +347,17 @@ fn test_included_and_excluded_keyword() {
 
     // only the included keyword is present
     let mut content = "hey world".to_string();
-    assert_eq!(scanner.scan(&mut content).len(), 1);
+    assert_eq!(scanner.scan(&mut content).unwrap().len(), 1);
 
     // only the excluded keyword is present
     let mut content = "hello world".to_string();
-    assert_eq!(scanner.scan(&mut content).len(), 0);
+    assert_eq!(scanner.scan(&mut content).unwrap().len(), 0);
 
     // no keyword is present
     let mut content = "world".to_string();
-    assert_eq!(scanner.scan(&mut content).len(), 0);
+    assert_eq!(scanner.scan(&mut content).unwrap().len(), 0);
 
     // included and excluded keywords are present
     let mut content = "hey, hello world".to_string();
-    assert_eq!(scanner.scan(&mut content).len(), 1);
+    assert_eq!(scanner.scan(&mut content).unwrap().len(), 1);
 }

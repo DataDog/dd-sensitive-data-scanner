@@ -1,4 +1,4 @@
-use dd_sds::{Encoding, Event, EventVisitor, Path, PathSegment, RuleMatch};
+use dd_sds::{Encoding, Event, EventVisitor, Path, PathSegment, RuleMatch, ScannerError};
 use std::borrow::Cow;
 use std::{collections::BTreeMap, marker::PhantomData};
 
@@ -32,7 +32,10 @@ impl<E: Encoding> BinaryEvent<E> {
 impl<E: Encoding> Event for BinaryEvent<E> {
     type Encoding = E;
 
-    fn visit_event<'a>(&'a mut self, visitor: &mut impl EventVisitor<'a>) {
+    fn visit_event<'a>(
+        &'a mut self,
+        visitor: &mut impl EventVisitor<'a>,
+    ) -> Result<(), ScannerError> {
         let mut index = 0;
         while index < self.bytes.len() {
             match self.bytes[index] {
@@ -83,7 +86,7 @@ impl<E: Encoding> Event for BinaryEvent<E> {
                     };
 
                     index += len;
-                    let visit_result = visitor.visit_string(&content);
+                    let visit_result = visitor.visit_string(&content)?;
                     if visit_result.might_mutate && !self.storage.contains_key(&visit_result.path) {
                         self.storage.insert(
                             visit_result.path.into_static(),
@@ -94,6 +97,7 @@ impl<E: Encoding> Event for BinaryEvent<E> {
                 _ => panic!("invalid encoded content"),
             }
         }
+        Ok(())
     }
 
     fn visit_string_mut(&mut self, path: &Path, mut visit: impl FnMut(&mut String) -> bool) {
