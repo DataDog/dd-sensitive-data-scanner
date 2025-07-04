@@ -832,11 +832,10 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         // Create a map of per rule type data that can be shared between rules of the same type
         let mut per_string_data = SharedData::new();
         let wildcard_indices_per_path = self.wildcarded_indexes.get(path);
-        let mut result = Ok(false);
 
         rule_visitor.visit_rule_indices(|rule_index| {
             if self.blocked_rules.contains(&rule_index) {
-                return;
+                return Ok(());
             }
             let rule = &self.scanner.rules[rule_index];
             {
@@ -860,7 +859,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 // TODO: move this somewhere higher?
                 rule.init_per_event_data(&mut self.per_event_data);
 
-                if let Err(e) = rule.get_string_matches(
+                rule.get_string_matches(
                     content,
                     path,
                     self.regex_caches,
@@ -871,14 +870,10 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     self.excluded_matches,
                     &mut emitter,
                     wildcard_indices_per_path,
-                ) {
-                    result = Err(e);
-                }
+                )?;
             }
-        });
-
-        // If any of the rules returned an error, return that (last) error
-        result?;
+            Ok(())
+        })?;
 
         // calculate_indices requires that matches are sorted by start index
         path_rules_matches.sort_unstable_by_key(|rule_match| rule_match.utf8_start);

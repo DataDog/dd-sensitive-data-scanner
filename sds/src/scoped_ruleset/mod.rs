@@ -232,7 +232,10 @@ pub struct RuleIndexVisitor<'a> {
 impl RuleIndexVisitor<'_> {
     /// Visits all rules associated with the current string. This may
     /// potentially return no rule indices at all.
-    pub fn visit_rule_indices(&mut self, mut visit: impl FnMut(usize)) {
+    pub fn visit_rule_indices(
+        &mut self,
+        mut visit: impl FnMut(usize) -> Result<(), ScannerError>,
+    ) -> Result<(), ScannerError> {
         // visit rules with an `Include` scope
         for include_node in self.tree_nodes {
             if include_node.index_wildcard_match {
@@ -244,16 +247,17 @@ impl RuleIndexVisitor<'_> {
                     RuleChange::Add(rule_index) => {
                         if let Some(used_rule_set) = &mut self.used_rule_set {
                             if !used_rule_set.get_and_set(*rule_index) {
-                                (visit)(*rule_index);
+                                (visit)(*rule_index)?;
                             }
                         } else {
-                            (visit)(*rule_index);
+                            (visit)(*rule_index)?;
                         }
                     }
                     RuleChange::Remove(_) => { /* Nothing to do here */ }
                 }
             }
         }
+        Ok(())
     }
 }
 
