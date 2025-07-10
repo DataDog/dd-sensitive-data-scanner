@@ -124,7 +124,7 @@ func (c RegexRuleConfig) CreateRule() (*Rule, error) {
 
 	ptr := C.create_regex_rule(cdata)
 	if ptr < 0 {
-		return nil, fmt.Errorf("Failed to create regex rule")
+		return nil, fmt.Errorf("Failed to create regex rule with id %s", c.Id)
 	} else {
 		return &Rule{nativeRulePtr: int64(ptr)}, nil
 	}
