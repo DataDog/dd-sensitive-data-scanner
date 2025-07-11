@@ -167,6 +167,39 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialization() {
+        let config_str = r#"
+        {
+            "endpoint": "http://localhost/test1",
+            "hosts": [],
+            "http_method": "GET",
+            "request_headers": {},
+            "valid_http_status_code": [],
+            "invalid_http_status_code": [],
+            "timeout_seconds": 10
+        }
+        "#;
+        let config: CustomHttpConfig = serde_json::from_str(config_str).unwrap();
+        let endpoints = config.get_endpoints().unwrap();
+        assert_eq!(endpoints, vec!["http://localhost/test1"]);
+
+        let config_str = r#"
+        {
+            "endpoint": "http://$HOST/test1",
+            "hosts": ["us", "eu"],
+            "http_method": "GET",
+            "request_headers": {},
+            "valid_http_status_code": [],
+            "invalid_http_status_code": [],
+            "timeout_seconds": 10
+        }
+        "#;
+        let config: CustomHttpConfig = serde_json::from_str(config_str).unwrap();
+        let endpoints = config.get_endpoints().unwrap();
+        assert_eq!(endpoints, vec!["http://us/test1", "http://eu/test1"]);
+    }
+
+    #[test]
     fn test_http_validator_config_with_hosts() {
         let endpoints = CustomHttpConfig::default()
             .with_endpoint("http://localhost/$HOST".to_string())

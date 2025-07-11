@@ -100,7 +100,7 @@ pub struct HttpValidatorOption {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct CustomHttpConfig {
     pub endpoint: String,
-    #[serde(default)]
+    #[serde(default = "default_hosts")]
     pub hosts: Vec<String>,
     #[serde(default = "default_http_method")]
     pub http_method: HttpMethod,
@@ -220,6 +220,10 @@ impl CustomHttpConfig {
 
 fn default_timeout_seconds() -> u32 {
     DEFAULT_HTTPS_TIMEOUT_SEC as u32
+}
+
+fn default_hosts() -> Vec<String> {
+    vec![]
 }
 
 fn default_http_method() -> HttpMethod {
