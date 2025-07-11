@@ -123,7 +123,7 @@ impl<E: Encoding> Event for BinaryEvent<E> {
 /// 5: rule match (rule index, path, replacement type, start, end, shift offset)
 pub fn encode_response(
     storage: &BTreeMap<Path, (bool, String)>,
-    matches: Result<&[RuleMatch], ScannerError>,
+    matches: Result<&[RuleMatch], &ScannerError>,
     return_matches: bool,
 ) -> Option<Vec<u8>> {
     let mut out = vec![];
