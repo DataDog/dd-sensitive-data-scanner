@@ -111,6 +111,10 @@ impl<E: Encoding> Event for BinaryEvent<E> {
 
 /// Encode a result to a byte array for efficient transfer over FFI to native code.
 /// Big endian encoding.
+/// Starts with a status code:
+/// 0: success
+/// 1: error -> followed by one byte indicating the error type
+/// Followed by a sequence of bytes that represent the encoded event:
 /// 0: push field
 /// 1: push index
 /// 2: pop segment
@@ -119,14 +123,25 @@ impl<E: Encoding> Event for BinaryEvent<E> {
 /// 5: rule match (rule index, path, replacement type, start, end, shift offset)
 pub fn encode_response(
     storage: &BTreeMap<Path, (bool, String)>,
-    matches: &[RuleMatch],
+    matches: Result<&[RuleMatch], ScannerError>,
     return_matches: bool,
 ) -> Option<Vec<u8>> {
+    let mut out = vec![];
+    if matches.is_err() {
+        encode_error(&mut out, &matches.unwrap_err());
+        return Some(out);
+    }
+
+    let matches = matches.unwrap();
+
     if matches.is_empty() {
         return None;
     }
 
-    let mut out = vec![];
+    // We encode success after the check that the matches are empty to avoid
+    // an unnecessary allocation.
+    encode_success(&mut out);
+
     for (path, (mutated, content)) in storage {
         if *mutated {
             encode_mutation(&mut out, path, content);
@@ -137,6 +152,17 @@ pub fn encode_response(
     }
 
     Some(out)
+}
+
+fn encode_error(out: &mut Vec<u8>, error: &ScannerError) {
+    out.push(1);
+    match error {
+        ScannerError::Transient => out.push(0),
+    }
+}
+
+fn encode_success(out: &mut Vec<u8>) {
+    out.push(0);
 }
 
 fn encode_match(out: &mut Vec<u8>, rule_match: &RuleMatch, return_matches: bool) {
