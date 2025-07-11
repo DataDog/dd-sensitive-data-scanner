@@ -30,10 +30,7 @@ pub unsafe fn read_json<T: DeserializeOwned>(raw_value: *const c_char) -> Result
             // Convert the error to a more generic error type
             Err(Error::new(
                 ErrorKind::InvalidData,
-                format!(
-                    "Failed to deserialize JSON: {} at path: {}. Input json was: {}",
-                    e, path, val
-                ),
+                format!("Failed to deserialize JSON: {} at path: {}", e, path),
             ))
         }
     }
