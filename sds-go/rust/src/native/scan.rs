@@ -28,7 +28,7 @@ pub extern "C" fn scan(
         // TODO: we might want to forward the error to go in the future
         let matches = scanner.scan(&mut event);
 
-        if let Some(encoded_response) = encode_response(&event.storage, matches, false) {
+        if let Some(encoded_response) = encode_response(&event.storage, matches.as_deref(), false) {
             let mut str = std::mem::ManuallyDrop::new(encoded_response);
             let len = str.len() as i64;
             let cap = str.capacity() as i64;
