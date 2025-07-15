@@ -111,7 +111,8 @@ impl<E: Encoding> Event for BinaryEvent<E> {
 
 /// Encode a result to a byte array for efficient transfer over FFI to native code.
 /// Big endian encoding.
-/// Starts with a status code:
+/// If there are no matches, the response is empty.
+/// If there are matches or we encountered an error, the response starts with a status code:
 /// 0: success
 /// 1: error -> followed by one byte indicating the error type
 /// Followed by a sequence of bytes that represent the encoded event:

@@ -299,6 +299,7 @@ func decodeMatchResponse(result *ScanResult, buf *bytes.Buffer) {
 }
 
 func decodeEventMapResponse(rawData []byte, event map[string]interface{}) (ScanResult, error) {
+	// If there are no matches, the response is empty.
 	if len(rawData) == 0 {
 		return ScanResult{}, nil
 	}
@@ -337,6 +338,7 @@ func decodeEventMapResponse(rawData []byte, event map[string]interface{}) (ScanR
 // decodeResponse reads the binary response returned by the SDS shared library
 // on a `scan` call.
 func decodeResponse(rawData []byte) (ScanResult, error) {
+	// If there are no matches, the response is empty.
 	if len(rawData) == 0 {
 		return ScanResult{}, nil
 	}
