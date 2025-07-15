@@ -299,7 +299,17 @@ func decodeMatchResponse(result *ScanResult, buf *bytes.Buffer) {
 }
 
 func decodeEventMapResponse(rawData []byte, event map[string]interface{}) (ScanResult, error) {
-	buf := bytes.NewBuffer(rawData)
+	if len(rawData) == 0 {
+		return ScanResult{}, nil
+	}
+
+	err := decodeStatusResponse(rawData)
+	if err != nil {
+		return ScanResult{}, err
+	}
+
+	// The first byte is the success marker, the rest is the data.
+	buf := bytes.NewBuffer(rawData[1:])
 
 	var result ScanResult
 
@@ -328,7 +338,17 @@ func decodeEventMapResponse(rawData []byte, event map[string]interface{}) (ScanR
 // decodeResponse reads the binary response returned by the SDS shared library
 // on a `scan` call.
 func decodeResponse(rawData []byte) (ScanResult, error) {
-	buf := bytes.NewBuffer(rawData)
+	if len(rawData) == 0 {
+		return ScanResult{}, nil
+	}
+
+	err := decodeStatusResponse(rawData)
+	if err != nil {
+		return ScanResult{}, err
+	}
+
+	// The first byte is the success marker, the rest is the data.
+	buf := bytes.NewBuffer(rawData[1:])
 
 	var result ScanResult
 
@@ -352,6 +372,27 @@ func decodeResponse(rawData []byte) (ScanResult, error) {
 	}
 
 	return result, nil
+}
+
+func decodeStatusResponse(rawData []byte) error {
+	switch rawData[0] {
+	case 0:
+		// Success
+		return nil
+	case 1:
+
+		// Error
+		switch rawData[1] {
+		case 0:
+			// Error: TransientError
+			return fmt.Errorf("scan error: transient error that a future retry might fix")
+		default:
+			// Error: InvalidKeywords
+			return fmt.Errorf("decodeResponse: unknown error byte marker: %x", rawData[1])
+		}
+	default:
+		return fmt.Errorf("decodeResponse: unknown byte marker: %x", rawData[0])
+	}
 }
 
 // nextString using this format:
