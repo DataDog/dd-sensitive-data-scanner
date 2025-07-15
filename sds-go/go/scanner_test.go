@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -49,6 +50,27 @@ func TestCreateScannerFailOnBadRegex(t *testing.T) {
 	}
 	if scanner != nil {
 		t.Fatal("on failed creation, the returned scanner should be nil")
+	}
+}
+
+func TestCreateScannerFailedOnInvalidRule(t *testing.T) {
+	// scanner ok
+	rules := []RuleConfig{
+		RegexRuleConfig{
+			Id:      "rule_hello",
+			Pattern: "hello",
+			MatchAction: MatchAction{
+				Type: MatchActionType("unknown"),
+			},
+		},
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err == nil || scanner != nil {
+		t.Fatal("creating the scanner should've failed due to invalid rule")
+	}
+	if !strings.Contains(err.Error(), "Failed to create regex rule with id rule_hello") {
+		t.Fatalf("unexpected error message: %s", err.Error())
 	}
 }
 

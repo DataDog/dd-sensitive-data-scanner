@@ -2,6 +2,7 @@ use core::panic::UnwindSafe;
 use dd_sds::{RootRuleConfig, RuleConfig};
 use serde::de::DeserializeOwned;
 use std::ffi::{c_char, CStr, CString};
+use std::io::{Error, ErrorKind};
 use std::sync::{Arc, Mutex};
 
 pub mod create_scanner;
@@ -17,12 +18,22 @@ pub type RuleDoublePtr = Arc<RulePtr>;
 pub type RuleList = Arc<Mutex<Vec<RulePtr>>>;
 
 /// Safety: The pointer passed in must be a valid cstr pointer.
-pub unsafe fn read_json<T: DeserializeOwned>(
-    raw_value: *const c_char,
-) -> Result<T, serde_json::Error> {
+pub unsafe fn read_json<T: DeserializeOwned>(raw_value: *const c_char) -> Result<T, Error> {
     let c_str = unsafe { CStr::from_ptr(raw_value) };
     let val = c_str.to_string_lossy();
-    serde_json::from_str(&val)
+    let jd = &mut serde_json::Deserializer::from_str(&val);
+
+    match serde_path_to_error::deserialize(jd) {
+        Ok(value) => Ok(value),
+        Err(e) => {
+            let path = e.path().to_string();
+            // Convert the error to a more generic error type
+            Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("Failed to deserialize JSON: {} at path: {}", e, path),
+            ))
+        }
+    }
 }
 
 ///
