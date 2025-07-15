@@ -303,13 +303,12 @@ func decodeEventMapResponse(rawData []byte, event map[string]interface{}) (ScanR
 		return ScanResult{}, nil
 	}
 
-	err := decodeStatusResponse(rawData)
+	rawData, err := decodeStatusResponse(rawData)
 	if err != nil {
 		return ScanResult{}, err
 	}
 
-	// The first byte is the success marker, the rest is the data.
-	buf := bytes.NewBuffer(rawData[1:])
+	buf := bytes.NewBuffer(rawData)
 
 	var result ScanResult
 
@@ -342,13 +341,12 @@ func decodeResponse(rawData []byte) (ScanResult, error) {
 		return ScanResult{}, nil
 	}
 
-	err := decodeStatusResponse(rawData)
+	rawData, err := decodeStatusResponse(rawData)
 	if err != nil {
 		return ScanResult{}, err
 	}
 
-	// The first byte is the success marker, the rest is the data.
-	buf := bytes.NewBuffer(rawData[1:])
+	buf := bytes.NewBuffer(rawData)
 
 	var result ScanResult
 
@@ -374,24 +372,24 @@ func decodeResponse(rawData []byte) (ScanResult, error) {
 	return result, nil
 }
 
-func decodeStatusResponse(rawData []byte) error {
+func decodeStatusResponse(rawData []byte) ([]byte, error) {
 	switch rawData[0] {
 	case 0:
 		// Success
-		return nil
+		return rawData[1:], nil
 	case 1:
 
 		// Error
 		switch rawData[1] {
 		case 0:
 			// Error: TransientError
-			return fmt.Errorf("scan error: transient error that a future retry might fix")
+			return nil, fmt.Errorf("scan error: transient error that a future retry might fix")
 		default:
 			// Error: InvalidKeywords
-			return fmt.Errorf("decodeResponse: unknown error byte marker: %x", rawData[1])
+			return nil, fmt.Errorf("decodeResponse: unknown error byte marker: %x", rawData[1])
 		}
 	default:
-		return fmt.Errorf("decodeResponse: unknown byte marker: %x", rawData[0])
+		return nil, fmt.Errorf("decodeResponse: unknown byte marker: %x", rawData[0])
 	}
 }
 
