@@ -48,7 +48,7 @@ pub use scanner::{
     regex_rule::RegexCaches,
     scope::Scope,
     CompiledRule, MatchEmitter, RootCompiledRule, RootRuleConfig, ScanOptionBuilder, Scanner,
-    ScannerBuilder, SharedData, StringMatch,
+    ScannerBuilder, SharedData, StringMatch, StringMatchesCtx,
 };
 pub use scoped_ruleset::ExclusionCheck;
 pub use validation::{
