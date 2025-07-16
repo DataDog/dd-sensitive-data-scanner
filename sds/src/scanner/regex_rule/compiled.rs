@@ -29,14 +29,6 @@ impl CompiledRule for RegexCompiledRule {
         content: &str,
         path: &Path,
         ctx: &mut StringMatchesCtx,
-        // regex_caches: &mut RegexCaches,
-        // _per_string_data: &mut SharedData,
-        // _per_scanner_data: &SharedData,
-        // _per_event_data: &mut SharedData,
-        // exclusion_check: &ExclusionCheck<'_>,
-        // excluded_matches: &mut AHashSet<String>,
-        // match_emitter: &mut dyn MatchEmitter,
-        // _: Option<&Vec<(usize, usize)>>,
     ) -> Result<(), ScannerError> {
         match self.included_keywords {
             Some(ref included_keywords) => {
