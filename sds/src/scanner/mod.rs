@@ -168,6 +168,19 @@ impl Deref for RootCompiledRule {
     }
 }
 
+pub struct StringMatchesCtx<'a> {
+    pub regex_caches: &'a mut RegexCaches,
+    pub exclusion_check: &'a ExclusionCheck<'a>,
+    pub excluded_matches: &'a mut AHashSet<String>,
+    pub match_emitter: &'a mut dyn MatchEmitter,
+    pub wildcard_indices: Option<&'a Vec<(usize, usize)>>,
+
+    // Shared Data
+    pub per_string_data: &'a mut SharedData,
+    pub per_scanner_data: &'a SharedData,
+    pub per_event_data: &'a mut SharedData,
+}
+
 // This is the public trait that is used to define the behavior of a compiled rule.
 pub trait CompiledRule: Send + Sync {
     fn init_per_scanner_data(&self, _per_scanner_data: &mut SharedData) {
@@ -182,19 +195,11 @@ pub trait CompiledRule: Send + Sync {
         // by default, no per-event data is initialized
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn get_string_matches(
         &self,
         content: &str,
         path: &Path,
-        regex_caches: &mut RegexCaches,
-        per_string_data: &mut SharedData,
-        per_scanner_data: &SharedData,
-        per_event_data: &mut SharedData,
-        exclusion_check: &ExclusionCheck<'_>,
-        excluded_matches: &mut AHashSet<String>,
-        match_emitter: &mut dyn MatchEmitter,
-        wildcard_indices: Option<&Vec<(usize, usize)>>,
+        ctx: &mut StringMatchesCtx<'_>,
     ) -> Result<(), ScannerError>;
 
     /// Determines if this rule has a match, without determining the exact position,
@@ -206,29 +211,25 @@ pub trait CompiledRule: Send + Sync {
         &self,
         content: &str,
         path: &Path,
-        regex_caches: &mut RegexCaches,
-        per_string_data: &mut SharedData,
-        per_scanner_data: &SharedData,
-        per_event_data: &mut SharedData,
-        exclusion_check: &ExclusionCheck<'_>,
-        excluded_matches: &mut AHashSet<String>,
-        wildcard_indices: Option<&Vec<(usize, usize)>>,
+        ctx: &mut StringMatchesCtx<'_>,
     ) -> Result<bool, ScannerError> {
         let mut found_match = false;
+
         let mut match_emitter = |_| found_match = true;
-        self.get_string_matches(
-            content,
-            path,
-            regex_caches,
-            per_string_data,
-            per_scanner_data,
-            per_event_data,
-            exclusion_check,
-            excluded_matches,
-            &mut match_emitter,
-            wildcard_indices,
-        )
-        .map(|_| found_match)
+
+        let mut new_ctx = StringMatchesCtx {
+            match_emitter: &mut match_emitter,
+            regex_caches: ctx.regex_caches,
+            exclusion_check: ctx.exclusion_check,
+            excluded_matches: ctx.excluded_matches,
+            wildcard_indices: ctx.wildcard_indices,
+            per_string_data: ctx.per_string_data,
+            per_scanner_data: ctx.per_scanner_data,
+            per_event_data: ctx.per_event_data,
+        };
+
+        self.get_string_matches(content, path, &mut new_ctx)
+            .map(|_| found_match)
     }
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
@@ -859,18 +860,18 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 // TODO: move this somewhere higher?
                 rule.init_per_event_data(&mut self.per_event_data);
 
-                rule.get_string_matches(
-                    content,
-                    path,
-                    self.regex_caches,
-                    &mut per_string_data,
-                    &self.scanner.per_scanner_data,
-                    &mut self.per_event_data,
-                    &exclusion_check,
-                    self.excluded_matches,
-                    &mut emitter,
-                    wildcard_indices_per_path,
-                )?;
+                let mut ctx = StringMatchesCtx {
+                    regex_caches: self.regex_caches,
+                    exclusion_check: &exclusion_check,
+                    excluded_matches: self.excluded_matches,
+                    match_emitter: &mut emitter,
+                    wildcard_indices: wildcard_indices_per_path,
+                    per_string_data: &mut per_string_data,
+                    per_scanner_data: &self.scanner.per_scanner_data,
+                    per_event_data: &mut self.per_event_data,
+                };
+
+                rule.get_string_matches(content, path, &mut ctx)?;
             }
             Ok(())
         })?;
