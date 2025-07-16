@@ -5,11 +5,9 @@ use crate::proximity_keywords::{
 use crate::scanner::error::ScannerError;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::regex_store::SharedRegex;
-use crate::scanner::regex_rule::RegexCaches;
-use crate::scanner::shared_data::SharedData;
-use crate::scanner::{get_next_regex_start, is_false_positive_match};
+use crate::scanner::{get_next_regex_start, is_false_positive_match, StringMatchesCtx};
 use crate::secondary_validation::Validator;
-use crate::{CompiledRule, ExclusionCheck, MatchEmitter, Path, StringMatch};
+use crate::{CompiledRule, ExclusionCheck, Path, StringMatch};
 use ahash::AHashSet;
 use regex_automata::meta::Cache;
 use regex_automata::Input;
@@ -30,24 +28,22 @@ impl CompiledRule for RegexCompiledRule {
         &self,
         content: &str,
         path: &Path,
-        regex_caches: &mut RegexCaches,
-        _per_string_data: &mut SharedData,
-        _per_scanner_data: &SharedData,
-        _per_event_data: &mut SharedData,
-        exclusion_check: &ExclusionCheck<'_>,
-        excluded_matches: &mut AHashSet<String>,
-        match_emitter: &mut dyn MatchEmitter,
-        _: Option<&Vec<(usize, usize)>>,
+        ctx: &mut StringMatchesCtx,
+        // regex_caches: &mut RegexCaches,
+        // _per_string_data: &mut SharedData,
+        // _per_scanner_data: &SharedData,
+        // _per_event_data: &mut SharedData,
+        // exclusion_check: &ExclusionCheck<'_>,
+        // excluded_matches: &mut AHashSet<String>,
+        // match_emitter: &mut dyn MatchEmitter,
+        // _: Option<&Vec<(usize, usize)>>,
     ) -> Result<(), ScannerError> {
         match self.included_keywords {
             Some(ref included_keywords) => {
                 self.get_string_matches_with_included_keywords(
                     content,
                     path,
-                    regex_caches,
-                    exclusion_check,
-                    excluded_matches,
-                    match_emitter,
+                    ctx,
                     included_keywords,
                 );
             }
@@ -55,13 +51,13 @@ impl CompiledRule for RegexCompiledRule {
                 let true_positive_search = self.true_positive_matches(
                     content,
                     0,
-                    regex_caches.get(&self.regex),
+                    ctx.regex_caches.get(&self.regex),
                     true,
-                    exclusion_check,
-                    excluded_matches,
+                    ctx.exclusion_check,
+                    ctx.excluded_matches,
                 );
                 for string_match in true_positive_search {
-                    match_emitter.emit(string_match);
+                    ctx.match_emitter.emit(string_match);
                 }
             }
         }
@@ -83,24 +79,21 @@ impl RegexCompiledRule {
         &self,
         content: &str,
         path: &Path,
-        regex_caches: &mut RegexCaches,
-        exclusion_check: &ExclusionCheck<'_>,
-        excluded_matches: &mut AHashSet<String>,
-        match_emitter: &mut dyn MatchEmitter,
+        ctx: &mut StringMatchesCtx,
         included_keywords: &CompiledIncludedProximityKeywords,
     ) {
         let mut included_keyword_matches = included_keywords.keyword_matches(content);
 
         'included_keyword_search: while let Some(included_keyword_match) =
-            included_keyword_matches.next(regex_caches)
+            included_keyword_matches.next(ctx.regex_caches)
         {
             let true_positive_search = self.true_positive_matches(
                 content,
                 included_keyword_match.end,
-                regex_caches.get(&self.regex),
+                ctx.regex_caches.get(&self.regex),
                 false,
-                exclusion_check,
-                excluded_matches,
+                ctx.exclusion_check,
+                ctx.excluded_matches,
             );
 
             for true_positive_match in true_positive_search {
@@ -115,7 +108,7 @@ impl RegexCompiledRule {
                     // is used instead of the end since the included keyword can overlap with
                     // a previous match (maybe this can be removed in the future?)
                     included_keyword_matches.skip_to(true_positive_match.start);
-                    match_emitter.emit(true_positive_match);
+                    ctx.match_emitter.emit(true_positive_match);
 
                     // Continue search since another true positive could potentially be found within the same prefix
                 } else {
@@ -144,7 +137,7 @@ impl RegexCompiledRule {
             let input = Input::new(content);
             if self
                 .regex
-                .search_with(regex_caches.get(&self.regex), &input)
+                .search_with(ctx.regex_caches.get(&self.regex), &input)
                 .is_some()
             {
                 has_verified_kws_in_path = Some(contains_keyword_in_path(
@@ -163,14 +156,14 @@ impl RegexCompiledRule {
         let true_positive_search = self.true_positive_matches(
             content,
             0,
-            regex_caches.get(&self.regex),
+            ctx.regex_caches.get(&self.regex),
             false,
-            exclusion_check,
-            excluded_matches,
+            ctx.exclusion_check,
+            ctx.excluded_matches,
         );
 
         for string_match in true_positive_search {
-            match_emitter.emit(string_match);
+            ctx.match_emitter.emit(string_match);
         }
     }
 

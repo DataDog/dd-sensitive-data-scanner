@@ -5,7 +5,7 @@ mod overlapping_matches;
 mod validators;
 
 use super::*;
-use super::{MatchEmitter, ScannerBuilder, StringMatch};
+use super::{ScannerBuilder, StringMatch};
 use crate::match_action::{MatchAction, MatchActionValidationError};
 
 use crate::observability::labels::Labels;
@@ -14,12 +14,10 @@ use crate::scanner::regex_rule::config::{
 };
 use crate::scanner::scope::Scope;
 use crate::scanner::{get_next_regex_start, CreateScannerError, Scanner};
-use crate::scoped_ruleset::ExclusionCheck;
 use crate::validation::RegexValidationError;
 
 use crate::{simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch};
 use crate::{Encoding, Utf8Encoding};
-use ahash::AHashSet;
 
 use regex_automata::Match;
 use std::collections::BTreeMap;
@@ -36,16 +34,9 @@ impl CompiledRule for DumbCompiledRule {
         &self,
         _content: &str,
         _path: &Path,
-        _regex_caches: &mut RegexCaches,
-        _per_string_data: &mut SharedData,
-        _per_scanner_data: &SharedData,
-        _per_event_data: &mut SharedData,
-        _exclusion_check: &ExclusionCheck<'_>,
-        _excluded_matches: &mut AHashSet<String>,
-        match_emitter: &mut dyn MatchEmitter,
-        _: Option<&Vec<(usize, usize)>>,
+        ctx: &mut StringMatchesCtx,
     ) -> Result<(), ScannerError> {
-        match_emitter.emit(StringMatch { start: 10, end: 16 });
+        ctx.match_emitter.emit(StringMatch { start: 10, end: 16 });
         Ok(())
     }
 }
