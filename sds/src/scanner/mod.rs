@@ -46,7 +46,6 @@ pub mod scope;
 pub mod shared_data;
 pub mod shared_pool;
 
-// mod r#async;
 mod internal_rule_match_set;
 #[cfg(test)]
 mod test;
@@ -215,7 +214,7 @@ impl StringMatchesCtx<'_> {
         }
         .boxed();
 
-        Ok(OldAsyncStatus::Pending(fut))
+        Ok(AsyncStatus::Pending(fut))
     }
 }
 
@@ -230,7 +229,7 @@ impl AsyncStringMatchesCtx {
 }
 
 #[must_use]
-pub enum OldAsyncStatus<T> {
+pub enum AsyncStatus<T> {
     Done(T),
     Pending(PendingRuleResult),
 }
@@ -248,7 +247,7 @@ pub struct AsyncRuleInfo {
 }
 
 /// A rule result that cannot be async
-pub type RuleResult<T> = Result<OldAsyncStatus<T>, ScannerError>;
+pub type RuleResult<T> = Result<AsyncStatus<T>, ScannerError>;
 
 // This is the public trait that is used to define the behavior of a compiled rule.
 pub trait CompiledRule: Send + Sync {
@@ -1022,10 +1021,10 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 let async_status = rule.get_string_matches(content, path, &mut ctx)?;
 
                 match async_status {
-                    OldAsyncStatus::Done(()) => {
+                    AsyncStatus::Done(()) => {
                         // nothing to do
                     }
-                    OldAsyncStatus::Pending(fut) => {
+                    AsyncStatus::Pending(fut) => {
                         self.async_jobs.push(PendingRuleJob {
                             fut,
                             path: path.into_static(),
