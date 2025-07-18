@@ -2,10 +2,11 @@ use crate::proximity_keywords::{
     contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
     CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
 };
-use crate::scanner::error::ScannerError;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::regex_store::SharedRegex;
-use crate::scanner::{get_next_regex_start, is_false_positive_match, StringMatchesCtx};
+use crate::scanner::{
+    get_next_regex_start, is_false_positive_match, AsyncStatus, RuleResult, StringMatchesCtx,
+};
 use crate::secondary_validation::Validator;
 use crate::{CompiledRule, ExclusionCheck, Path, StringMatch};
 use ahash::AHashSet;
@@ -29,7 +30,7 @@ impl CompiledRule for RegexCompiledRule {
         content: &str,
         path: &Path,
         ctx: &mut StringMatchesCtx,
-    ) -> Result<(), ScannerError> {
+    ) -> RuleResult<()> {
         match self.included_keywords {
             Some(ref included_keywords) => {
                 self.get_string_matches_with_included_keywords(
@@ -53,7 +54,7 @@ impl CompiledRule for RegexCompiledRule {
                 }
             }
         }
-        Ok(())
+        Ok(AsyncStatus::Done(()))
     }
 
     fn should_exclude_multipass_v0(&self) -> bool {

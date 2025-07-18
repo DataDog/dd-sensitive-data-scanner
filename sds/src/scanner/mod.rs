@@ -1,5 +1,6 @@
 use crate::encoding::Encoding;
 use crate::event::Event;
+use std::future::{Future, Pending};
 
 use crate::match_validation::{
     config::InternalMatchValidationType, config::MatchValidationType, match_status::MatchStatus,
@@ -16,8 +17,9 @@ use crate::{
     CreateScannerError, EncodeIndices, MatchAction, Path, RegexValidationError, ScannerError,
 };
 use std::ops::Deref;
+use std::pin::Pin;
 use std::sync::Arc;
-
+use std::time::Instant;
 use self::metrics::ScannerMetrics;
 use crate::match_validation::match_validator::RAYON_THREAD_POOL;
 use crate::scanner::config::RuleConfig;
@@ -27,6 +29,9 @@ use crate::scanner::scope::Scope;
 pub use crate::scanner::shared_data::SharedData;
 use crate::stats::GLOBAL_STATS;
 use ahash::{AHashMap, AHashSet};
+use futures::executor::block_on;
+use futures::future::BoxFuture;
+use futures::FutureExt;
 use regex_automata::Match;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -181,6 +186,62 @@ pub struct StringMatchesCtx<'a> {
     pub per_event_data: &'a mut SharedData,
 }
 
+impl StringMatchesCtx<'_> {
+    pub fn process_async(
+        &self,
+        func: impl for<'a> FnOnce(
+                &'a mut AsyncStringMatchesCtx,
+            )
+                -> Pin<Box<dyn Future<Output = Result<(), ScannerError>> + Send + 'a>>
+            + Send
+            + 'static,
+    ) -> RuleResult<()> {
+        let fut = async move {
+            let mut ctx = AsyncStringMatchesCtx {
+                rule_matches: vec![],
+            };
+            (func)(&mut ctx).await?;
+
+            Ok(AsyncRuleInfo {
+                rule_matches: ctx.rule_matches,
+            })
+        }
+        .boxed();
+
+        Ok(AsyncStatus::Pending(fut))
+    }
+}
+
+pub struct AsyncStringMatchesCtx {
+    rule_matches: Vec<StringMatch>,
+}
+
+impl AsyncStringMatchesCtx {
+    pub fn emit_match(&mut self, string_match: StringMatch) {
+        self.rule_matches.push(string_match);
+    }
+}
+
+pub enum AsyncStatus<T> {
+    Done(T),
+    Pending(PendingRuleResult),
+}
+
+pub type PendingRuleResult = BoxFuture<'static, Result<AsyncRuleInfo, ScannerError>>;
+
+pub struct PendingRuleJob {
+    fut: PendingRuleResult,
+    path: Path<'static>,
+}
+
+pub struct AsyncRuleInfo {
+    rule_matches: Vec<StringMatch>,
+}
+
+/// A rule result that cannot be async
+#[must_use]
+pub type RuleResult<T> = Result<AsyncStatus<T>, ScannerError>;
+
 // This is the public trait that is used to define the behavior of a compiled rule.
 pub trait CompiledRule: Send + Sync {
     fn init_per_scanner_data(&self, _per_scanner_data: &mut SharedData) {
@@ -200,37 +261,47 @@ pub trait CompiledRule: Send + Sync {
         content: &str,
         path: &Path,
         ctx: &mut StringMatchesCtx<'_>,
-    ) -> Result<(), ScannerError>;
+    ) -> RuleResult<()>;
 
-    /// Determines if this rule has a match, without determining the exact position,
-    /// or finding multiple matches. The default implementation just calls
-    /// `get_string_matches`, but this can be overridden with a more efficient
-    /// implementation if applicable
-    #[allow(clippy::too_many_arguments)]
-    fn has_string_match(
-        &self,
-        content: &str,
-        path: &Path,
-        ctx: &mut StringMatchesCtx<'_>,
-    ) -> Result<bool, ScannerError> {
-        let mut found_match = false;
-
-        let mut match_emitter = |_| found_match = true;
-
-        let mut new_ctx = StringMatchesCtx {
-            match_emitter: &mut match_emitter,
-            regex_caches: ctx.regex_caches,
-            exclusion_check: ctx.exclusion_check,
-            excluded_matches: ctx.excluded_matches,
-            wildcard_indices: ctx.wildcard_indices,
-            per_string_data: ctx.per_string_data,
-            per_scanner_data: ctx.per_scanner_data,
-            per_event_data: ctx.per_event_data,
-        };
-
-        self.get_string_matches(content, path, &mut new_ctx)
-            .map(|_| found_match)
-    }
+    // /// Determines if this rule has a match, without determining the exact position,
+    // /// or finding multiple matches. The default implementation just calls
+    // /// `get_string_matches`, but this can be overridden with a more efficient
+    // /// implementation if applicable
+    // #[allow(clippy::too_many_arguments)]
+    // fn has_string_match(
+    //     &self,
+    //     content: &str,
+    //     path: &Path,
+    //     ctx: &mut StringMatchesCtx<'_>,
+    // ) -> RuleResult<bool> {
+    //     let mut found_match = false;
+    //
+    //     let mut match_emitter = |_| found_match = true;
+    //
+    //     let mut new_ctx = StringMatchesCtx {
+    //         match_emitter: &mut match_emitter,
+    //         regex_caches: ctx.regex_caches,
+    //         exclusion_check: ctx.exclusion_check,
+    //         excluded_matches: ctx.excluded_matches,
+    //         wildcard_indices: ctx.wildcard_indices,
+    //         per_string_data: ctx.per_string_data,
+    //         per_scanner_data: ctx.per_scanner_data,
+    //         per_event_data: ctx.per_event_data,
+    //     };
+    //
+    //     let x = self.get_string_matches(content, path, &mut new_ctx);
+    //     x.map(|status| {
+    //         // TODO: This is a lie, fix it
+    //         AsyncStatus::Done(true)
+    //     })
+    //
+    //     // match self.get_string_matches(content, path, &mut new_ctx) {
+    //     //     RuleResult::Async(result) => result.map(|_| true),
+    //     //     RuleResult::Success(_) => found_match,
+    //     //     RuleResult::Err(_) => {}
+    //     // }
+    //     // .map(|_| found_match)
+    // }
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
     // if the content of this match was found in a match from an excluded scope
@@ -344,7 +415,7 @@ impl Scanner {
         ScannerBuilder::new(rules)
     }
 
-    fn record_metrics(&self, output_rule_matches: &[RuleMatch], start: std::time::Instant) {
+    fn record_metrics(&self, output_rule_matches: &[RuleMatch], start: Instant) {
         // Record detection time
         self.metrics
             .duration_ns
@@ -362,15 +433,42 @@ impl Scanner {
         event: &mut E,
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
+        block_on(self.internal_scan_with_metrics(event, options))
+    }
+
+    async fn internal_scan_with_metrics<E: Event>(
+        &self,
+        event: &mut E,
+        options: ScanOptions,
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
+        let start = Instant::now();
+        let result = self.internal_scan(event, options).await;
+        match &result {
+            Ok(rule_matches) => {
+                self.record_metrics(rule_matches, start);
+            }
+            Err(_) => {
+                self.record_metrics(&[], start);
+            }
+        }
+        result
+    }
+
+    async fn internal_scan<E: Event>(
+        &self,
+        event: &mut E,
+        options: ScanOptions,
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
         // All matches, after some (but not all) false-positives have been removed.
         // This is a vec of vecs, where each inner vec is a set of matches for a single path.
-        let mut rule_matches_list = vec![];
+        let mut rule_matches_list: Vec<(Path, Vec<InternalRuleMatch<<E as Event>::Encoding>>)> =
+            vec![];
 
         let mut excluded_matches = AHashSet::new();
 
-        // Measure detection time
-        let start = std::time::Instant::now();
-        let result = access_regex_caches(|regex_caches| {
+        let mut async_jobs = vec![];
+        
+        access_regex_caches(|regex_caches| {
             self.scoped_ruleset.visit_string_rule_combinations(
                 event,
                 ScannerContentVisitor {
@@ -381,15 +479,22 @@ impl Scanner {
                     excluded_matches: &mut excluded_matches,
                     per_event_data: SharedData::new(),
                     wildcarded_indexes: &options.wildcarded_indices,
+                    async_jobs: &mut async_jobs,
                 },
             )
-        });
-
-        // If we were not able to scan, no need to go any further.
-        // Don't forget to record the metrics though!
-        if let Err(e) = result {
-            self.record_metrics(&[], start);
-            return Err(e);
+        })?;
+        
+        // TODO: resolve all async jobs
+        // spawn all async tasks in parallel
+        let mut handles = vec![];
+        for job in async_jobs {
+            handles.push(tokio::spawn(job.fut));
+        }
+        
+        // collect the async results
+        for handle in handles {
+            let x = handle.await;
+            
         }
 
         let mut output_rule_matches = vec![];
@@ -397,6 +502,21 @@ impl Scanner {
         for (path, rule_matches) in &mut rule_matches_list {
             // All rule matches in each inner list are for a single path, so they can be processed independently.
             event.visit_string_mut(path, |content| {
+                // calculate_indices requires that matches are sorted by start index
+                rule_matches.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
+
+                <<E as Event>::Encoding>::calculate_indices(
+                    content,
+                    rule_matches.iter_mut().map(
+                        |rule_match: &mut InternalRuleMatch<E::Encoding>| EncodeIndices {
+                            utf8_start: rule_match.utf8_start,
+                            utf8_end: rule_match.utf8_end,
+                            custom_start: &mut rule_match.custom_start,
+                            custom_end: &mut rule_match.custom_end,
+                        },
+                    ),
+                );
+
                 if self.scanner_features.multipass_v0_enabled {
                     // Now that the `excluded_matches` set is fully populated, filter out any matches
                     // that are the same as excluded matches (also known as "Multi-pass V0")
@@ -428,8 +548,6 @@ impl Scanner {
                 will_mutate
             });
         }
-
-        self.record_metrics(&output_rule_matches, start);
 
         Ok(output_rule_matches)
     }
@@ -817,6 +935,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     excluded_matches: &'a mut AHashSet<String>,
     per_event_data: SharedData,
     wildcarded_indexes: &'a AHashMap<Path<'static>, Vec<(usize, usize)>>,
+    async_jobs: &'a mut Vec<PendingRuleJob>,
 }
 
 impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
@@ -871,36 +990,35 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     per_event_data: &mut self.per_event_data,
                 };
 
-                rule.get_string_matches(content, path, &mut ctx)?;
+                let async_status = rule.get_string_matches(content, path, &mut ctx)?;
+
+                match async_status {
+                    AsyncStatus::Done(()) => {
+                        // nothing to do
+                    }
+                    AsyncStatus::Pending(fut) => {
+                        self.async_jobs.push(PendingRuleJob {
+                            fut,
+                            path: path.into_static(),
+                        });
+                    }
+                }
             }
             Ok(())
         })?;
 
-        // calculate_indices requires that matches are sorted by start index
-        path_rules_matches.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
-
-        E::calculate_indices(
-            content,
-            path_rules_matches
-                .iter_mut()
-                .map(|rule_match: &mut InternalRuleMatch<E>| EncodeIndices {
-                    utf8_start: rule_match.utf8_start,
-                    utf8_end: rule_match.utf8_end,
-                    custom_start: &mut rule_match.custom_start,
-                    custom_end: &mut rule_match.custom_end,
-                }),
-        );
-
         // If there are any matches, the string will need to be accessed to check for false positives from
         // excluded matches, any to potentially mutate the string.
-        let has_match = !path_rules_matches.is_empty();
+        // If there are any async jobs, this is also true since it's not known yet whether there
+        // will be a match
+        let needs_to_access_content = !path_rules_matches.is_empty() || !self.async_jobs.is_empty();
 
-        if has_match {
+        if !path_rules_matches.is_empty() {
             self.rule_matches
                 .push((path.into_static(), path_rules_matches));
         }
 
-        Ok(has_match)
+        Ok(needs_to_access_content)
     }
 }
 

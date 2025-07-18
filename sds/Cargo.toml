@@ -51,6 +51,8 @@ bitcoin = "0.32.6"
 iso_iec_7064 = "0.1.1"
 ethaddr = "0.2.2"
 monero = "0.21.0"
+futures = "0.3.31"
+tokio = "1.46.1"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
