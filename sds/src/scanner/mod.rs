@@ -1,5 +1,6 @@
 use crate::encoding::Encoding;
 use crate::event::Event;
+use std::future::Future;
 
 use crate::match_validation::{
     config::InternalMatchValidationType, config::MatchValidationType, match_status::MatchStatus,
@@ -8,28 +9,34 @@ use crate::match_validation::{
 
 use error::{MatchValidationError, MatchValidatorCreationError};
 
-use crate::observability::labels::Labels;
-use crate::rule_match::{InternalRuleMatch, RuleMatch};
-use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
-pub use crate::secondary_validation::Validator;
-use crate::{
-    CreateScannerError, EncodeIndices, MatchAction, Path, RegexValidationError, ScannerError,
-};
-use std::ops::Deref;
-use std::sync::Arc;
-
 use self::metrics::ScannerMetrics;
 use crate::match_validation::match_validator::RAYON_THREAD_POOL;
+use crate::observability::labels::Labels;
+use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scanner::config::RuleConfig;
+use crate::scanner::internal_rule_match_set::InternalRuleMatchSet;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::{access_regex_caches, RegexCaches};
 use crate::scanner::scope::Scope;
 pub use crate::scanner::shared_data::SharedData;
+use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
+pub use crate::secondary_validation::Validator;
 use crate::stats::GLOBAL_STATS;
+use crate::tokio::TOKIO_RUNTIME;
+use crate::{
+    CreateScannerError, EncodeIndices, MatchAction, Path, RegexValidationError, ScannerError,
+};
 use ahash::{AHashMap, AHashSet};
+use futures::executor::block_on;
+use futures::future::BoxFuture;
+use futures::FutureExt;
 use regex_automata::Match;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::ops::Deref;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::time::Instant;
 
 pub mod config;
 pub mod error;
@@ -39,6 +46,7 @@ pub mod scope;
 pub mod shared_data;
 pub mod shared_pool;
 
+mod internal_rule_match_set;
 #[cfg(test)]
 mod test;
 
@@ -169,6 +177,7 @@ impl Deref for RootCompiledRule {
 }
 
 pub struct StringMatchesCtx<'a> {
+    rule_index: usize,
     pub regex_caches: &'a mut RegexCaches,
     pub exclusion_check: &'a ExclusionCheck<'a>,
     pub excluded_matches: &'a mut AHashSet<String>,
@@ -180,6 +189,65 @@ pub struct StringMatchesCtx<'a> {
     pub per_scanner_data: &'a SharedData,
     pub per_event_data: &'a mut SharedData,
 }
+
+impl StringMatchesCtx<'_> {
+    pub fn process_async(
+        &self,
+        func: impl for<'a> FnOnce(
+                &'a mut AsyncStringMatchesCtx,
+            )
+                -> Pin<Box<dyn Future<Output = Result<(), ScannerError>> + Send + 'a>>
+            + Send
+            + 'static,
+    ) -> RuleResult<()> {
+        let rule_index = self.rule_index;
+        let fut = async move {
+            let mut ctx = AsyncStringMatchesCtx {
+                rule_matches: vec![],
+            };
+            (func)(&mut ctx).await?;
+
+            Ok(AsyncRuleInfo {
+                rule_index,
+                rule_matches: ctx.rule_matches,
+            })
+        }
+        .boxed();
+
+        Ok(AsyncStatus::Pending(fut))
+    }
+}
+
+pub struct AsyncStringMatchesCtx {
+    rule_matches: Vec<StringMatch>,
+}
+
+impl AsyncStringMatchesCtx {
+    pub fn emit_match(&mut self, string_match: StringMatch) {
+        self.rule_matches.push(string_match);
+    }
+}
+
+#[must_use]
+pub enum AsyncStatus<T> {
+    Done(T),
+    Pending(PendingRuleResult),
+}
+
+pub type PendingRuleResult = BoxFuture<'static, Result<AsyncRuleInfo, ScannerError>>;
+
+pub struct PendingRuleJob {
+    fut: PendingRuleResult,
+    path: Path<'static>,
+}
+
+pub struct AsyncRuleInfo {
+    rule_index: usize,
+    rule_matches: Vec<StringMatch>,
+}
+
+/// A rule result that cannot be async
+pub type RuleResult<T> = Result<AsyncStatus<T>, ScannerError>;
 
 // This is the public trait that is used to define the behavior of a compiled rule.
 pub trait CompiledRule: Send + Sync {
@@ -200,37 +268,47 @@ pub trait CompiledRule: Send + Sync {
         content: &str,
         path: &Path,
         ctx: &mut StringMatchesCtx<'_>,
-    ) -> Result<(), ScannerError>;
+    ) -> RuleResult<()>;
 
-    /// Determines if this rule has a match, without determining the exact position,
-    /// or finding multiple matches. The default implementation just calls
-    /// `get_string_matches`, but this can be overridden with a more efficient
-    /// implementation if applicable
-    #[allow(clippy::too_many_arguments)]
-    fn has_string_match(
-        &self,
-        content: &str,
-        path: &Path,
-        ctx: &mut StringMatchesCtx<'_>,
-    ) -> Result<bool, ScannerError> {
-        let mut found_match = false;
-
-        let mut match_emitter = |_| found_match = true;
-
-        let mut new_ctx = StringMatchesCtx {
-            match_emitter: &mut match_emitter,
-            regex_caches: ctx.regex_caches,
-            exclusion_check: ctx.exclusion_check,
-            excluded_matches: ctx.excluded_matches,
-            wildcard_indices: ctx.wildcard_indices,
-            per_string_data: ctx.per_string_data,
-            per_scanner_data: ctx.per_scanner_data,
-            per_event_data: ctx.per_event_data,
-        };
-
-        self.get_string_matches(content, path, &mut new_ctx)
-            .map(|_| found_match)
-    }
+    // /// Determines if this rule has a match, without determining the exact position,
+    // /// or finding multiple matches. The default implementation just calls
+    // /// `get_string_matches`, but this can be overridden with a more efficient
+    // /// implementation if applicable
+    // #[allow(clippy::too_many_arguments)]
+    // fn has_string_match(
+    //     &self,
+    //     content: &str,
+    //     path: &Path,
+    //     ctx: &mut StringMatchesCtx<'_>,
+    // ) -> RuleResult<bool> {
+    //     let mut found_match = false;
+    //
+    //     let mut match_emitter = |_| found_match = true;
+    //
+    //     let mut new_ctx = StringMatchesCtx {
+    //         match_emitter: &mut match_emitter,
+    //         regex_caches: ctx.regex_caches,
+    //         exclusion_check: ctx.exclusion_check,
+    //         excluded_matches: ctx.excluded_matches,
+    //         wildcard_indices: ctx.wildcard_indices,
+    //         per_string_data: ctx.per_string_data,
+    //         per_scanner_data: ctx.per_scanner_data,
+    //         per_event_data: ctx.per_event_data,
+    //     };
+    //
+    //     let x = self.get_string_matches(content, path, &mut new_ctx);
+    //     x.map(|status| {
+    //         // TODO: This is a lie, fix it
+    //         AsyncStatus::Done(true)
+    //     })
+    //
+    //     // match self.get_string_matches(content, path, &mut new_ctx) {
+    //     //     RuleResult::Async(result) => result.map(|_| true),
+    //     //     RuleResult::Success(_) => found_match,
+    //     //     RuleResult::Err(_) => {}
+    //     // }
+    //     // .map(|_| found_match)
+    // }
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
     // if the content of this match was found in a match from an excluded scope
@@ -344,7 +422,41 @@ impl Scanner {
         ScannerBuilder::new(rules)
     }
 
-    fn record_metrics(&self, output_rule_matches: &[RuleMatch], start: std::time::Instant) {
+    // This function scans the given event with the rules configured in the scanner.
+    // The event parameter is a mutable reference to the event that should be scanned (implemented the Event trait).
+    // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
+    pub fn scan<E: Event>(&self, event: &mut E) -> Result<Vec<RuleMatch>, ScannerError> {
+        self.scan_with_options(event, ScanOptions::default())
+    }
+
+    // This function scans the given event with the rules configured in the scanner.
+    // The event parameter is a mutable reference to the event that should be scanned (implemented the Event trait).
+    // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
+    pub async fn scan_async<E: Event>(
+        &self,
+        event: &mut E,
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
+        self.scan_async_with_options(event, ScanOptions::default())
+            .await
+    }
+
+    pub fn scan_with_options<E: Event>(
+        &self,
+        event: &mut E,
+        options: ScanOptions,
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
+        block_on(self.internal_scan_with_metrics(event, options))
+    }
+
+    pub async fn scan_async_with_options<E: Event>(
+        &self,
+        event: &mut E,
+        options: ScanOptions,
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
+        self.internal_scan_with_metrics(event, options).await
+    }
+
+    fn record_metrics(&self, output_rule_matches: &[RuleMatch], start: Instant) {
         // Record detection time
         self.metrics
             .duration_ns
@@ -357,46 +469,90 @@ impl Scanner {
             .increment(output_rule_matches.len() as u64);
     }
 
-    pub fn scan_with_options<E: Event>(
+    async fn internal_scan_with_metrics<'a, E: Event>(
+        &'a self,
+        event: &'a mut E,
+        options: ScanOptions,
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
+        let start = Instant::now();
+        let result = self.internal_scan(event, options).await;
+        match &result {
+            Ok(rule_matches) => {
+                self.record_metrics(rule_matches, start);
+            }
+            Err(_) => {
+                self.record_metrics(&[], start);
+            }
+        }
+        result
+    }
+
+    async fn internal_scan<E: Event>(
         &self,
         event: &mut E,
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
         // All matches, after some (but not all) false-positives have been removed.
-        // This is a vec of vecs, where each inner vec is a set of matches for a single path.
-        let mut rule_matches_list = vec![];
-
+        let mut rule_matches = InternalRuleMatchSet::new();
         let mut excluded_matches = AHashSet::new();
+        let mut async_jobs = vec![];
 
-        // Measure detection time
-        let start = std::time::Instant::now();
-        let result = access_regex_caches(|regex_caches| {
+        access_regex_caches(|regex_caches| {
             self.scoped_ruleset.visit_string_rule_combinations(
                 event,
                 ScannerContentVisitor {
                     scanner: self,
                     regex_caches,
-                    rule_matches: &mut rule_matches_list,
+                    rule_matches: &mut rule_matches,
                     blocked_rules: &options.blocked_rules_idx,
                     excluded_matches: &mut excluded_matches,
                     per_event_data: SharedData::new(),
                     wildcarded_indexes: &options.wildcarded_indices,
+                    async_jobs: &mut async_jobs,
                 },
             )
-        });
+        })?;
 
-        // If we were not able to scan, no need to go any further.
-        // Don't forget to record the metrics though!
-        if let Err(e) = result {
-            self.record_metrics(&[], start);
-            return Err(e);
+        // TODO: deal with result
+
+        // return Ok(vec![]);
+        // TODO: spawn future immediately instead of waiting until here?
+        let mut handles = vec![];
+        for job in async_jobs {
+            handles.push((job.path, TOKIO_RUNTIME.spawn(job.fut)));
+        }
+
+        // collect the async results
+        for (path, handle) in handles {
+            let rule_info = handle.await.unwrap()?;
+            for rule_match in rule_info.rule_matches {
+                rule_matches.push_async_match(
+                    &path,
+                    InternalRuleMatch::new(rule_info.rule_index, rule_match),
+                )
+            }
         }
 
         let mut output_rule_matches = vec![];
 
-        for (path, rule_matches) in &mut rule_matches_list {
+        for (path, mut rule_matches) in rule_matches.into_iter() {
             // All rule matches in each inner list are for a single path, so they can be processed independently.
-            event.visit_string_mut(path, |content| {
+            event.visit_string_mut(&path, |content| {
+                // calculate_indices requires that matches are sorted by start index
+                rule_matches.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
+
+                <<E as Event>::Encoding>::calculate_indices(
+                    content,
+                    rule_matches.iter_mut().map(
+                        |rule_match: &mut InternalRuleMatch<E::Encoding>| EncodeIndices {
+                            utf8_start: rule_match.utf8_start,
+                            utf8_end: rule_match.utf8_end,
+                            custom_start: &mut rule_match.custom_start,
+                            custom_end: &mut rule_match.custom_end,
+                        },
+                    ),
+                );
+
                 if self.scanner_features.multipass_v0_enabled {
                     // Now that the `excluded_matches` set is fully populated, filter out any matches
                     // that are the same as excluded matches (also known as "Multi-pass V0")
@@ -417,28 +573,24 @@ impl Scanner {
                     });
                 }
 
-                self.sort_and_remove_overlapping_rules::<E::Encoding>(rule_matches);
+                self.sort_and_remove_overlapping_rules::<E::Encoding>(&mut rule_matches);
 
                 let will_mutate = rule_matches
                     .iter()
                     .any(|rule_match| self.rules[rule_match.rule_index].match_action.is_mutating());
 
-                self.apply_match_actions(content, path, rule_matches, &mut output_rule_matches);
+                self.apply_match_actions(
+                    content,
+                    &path,
+                    &mut rule_matches,
+                    &mut output_rule_matches,
+                );
 
                 will_mutate
             });
         }
 
-        self.record_metrics(&output_rule_matches, start);
-
         Ok(output_rule_matches)
-    }
-
-    // This function scans the given event with the rules configured in the scanner.
-    // The event parameter is a mutable reference to the event that should be scanned (implemented the Event trait).
-    // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
-    pub fn scan<E: Event>(&self, event: &mut E) -> Result<Vec<RuleMatch>, ScannerError> {
-        self.scan_with_options(event, ScanOptions::default())
     }
 
     pub fn validate_matches(
@@ -747,9 +899,9 @@ impl ScannerBuilder<'_> {
                             .scanner_features
                             .skip_rules_with_regex_matching_empty_string
                             && err
-                                == CreateScannerError::InvalidRegex(
-                                    RegexValidationError::MatchesEmptyString,
-                                )
+                            == CreateScannerError::InvalidRegex(
+                            RegexValidationError::MatchesEmptyString,
+                        )
                         {
                             // this is a temporary feature to skip rules that should be considered invalid.
                             #[allow(clippy::print_stdout)]
@@ -810,13 +962,14 @@ impl ScannerBuilder<'_> {
 struct ScannerContentVisitor<'a, E: Encoding> {
     scanner: &'a Scanner,
     regex_caches: &'a mut RegexCaches,
-    rule_matches: &'a mut Vec<(crate::Path<'static>, Vec<InternalRuleMatch<E>>)>,
+    rule_matches: &'a mut InternalRuleMatchSet<E>,
     // Rules that shall be skipped for this scan
     // This list shall be small (<10), so a linear search is acceptable
     blocked_rules: &'a Vec<usize>,
     excluded_matches: &'a mut AHashSet<String>,
     per_event_data: SharedData,
     wildcarded_indexes: &'a AHashMap<Path<'static>, Vec<(usize, usize)>>,
+    async_jobs: &'a mut Vec<PendingRuleJob>,
 }
 
 impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
@@ -845,14 +998,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     // This should never happen, but to ensure no empty match is ever generated
                     // (which may cause an infinite loop), this will panic instead.
                     assert_ne!(rule_match.start, rule_match.end, "empty match detected");
-
-                    path_rules_matches.push(InternalRuleMatch {
-                        rule_index,
-                        utf8_start: rule_match.start,
-                        utf8_end: rule_match.end,
-                        custom_start: E::zero_index(),
-                        custom_end: E::zero_index(),
-                    });
+                    path_rules_matches.push(InternalRuleMatch::new(rule_index, rule_match));
                 };
 
                 rule.init_per_string_data(&self.scanner.labels, &mut per_string_data);
@@ -861,6 +1007,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 rule.init_per_event_data(&mut self.per_event_data);
 
                 let mut ctx = StringMatchesCtx {
+                    rule_index,
                     regex_caches: self.regex_caches,
                     exclusion_check: &exclusion_check,
                     excluded_matches: self.excluded_matches,
@@ -871,36 +1018,33 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     per_event_data: &mut self.per_event_data,
                 };
 
-                rule.get_string_matches(content, path, &mut ctx)?;
+                let async_status = rule.get_string_matches(content, path, &mut ctx)?;
+
+                match async_status {
+                    AsyncStatus::Done(()) => {
+                        // nothing to do
+                    }
+                    AsyncStatus::Pending(fut) => {
+                        self.async_jobs.push(PendingRuleJob {
+                            fut,
+                            path: path.into_static(),
+                        });
+                    }
+                }
             }
             Ok(())
         })?;
 
-        // calculate_indices requires that matches are sorted by start index
-        path_rules_matches.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
-
-        E::calculate_indices(
-            content,
-            path_rules_matches
-                .iter_mut()
-                .map(|rule_match: &mut InternalRuleMatch<E>| EncodeIndices {
-                    utf8_start: rule_match.utf8_start,
-                    utf8_end: rule_match.utf8_end,
-                    custom_start: &mut rule_match.custom_start,
-                    custom_end: &mut rule_match.custom_end,
-                }),
-        );
-
         // If there are any matches, the string will need to be accessed to check for false positives from
         // excluded matches, any to potentially mutate the string.
-        let has_match = !path_rules_matches.is_empty();
+        // If there are any async jobs, this is also true since it's not known yet whether there
+        // will be a match
+        let needs_to_access_content = !path_rules_matches.is_empty() || !self.async_jobs.is_empty();
 
-        if has_match {
-            self.rule_matches
-                .push((path.into_static(), path_rules_matches));
-        }
+        self.rule_matches
+            .push_new_path_matches(path, path_rules_matches);
 
-        Ok(has_match)
+        Ok(needs_to_access_content)
     }
 }
 

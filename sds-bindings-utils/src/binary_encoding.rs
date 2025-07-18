@@ -109,31 +109,46 @@ impl<E: Encoding> Event for BinaryEvent<E> {
     }
 }
 
+pub enum ResponseStatus<'a> {
+    Success(&'a [RuleMatch]),
+    Error(&'a ScannerError),
+    Async(u64),
+}
+
 /// Encode a result to a byte array for efficient transfer over FFI to native code.
 /// Big endian encoding.
 /// If there are no matches, the response is empty.
-/// If there are matches or we encountered an error, the response starts with a status code:
-/// 0: success
-/// 1: error -> followed by one byte indicating the error type
-/// Followed by a sequence of bytes that represent the encoded event:
-/// 0: push field
-/// 1: push index
-/// 2: pop segment
-/// 3: string content
-/// 4: mutation (path, tag 3 / string content)
-/// 5: rule match (rule index, path, replacement type, start, end, shift offset)
+/// If there are matches, or we encountered an error, the response is as follows:
+/// - Status:
+///      - 0: success
+///      - 1: error -> followed by one byte indicating the error type
+///      - 2: async -> followed by an 8-byte id used to later retrieve the response
+///
+/// - Followed by a sequence of bytes that represent the encoded event:
+///    - 0: push field
+///    - 1: push index
+///    - 2: pop segment
+///    - 3: string content
+///    - 4: mutation (path, tag 3 / string content)
+///    - 5: rule match (rule index, path, replacement type, start, end, shift offset)
 pub fn encode_response(
     storage: &BTreeMap<Path, (bool, String)>,
-    matches: Result<&[RuleMatch], &ScannerError>,
+    status: ResponseStatus,
     return_matches: bool,
 ) -> Option<Vec<u8>> {
     let mut out = vec![];
-    if matches.is_err() {
-        encode_error(&mut out, &matches.unwrap_err());
-        return Some(out);
-    }
 
-    let matches = matches.unwrap();
+    let matches = match status {
+        ResponseStatus::Success(lines) => lines,
+        ResponseStatus::Error(error) => {
+            encode_error(&mut out, error);
+            return Some(out);
+        }
+        ResponseStatus::Async(count) => {
+            encode_async_response(&mut out, count);
+            return Some(out);
+        }
+    };
 
     if matches.is_empty() {
         return None;
@@ -153,6 +168,14 @@ pub fn encode_response(
     }
 
     Some(out)
+}
+
+fn encode_async_response(out: &mut Vec<u8>, token: u64) {
+    // async status
+    out.push(2);
+
+    // 8-byte token to identify the real response once it is ready
+    out.extend(token.to_be_bytes());
 }
 
 fn encode_error(out: &mut Vec<u8>, error: &ScannerError) {

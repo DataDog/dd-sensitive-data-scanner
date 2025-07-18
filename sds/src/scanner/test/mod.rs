@@ -1,3 +1,4 @@
+mod async_rule;
 mod included_keywords;
 mod match_validation;
 mod metrics;
@@ -35,9 +36,9 @@ impl CompiledRule for DumbCompiledRule {
         _content: &str,
         _path: &Path,
         ctx: &mut StringMatchesCtx,
-    ) -> Result<(), ScannerError> {
+    ) -> RuleResult<()> {
         ctx.match_emitter.emit(StringMatch { start: 10, end: 16 });
-        Ok(())
+        Ok(AsyncStatus::Done(()))
     }
 }
 
