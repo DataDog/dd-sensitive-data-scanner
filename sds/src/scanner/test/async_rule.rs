@@ -1,10 +1,10 @@
-use crate::scanner::{AsyncStatus, RuleResult};
+use crate::scanner::RuleResult;
 use crate::{
     CompiledRule, CreateScannerError, Labels, MatchAction, Path, RootRuleConfig, RuleConfig,
     ScannerBuilder, StringMatch, StringMatchesCtx,
 };
-use futures::FutureExt;
 use std::sync::Arc;
+use tokio::task::block_in_place;
 
 pub struct AsyncRuleConfig {}
 
@@ -19,6 +19,8 @@ impl CompiledRule for AsyncCompiledRule {
     ) -> RuleResult<()> {
         ctx.process_async(|ctx| {
             Box::pin(async move {
+                // sleep to make it actually async (it doesn't resolve on the first poll)
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
                 ctx.emit_match(StringMatch { start: 10, end: 16 });
                 Ok(())
             })
@@ -36,8 +38,8 @@ impl RuleConfig for AsyncRuleConfig {
     }
 }
 
-#[test]
-fn run_async_rule() {
+#[tokio::test(flavor = "multi_thread")]
+async fn run_async_rule() {
     let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
         Arc::new(AsyncRuleConfig {}) as Arc<dyn RuleConfig>
     )
@@ -47,10 +49,17 @@ fn run_async_rule() {
     .build()
     .unwrap();
 
+    // synchronous scan
+    block_in_place(|| {
+        let mut input = "this is a secret with random data".to_owned();
+        let matched_rules = scanner.scan(&mut input).unwrap();
+        assert_eq!(matched_rules.len(), 1);
+        assert_eq!(input, "this is a [REDACTED] with random data");
+    });
+
+    // async scan
     let mut input = "this is a secret with random data".to_owned();
-
-    let matched_rules = scanner.scan(&mut input).unwrap();
-
+    let matched_rules = scanner.scan_async(&mut input).await.unwrap();
     assert_eq!(matched_rules.len(), 1);
     assert_eq!(input, "this is a [REDACTED] with random data");
 }

@@ -21,6 +21,7 @@ mod scoped_ruleset;
 mod secondary_validation;
 mod simple_event;
 mod stats;
+mod tokio;
 mod validation;
 
 pub use simple_event::SimpleEvent;

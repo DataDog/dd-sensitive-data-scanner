@@ -52,7 +52,7 @@ iso_iec_7064 = "0.1.1"
 ethaddr = "0.2.2"
 monero = "0.21.0"
 futures = "0.3.31"
-tokio = "1.46.1"
+tokio = { version = "1.46.1", features = ["full"] }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
