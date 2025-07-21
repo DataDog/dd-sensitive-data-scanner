@@ -157,8 +157,8 @@ pub fn encode_response(
             return Some(out);
         }
         ResponseStatus::Async(count) => {
-            encode_async_response(&mut out, count);
-            return Some(out);
+            // TODO: remove this case
+            unimplemented!()
         }
     };
 
@@ -182,12 +182,16 @@ pub fn encode_response(
     Some(out)
 }
 
-fn encode_async_response(out: &mut Vec<u8>, token: u64) {
+pub fn encode_async_response(token: u64) -> Vec<u8> {
+    let mut out = Vec::with_capacity(size_of::<u64>() + 1);
+
     // async status
     out.push(2);
 
     // 8-byte token to identify the real response once it is ready
     out.extend(token.to_be_bytes());
+
+    out
 }
 
 fn encode_error(out: &mut Vec<u8>, error: &ScannerError) {
