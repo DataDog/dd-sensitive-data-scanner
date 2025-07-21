@@ -133,6 +133,7 @@ pub enum ResponseStatus<'a> {
 ///    - 5: rule match (rule index, path, replacement type, start, end, shift offset)
 pub fn encode_response(
     storage: &BTreeMap<Path, (bool, String)>,
+
     status: ResponseStatus,
     return_matches: bool,
 ) -> Option<Vec<u8>> {

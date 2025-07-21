@@ -52,6 +52,7 @@ pub use scanner::{
     ScanOptionBuilder, Scanner, ScannerBuilder, SharedData, StringMatch, StringMatchesCtx,
 };
 pub use scoped_ruleset::ExclusionCheck;
+pub use tokio::TOKIO_RUNTIME;
 pub use validation::{
     get_regex_complexity_estimate_very_slow, validate_regex, RegexValidationError,
 };
