@@ -434,8 +434,8 @@ impl Scanner {
     // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
     pub async fn scan_async<E: Event>(
         &self,
-        event: &mut E,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
+        event: E,
+    ) -> (E, Result<Vec<RuleMatch>, ScannerError>) {
         self.scan_async_with_options(event, ScanOptions::default())
             .await
     }
@@ -445,14 +445,18 @@ impl Scanner {
         event: &mut E,
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
-        block_on(self.internal_scan_with_metrics(event, options))
+        let owned_event = std::mem::take(event);
+        let (owned_event, response) =
+            block_on(self.internal_scan_with_metrics(owned_event, options));
+        let _unused = std::mem::replace(event, owned_event);
+        response
     }
 
     pub async fn scan_async_with_options<E: Event>(
         &self,
-        event: &mut E,
+        event: E,
         options: ScanOptions,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
+    ) -> (E, Result<Vec<RuleMatch>, ScannerError>) {
         self.internal_scan_with_metrics(event, options).await
     }
 
@@ -471,11 +475,11 @@ impl Scanner {
 
     async fn internal_scan_with_metrics<'a, E: Event>(
         &'a self,
-        event: &'a mut E,
+        event: E,
         options: ScanOptions,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
+    ) -> (E, Result<Vec<RuleMatch>, ScannerError>) {
         let start = Instant::now();
-        let result = self.internal_scan(event, options).await;
+        let (event, result) = self.internal_scan(event, options).await;
         match &result {
             Ok(rule_matches) => {
                 self.record_metrics(rule_matches, start);
@@ -484,22 +488,128 @@ impl Scanner {
                 self.record_metrics(&[], start);
             }
         }
-        result
+        (event, result)
     }
+
+    // async fn internal_scan<E: Event>(
+    //     &self,
+    //     event: &mut E,
+    //     options: ScanOptions,
+    // ) -> Result<Vec<RuleMatch>, ScannerError> {
+    //     // All matches, after some (but not all) false-positives have been removed.
+    //     let mut rule_matches = InternalRuleMatchSet::new();
+    //     let mut excluded_matches = AHashSet::new();
+    //     let mut async_jobs = vec![];
+    //
+    //     access_regex_caches(|regex_caches| {
+    //         self.scoped_ruleset.visit_string_rule_combinations(
+    //             event,
+    //             ScannerContentVisitor {
+    //                 scanner: self,
+    //                 regex_caches,
+    //                 rule_matches: &mut rule_matches,
+    //                 blocked_rules: &options.blocked_rules_idx,
+    //                 excluded_matches: &mut excluded_matches,
+    //                 per_event_data: SharedData::new(),
+    //                 wildcarded_indexes: &options.wildcarded_indices,
+    //                 async_jobs: &mut async_jobs,
+    //             },
+    //         )
+    //     })?;
+    //
+    //     // TODO: deal with result
+    //
+    //     // return Ok(vec![]);
+    //     // TODO: spawn future immediately instead of waiting until here?
+    //     let mut handles = vec![];
+    //     for job in async_jobs {
+    //         handles.push((job.path, TOKIO_RUNTIME.spawn(job.fut)));
+    //     }
+    //
+    //     // collect the async results
+    //     for (path, handle) in handles {
+    //         let rule_info = handle.await.unwrap()?;
+    //         for rule_match in rule_info.rule_matches {
+    //             rule_matches.push_async_match(
+    //                 &path,
+    //                 InternalRuleMatch::new(rule_info.rule_index, rule_match),
+    //             )
+    //         }
+    //     }
+    //
+    //     let mut output_rule_matches = vec![];
+    //
+    //     for (path, mut rule_matches) in rule_matches.into_iter() {
+    //         // All rule matches in each inner list are for a single path, so they can be processed independently.
+    //         event.visit_string_mut(&path, |content| {
+    //             // calculate_indices requires that matches are sorted by start index
+    //             rule_matches.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
+    //
+    //             <<E as Event>::Encoding>::calculate_indices(
+    //                 content,
+    //                 rule_matches.iter_mut().map(
+    //                     |rule_match: &mut InternalRuleMatch<E::Encoding>| EncodeIndices {
+    //                         utf8_start: rule_match.utf8_start,
+    //                         utf8_end: rule_match.utf8_end,
+    //                         custom_start: &mut rule_match.custom_start,
+    //                         custom_end: &mut rule_match.custom_end,
+    //                     },
+    //                 ),
+    //             );
+    //
+    //             if self.scanner_features.multipass_v0_enabled {
+    //                 // Now that the `excluded_matches` set is fully populated, filter out any matches
+    //                 // that are the same as excluded matches (also known as "Multi-pass V0")
+    //                 rule_matches.retain(|rule_match| {
+    //                     if self.rules[rule_match.rule_index]
+    //                         .inner
+    //                         .should_exclude_multipass_v0()
+    //                     {
+    //                         let is_false_positive = excluded_matches
+    //                             .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
+    //                         if is_false_positive && self.scanner_features.multipass_v0_enabled {
+    //                             self.rules[rule_match.rule_index].on_excluded_match_multipass_v0();
+    //                         }
+    //                         !is_false_positive
+    //                     } else {
+    //                         true
+    //                     }
+    //                 });
+    //             }
+    //
+    //             self.sort_and_remove_overlapping_rules::<E::Encoding>(&mut rule_matches);
+    //
+    //             let will_mutate = rule_matches
+    //                 .iter()
+    //                 .any(|rule_match| self.rules[rule_match.rule_index].match_action.is_mutating());
+    //
+    //             self.apply_match_actions(
+    //                 content,
+    //                 &path,
+    //                 &mut rule_matches,
+    //                 &mut output_rule_matches,
+    //             );
+    //
+    //             will_mutate
+    //         });
+    //     }
+    //
+    //     Ok(output_rule_matches)
+    // }
 
     async fn internal_scan<E: Event>(
         &self,
-        event: &mut E,
+        mut event: E,
         options: ScanOptions,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
+    ) -> (E, Result<Vec<RuleMatch>, ScannerError>) {
         // All matches, after some (but not all) false-positives have been removed.
         let mut rule_matches = InternalRuleMatchSet::new();
         let mut excluded_matches = AHashSet::new();
         let mut async_jobs = vec![];
 
-        access_regex_caches(|regex_caches| {
+        if let Err(err) = access_regex_caches(|regex_caches| {
             self.scoped_ruleset.visit_string_rule_combinations(
-                event,
+                &mut event,
                 ScannerContentVisitor {
                     scanner: self,
                     regex_caches,
@@ -511,7 +621,9 @@ impl Scanner {
                     async_jobs: &mut async_jobs,
                 },
             )
-        })?;
+        }) {
+            return (event, Err(err));
+        }
 
         // TODO: deal with result
 
@@ -524,7 +636,10 @@ impl Scanner {
 
         // collect the async results
         for (path, handle) in handles {
-            let rule_info = handle.await.unwrap()?;
+            let rule_info = match handle.await.unwrap() {
+                Ok(rule_info) => rule_info,
+                Err(err) => return (event, Err(err)),
+            };
             for rule_match in rule_info.rule_matches {
                 rule_matches.push_async_match(
                     &path,
@@ -590,7 +705,7 @@ impl Scanner {
             });
         }
 
-        Ok(output_rule_matches)
+        (event, Ok(output_rule_matches))
     }
 
     pub fn validate_matches(

@@ -6,7 +6,7 @@ use crate::PathSegment;
 /// Any object that can be scanned by SDS needs to implement `Event`.
 /// You can think of an Event as a "JSON-like" object that has a nested map of values with String
 /// keys.
-pub trait Event: Sized {
+pub trait Event: Sized + Default {
     /// The encoding used to calculate match indices. The actual data itself must always be UTF-8.
     type Encoding: Encoding;
 

@@ -58,8 +58,9 @@ async fn run_async_rule() {
     });
 
     // async scan
-    let mut input = "this is a secret with random data".to_owned();
-    let matched_rules = scanner.scan_async(&mut input).await.unwrap();
+    let input = "this is a secret with random data".to_owned();
+    let (output, result) = scanner.scan_async(input).await;
+    let matched_rules = result.unwrap();
     assert_eq!(matched_rules.len(), 1);
-    assert_eq!(input, "this is a [REDACTED] with random data");
+    assert_eq!(output, "this is a [REDACTED] with random data");
 }
