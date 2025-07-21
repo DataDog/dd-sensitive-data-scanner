@@ -18,6 +18,17 @@ pub struct BinaryEvent<E: Encoding> {
     _phantom: PhantomData<E>,
 }
 
+impl<E: Encoding> Default for BinaryEvent<E> {
+    fn default() -> Self {
+        Self {
+            bytes: vec![],
+            storage: BTreeMap::new(),
+            strings_are_valid_utf8: false,
+            _phantom: PhantomData,
+        }
+    }
+}
+
 impl<E: Encoding> BinaryEvent<E> {
     pub fn new(bytes: Vec<u8>, strings_are_valid_utf8: bool) -> Self {
         Self {
