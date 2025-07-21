@@ -2,6 +2,12 @@ use dd_sds::{Encoding, Event, EventVisitor, Path, PathSegment, RuleMatch, Scanne
 use std::borrow::Cow;
 use std::{collections::BTreeMap, marker::PhantomData};
 
+enum StatusCode {
+    Success = 0,
+    Error = 1,
+    Async = 2,
+}
+
 /// This allows scanning events that have been encoded as a byte array. In order to use this, you must
 /// guarantee the following:
 /// 1. Events were encoded correctly. The reference implementation is currently the Java encoding implementation.
@@ -183,26 +189,18 @@ pub fn encode_response(
 }
 
 pub fn encode_async_response(token: u64) -> Vec<u8> {
-    let mut out = Vec::with_capacity(size_of::<u64>() + 1);
-
-    // async status
-    out.push(2);
-
-    // 8-byte token to identify the real response once it is ready
-    out.extend(token.to_be_bytes());
-
-    out
+    vec![StatusCode::Async as u8]
 }
 
 fn encode_error(out: &mut Vec<u8>, error: &ScannerError) {
-    out.push(1);
+    out.push(StatusCode::Error as u8);
     match error {
         ScannerError::Transient => out.push(0),
     }
 }
 
 fn encode_success(out: &mut Vec<u8>) {
-    out.push(0);
+    out.push(StatusCode::Success as u8);
 }
 
 fn encode_match(out: &mut Vec<u8>, rule_match: &RuleMatch, return_matches: bool) {
