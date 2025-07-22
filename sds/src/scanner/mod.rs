@@ -50,6 +50,7 @@ mod internal_rule_match_set;
 #[cfg(test)]
 mod test;
 
+#[derive(Copy, Clone)]
 pub struct StringMatch {
     pub start: usize,
     pub end: usize,
@@ -270,45 +271,66 @@ pub trait CompiledRule: Send + Sync {
         ctx: &mut StringMatchesCtx<'_>,
     ) -> RuleResult<()>;
 
-    // /// Determines if this rule has a match, without determining the exact position,
-    // /// or finding multiple matches. The default implementation just calls
-    // /// `get_string_matches`, but this can be overridden with a more efficient
-    // /// implementation if applicable
-    // #[allow(clippy::too_many_arguments)]
-    // fn has_string_match(
-    //     &self,
-    //     content: &str,
-    //     path: &Path,
-    //     ctx: &mut StringMatchesCtx<'_>,
-    // ) -> RuleResult<bool> {
-    //     let mut found_match = false;
-    //
-    //     let mut match_emitter = |_| found_match = true;
-    //
-    //     let mut new_ctx = StringMatchesCtx {
-    //         match_emitter: &mut match_emitter,
-    //         regex_caches: ctx.regex_caches,
-    //         exclusion_check: ctx.exclusion_check,
-    //         excluded_matches: ctx.excluded_matches,
-    //         wildcard_indices: ctx.wildcard_indices,
-    //         per_string_data: ctx.per_string_data,
-    //         per_scanner_data: ctx.per_scanner_data,
-    //         per_event_data: ctx.per_event_data,
-    //     };
-    //
-    //     let x = self.get_string_matches(content, path, &mut new_ctx);
-    //     x.map(|status| {
-    //         // TODO: This is a lie, fix it
-    //         AsyncStatus::Done(true)
-    //     })
-    //
-    //     // match self.get_string_matches(content, path, &mut new_ctx) {
-    //     //     RuleResult::Async(result) => result.map(|_| true),
-    //     //     RuleResult::Success(_) => found_match,
-    //     //     RuleResult::Err(_) => {}
-    //     // }
-    //     // .map(|_| found_match)
-    // }
+    /// Determines if this rule has a match, without determining the exact position,
+    /// or finding multiple matches. The default implementation just calls
+    /// `get_string_matches`, but this can be overridden with a more efficient
+    /// implementation if applicable
+    #[allow(clippy::too_many_arguments)]
+    fn has_string_match(
+        &self,
+        content: &str,
+        path: &Path,
+        ctx: &mut StringMatchesCtx<'_>,
+    ) -> RuleResult<bool> {
+        let mut found_match = false;
+
+        let mut match_emitter = |_| found_match = true;
+
+        let mut new_ctx = StringMatchesCtx {
+            rule_index: ctx.rule_index,
+            match_emitter: &mut match_emitter,
+            regex_caches: ctx.regex_caches,
+            exclusion_check: ctx.exclusion_check,
+            excluded_matches: ctx.excluded_matches,
+            wildcard_indices: ctx.wildcard_indices,
+            per_string_data: ctx.per_string_data,
+            per_scanner_data: ctx.per_scanner_data,
+            per_event_data: ctx.per_event_data,
+        };
+
+        unimplemented!()
+
+        // let rule_result = self.get_string_matches(content, path, &mut new_ctx);
+        //
+        // match rule_result {
+        //     Ok(async_status) => {
+        //         match async_status {
+        //             AsyncStatus::Done(()) => {
+        //                 Ok(AsyncStatus::Done(found_match))
+        //             }
+        //             AsyncStatus::Pending(pending_result) => {
+        //                 pending_result.map(|async_result| {
+        //                     AsyncStatus::Pending(pending_result)
+        //                 })
+        //                 unimplemented!()
+        //             }
+        //         }
+        //     }
+        //     Err(err) => Err(err)
+        // }
+        // x.map(|status| {
+        //
+        //     // // TODO: This is a lie, fix it
+        //     // AsyncStatus::Done(true)
+        // })
+
+        // match self.get_string_matches(content, path, &mut new_ctx) {
+        //     RuleResult::Async(result) => result.map(|_| true),
+        //     RuleResult::Success(_) => found_match,
+        //     RuleResult::Err(_) => {}
+        // }
+        // .map(|_| found_match)
+    }
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
     // if the content of this match was found in a match from an excluded scope
