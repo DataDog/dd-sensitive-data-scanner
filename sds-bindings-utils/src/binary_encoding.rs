@@ -150,21 +150,16 @@ pub enum ResponseStatus<'a> {
 ///    - 5: rule match (rule index, path, replacement type, start, end, shift offset)
 pub fn encode_response(
     storage: &BTreeMap<Path, (bool, String)>,
-
-    status: ResponseStatus,
+    status: Result<&[RuleMatch], &ScannerError>,
     return_matches: bool,
 ) -> Option<Vec<u8>> {
     let mut out = vec![];
 
     let matches = match status {
-        ResponseStatus::Success(lines) => lines,
-        ResponseStatus::Error(error) => {
-            encode_error(&mut out, error);
+        Ok(matches) => matches,
+        Err(err) => {
+            encode_error(&mut out, err);
             return Some(out);
-        }
-        ResponseStatus::Async(count) => {
-            // TODO: remove this case
-            unimplemented!()
         }
     };
 
