@@ -166,7 +166,7 @@ pub fn encode_response(
     Some(out)
 }
 
-pub fn encode_async_response(token: u64) -> Vec<u8> {
+pub fn encode_async_response() -> Vec<u8> {
     vec![StatusCode::Async as u8]
 }
 
