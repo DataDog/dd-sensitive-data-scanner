@@ -28,8 +28,6 @@ use crate::{
 };
 use ahash::{AHashMap, AHashSet};
 use futures::executor::block_on;
-use futures::future::BoxFuture;
-use futures::FutureExt;
 use regex_automata::Match;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -37,6 +35,7 @@ use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
+use tokio::task::JoinHandle;
 
 pub mod config;
 pub mod error;
@@ -202,7 +201,10 @@ impl StringMatchesCtx<'_> {
             + 'static,
     ) -> RuleResult<()> {
         let rule_index = self.rule_index;
-        let fut = async move {
+
+        // The future is spawned onto the tokio runtime immediately so it starts running
+        // in the background
+        let fut = TOKIO_RUNTIME.spawn(async move {
             let mut ctx = AsyncStringMatchesCtx {
                 rule_matches: vec![],
             };
@@ -212,8 +214,7 @@ impl StringMatchesCtx<'_> {
                 rule_index,
                 rule_matches: ctx.rule_matches,
             })
-        }
-        .boxed();
+        });
 
         Ok(AsyncStatus::Pending(fut))
     }
@@ -235,7 +236,8 @@ pub enum AsyncStatus<T> {
     Pending(PendingRuleResult),
 }
 
-pub type PendingRuleResult = BoxFuture<'static, Result<AsyncRuleInfo, ScannerError>>;
+// pub type PendingRuleResult = BoxFuture<'static, Result<AsyncRuleInfo, ScannerError>>;
+pub type PendingRuleResult = JoinHandle<Result<AsyncRuleInfo, ScannerError>>;
 
 pub struct PendingRuleJob {
     fut: PendingRuleResult,
@@ -474,18 +476,13 @@ impl Scanner {
             )
         })?;
 
-        // TODO: spawn future immediately instead of waiting until here?
-        let mut handles = vec![];
+        // The async jobs were already spawned on the tokio runtime, so the
+        // results just need to be collected
         for job in async_jobs {
-            handles.push((job.path, TOKIO_RUNTIME.spawn(job.fut)));
-        }
-
-        // collect the async results
-        for (path, handle) in handles {
-            let rule_info = handle.await.unwrap()?;
+            let rule_info = job.fut.await.unwrap()?;
             for rule_match in rule_info.rule_matches {
                 rule_matches.push_async_match(
-                    &path,
+                    &job.path,
                     InternalRuleMatch::new(rule_info.rule_index, rule_match),
                 )
             }
