@@ -421,8 +421,11 @@ impl Scanner {
         let fut = self.internal_scan_with_metrics(event, options);
 
         // The sleep from the timeout requires being in a tokio context
-        let _tokio_guard = TOKIO_RUNTIME.enter();
-        let result = timeout(self.async_scan_timeout, fut).await;
+        let tokio_guard = TOKIO_RUNTIME.enter();
+        let t = timeout(self.async_scan_timeout, fut);
+        drop(tokio_guard);
+
+        let result = t.await;
 
         result.unwrap_or(Err(ScannerError::Transient))
     }
