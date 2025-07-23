@@ -432,8 +432,8 @@ impl Scanner {
             .increment(output_rule_matches.len() as u64);
     }
 
-    async fn internal_scan_with_metrics<'a, E: Event>(
-        &'a self,
+    async fn internal_scan_with_metrics<E: Event>(
+        &self,
         event: &mut E,
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
