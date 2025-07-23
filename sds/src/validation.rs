@@ -9,7 +9,7 @@ use regex_syntax::ast::Ast;
 use regex_syntax::hir::translate::Translator;
 use thiserror::Error;
 
-const REGEX_CACHE: Lazy<Cache<String, Result<(), RegexValidationError>>> =
+static REGEX_CACHE: Lazy<Cache<String, Result<(), RegexValidationError>>> =
     Lazy::new(|| Cache::new(1000));
 
 #[derive(Debug, PartialEq, Eq, Error, Clone)]
