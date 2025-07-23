@@ -13,12 +13,6 @@ pub enum SimpleEvent {
     Map(BTreeMap<String, SimpleEvent>),
 }
 
-impl Default for SimpleEvent {
-    fn default() -> Self {
-        SimpleEvent::String(String::new())
-    }
-}
-
 impl Event for SimpleEvent {
     type Encoding = Utf8Encoding;
 
