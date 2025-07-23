@@ -34,8 +34,9 @@ use serde_with::serde_as;
 use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 
 pub mod config;
 pub mod error;
@@ -378,6 +379,7 @@ pub struct Scanner {
     labels: Labels,
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
     per_scanner_data: SharedData,
+    async_scan_timeout: Duration,
 }
 
 impl Scanner {
@@ -416,7 +418,9 @@ impl Scanner {
         event: &mut E,
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
-        self.internal_scan_with_metrics(event, options).await
+        let fut = self.internal_scan_with_metrics(event, options);
+        let result = timeout(self.async_scan_timeout, fut).await;
+        result.unwrap_or(Err(ScannerError::Transient))
     }
 
     fn record_metrics(&self, output_rule_matches: &[RuleMatch], start: Instant) {
@@ -781,6 +785,7 @@ pub struct ScannerBuilder<'a> {
     rules: &'a [RootRuleConfig<Arc<dyn RuleConfig>>],
     labels: Labels,
     scanner_features: ScannerFeatures,
+    async_scan_timeout: Duration,
 }
 
 impl ScannerBuilder<'_> {
@@ -789,11 +794,17 @@ impl ScannerBuilder<'_> {
             rules,
             labels: Labels::empty(),
             scanner_features: ScannerFeatures::default(),
+            async_scan_timeout: Duration::from_secs(1),
         }
     }
 
     pub fn labels(mut self, labels: Labels) -> Self {
         self.labels = labels;
+        self
+    }
+
+    pub fn with_async_scan_timeout(mut self, duration: Duration) -> Self {
+        self.async_scan_timeout = duration;
         self
     }
 
@@ -910,6 +921,7 @@ impl ScannerBuilder<'_> {
             match_validators_per_type,
             labels: self.labels,
             per_scanner_data,
+            async_scan_timeout: self.async_scan_timeout,
         })
     }
 }

@@ -1,14 +1,19 @@
 use crate::scanner::RuleResult;
 use crate::{
     CompiledRule, CreateScannerError, Labels, MatchAction, Path, RootRuleConfig, RuleConfig,
-    ScannerBuilder, StringMatch, StringMatchesCtx,
+    ScannerBuilder, ScannerError, StringMatch, StringMatchesCtx,
 };
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::task::block_in_place;
 
-pub struct AsyncRuleConfig {}
+pub struct AsyncRuleConfig {
+    wait: Duration,
+}
 
-pub struct AsyncCompiledRule {}
+pub struct AsyncCompiledRule {
+    wait: Duration,
+}
 
 impl CompiledRule for AsyncCompiledRule {
     fn get_string_matches(
@@ -17,10 +22,10 @@ impl CompiledRule for AsyncCompiledRule {
         _path: &Path,
         ctx: &mut StringMatchesCtx,
     ) -> RuleResult<()> {
-        ctx.process_async(|ctx| {
+        let wait = self.wait;
+        ctx.process_async(move |ctx| {
             Box::pin(async move {
-                // sleep to make it actually async (it doesn't resolve on the first poll)
-                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                tokio::time::sleep(wait).await;
                 ctx.emit_match(StringMatch { start: 10, end: 16 });
                 Ok(())
             })
@@ -34,15 +39,15 @@ impl RuleConfig for AsyncRuleConfig {
         _content: usize,
         _: Labels,
     ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
-        Ok(Box::new(AsyncCompiledRule {}))
+        Ok(Box::new(AsyncCompiledRule { wait: self.wait }))
     }
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn run_async_rule() {
-    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
-        Arc::new(AsyncRuleConfig {}) as Arc<dyn RuleConfig>
-    )
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(Arc::new(AsyncRuleConfig {
+        wait: Duration::from_millis(1),
+    }) as Arc<dyn RuleConfig>)
     .match_action(MatchAction::Redact {
         replacement: "[REDACTED]".to_string(),
     })])
@@ -62,4 +67,22 @@ async fn run_async_rule() {
     let matched_rules = scanner.scan_async(&mut input).await.unwrap();
     assert_eq!(matched_rules.len(), 1);
     assert_eq!(input, "this is a [REDACTED] with random data");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn async_scan_timeout() {
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(Arc::new(AsyncRuleConfig {
+        wait: Duration::from_secs(99999),
+    }) as Arc<dyn RuleConfig>)
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    })])
+    .with_async_scan_timeout(Duration::from_millis(1))
+    .build()
+    .unwrap();
+
+    let mut input = "this is a secret with random data".to_owned();
+    let result = scanner.scan_async(&mut input).await;
+    assert_eq!(result.is_err(), true);
+    assert_eq!(result.unwrap_err(), ScannerError::Transient);
 }
