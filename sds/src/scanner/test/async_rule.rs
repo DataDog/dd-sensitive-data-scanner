@@ -102,10 +102,17 @@ fn async_scan_outside_of_tokio() {
     .build()
     .unwrap();
 
-    block_on(async {
+    let fut = async move {
         let mut input = "this is a secret with random data".to_owned();
         let matched_rules = scanner.scan_async(&mut input).await.unwrap();
         assert_eq!(matched_rules.len(), 1);
         assert_eq!(input, "this is a [REDACTED] with random data");
-    });
+    };
+
+    // moving the future to a separate thread before executing it to make sure it is `Send`
+    std::thread::spawn(move || {
+        block_on(fut);
+    })
+    .join()
+    .unwrap();
 }

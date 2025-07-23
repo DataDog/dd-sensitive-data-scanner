@@ -423,6 +423,7 @@ impl Scanner {
         // The sleep from the timeout requires being in a tokio context
         let tokio_guard = TOKIO_RUNTIME.enter();
         let t = timeout(self.async_scan_timeout, fut);
+        // The guard needs to be dropped before await since the guard is !Send
         drop(tokio_guard);
 
         let result = t.await;
