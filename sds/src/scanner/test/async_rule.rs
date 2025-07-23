@@ -3,6 +3,7 @@ use crate::{
     CompiledRule, CreateScannerError, Labels, MatchAction, Path, RootRuleConfig, RuleConfig,
     ScannerBuilder, ScannerError, StringMatch, StringMatchesCtx,
 };
+use futures::executor::block_on;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::block_in_place;
@@ -85,4 +86,26 @@ async fn async_scan_timeout() {
     let result = scanner.scan_async(&mut input).await;
     assert_eq!(result.is_err(), true);
     assert_eq!(result.unwrap_err(), ScannerError::Transient);
+}
+
+#[test]
+fn async_scan_outside_of_tokio() {
+    // Make sure scanning works without requiring users to explicitly enter a Tokio runtime.
+    // This is done automatically for tests with `#[tokio::test]` so this one excludes it.
+
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(Arc::new(AsyncRuleConfig {
+        wait: Duration::from_millis(1),
+    }) as Arc<dyn RuleConfig>)
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    })])
+    .build()
+    .unwrap();
+
+    block_on(async {
+        let mut input = "this is a secret with random data".to_owned();
+        let matched_rules = scanner.scan_async(&mut input).await.unwrap();
+        assert_eq!(matched_rules.len(), 1);
+        assert_eq!(input, "this is a [REDACTED] with random data");
+    });
 }

@@ -419,7 +419,11 @@ impl Scanner {
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
         let fut = self.internal_scan_with_metrics(event, options);
+
+        // The sleep from the timeout requires being in a tokio context
+        let _tokio_guard = TOKIO_RUNTIME.enter();
         let result = timeout(self.async_scan_timeout, fut).await;
+
         result.unwrap_or(Err(ScannerError::Transient))
     }
 
