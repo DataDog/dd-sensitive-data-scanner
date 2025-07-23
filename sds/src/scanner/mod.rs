@@ -456,8 +456,8 @@ impl Scanner {
     // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
     pub async fn scan_async<E: Event>(
         &self,
-        event: E,
-    ) -> (E, Result<Vec<RuleMatch>, ScannerError>) {
+        event: &mut E,
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
         self.scan_async_with_options(event, ScanOptions::default())
             .await
     }
@@ -467,18 +467,14 @@ impl Scanner {
         event: &mut E,
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
-        let owned_event = std::mem::take(event);
-        let (owned_event, response) =
-            block_on(self.internal_scan_with_metrics(owned_event, options));
-        let _unused = std::mem::replace(event, owned_event);
-        response
+        block_on(self.internal_scan_with_metrics(event, options))
     }
 
     pub async fn scan_async_with_options<E: Event>(
         &self,
-        event: E,
+        event: &mut E,
         options: ScanOptions,
-    ) -> (E, Result<Vec<RuleMatch>, ScannerError>) {
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
         self.internal_scan_with_metrics(event, options).await
     }
 
@@ -497,11 +493,11 @@ impl Scanner {
 
     async fn internal_scan_with_metrics<'a, E: Event>(
         &'a self,
-        event: E,
+        event: &mut E,
         options: ScanOptions,
-    ) -> (E, Result<Vec<RuleMatch>, ScannerError>) {
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
         let start = Instant::now();
-        let (event, result) = self.internal_scan(event, options).await;
+        let result = self.internal_scan(event, options).await;
         match &result {
             Ok(rule_matches) => {
                 self.record_metrics(rule_matches, start);
@@ -510,7 +506,7 @@ impl Scanner {
                 self.record_metrics(&[], start);
             }
         }
-        (event, result)
+        result
     }
 
     // async fn internal_scan<E: Event>(
@@ -621,17 +617,17 @@ impl Scanner {
 
     async fn internal_scan<E: Event>(
         &self,
-        mut event: E,
+        event: &mut E,
         options: ScanOptions,
-    ) -> (E, Result<Vec<RuleMatch>, ScannerError>) {
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
         // All matches, after some (but not all) false-positives have been removed.
         let mut rule_matches = InternalRuleMatchSet::new();
         let mut excluded_matches = AHashSet::new();
         let mut async_jobs = vec![];
 
-        if let Err(err) = access_regex_caches(|regex_caches| {
+        access_regex_caches(|regex_caches| {
             self.scoped_ruleset.visit_string_rule_combinations(
-                &mut event,
+                event,
                 ScannerContentVisitor {
                     scanner: self,
                     regex_caches,
@@ -643,13 +639,8 @@ impl Scanner {
                     async_jobs: &mut async_jobs,
                 },
             )
-        }) {
-            return (event, Err(err));
-        }
+        })?;
 
-        // TODO: deal with result
-
-        // return Ok(vec![]);
         // TODO: spawn future immediately instead of waiting until here?
         let mut handles = vec![];
         for job in async_jobs {
@@ -658,10 +649,7 @@ impl Scanner {
 
         // collect the async results
         for (path, handle) in handles {
-            let rule_info = match handle.await.unwrap() {
-                Ok(rule_info) => rule_info,
-                Err(err) => return (event, Err(err)),
-            };
+            let rule_info = handle.await.unwrap()?;
             for rule_match in rule_info.rule_matches {
                 rule_matches.push_async_match(
                     &path,
@@ -727,7 +715,7 @@ impl Scanner {
             });
         }
 
-        (event, Ok(output_rule_matches))
+        Ok(output_rule_matches)
     }
 
     pub fn validate_matches(
