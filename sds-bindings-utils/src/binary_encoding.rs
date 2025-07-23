@@ -115,12 +115,6 @@ impl<E: Encoding> Event for BinaryEvent<E> {
     }
 }
 
-pub enum ResponseStatus<'a> {
-    Success(&'a [RuleMatch]),
-    Error(&'a ScannerError),
-    Async(u64),
-}
-
 /// Encode a result to a byte array for efficient transfer over FFI to native code.
 /// Big endian encoding.
 /// If there are no matches, the response is empty.
@@ -128,7 +122,7 @@ pub enum ResponseStatus<'a> {
 /// - Status:
 ///      - 0: success
 ///      - 1: error -> followed by one byte indicating the error type
-///      - 2: async -> followed by an 8-byte id used to later retrieve the response
+///      - 2: async -> no additional data (handled by encode_async_response since storage isn't available yet in this case)
 ///
 /// - Followed by a sequence of bytes that represent the encoded event:
 ///    - 0: push field
