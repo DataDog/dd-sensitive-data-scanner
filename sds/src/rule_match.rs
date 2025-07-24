@@ -1,5 +1,5 @@
 use crate::match_validation::match_status::MatchStatus;
-use crate::{encoding::Encoding, path::Path};
+use crate::{encoding::Encoding, path::Path, StringMatch};
 use std::fmt::Debug;
 use std::fmt::{Display, Formatter};
 
@@ -55,6 +55,16 @@ pub struct InternalRuleMatch<E: Encoding> {
 }
 
 impl<E: Encoding> InternalRuleMatch<E> {
+    pub fn new(rule_index: usize, string_match: StringMatch) -> Self {
+        Self {
+            rule_index,
+            utf8_start: string_match.start,
+            utf8_end: string_match.end,
+            custom_start: E::zero_index(),
+            custom_end: E::zero_index(),
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.utf8_end - self.utf8_start
     }
