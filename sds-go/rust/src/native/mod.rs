@@ -9,6 +9,7 @@ pub mod create_scanner;
 pub mod delete_scanner;
 pub mod rule;
 pub mod scan;
+pub mod validation;
 
 const ERR_UNKNOWN: i64 = -1;
 pub const ERR_PANIC: i64 = -5;

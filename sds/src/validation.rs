@@ -2,12 +2,17 @@ use crate::normalization::rust_regex_adapter::{
     convert_to_rust_regex, convert_to_rust_regex_ast, QUANTIFIER_LIMIT,
 };
 use crate::parser::error::ParseError;
+use moka::sync::Cache;
+use once_cell::sync::Lazy;
 use regex_automata::meta::{self};
 use regex_syntax::ast::Ast;
 use regex_syntax::hir::translate::Translator;
 use thiserror::Error;
 
-#[derive(Debug, PartialEq, Eq, Error)]
+static REGEX_CACHE: Lazy<Cache<String, Result<(), RegexValidationError>>> =
+    Lazy::new(|| Cache::new(1000));
+
+#[derive(Debug, PartialEq, Eq, Error, Clone)]
 pub enum RegexValidationError {
     #[error("Invalid regex syntax")]
     InvalidSyntax,
@@ -41,7 +46,14 @@ const REGEX_COMPLEXITY_LIMIT: usize = 1_000_000;
 pub fn validate_regex(input: &str) -> Result<(), RegexValidationError> {
     // This is the same as `validate_and_create_regex`, but removes the actual Regex type
     // to create a more stable API for external users of the crate.
-    validate_and_create_regex(input).map(|_| ())
+    if let Some(cache_hit) = REGEX_CACHE.get(input) {
+        return cache_hit;
+    }
+
+    let result = validate_and_create_regex(input).map(|_| ());
+
+    REGEX_CACHE.insert(input.to_owned(), result.clone());
+    result
 }
 
 pub fn get_regex_complexity_estimate_very_slow(input: &str) -> Result<usize, RegexValidationError> {
