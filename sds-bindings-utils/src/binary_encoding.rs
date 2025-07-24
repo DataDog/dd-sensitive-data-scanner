@@ -137,33 +137,44 @@ pub fn encode_response(
     return_matches: bool,
 ) -> Option<Vec<u8>> {
     let mut out = vec![];
+    encode_response_in_place(storage, status, return_matches, &mut out);
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
+}
 
+pub fn encode_response_in_place(
+    storage: &BTreeMap<Path, (bool, String)>,
+    status: Result<&[RuleMatch], &ScannerError>,
+    return_matches: bool,
+    out: &mut Vec<u8>,
+) {
     let matches = match status {
         Ok(matches) => matches,
         Err(err) => {
-            encode_error(&mut out, err);
-            return Some(out);
+            encode_error(out, err);
+            return;
         }
     };
 
     if matches.is_empty() {
-        return None;
+        return;
     }
 
     // We encode success after the check that the matches are empty to avoid
     // an unnecessary allocation.
-    encode_success(&mut out);
+    encode_success(out);
 
     for (path, (mutated, content)) in storage {
         if *mutated {
-            encode_mutation(&mut out, path, content);
+            encode_mutation(out, path, content);
         }
     }
     for rule_match in matches {
-        encode_match(&mut out, rule_match, return_matches);
+        encode_match(out, rule_match, return_matches);
     }
-
-    Some(out)
 }
 
 pub fn encode_async_response() -> Vec<u8> {
