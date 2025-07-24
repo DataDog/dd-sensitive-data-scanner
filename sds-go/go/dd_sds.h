@@ -19,3 +19,5 @@ void free_any_rule(long rule_ptr);
 long create_rule_list();
 void append_rule_to_list(long rule_ptr, long list_ptr);
 void free_rule_list(long list_ptr);
+
+const char* validate_regex(const char* regex, const char** error_out);
