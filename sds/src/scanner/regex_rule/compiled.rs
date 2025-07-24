@@ -5,7 +5,7 @@ use crate::proximity_keywords::{
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::regex_store::SharedRegex;
 use crate::scanner::{
-    get_next_regex_start, is_false_positive_match, AsyncStatus, RuleResult, StringMatchesCtx,
+    get_next_regex_start, is_false_positive_match, RuleResult, RuleStatus, StringMatchesCtx,
 };
 use crate::secondary_validation::Validator;
 use crate::{CompiledRule, ExclusionCheck, Path, StringMatch};
@@ -30,7 +30,7 @@ impl CompiledRule for RegexCompiledRule {
         content: &str,
         path: &Path,
         ctx: &mut StringMatchesCtx,
-    ) -> RuleResult<()> {
+    ) -> RuleResult {
         match self.included_keywords {
             Some(ref included_keywords) => {
                 self.get_string_matches_with_included_keywords(
@@ -54,7 +54,7 @@ impl CompiledRule for RegexCompiledRule {
                 }
             }
         }
-        Ok(AsyncStatus::Done(()))
+        Ok(RuleStatus::Done)
     }
 
     fn should_exclude_multipass_v0(&self) -> bool {

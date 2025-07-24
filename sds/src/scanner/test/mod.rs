@@ -36,9 +36,9 @@ impl CompiledRule for DumbCompiledRule {
         _content: &str,
         _path: &Path,
         ctx: &mut StringMatchesCtx,
-    ) -> RuleResult<()> {
+    ) -> RuleResult {
         ctx.match_emitter.emit(StringMatch { start: 10, end: 16 });
-        Ok(AsyncStatus::Done(()))
+        Ok(RuleStatus::Done)
     }
 }
 

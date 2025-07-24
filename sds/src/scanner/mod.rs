@@ -200,7 +200,7 @@ impl StringMatchesCtx<'_> {
                 -> Pin<Box<dyn Future<Output = Result<(), ScannerError>> + Send + 'a>>
             + Send
             + 'static,
-    ) -> RuleResult<()> {
+    ) -> RuleResult {
         let rule_index = self.rule_index;
 
         // The future is spawned onto the tokio runtime immediately so it starts running
@@ -217,7 +217,7 @@ impl StringMatchesCtx<'_> {
             })
         });
 
-        Ok(AsyncStatus::Pending(fut))
+        Ok(RuleStatus::Pending(fut))
     }
 }
 
@@ -232,8 +232,8 @@ impl AsyncStringMatchesCtx {
 }
 
 #[must_use]
-pub enum AsyncStatus<T> {
-    Done(T),
+pub enum RuleStatus {
+    Done,
     Pending(PendingRuleResult),
 }
 
@@ -251,7 +251,7 @@ pub struct AsyncRuleInfo {
 }
 
 /// A rule result that cannot be async
-pub type RuleResult<T> = Result<AsyncStatus<T>, ScannerError>;
+pub type RuleResult = Result<RuleStatus, ScannerError>;
 
 // This is the public trait that is used to define the behavior of a compiled rule.
 pub trait CompiledRule: Send + Sync {
@@ -272,7 +272,7 @@ pub trait CompiledRule: Send + Sync {
         content: &str,
         path: &Path,
         ctx: &mut StringMatchesCtx<'_>,
-    ) -> RuleResult<()>;
+    ) -> RuleResult;
 
     // Whether a match from this rule should be excluded (marked as a false-positive)
     // if the content of this match was found in a match from an excluded scope
@@ -995,10 +995,10 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 let async_status = rule.get_string_matches(content, path, &mut ctx)?;
 
                 match async_status {
-                    AsyncStatus::Done(()) => {
+                    RuleStatus::Done => {
                         // nothing to do
                     }
-                    AsyncStatus::Pending(fut) => {
+                    RuleStatus::Pending(fut) => {
                         self.async_jobs.push(PendingRuleJob {
                             fut,
                             path: path.into_static(),

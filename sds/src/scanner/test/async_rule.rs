@@ -22,7 +22,7 @@ impl CompiledRule for AsyncCompiledRule {
         _content: &str,
         _path: &Path,
         ctx: &mut StringMatchesCtx,
-    ) -> RuleResult<()> {
+    ) -> RuleResult {
         let wait = self.wait;
         ctx.process_async(move |ctx| {
             Box::pin(async move {
