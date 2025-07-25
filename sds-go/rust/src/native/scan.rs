@@ -7,8 +7,13 @@ use crate::convert_panic_to_go_error;
 use dd_sds::{Scanner, Utf8Encoding};
 use sds_bindings_utils::{encode_response, BinaryEvent};
 
+/// # Safety
+///
+/// This function makes use of `slice::from_raw_parts` which is unsafe as it dereferences a pointer to a c_void.
+/// It also dereferences `retsize` and `retcapacity` which are pointers to i64.
+/// The caller must ensure that the pointers are valid.
 #[no_mangle]
-pub extern "C" fn scan(
+pub unsafe extern "C" fn scan(
     scanner_id: i64,
     event: *const c_void,
     event_size: i64,
@@ -47,7 +52,7 @@ pub extern "C" fn scan(
                 *retsize = 0;
                 *retcapacity = 0;
             }
-            0 as *const c_char
+            std::ptr::null::<c_char>()
         }
     }) {
         Ok(ptr) => ptr,
@@ -63,7 +68,7 @@ pub extern "C" fn scan(
                 *retsize = 0;
                 *retcapacity = 0;
             }
-            0 as *const c_char
+            std::ptr::null::<c_char>()
         }
     }
 }

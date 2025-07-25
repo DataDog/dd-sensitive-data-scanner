@@ -2,7 +2,6 @@ use std::ffi::c_char;
 use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
-use crate::native::ERR_UNKNOWN;
 use crate::{handle_panic_ptr_return, RuleList};
 use dd_sds::Scanner;
 
@@ -16,10 +15,7 @@ pub extern "C" fn create_scanner(rules: i64, error_out: *mut *const c_char) -> i
         // create the scanner
         let scanner = match Scanner::builder(&rules).build() {
             Ok(s) => s,
-            Err(err) => match err.try_into() {
-                Ok(i) => return i,
-                Err(_) => return ERR_UNKNOWN,
-            },
+            Err(err) => return err.into(),
         };
 
         // return a scanner id using the object address

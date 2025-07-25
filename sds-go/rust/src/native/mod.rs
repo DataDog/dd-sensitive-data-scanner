@@ -11,14 +11,15 @@ pub mod rule;
 pub mod scan;
 pub mod validation;
 
-const ERR_UNKNOWN: i64 = -1;
 pub const ERR_PANIC: i64 = -5;
 
 pub type RulePtr = RootRuleConfig<Arc<dyn RuleConfig>>;
 pub type RuleDoublePtr = Arc<RulePtr>;
 pub type RuleList = Arc<Mutex<Vec<RulePtr>>>;
 
-/// Safety: The pointer passed in must be a valid cstr pointer.
+/// # Safety
+///
+/// The pointer passed in must be a valid cstr pointer.
 pub unsafe fn read_json<T: DeserializeOwned>(raw_value: *const c_char) -> Result<T, Error> {
     let c_str = unsafe { CStr::from_ptr(raw_value) };
     let val = c_str.to_string_lossy();
@@ -31,7 +32,7 @@ pub unsafe fn read_json<T: DeserializeOwned>(raw_value: *const c_char) -> Result
             // Convert the error to a more generic error type
             Err(Error::new(
                 ErrorKind::InvalidData,
-                format!("Failed to deserialize JSON: {} at path: {}", e, path),
+                format!("Failed to deserialize JSON: {e} at path: {path}"),
             ))
         }
     }
