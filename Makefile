@@ -17,6 +17,12 @@ format-go: ## Format the golang lib.
     # Only the sds-go folder needs to be checked since generation-checks takes care of the generated code
 	$(shell gofmt -s -w sds-go/go && git diff --exit-code)
 
+.PHONY: format-rust
+format-rust: ## Format the rust lib.
+	@echo "Formatting rust lib"
+	cargo fmt --manifest-path="sds/Cargo.toml" --all
+	cargo fmt --manifest-path="sds-go/rust/Cargo.toml" --all
+
 ##@ Checks
 
 .PHONY: check-go
