@@ -84,7 +84,7 @@ async fn async_scan_timeout() {
 
     let mut input = "this is a secret with random data".to_owned();
     let result = scanner.scan_async(&mut input).await;
-    assert_eq!(result.is_err(), true);
+    assert!(result.is_err());
     assert_eq!(result.unwrap_err(), ScannerError::Transient);
 }
 

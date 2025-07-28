@@ -192,6 +192,15 @@ pub struct StringMatchesCtx<'a> {
 }
 
 impl StringMatchesCtx<'_> {
+    /// If a `get_string_matches` implementation needs to do any async processing (e.g. I/O),
+    /// this function can be used to return an "async job" to find matches. The return value
+    /// of `process_async` should be returned from the `get_string_matches` function. The future
+    /// passed into this function will be spawned and executed immediately without blocking
+    /// other `get_string_matches` calls. This means all the async jobs will run concurrently.
+    ///
+    /// The `ctx` available to async jobs is more restrictive than the normal `ctx` available in
+    /// `get_string_matches`. The only thing you can do is return matches. If other data is needed,
+    /// it should be accessed before `process_async` is called.
     pub fn process_async(
         &self,
         func: impl for<'a> FnOnce(
@@ -491,12 +500,13 @@ impl Scanner {
         // results just need to be collected
         for job in async_jobs {
             let rule_info = job.fut.await.unwrap()?;
-            for rule_match in rule_info.rule_matches {
-                rule_matches.push_async_match(
-                    &job.path,
-                    InternalRuleMatch::new(rule_info.rule_index, rule_match),
-                )
-            }
+            rule_matches.push_matches(
+                &job.path,
+                rule_info
+                    .rule_matches
+                    .into_iter()
+                    .map(|x| InternalRuleMatch::new(rule_info.rule_index, x)),
+            );
         }
 
         let mut output_rule_matches = vec![];
@@ -1015,8 +1025,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         // will be a match
         let needs_to_access_content = !path_rules_matches.is_empty() || !self.async_jobs.is_empty();
 
-        self.rule_matches
-            .push_new_path_matches(path, path_rules_matches);
+        self.rule_matches.push_matches(path, path_rules_matches);
 
         Ok(needs_to_access_content)
     }
