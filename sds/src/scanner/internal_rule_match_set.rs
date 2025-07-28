@@ -19,6 +19,11 @@ impl<E: Encoding> InternalRuleMatchSet<E> {
         path: &Path,
         list: impl IntoIterator<Item = InternalRuleMatch<E>>,
     ) {
+        let mut list = list.into_iter().peekable();
+        if list.peek().is_none() {
+            // An empty list should not push a new entry in the map
+            return;
+        }
         self.map.entry(path.into_static()).or_default().extend(list);
     }
 
