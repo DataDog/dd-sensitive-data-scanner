@@ -16,6 +16,7 @@ format-go: ## Format the golang lib.
 	@echo "Formatting golang lib"
     # Only the sds-go folder needs to be checked since generation-checks takes care of the generated code
 	$(shell gofmt -s -w sds-go/go && git diff --exit-code)
+	cd sds-go/go && go mod tidy -diff
 
 ##@ Checks
 
@@ -49,9 +50,21 @@ test-all: test-rust test-go ## Test the rust lib and golang libs.
 .PHONY: test
 test: test-all ## Alias for test-all
 
+##@ Build sds-go
+
+.PHONY: build-sds-go
+build-sds-go: ## Build the sds-go lib.
+	@echo "Building sds-go lib"
+	cargo build --manifest-path="sds-go/rust/Cargo.toml" --release
+
 ##@ Licenses generation
 
 .PHONY: update-licenses
 update-licenses: ## Generate licenses for the project.
 	@echo "Updating licenses"
 	bash ./scripts/generate_license_3rdparty.sh
+
+.PHONY: check-licenses
+check-licenses: ## Check licenses for the project.
+	@echo "Checking licenses"
+	bash ./scripts/generate_license_3rdparty.sh check
