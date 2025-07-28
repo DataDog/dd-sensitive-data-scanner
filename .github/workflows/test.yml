@@ -34,33 +34,26 @@ jobs:
         run: bash ./scripts/rust_checks.sh
   sds-go:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: sds-go
     steps:
       - uses: actions/checkout@v4
       - run: source "$HOME/.cargo/env"
       - name: "Build the SDS Go/Rust wrapper"
-        run: |
-          cd rust
-          cargo build --release
+        run: make build-sds-go
       - name: "Run the Go linter"
         run: |
-          cd go
+          cd sds-go/go
           go version
           go install honnef.co/go/tools/cmd/staticcheck@latest
           export PATH=$PATH:$(go env GOPATH)/bin
-          LD_LIBRARY_PATH=../rust/target/release staticcheck ./...
-          gofmt -s -w . && git diff --exit-code
-          # Replace the gofmt command above by `gofmt -s -d .` when the following is resolved https://github.com/golang/go/issues/46289
-          go mod tidy -diff
+          LD_LIBRARY_PATH=sds-go/rust/target/release staticcheck ./...
+          cd ../..
+          make format-go
       - name: "Run the Go unit tests"
-        run: |
-          cd go
-          LD_LIBRARY_PATH=../rust/target/release go test -v ./...
+        working-directory: sds-go/go
+        run: LD_LIBRARY_PATH=../rust/target/release go test -v .
       - name: "Make sure the example builds and stays relevant"
+        working-directory: sds-go/go
         run: |
-          cd go/example
           go build -buildvcs=false
   license-3rdparty:
     runs-on: ubuntu-latest
@@ -69,4 +62,4 @@ jobs:
       - name: "Install dd-rust-license-tool"
         run: cargo install dd-rust-license-tool
       - name: "Check LICENSE-3rdparty.csv"
-        run: ./scripts/generate_license_3rdparty.sh check
+        run: make check-licenses

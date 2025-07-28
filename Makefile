@@ -55,9 +55,21 @@ test-all: test-rust test-go ## Test the rust lib and golang libs.
 .PHONY: test
 test: test-all ## Alias for test-all
 
+##@ Build sds-go
+
+.PHONY: build-sds-go
+build-sds-go: ## Build the sds-go lib.
+	@echo "Building sds-go lib"
+	cargo build --manifest-path="sds-go/rust/Cargo.toml" --release
+
 ##@ Licenses generation
 
 .PHONY: update-licenses
 update-licenses: ## Generate licenses for the project.
 	@echo "Updating licenses"
 	bash ./scripts/generate_license_3rdparty.sh
+
+.PHONY: check-licenses
+check-licenses: ## Check licenses for the project.
+	@echo "Checking licenses"
+	bash ./scripts/generate_license_3rdparty.sh check
