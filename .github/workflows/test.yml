@@ -27,9 +27,6 @@ env:
 jobs:
   sds:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: sds
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
@@ -37,9 +34,6 @@ jobs:
         run: make check-rust
   sds-go:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: sds-go
     steps:
       - uses: actions/checkout@v4
       - run: source "$HOME/.cargo/env"
@@ -47,16 +41,17 @@ jobs:
         run: make build-sds-go
       - name: "Run the Go linter"
         run: |
-          cd go
+          cd sds-go/go
           go version
           go install honnef.co/go/tools/cmd/staticcheck@latest
           export PATH=$PATH:$(go env GOPATH)/bin
           LD_LIBRARY_PATH=sds-go/rust/target/release staticcheck ./...
-          cd .. && make format-go
+          cd ..
+          make format-go
       - name: "Run the Go unit tests"
         run: |
           cd go
-          LD_LIBRARY_PATH=../rust/target/release go test -v ./...
+          LD_LIBRARY_PATH=sds-go/rust/target/release go test -v ./...
       - name: "Make sure the example builds and stays relevant"
         run: |
           cd go/example
