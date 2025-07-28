@@ -56,9 +56,8 @@ jobs:
           cd ../..
           make format-go
       - name: "Run the Go unit tests"
-        run: |
-          cd sds-go/go
-          LD_LIBRARY_PATH=../rust/target/release go test -v .
+        working-directory: sds-go/go
+        run: LD_LIBRARY_PATH=../rust/target/release go test -v .
       - name: "Make sure the example builds and stays relevant"
         run: |
           cd go/example
