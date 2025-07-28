@@ -27,18 +27,11 @@ env:
 jobs:
   sds:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: sds
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
-      - name: "Format check"
-        run: cargo fmt --check --all
-      - name: "Tests"
-        run: cargo test --workspace
-      - name: "clippy"
-        run: cargo clippy --workspace -- -D warnings
+      - name: "Rust checks"
+        run: bash ./scripts/rust_checks.sh
   sds-go:
     runs-on: ubuntu-latest
     steps:
