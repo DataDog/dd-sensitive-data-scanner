@@ -27,11 +27,18 @@ env:
 jobs:
   sds:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sds
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
-      - name: "Rust format / check / clippy"
-        run: make check-rust
+      - name: "Format check"
+        run: cargo fmt --check --all
+      - name: "Tests"
+        run: cargo test --workspace
+      - name: "clippy"
+        run: cargo clippy --workspace -- -D warnings
   sds-go:
     runs-on: ubuntu-latest
     steps:
@@ -47,6 +54,8 @@ jobs:
           export PATH=$PATH:$(go env GOPATH)/bin
           LD_LIBRARY_PATH=sds-go/rust/target/release staticcheck ./...
           cd ..
+          pwd
+          ls
           make format-go
       - name: "Run the Go unit tests"
         run: |
