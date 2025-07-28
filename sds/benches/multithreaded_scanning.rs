@@ -1,9 +1,10 @@
 use ahash::AHashMap;
 use criterion::Criterion;
-use dd_sds::Scanner;
 use dd_sds::{
-    Event, EventVisitor, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig, Utf8Encoding,
+    Event, EventVisitor, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
+    RootRuleConfig, Utf8Encoding,
 };
+use dd_sds::{Scanner, ScannerError};
 use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
@@ -12,7 +13,7 @@ use threadpool::ThreadPool;
 pub fn multithread_scanning(c: &mut Criterion) {
     let rules: Vec<_> = sample_regexes()
         .into_iter()
-        .map(|regex| RegexRuleConfig::new(&regex).build())
+        .map(|regex| RootRuleConfig::new(RegexRuleConfig::new(&regex).build()))
         .collect();
 
     let scanner = Arc::new(Scanner::builder(&rules).build().unwrap());
@@ -21,13 +22,15 @@ pub fn multithread_scanning(c: &mut Criterion) {
     let rules_with_keywords: Vec<_> = regex_with_keywords
         .into_iter()
         .map(|(keywords, regex)| {
-            RegexRuleConfig::new(&regex)
-                .with_proximity_keywords(ProximityKeywordsConfig {
-                    look_ahead_character_count: 30,
-                    included_keywords: keywords,
-                    excluded_keywords: vec![],
-                })
-                .build()
+            RootRuleConfig::new(
+                RegexRuleConfig::new(&regex)
+                    .with_proximity_keywords(ProximityKeywordsConfig {
+                        look_ahead_character_count: 30,
+                        included_keywords: keywords,
+                        excluded_keywords: vec![],
+                    })
+                    .build(),
+            )
         })
         .collect();
 
@@ -51,7 +54,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     let mut sample_inputs = sample_inputs.clone();
                     let mut matches = 0;
                     for input in &mut sample_inputs {
-                        let results = scanner.scan(input);
+                        let results = scanner.scan(input).unwrap();
                         matches += results.len();
                     }
                     assert_eq!(matches, 65);
@@ -68,7 +71,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                 let scanner = Arc::clone(&scanner);
                 thread_pool.execute(move || {
                     let mut sample_event = sample_event.clone();
-                    let results = scanner.scan(&mut sample_event);
+                    let results = scanner.scan(&mut sample_event).unwrap();
                     assert_eq!(results.len(), 65);
                 });
             }
@@ -87,7 +90,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                         let mut sample_inputs = sample_inputs.clone();
                         let mut matches = 0;
                         for input in &mut sample_inputs {
-                            let results = scanner.scan(input);
+                            let results = scanner.scan(input).unwrap();
                             matches += results.len();
                         }
                         assert_eq!(matches, 35);
@@ -107,7 +110,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     let scanner = Arc::clone(&scanner_with_keywords);
                     thread_pool.execute(move || {
                         let mut sample_event = sample_event.clone();
-                        let results = scanner.scan(&mut sample_event);
+                        let results = scanner.scan(&mut sample_event).unwrap();
                         assert_eq!(results.len(), 35);
                     });
                 }
@@ -125,7 +128,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                 let mut sample_inputs = sample_inputs.clone();
                 let mut matches = 0;
                 for input in &mut sample_inputs {
-                    let results = scanner.scan(input);
+                    let results = scanner.scan(input).unwrap();
                     matches += results.len();
                 }
                 assert_eq!(matches, 65);
@@ -140,7 +143,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                 let sample_event = sample_event.clone();
                 let scanner = Arc::clone(&scanner);
                 let mut sample_event = sample_event.clone();
-                let results = scanner.scan(&mut sample_event);
+                let results = scanner.scan(&mut sample_event).unwrap();
                 assert_eq!(results.len(), 65);
             }
         })
@@ -157,7 +160,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     let mut sample_inputs = sample_inputs.clone();
                     let mut matches = 0;
                     for input in &mut sample_inputs {
-                        let results = scanner.scan(input);
+                        let results = scanner.scan(input).unwrap();
                         matches += results.len();
                     }
                     assert_eq!(matches, 35);
@@ -175,7 +178,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     let sample_event = sample_event.clone();
                     let scanner = Arc::clone(&scanner_with_keywords);
                     let mut sample_event = sample_event.clone();
-                    let results = scanner.scan(&mut sample_event);
+                    let results = scanner.scan(&mut sample_event).unwrap();
                     assert_eq!(results.len(), 35);
                 }
             })
@@ -236,7 +239,10 @@ pub enum BenchEvent {
 impl Event for BenchEvent {
     type Encoding = Utf8Encoding;
 
-    fn visit_event<'path>(&'path mut self, visitor: &mut impl EventVisitor<'path>) {
+    fn visit_event<'path>(
+        &'path mut self,
+        visitor: &mut impl EventVisitor<'path>,
+    ) -> Result<(), ScannerError> {
         match self {
             Self::String(value) => {
                 let _result = visitor.visit_string(value);
@@ -244,11 +250,12 @@ impl Event for BenchEvent {
             Self::Map(map) => {
                 for (key, child) in map.iter_mut() {
                     visitor.push_segment(key.as_str().into());
-                    child.visit_event(visitor);
+                    child.visit_event(visitor)?;
                     visitor.pop_segment();
                 }
             }
         }
+        Ok(())
     }
 
     fn visit_string_mut(&mut self, path: &Path, mut visit: impl FnMut(&mut String) -> bool) {

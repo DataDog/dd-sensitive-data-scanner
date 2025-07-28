@@ -6,8 +6,12 @@ use std::sync::{Arc, Mutex};
 use crate::native::{convert_panic_to_go_error, handle_panic_ptr_return, read_json};
 use crate::{RuleDoublePtr, RuleList, RulePtr};
 
+/// # Safety
+///
+/// This function makes use of `read_json` which is unsafe as it dereferences a pointer to a c_char.
+/// The caller must ensure that the pointer is valid and points to a valid JSON string.
 #[no_mangle]
-pub extern "C" fn create_regex_rule(json_config: *const c_char) -> i64 {
+pub unsafe extern "C" fn create_regex_rule(json_config: *const c_char) -> i64 {
     handle_panic_ptr_return(None, || {
         // parse the json
         let config: RootRuleConfig<RegexRuleConfig> = unsafe { read_json(json_config).unwrap() };
@@ -21,8 +25,12 @@ pub extern "C" fn create_regex_rule(json_config: *const c_char) -> i64 {
     })
 }
 
+/// # Safety
+///
+/// This function makes use of `RuleDoublePtr::from_raw` which is unsafe as it dereferences a pointer to a i64.
+/// The caller must ensure that the pointer is valid and points to a valid RuleDoublePtr.
 #[no_mangle]
-pub extern "C" fn free_any_rule(rule_ptr: i64) {
+pub unsafe extern "C" fn free_any_rule(rule_ptr: i64) {
     let _ = convert_panic_to_go_error(|| {
         let double_pointer = unsafe { RuleDoublePtr::from_raw(rule_ptr as usize as *const _) };
         drop(double_pointer);
