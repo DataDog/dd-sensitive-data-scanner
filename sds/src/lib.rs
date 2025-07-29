@@ -21,6 +21,7 @@ mod scoped_ruleset;
 mod secondary_validation;
 mod simple_event;
 mod stats;
+mod tokio;
 mod validation;
 
 pub use simple_event::SimpleEvent;
@@ -47,10 +48,11 @@ pub use scanner::{
     regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator},
     regex_rule::RegexCaches,
     scope::Scope,
-    CompiledRule, MatchEmitter, RootCompiledRule, RootRuleConfig, ScanOptionBuilder, Scanner,
-    ScannerBuilder, SharedData, StringMatch, StringMatchesCtx,
+    CompiledRule, MatchEmitter, RootCompiledRule, RootRuleConfig, RuleResult, RuleStatus,
+    ScanOptionBuilder, Scanner, ScannerBuilder, SharedData, StringMatch, StringMatchesCtx,
 };
 pub use scoped_ruleset::ExclusionCheck;
+pub use tokio::TOKIO_RUNTIME;
 pub use validation::{
     get_regex_complexity_estimate_very_slow, validate_regex, RegexValidationError,
 };
