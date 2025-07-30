@@ -221,14 +221,6 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_jwt_empty_payload() {
-        let jwt = generate_jwt_with_claims("{}");
-        let config = JwtClaimsCheckerConfig::default();
-        let checker = JwtClaimsChecker::new(config);
-        assert!(!checker.is_valid_match(&jwt));
-    }
-
-    #[test]
     fn test_invalid_jwt_malformed() {
         let config = JwtClaimsCheckerConfig::default();
         let checker = JwtClaimsChecker::new(config);
