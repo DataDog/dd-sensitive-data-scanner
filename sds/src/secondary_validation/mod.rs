@@ -21,6 +21,7 @@ mod iban_checker;
 mod irish_pps_checksum;
 mod iso_7064_checksum;
 mod italian_national_id_checksum;
+mod jwt_claims_checker;
 mod jwt_expiration_checker;
 mod latvia_national_id_checksum;
 mod lithuanian_personal_identification_number_checksum;
@@ -69,6 +70,7 @@ pub use crate::secondary_validation::iso_7064_checksum::{
     Mod37_36checksum, Mod661_26checksum, Mod97_10checksum,
 };
 pub use crate::secondary_validation::italian_national_id_checksum::ItalianNationalIdChecksum;
+pub use crate::secondary_validation::jwt_claims_checker::JwtClaimsChecker;
 pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecker;
 pub use crate::secondary_validation::latvia_national_id_checksum::LatviaNationalIdChecksum;
 use crate::secondary_validation::lithuanian_personal_identification_number_checksum::LithuanianPersonalIdentificationNumberChecksum;
@@ -172,6 +174,9 @@ impl Validator for SecondaryValidator {
             SecondaryValidator::IrishPpsChecksum => IrishPpsChecksum.is_valid_match(regex_match),
             SecondaryValidator::ItalianNationalIdChecksum => {
                 ItalianNationalIdChecksum.is_valid_match(regex_match)
+            }
+            SecondaryValidator::JwtClaimsChecker { config } => {
+                JwtClaimsChecker::new(config.clone()).is_valid_match(regex_match)
             }
             SecondaryValidator::JwtExpirationChecker => {
                 JwtExpirationChecker.is_valid_match(regex_match)
