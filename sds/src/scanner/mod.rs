@@ -500,7 +500,7 @@ impl Scanner {
         // results just need to be collected
         for job in async_jobs {
             let rule_info = job.fut.await.unwrap()?;
-            rule_matches.push_matches(
+            rule_matches.push_async_matches(
                 &job.path,
                 rule_info
                     .rule_matches
@@ -1025,7 +1025,8 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         // will be a match
         let needs_to_access_content = !path_rules_matches.is_empty() || !self.async_jobs.is_empty();
 
-        self.rule_matches.push_matches(path, path_rules_matches);
+        self.rule_matches
+            .push_sync_matches(path, path_rules_matches);
 
         Ok(needs_to_access_content)
     }
