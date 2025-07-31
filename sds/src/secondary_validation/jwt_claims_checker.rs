@@ -59,21 +59,13 @@ fn validate_required_claims(payload: &JsonValue, required_claims: &HashMap<Strin
     let payload_obj = payload.as_object().unwrap();
     
     // Check each required claim
-    for (claim_name, requirement) in required_claims {
-        match payload_obj.get(claim_name) {
-            Some(claim_value) => {
-                if !validate_claim_requirement(claim_value, requirement) {
-                    return false;
-                }
-            }
-            None => {
-                // Claim is missing
-                return false;
-            }
+    required_claims.iter().all(|(claim_name, requirement)| {
+        if let Some(claim_value) = payload_obj.get(claim_name) {
+            validate_claim_requirement(claim_value, requirement)
+        } else {
+            false
         }
-    }
-    
-    true
+    })
 }
 
 fn validate_claim_requirement(claim_value: &JsonValue, requirement: &ClaimRequirement) -> bool {
