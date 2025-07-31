@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"unsafe"
 )
@@ -218,10 +219,17 @@ func encodeValueRecursive(v interface{}, result []byte) ([]byte, error) {
 		return encodeMapEvent(v, result)
 	case []interface{}:
 		return encodeListEvent(v, result)
+	case float64:
+		s := strconv.FormatFloat(v, 'f', -1, 64)
+		return encodeStringEvent([]byte(s), result)
+	case bool:
+		s := strconv.FormatBool(v)
+		return encodeStringEvent([]byte(s), result)
+	case nil:
+		return result, nil
 	default:
 		return result, fmt.Errorf("encodeValueRecursive: unknown type %T", v)
 	}
-
 }
 
 func encodeMapEvent(event map[string]interface{}, result []byte) ([]byte, error) {
