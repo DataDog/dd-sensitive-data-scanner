@@ -144,19 +144,11 @@ pub enum ClaimRequirement {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct JwtClaimsCheckerConfig {
     #[serde_as(deserialize_as = "DefaultOnNull")]
     #[serde(default)]
     pub required_claims: std::collections::HashMap<String, ClaimRequirement>,
-}
-
-impl Default for JwtClaimsCheckerConfig {
-    fn default() -> Self {
-        Self {
-            required_claims: std::collections::HashMap::new(),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumIter, AsRefStr)]
