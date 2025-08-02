@@ -860,6 +860,7 @@ dependencies = [
  "thiserror 1.0.69",
  "threadpool",
  "tokio",
+ "tokio-shared-rt",
 ]
 
 [[package]]
@@ -3567,6 +3568,28 @@ checksum = "8e727b36a1a0e8b74c376ac2211e40c2c8af09fb4013c60d910495810f008e9b"
 dependencies = [
  "rustls",
  "tokio",
+]
+
+[[package]]
+name = "tokio-shared-rt"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a6bb03ec682a0bb16ce93d19301abc5b98a0d7936477175a156a213dcc47d85"
+dependencies = [
+ "once_cell",
+ "tokio",
+ "tokio-shared-rt-macro",
+]
+
+[[package]]
+name = "tokio-shared-rt-macro"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fe49a94e3a984b0d0ab97343dc3dcd52baae1ee13f005bfad39faea47d051dc"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.72",
 ]
 
 [[package]]

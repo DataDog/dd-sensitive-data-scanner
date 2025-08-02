@@ -63,6 +63,8 @@ serde_test = "1.0.176"
 httpmock = "0.7.0"
 dd-sds = { path = ".", features = ["bench"] }
 threadpool = "1.8.1"
+tokio-shared-rt = "0.1.0"
+
 
 [[bench]]
 name = "bench"
