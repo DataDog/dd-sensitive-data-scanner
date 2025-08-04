@@ -22,8 +22,6 @@ impl JwtClaimsChecker {
     }
 }
 
-const SEGMENTS_COUNT: usize = 3;
-
 impl Validator for JwtClaimsChecker {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         if let Some((_, payload)) = decode_segments(regex_match) {
@@ -38,14 +36,16 @@ impl Validator for JwtClaimsChecker {
 // This function is an extraction of the decoding part from jwt_expiration_checker
 // Reusing the JWT decoding logic to avoid duplication
 fn decode_segments(encoded_token: &str) -> Option<(JsonValue, JsonValue)> {
-    let raw_segments: Vec<&str> = encoded_token.split('.').collect();
-    if raw_segments.len() != SEGMENTS_COUNT {
+    let mut raw_segments: std::str::Split<&str> = encoded_token.split(".");
+
+    let header_segment = raw_segments.next()?;
+    let payload_segment = raw_segments.next()?;
+
+    if raw_segments.next().is_none() {
         // Invalid JWT header + payload + signature
         return None;
     }
 
-    let header_segment = raw_segments[0];
-    let payload_segment = raw_segments[1];
     let header_json = decode_segment(header_segment)?;
     let payload_json = decode_segment(payload_segment)?;
     Some((header_json, payload_json))
