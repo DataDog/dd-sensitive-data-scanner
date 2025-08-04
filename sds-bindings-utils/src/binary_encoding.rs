@@ -184,7 +184,10 @@ pub fn encode_async_response() -> Vec<u8> {
 fn encode_error(out: &mut Vec<u8>, error: &ScannerError) {
     out.push(StatusCode::Error as u8);
     match error {
-        ScannerError::Transient => out.push(0),
+        ScannerError::Transient(message) => {
+            out.push(0);
+            encode_bytes(out, message.as_bytes());
+        }
     }
 }
 

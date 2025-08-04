@@ -385,7 +385,7 @@ func decodeStatusResponse(rawData []byte) ([]byte, error) {
 		switch rawData[1] {
 		case 0:
 			// Error: TransientError
-			return nil, fmt.Errorf("scan error: transient error that a future retry might fix")
+			return nil, fmt.Errorf("scan error: transient error that a future retry might fix: %s", string(nextString(bytes.NewBuffer(rawData[2:]))))
 		default:
 			return nil, fmt.Errorf("decodeResponse: unknown error byte marker: %x", rawData[1])
 		}
