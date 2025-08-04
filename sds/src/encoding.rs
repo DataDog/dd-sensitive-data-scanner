@@ -1,5 +1,5 @@
 /// Specifies how indices are calculated for rule matches
-pub trait Encoding: Sized {
+pub trait Encoding: Sized + 'static {
     type Index: Sized + 'static;
     type IndexShift: Sized;
 
