@@ -7,11 +7,18 @@ use std::collections::HashMap;
 
 pub struct JwtClaimsChecker {
     pub config: JwtClaimsCheckerConfig,
+    patterns: HashMap<String, Regex>,
 }
 
 impl JwtClaimsChecker {
     pub fn new(config: JwtClaimsCheckerConfig) -> Self {
-        Self { config }
+        let mut patterns = HashMap::new();
+        for (claim_name, requirement) in &config.required_claims {
+            if let ClaimRequirement::RegexMatch(pattern) = requirement {
+                patterns.insert(claim_name.clone(), Regex::new(pattern).unwrap());
+            }
+        }
+        Self { config, patterns }
     }
 }
 
@@ -20,7 +27,7 @@ const SEGMENTS_COUNT: usize = 3;
 impl Validator for JwtClaimsChecker {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         if let Some((_, payload)) = decode_segments(regex_match) {
-            validate_required_claims(&payload, &self.config.required_claims)
+            validate_required_claims(&payload, &self.config.required_claims, &self.patterns)
         } else {
             // If JWT segments cannot be decoded, the JWT is not well formatted
             false
@@ -51,7 +58,7 @@ fn decode_segment(segment: &str) -> Option<JsonValue> {
         .and_then(|decoded| serde_json::from_slice(&decoded).ok())
 }
 
-fn validate_required_claims(payload: &JsonValue, required_claims: &HashMap<String, ClaimRequirement>) -> bool {
+fn validate_required_claims(payload: &JsonValue, required_claims: &HashMap<String, ClaimRequirement>, patterns: &HashMap<String, Regex>) -> bool {
     if !payload.is_object() {
         return false;
     }
@@ -61,14 +68,14 @@ fn validate_required_claims(payload: &JsonValue, required_claims: &HashMap<Strin
     // Check each required claim
     required_claims.iter().all(|(claim_name, requirement)| {
         if let Some(claim_value) = payload_obj.get(claim_name) {
-            validate_claim_requirement(claim_value, requirement)
+            validate_claim_requirement(claim_value, requirement, patterns.get(claim_name))
         } else {
             false
         }
     })
 }
 
-fn validate_claim_requirement(claim_value: &JsonValue, requirement: &ClaimRequirement) -> bool {
+fn validate_claim_requirement(claim_value: &JsonValue, requirement: &ClaimRequirement, cached_pattern: Option<&Regex>) -> bool {
     match requirement {
         ClaimRequirement::Present => {
             // Just check that the claim exists (we already know it does if we're here)
@@ -82,13 +89,10 @@ fn validate_claim_requirement(claim_value: &JsonValue, requirement: &ClaimRequir
                 false // We only match string values
             }
         }
-        ClaimRequirement::RegexMatch(pattern) => {
+        ClaimRequirement::RegexMatch(_) => {
             // Check if the claim value matches the regex pattern
             if let Some(actual) = claim_value.as_str() {
-                match Regex::new(pattern) {
-                    Ok(regex) => regex.is_match(actual),
-                    Err(_) => false, // Invalid regex pattern
-                }
+                cached_pattern.map(|pattern| pattern.is_match(actual)).unwrap_or(false)
             } else {
                 false // Can only regex match string values
             }
