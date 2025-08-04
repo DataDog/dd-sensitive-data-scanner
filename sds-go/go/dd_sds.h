@@ -5,7 +5,7 @@
 
 long create_regex_rule(const char* json_config);
 
-long create_scanner(long rule_list, const char** error);
+long create_scanner(long rule_list, const char* encoded_labels, const char** error);
 void delete_scanner(long scanner_id);
 
 // event is a non-null terminated TODO
