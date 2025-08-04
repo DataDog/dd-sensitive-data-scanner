@@ -79,7 +79,7 @@ fn validate_claim_requirement(claim_value: &JsonValue, requirement: &ClaimRequir
     match requirement {
         ClaimRequirement::Present => {
             // Just check that the claim exists (we already know it does if we're here)
-            true
+            claim_value != &JsonValue::Null
         }
         ClaimRequirement::ExactValue(expected) => {
             // Check for exact string match
