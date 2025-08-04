@@ -54,10 +54,10 @@ fn decode_segments(encoded_token: &str) -> Option<(JsonValue, JsonValue)> {
 }
 
 fn decode_segment(segment: &str) -> Option<JsonValue> {
-    URL_SAFE_NO_PAD
+    let decoded = URL_SAFE_NO_PAD
         .decode(segment)
-        .ok()
-        .and_then(|decoded| serde_json::from_slice(&decoded).ok())
+        .ok()?;
+    serde_json::from_slice(&decoded).ok()
 }
 
 fn validate_required_claims(payload: &JsonValue, required_claims: &Vec<(String, ClaimRequirement)>, patterns: &AHashMap<String, Regex>) -> bool {
