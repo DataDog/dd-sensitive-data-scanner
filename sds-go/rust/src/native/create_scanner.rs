@@ -6,7 +6,7 @@ use crate::{handle_panic_ptr_return, read_json, RuleList};
 use dd_sds::Scanner;
 
 #[no_mangle]
-pub extern "C" fn create_scanner(
+pub unsafe extern "C" fn create_scanner(
     rules: i64,
     encoded_labels: *const c_char,
     error_out: *mut *const c_char,
