@@ -3,29 +3,29 @@ use crate::scanner::regex_rule::config::{ClaimRequirement, JwtClaimsCheckerConfi
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use regex::Regex;
 use serde_json::Value as JsonValue;
-use std::collections::HashMap;
+use ahash::AHashMap;
 
 pub struct JwtClaimsChecker {
-    pub config: JwtClaimsCheckerConfig,
-    patterns: HashMap<String, Regex>,
+    pub required_claims: Vec<(String, ClaimRequirement)>,
+    patterns: AHashMap<String, Regex>,
 }
 
 impl JwtClaimsChecker {
     pub fn new(config: JwtClaimsCheckerConfig) -> Self {
-        let mut patterns = HashMap::new();
+        let mut patterns = AHashMap::new();
         for (claim_name, requirement) in &config.required_claims {
             if let ClaimRequirement::RegexMatch(pattern) = requirement {
                 patterns.insert(claim_name.clone(), Regex::new(pattern).unwrap());
             }
         }
-        Self { config, patterns }
+        Self { required_claims: config.required_claims.into_iter().collect(), patterns }
     }
 }
 
 impl Validator for JwtClaimsChecker {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         if let Some((_, payload)) = decode_segments(regex_match) {
-            validate_required_claims(&payload, &self.config.required_claims, &self.patterns)
+            validate_required_claims(&payload, &self.required_claims, &self.patterns)
         } else {
             // If JWT segments cannot be decoded, the JWT is not well formatted
             false
@@ -43,6 +43,8 @@ fn decode_segments(encoded_token: &str) -> Option<(JsonValue, JsonValue)> {
 
     if raw_segments.next().is_none() {
         // Invalid JWT header + payload + signature
+        // We're not explicitly checking the validity of the signature
+        // We could embed signature verification at some point if necessary
         return None;
     }
 
@@ -58,7 +60,7 @@ fn decode_segment(segment: &str) -> Option<JsonValue> {
         .and_then(|decoded| serde_json::from_slice(&decoded).ok())
 }
 
-fn validate_required_claims(payload: &JsonValue, required_claims: &HashMap<String, ClaimRequirement>, patterns: &HashMap<String, Regex>) -> bool {
+fn validate_required_claims(payload: &JsonValue, required_claims: &Vec<(String, ClaimRequirement)>, patterns: &AHashMap<String, Regex>) -> bool {
     if let Some(payload_obj) = payload.as_object() {
         // Check each required claim
         required_claims.iter().all(|(claim_name, requirement)| {
@@ -102,6 +104,7 @@ fn validate_claim_requirement(claim_value: &JsonValue, requirement: &ClaimRequir
 mod tests {
     use super::*;
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+    use std::collections::HashMap;
 
     fn generate_jwt_with_claims(claims: &str) -> String {
         let header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"; // {"alg":"HS256","typ":"JWT"}
