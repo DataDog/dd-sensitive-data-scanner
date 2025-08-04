@@ -59,20 +59,18 @@ fn decode_segment(segment: &str) -> Option<JsonValue> {
 }
 
 fn validate_required_claims(payload: &JsonValue, required_claims: &HashMap<String, ClaimRequirement>, patterns: &HashMap<String, Regex>) -> bool {
-    if !payload.is_object() {
-        return false;
+    if let Some(payload_obj) = payload.as_object() {
+        // Check each required claim
+        required_claims.iter().all(|(claim_name, requirement)| {
+            if let Some(claim_value) = payload_obj.get(claim_name) {
+                validate_claim_requirement(claim_value, requirement, patterns.get(claim_name))
+            } else {
+                false
+            }
+        })
+    } else {
+        false
     }
-    
-    let payload_obj = payload.as_object().unwrap();
-    
-    // Check each required claim
-    required_claims.iter().all(|(claim_name, requirement)| {
-        if let Some(claim_value) = payload_obj.get(claim_name) {
-            validate_claim_requirement(claim_value, requirement, patterns.get(claim_name))
-        } else {
-            false
-        }
-    })
 }
 
 fn validate_claim_requirement(claim_value: &JsonValue, requirement: &ClaimRequirement, cached_pattern: Option<&Regex>) -> bool {
