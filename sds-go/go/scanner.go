@@ -67,7 +67,7 @@ func CreateScanner(ruleConfigs []RuleConfig) (*Scanner, error) {
 	}
 
 	var errorString *C.char
-	id := C.create_scanner(C.long(ruleList.nativePtr), &errorString, C.bool(false) /* should_keywords_match_event_paths */)
+	id := C.create_scanner(C.long(ruleList.nativePtr), &errorString)
 
 	if id < 0 {
 		switch id {
