@@ -5,6 +5,10 @@ use std::sync::Arc;
 use crate::{handle_panic_ptr_return, read_json, RuleList};
 use dd_sds::Scanner;
 
+/// # Safety
+///
+/// This function makes use of `read_json` which is unsafe as it dereferences a pointer to a c_char.
+/// The caller must ensure that the pointer is valid and points to a valid JSON string.
 #[no_mangle]
 pub unsafe extern "C" fn create_scanner(
     rules: i64,
