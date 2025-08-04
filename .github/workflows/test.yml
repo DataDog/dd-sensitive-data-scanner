@@ -3,7 +3,7 @@ name: Test Suite
 on:
   pull_request:
   merge_group:
-    types: [ checks_requested ]
+    types: [checks_requested]
   push:
     branches:
       - main
@@ -59,6 +59,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: "Check Rust version"
+        run: rustc --version
       - name: "Install dd-rust-license-tool"
         run: cargo install dd-rust-license-tool
       - name: "Check LICENSE-3rdparty.csv"
