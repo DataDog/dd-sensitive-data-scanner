@@ -157,7 +157,7 @@ impl SecondaryValidator {
             SecondaryValidator::IrishPpsChecksum => Arc::new(IrishPpsChecksum),
             SecondaryValidator::ItalianNationalIdChecksum => Arc::new(ItalianNationalIdChecksum),
             SecondaryValidator::JwtClaimsChecker { config } => {
-                JwtClaimsChecker::new(config.clone()).is_valid_match(regex_match)
+                Arc::new(JwtClaimsChecker::new(config.clone()))
             }
             SecondaryValidator::JwtExpirationChecker => Arc::new(JwtExpirationChecker),
             SecondaryValidator::LatviaNationalIdChecksum => Arc::new(LatviaNationalIdChecksum),
