@@ -687,10 +687,10 @@ func runTestMap(t *testing.T, scanner *Scanner, testData map[string]mapTestResul
 		}
 
 		sort.Slice(result.Matches, func(i, j int) bool {
-			return sortRulesMatch(result.Matches[i], result.Matches[i])
+			return sortRulesMatch(result.Matches[i], result.Matches[j])
 		})
 		sort.Slice(testResult.rules, func(i, j int) bool {
-			return sortRulesMatch(testResult.rules[i], testResult.rules[i])
+			return sortRulesMatch(testResult.rules[i], testResult.rules[j])
 		})
 
 		for i, expected := range testResult.rules {

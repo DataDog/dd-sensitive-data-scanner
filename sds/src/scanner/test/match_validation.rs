@@ -239,16 +239,73 @@ fn test_mock_same_http_validator_several_matches() {
 }
 
 #[test]
+fn test_mock_multiple_http_validators_one_timeout() {
+    let server_1 = MockServer::start();
+    let server_2 = MockServer::start();
+
+    // Simulate a slow server
+    let _ = server_1.mock(|when, then| {
+        when.method(GET)
+            .path("/")
+            .header("authorization", "Bearer valid_match");
+        then.status(200).delay(Duration::from_secs(5));
+    });
+    let _ = server_2.mock(|when, then| {
+        when.method(GET)
+            .path("/")
+            .header("authorization", "Bearer valid_match");
+        then.status(200);
+    });
+
+    let server_url_1 = server_1.url("/").to_string();
+    let server_url_2 = server_2.url("/").to_string();
+
+    let rule_valid_match = RootRuleConfig::new(RegexRuleConfig::new("\\bvalid_match\\b").build())
+        .match_action(MatchAction::Redact {
+            replacement: "[VALID]".to_string(),
+        })
+        .third_party_active_checker(MatchValidationType::CustomHttp(
+            CustomHttpConfig::default()
+                .with_endpoint("$HOST".to_string())
+                .with_hosts(vec![server_url_1.clone(), server_url_2.clone()])
+                .with_request_headers(BTreeMap::from([(
+                    "authorization".to_string(),
+                    "Bearer $MATCH".to_string(),
+                )]))
+                .with_valid_http_status_code(vec![HttpStatusCodeRange {
+                    start: 200,
+                    end: 300,
+                }]),
+        ));
+
+    let scanner = ScannerBuilder::new(&[rule_valid_match])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
+    let mut content = "this is a content with a valid_match".to_string();
+    let mut matches = scanner.scan(&mut content).unwrap();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(content, "this is a content with a [VALID]");
+    assert!(scanner.validate_matches(&mut matches).is_ok());
+    assert_eq!(matches[0].match_status, MatchStatus::Valid);
+}
+
+#[test]
 fn test_mock_http_timeout() {
     let server = MockServer::start();
     let _ = server.mock(|when, then| {
         when.method(GET)
             .path("/")
             .header("authorization", "Bearer valid_match");
-        then.status(200);
+        then.status(200).delay(Duration::from_secs(3));
     });
-    let mut http_config = CustomHttpConfig::default().with_endpoint(server.url("/").to_string());
-    http_config.set_timeout_seconds(0);
+    let mut http_config = CustomHttpConfig::default()
+        .with_endpoint(server.url("/").to_string())
+        .with_request_headers(BTreeMap::from([(
+            "authorization".to_string(),
+            "Bearer $MATCH".to_string(),
+        )]));
+    http_config.set_timeout_seconds(1);
     let rule_valid_match = RootRuleConfig::new(RegexRuleConfig::new("\\bvalid_match\\b").build())
         .match_action(MatchAction::Redact {
             replacement: "[VALID]".to_string(),

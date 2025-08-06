@@ -3,6 +3,7 @@ package dd_sds
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -66,8 +67,16 @@ func CreateScanner(ruleConfigs []RuleConfig) (*Scanner, error) {
 		rule.Delete()
 	}
 
+	labels := [][2]string{}
+	labelsMarshalled, err := json.Marshal(labels)
+	if err != nil {
+		return nil, err
+	}
+	encodedLabelsJson := C.CString(string(labelsMarshalled))
+	defer C.free(unsafe.Pointer(encodedLabelsJson))
+
 	var errorString *C.char
-	id := C.create_scanner(C.long(ruleList.nativePtr), &errorString, C.bool(false) /* should_keywords_match_event_paths */)
+	id := C.create_scanner(C.long(ruleList.nativePtr), encodedLabelsJson, &errorString)
 
 	if id < 0 {
 		switch id {

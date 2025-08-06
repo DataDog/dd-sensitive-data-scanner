@@ -91,6 +91,7 @@ pub use crate::secondary_validation::sweden_pin_checksum::SwedenPINChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
 
 use std::str::Chars;
+use std::sync::Arc;
 
 pub trait Validator: Send + Sync {
     fn is_valid_match(&self, regex_match: &str) -> bool;
@@ -125,108 +126,70 @@ fn sum_all_digits(digits: u32) -> u32 {
     sum
 }
 
-impl Validator for SecondaryValidator {
-    fn is_valid_match(&self, regex_match: &str) -> bool {
+impl SecondaryValidator {
+    pub fn compile(&self) -> Arc<dyn Validator> {
         match self {
-            SecondaryValidator::AbaRtnChecksum => AbaRtnChecksum.is_valid_match(regex_match),
-            SecondaryValidator::BrazilianCnpjChecksum => {
-                BrazilianCnpjChecksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::BrazilianCpfChecksum => {
-                BrazilianCpfChecksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::BtcChecksum => BtcChecksum.is_valid_match(regex_match),
-            SecondaryValidator::BulgarianEGNChecksum => {
-                BulgarianEGNChecksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::ChineseIdChecksum => ChineseIdChecksum.is_valid_match(regex_match),
-            SecondaryValidator::CoordinationNumberChecksum => {
-                CoordinationNumberChecksum.is_valid_match(regex_match)
-            }
+            SecondaryValidator::AbaRtnChecksum => Arc::new(AbaRtnChecksum),
+            SecondaryValidator::BrazilianCnpjChecksum => Arc::new(BrazilianCnpjChecksum),
+            SecondaryValidator::BrazilianCpfChecksum => Arc::new(BrazilianCpfChecksum),
+            SecondaryValidator::BtcChecksum => Arc::new(BtcChecksum),
+            SecondaryValidator::BulgarianEGNChecksum => Arc::new(BulgarianEGNChecksum),
+            SecondaryValidator::ChineseIdChecksum => Arc::new(ChineseIdChecksum),
+            SecondaryValidator::CoordinationNumberChecksum => Arc::new(CoordinationNumberChecksum),
             SecondaryValidator::CzechPersonalIdentificationNumberChecksum => {
-                RodneCisloNumberChecksum.is_valid_match(regex_match)
+                Arc::new(RodneCisloNumberChecksum)
             }
             SecondaryValidator::CzechTaxIdentificationNumberChecksum => {
-                CzechTaxIdentificationNumberChecksum.is_valid_match(regex_match)
+                Arc::new(CzechTaxIdentificationNumberChecksum)
             }
-            SecondaryValidator::DutchBsnChecksum => DutchBsnChecksum.is_valid_match(regex_match),
-            SecondaryValidator::DutchPassportChecksum => {
-                DutchPassportChecksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::EthereumChecksum => EthereumChecksum.is_valid_match(regex_match),
-            SecondaryValidator::FinnishHetuChecksum => {
-                FinnishHetuChecksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::FranceNifChecksum => FranceNifChecksum.is_valid_match(regex_match),
-            SecondaryValidator::FranceSsnChecksum => FranceSsnChecksum.is_valid_match(regex_match),
-            SecondaryValidator::GermanIdsChecksum => GermanIdsChecksum.is_valid_match(regex_match),
-            SecondaryValidator::GermanSvnrChecksum => {
-                GermanSvnrChecksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::GithubTokenChecksum => {
-                GithubTokenChecksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::GreekTinChecksum => GreekTinChecksum.is_valid_match(regex_match),
-            SecondaryValidator::HungarianTinChecksum => {
-                HungarianTinChecksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::IbanChecker => IbanChecker.is_valid_match(regex_match),
-            SecondaryValidator::IrishPpsChecksum => IrishPpsChecksum.is_valid_match(regex_match),
-            SecondaryValidator::ItalianNationalIdChecksum => {
-                ItalianNationalIdChecksum.is_valid_match(regex_match)
-            }
+            SecondaryValidator::DutchBsnChecksum => Arc::new(DutchBsnChecksum),
+            SecondaryValidator::DutchPassportChecksum => Arc::new(DutchPassportChecksum),
+            SecondaryValidator::EthereumChecksum => Arc::new(EthereumChecksum),
+            SecondaryValidator::FinnishHetuChecksum => Arc::new(FinnishHetuChecksum),
+            SecondaryValidator::FranceNifChecksum => Arc::new(FranceNifChecksum),
+            SecondaryValidator::FranceSsnChecksum => Arc::new(FranceSsnChecksum),
+            SecondaryValidator::GermanIdsChecksum => Arc::new(GermanIdsChecksum),
+            SecondaryValidator::GermanSvnrChecksum => Arc::new(GermanSvnrChecksum),
+            SecondaryValidator::GithubTokenChecksum => Arc::new(GithubTokenChecksum),
+            SecondaryValidator::GreekTinChecksum => Arc::new(GreekTinChecksum),
+            SecondaryValidator::HungarianTinChecksum => Arc::new(HungarianTinChecksum),
+            SecondaryValidator::IbanChecker => Arc::new(IbanChecker),
+            SecondaryValidator::IrishPpsChecksum => Arc::new(IrishPpsChecksum),
+            SecondaryValidator::ItalianNationalIdChecksum => Arc::new(ItalianNationalIdChecksum),
             SecondaryValidator::JwtClaimsChecker { config } => {
                 JwtClaimsChecker::new(config.clone()).is_valid_match(regex_match)
             }
-            SecondaryValidator::JwtExpirationChecker => {
-                JwtExpirationChecker.is_valid_match(regex_match)
-            }
-            SecondaryValidator::LatviaNationalIdChecksum => {
-                LatviaNationalIdChecksum.is_valid_match(regex_match)
-            }
+            SecondaryValidator::JwtExpirationChecker => Arc::new(JwtExpirationChecker),
+            SecondaryValidator::LatviaNationalIdChecksum => Arc::new(LatviaNationalIdChecksum),
             SecondaryValidator::LithuanianPersonalIdentificationNumberChecksum => {
-                LithuanianPersonalIdentificationNumberChecksum.is_valid_match(regex_match)
+                Arc::new(LithuanianPersonalIdentificationNumberChecksum)
             }
-            SecondaryValidator::LuhnChecksum => LuhnChecksum.is_valid_match(regex_match),
+            SecondaryValidator::LuhnChecksum => Arc::new(LuhnChecksum),
             SecondaryValidator::LuxembourgIndividualNINChecksum => {
-                LuxembourgIndividualNINChecksum.is_valid_match(regex_match)
+                Arc::new(LuxembourgIndividualNINChecksum)
             }
-            SecondaryValidator::Mod11_10checksum => Mod11_10checksum.is_valid_match(regex_match),
-            SecondaryValidator::Mod11_2checksum => Mod11_2checksum.is_valid_match(regex_match),
-            SecondaryValidator::Mod1271_36Checksum => {
-                Mod1271_36Checksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::Mod27_26checksum => Mod27_26checksum.is_valid_match(regex_match),
-            SecondaryValidator::Mod37_2checksum => Mod37_2checksum.is_valid_match(regex_match),
-            SecondaryValidator::Mod37_36checksum => Mod37_36checksum.is_valid_match(regex_match),
-            SecondaryValidator::Mod661_26checksum => Mod661_26checksum.is_valid_match(regex_match),
-            SecondaryValidator::Mod97_10checksum => Mod97_10checksum.is_valid_match(regex_match),
-            SecondaryValidator::MoneroAddress => MoneroAddress.is_valid_match(regex_match),
-            SecondaryValidator::NhsCheckDigit => NhsCheckDigit.is_valid_match(regex_match),
-            SecondaryValidator::NirChecksum => NirChecksum.is_valid_match(regex_match),
-            SecondaryValidator::PolishNationalIdChecksum => {
-                PolishNationalIdChecksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::PolishNipChecksum => PolishNipChecksum.is_valid_match(regex_match),
-            SecondaryValidator::PortugueseTaxIdChecksum => {
-                PortugueseTaxIdChecksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::RodneCisloNumberChecksum => {
-                RodneCisloNumberChecksum.is_valid_match(regex_match)
-            }
+            SecondaryValidator::Mod11_10checksum => Arc::new(Mod11_10checksum),
+            SecondaryValidator::Mod11_2checksum => Arc::new(Mod11_2checksum),
+            SecondaryValidator::Mod1271_36Checksum => Arc::new(Mod1271_36Checksum),
+            SecondaryValidator::Mod27_26checksum => Arc::new(Mod27_26checksum),
+            SecondaryValidator::Mod37_2checksum => Arc::new(Mod37_2checksum),
+            SecondaryValidator::Mod37_36checksum => Arc::new(Mod37_36checksum),
+            SecondaryValidator::Mod661_26checksum => Arc::new(Mod661_26checksum),
+            SecondaryValidator::Mod97_10checksum => Arc::new(Mod97_10checksum),
+            SecondaryValidator::MoneroAddress => Arc::new(MoneroAddress),
+            SecondaryValidator::NhsCheckDigit => Arc::new(NhsCheckDigit),
+            SecondaryValidator::NirChecksum => Arc::new(NirChecksum),
+            SecondaryValidator::PolishNationalIdChecksum => Arc::new(PolishNationalIdChecksum),
+            SecondaryValidator::PolishNipChecksum => Arc::new(PolishNipChecksum),
+            SecondaryValidator::PortugueseTaxIdChecksum => Arc::new(PortugueseTaxIdChecksum),
+            SecondaryValidator::RodneCisloNumberChecksum => Arc::new(RodneCisloNumberChecksum),
             SecondaryValidator::RomanianPersonalNumericCode => {
-                RomanianPersonalNumericCode.is_valid_match(regex_match)
+                Arc::new(RomanianPersonalNumericCode)
             }
-            SecondaryValidator::SlovenianPINChecksum => {
-                SlovenianPINChecksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::SpanishDniChecksum => {
-                SpanishDniChecksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::SpanishNussChecksum => {
-                SpanishNussChecksum.is_valid_match(regex_match)
-            }
-            SecondaryValidator::SwedenPINChecksum => SwedenPINChecksum.is_valid_match(regex_match),
+            SecondaryValidator::SlovenianPINChecksum => Arc::new(SlovenianPINChecksum),
+            SecondaryValidator::SpanishDniChecksum => Arc::new(SpanishDniChecksum),
+            SecondaryValidator::SpanishNussChecksum => Arc::new(SpanishNussChecksum),
+            SecondaryValidator::SwedenPINChecksum => Arc::new(SwedenPINChecksum),
         }
     }
 }
