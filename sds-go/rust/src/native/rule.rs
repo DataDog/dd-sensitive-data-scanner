@@ -10,7 +10,7 @@ use crate::{RuleDoublePtr, RuleList, RulePtr};
 ///
 /// This function makes use of `read_json` which is unsafe as it dereferences a pointer to a c_char.
 /// The caller must ensure that the pointer is valid and points to a valid JSON string.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn create_regex_rule(json_config: *const c_char) -> i64 {
     handle_panic_ptr_return(None, || {
         // parse the json
@@ -29,7 +29,7 @@ pub unsafe extern "C" fn create_regex_rule(json_config: *const c_char) -> i64 {
 ///
 /// This function makes use of `RuleDoublePtr::from_raw` which is unsafe as it dereferences a pointer to a i64.
 /// The caller must ensure that the pointer is valid and points to a valid RuleDoublePtr.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_any_rule(rule_ptr: i64) {
     let _ = convert_panic_to_go_error(|| {
         let double_pointer = unsafe { RuleDoublePtr::from_raw(rule_ptr as usize as *const _) };
@@ -38,7 +38,7 @@ pub unsafe extern "C" fn free_any_rule(rule_ptr: i64) {
 }
 
 // Infallible
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn create_rule_list() -> i64 {
     handle_panic_ptr_return(None, || {
         // Wrapping with `Arc<Mutex>>` so there is a single pointer than can be shared over FFI, and
@@ -49,7 +49,7 @@ pub extern "C" fn create_rule_list() -> i64 {
 }
 
 // Infallible
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn append_rule_to_list(rule: i64, list: i64) {
     let _ = convert_panic_to_go_error(|| {
         let list = ManuallyDrop::new(unsafe { RuleList::from_raw(list as usize as *const _) });
@@ -62,7 +62,7 @@ pub extern "C" fn append_rule_to_list(rule: i64, list: i64) {
 }
 
 // Infallible
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn free_rule_list(list: i64) {
     let _ = convert_panic_to_go_error(|| {
         let list = unsafe { RuleList::from_raw(list as usize as *const _) };

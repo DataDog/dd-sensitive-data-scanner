@@ -121,9 +121,9 @@ impl RegexStore {
         if self.gc_counter >= GC_FREQUENCY {
             self.gc();
         }
-        if let Some(existing_regex) = self.get(pattern) {
+        match self.get(pattern) { Some(existing_regex) => {
             existing_regex
-        } else {
+        } _ => {
             let shared_regex = Arc::new(regex);
 
             let regex_cache = shared_regex.create_cache();
@@ -145,7 +145,7 @@ impl RegexStore {
                 regex: shared_regex,
                 cache_key,
             }
-        }
+        }}
     }
 }
 
