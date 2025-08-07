@@ -9,7 +9,7 @@ use dd_sds::Scanner;
 ///
 /// This function makes use of `read_json` which is unsafe as it dereferences a pointer to a c_char.
 /// The caller must ensure that the pointer is valid and points to a valid JSON string.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn create_scanner(
     rules: i64,
     encoded_labels: *const c_char,

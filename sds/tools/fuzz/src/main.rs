@@ -6,7 +6,7 @@ use ahash::AHashMap;
 use dd_sds::{
     MatchAction, PartialRedactDirection, RegexRuleConfig, RootRuleConfig, ScannerBuilder, Scope,
 };
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 
 #[cfg(not(feature = "manual_test"))]
 fn main() {
@@ -17,7 +17,7 @@ fn main() {
 
 #[cfg(feature = "manual_test")]
 fn main() {
-    use std::io::{stdin, Read};
+    use std::io::{Read, stdin};
 
     let mut input = vec![];
     stdin().read_to_end(&mut input).unwrap();
@@ -120,15 +120,17 @@ fn run_fuzz(pattern: &str, input: &str, mut rng: StdRng) {
 
 #[cfg(feature = "hyperscan")]
 mod hyperscan {
-    use hyperscan::{compile, BlockDatabase, Matching, Pattern, Patterns};
+    use hyperscan::{BlockDatabase, Matching, Pattern, Patterns, compile};
 
     pub fn compile_hyperscan(pattern: &str) -> Result<BlockDatabase, ()> {
-        compile(Patterns(vec![Pattern::new(pattern)
-            .unwrap()
-            .dot_all()
-            .allow_empty()
-            .left_most()
-            .utf8()]))
+        compile(Patterns(vec![
+            Pattern::new(pattern)
+                .unwrap()
+                .dot_all()
+                .allow_empty()
+                .left_most()
+                .utf8(),
+        ]))
         .map_err(|_| ())
     }
 

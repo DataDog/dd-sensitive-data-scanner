@@ -9,7 +9,7 @@ use std::ffi::{c_char, CStr, CString};
 ///
 /// Thread Safety: This is safe to call simultaneously from multiple threads.
 /// Return value: `null` if the regex is valid, otherwise a string describing the error.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn validate_regex(
     regex: *const c_char,
     error_out: *mut *const c_char,

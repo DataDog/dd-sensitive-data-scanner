@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 use core::panic::UnwindSafe;
 use dd_sds::{RootRuleConfig, RuleConfig};
 use serde::de::DeserializeOwned;
