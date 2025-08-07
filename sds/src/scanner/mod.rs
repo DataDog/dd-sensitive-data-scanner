@@ -436,7 +436,9 @@ impl Scanner {
             timeout(self.async_scan_timeout, fut)
         };
 
-        timeout.await.unwrap_or(Err(ScannerError::Transient))
+        timeout.await.unwrap_or(Err(ScannerError::Transient(
+            "Async scan timeout".to_string(),
+        )))
     }
 
     fn record_metrics(&self, output_rule_matches: &[RuleMatch], start: Instant) {
