@@ -129,6 +129,24 @@ pub struct ProximityKeywordsConfig {
     pub excluded_keywords: Vec<String>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum ClaimRequirement {
+    /// Just check that the claim exists
+    Present,
+    /// Check that the claim exists and has an exact value
+    ExactValue(String),
+    /// Check that the claim exists and matches a regex pattern
+    RegexMatch(String),
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+pub struct JwtClaimsCheckerConfig {
+    #[serde_as(deserialize_as = "DefaultOnNull")]
+    #[serde(default)]
+    pub required_claims: std::collections::HashMap<String, ClaimRequirement>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumIter, AsRefStr)]
 #[serde(tag = "type")]
 pub enum SecondaryValidator {
@@ -155,6 +173,7 @@ pub enum SecondaryValidator {
     IbanChecker,
     IrishPpsChecksum,
     ItalianNationalIdChecksum,
+    JwtClaimsChecker { config: JwtClaimsCheckerConfig },
     JwtExpirationChecker,
     LatviaNationalIdChecksum,
     LithuanianPersonalIdentificationNumberChecksum,
