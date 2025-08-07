@@ -39,7 +39,7 @@ pub unsafe extern "C" fn free_any_rule(rule_ptr: i64) {
 
 // Infallible
 #[unsafe(no_mangle)]
-pub extern "C" fn create_rule_list() -> i64 {
+pub unsafe extern "C" fn create_rule_list() -> i64 {
     handle_panic_ptr_return(None, || {
         // Wrapping with `Arc<Mutex>>` so there is a single pointer than can be shared over FFI, and
         // to make it thread-safe.
@@ -50,7 +50,7 @@ pub extern "C" fn create_rule_list() -> i64 {
 
 // Infallible
 #[unsafe(no_mangle)]
-pub extern "C" fn append_rule_to_list(rule: i64, list: i64) {
+pub unsafe extern "C" fn append_rule_to_list(rule: i64, list: i64) {
     let _ = convert_panic_to_go_error(|| {
         let list = ManuallyDrop::new(unsafe { RuleList::from_raw(list as usize as *const _) });
         let rule_double_ptr =
@@ -63,7 +63,7 @@ pub extern "C" fn append_rule_to_list(rule: i64, list: i64) {
 
 // Infallible
 #[unsafe(no_mangle)]
-pub extern "C" fn free_rule_list(list: i64) {
+pub unsafe extern "C" fn free_rule_list(list: i64) {
     let _ = convert_panic_to_go_error(|| {
         let list = unsafe { RuleList::from_raw(list as usize as *const _) };
         drop(list);

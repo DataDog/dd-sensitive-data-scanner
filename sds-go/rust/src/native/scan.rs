@@ -74,7 +74,7 @@ pub unsafe extern "C" fn scan(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn free_vec(ptr: *const c_char, len: i64, cap: i64) {
+pub unsafe extern "C" fn free_vec(ptr: *const c_char, len: i64, cap: i64) {
     unsafe {
         // rust "owns" it again and will drop it leaving the scope
         drop(Vec::from_raw_parts(
@@ -86,7 +86,7 @@ pub extern "C" fn free_vec(ptr: *const c_char, len: i64, cap: i64) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn free_string(ptr: *const c_char) {
+pub unsafe extern "C" fn free_string(ptr: *const c_char) {
     unsafe {
         drop(std::ffi::CString::from_raw(ptr as *mut c_char));
     }
