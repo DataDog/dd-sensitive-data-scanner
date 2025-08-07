@@ -1,5 +1,4 @@
-use crate::secondary_validation::Validator;
-use crate::SecondaryValidator::Mod11_2checksum;
+use crate::secondary_validation::{Mod11_2checksum, Validator};
 
 pub struct ChineseIdChecksum;
 

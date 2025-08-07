@@ -3,7 +3,6 @@ use crate::scanner::config::RuleConfig;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::regex_store::get_memoized_regex;
-use crate::secondary_validation::Validator;
 use crate::validation::validate_and_create_regex;
 use crate::{CompiledRule, CreateScannerError, Labels};
 use serde::{Deserialize, Serialize};
@@ -110,10 +109,7 @@ impl RuleConfig for RegexRuleConfig {
             regex,
             included_keywords,
             excluded_keywords,
-            validator: self
-                .validator
-                .clone()
-                .map(|x| Arc::new(x) as Arc<dyn Validator>),
+            validator: self.validator.clone().map(|x| x.compile()),
             metrics: RuleMetrics::new(&rule_labels),
         }))
     }
