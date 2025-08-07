@@ -48,7 +48,7 @@ pub enum MatchValidationError {
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum ScannerError {
     #[error("Transient error while scanning")]
-    Transient,
+    Transient(String),
 }
 
 #[cfg(test)]
