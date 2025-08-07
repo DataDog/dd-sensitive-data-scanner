@@ -392,7 +392,7 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn builder(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder {
+    pub fn builder(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder<'_> {
         ScannerBuilder::new(rules)
     }
 
@@ -808,7 +808,7 @@ pub struct ScannerBuilder<'a> {
 }
 
 impl ScannerBuilder<'_> {
-    pub fn new(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder {
+    pub fn new(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder<'_> {
         ScannerBuilder {
             rules,
             labels: Labels::empty(),

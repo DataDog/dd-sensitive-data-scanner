@@ -96,7 +96,7 @@ impl MatchAction {
         }
     }
 
-    pub fn get_replacement(&self, matched_content: &str) -> Option<Replacement> {
+    pub fn get_replacement(&self, matched_content: &str) -> Option<Replacement<'_>> {
         match self {
             MatchAction::None => None,
             MatchAction::Redact { replacement } => Some(Replacement {

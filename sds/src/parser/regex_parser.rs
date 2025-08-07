@@ -209,7 +209,7 @@ fn unicode_property_class(input: Input) -> ParseResult<UnicodePropertyClass> {
     ))(input)
 }
 
-fn unicode_property_name(input: Input) -> ParseResult<&str> {
+fn unicode_property_name(input: Input<'_>) -> ParseResult<'_, &str> {
     let (input, name) = recognize(many0(one_of(ASCII_LETTERS_WITH_UNDERSCORE)))(input)?;
     if UNICODE_PROPERTY_NAMES.contains(&name.value) {
         Ok((input, name.value))
@@ -530,7 +530,7 @@ fn integer(input: Input) -> ParseResult<u32> {
     Ok((input, value))
 }
 
-fn capture_group_name(input: Input) -> ParseResult<&str> {
+fn capture_group_name(input: Input<'_>) -> ParseResult<'_, &str> {
     let (input, value) = recognize(tuple((
         one_of(ASCII_LETTERS_WITH_UNDERSCORE),
         many0(one_of(ASCII_ALPHANUMERIC_WITH_UNDERSCORE)),
