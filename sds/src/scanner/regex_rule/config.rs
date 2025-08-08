@@ -6,8 +6,8 @@ use crate::scanner::regex_rule::regex_store::get_memoized_regex;
 use crate::validation::validate_and_create_regex;
 use crate::{CompiledRule, CreateScannerError, Labels};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use serde_with::DefaultOnNull;
+use serde_with::serde_as;
 use std::sync::Arc;
 use strum::{AsRefStr, EnumIter};
 
@@ -145,14 +145,12 @@ impl<'de> serde::Deserialize<'de> for ClaimRequirement {
         D: serde::Deserializer<'de>,
     {
         let value = serde_json::Value::deserialize(deserializer)?;
-        
+
         if let serde_json::Value::String(ref s) = value {
             if s == "Present" {
                 return Ok(ClaimRequirement::Present);
             }
-        }
-        
-        if let serde_json::Value::Object(map) = value {
+        } else if let serde_json::Value::Object(map) = value {
             for (key, val) in map {
                 if let serde_json::Value::String(val_str) = val {
                     match key.as_str() {
@@ -163,7 +161,7 @@ impl<'de> serde::Deserialize<'de> for ClaimRequirement {
                 }
             }
         }
-        
+
         Err(serde::de::Error::custom("Invalid ClaimRequirement format"))
     }
 }
@@ -191,9 +189,30 @@ impl serde::Serialize for ClaimRequirement {
     }
 }
 
+// Custom serialization function to ensure stable alphabetical key order for HashMap
+fn serialize_claims_map<S>(
+    map: &std::collections::HashMap<String, ClaimRequirement>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeMap;
+    let mut sorted_keys: Vec<_> = map.keys().collect();
+    sorted_keys.sort();
+
+    let mut map_serializer = serializer.serialize_map(Some(map.len()))?;
+    for key in sorted_keys {
+        if let Some(value) = map.get(key) {
+            map_serializer.serialize_entry(key, value)?;
+        }
+    }
+    map_serializer.end()
+}
+
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct JwtClaimsCheckerConfig {
-    #[serde(default)]
+    #[serde(default, serialize_with = "serialize_claims_map")]
     pub required_claims: std::collections::HashMap<String, ClaimRequirement>,
 }
 
@@ -364,6 +383,39 @@ mod test {
             .collect();
         let mut sorted_validator_names = validator_names.clone();
         sorted_validator_names.sort();
-        assert_eq!(sorted_validator_names, validator_names, "Secondary validators should be sorted by alphabetical order, but it's not the case, expected order:");
+        assert_eq!(
+            sorted_validator_names, validator_names,
+            "Secondary validators should be sorted by alphabetical order, but it's not the case, expected order:"
+        );
+    }
+
+    #[test]
+    fn test_jwt_claims_checker_config_serialization_order() {
+        use std::collections::HashMap;
+
+        // Create a config with claims in non-alphabetical order
+        let mut required_claims = HashMap::new();
+        required_claims.insert("zzz".to_string(), ClaimRequirement::Present);
+        required_claims.insert(
+            "aaa".to_string(),
+            ClaimRequirement::ExactValue("test".to_string()),
+        );
+        required_claims.insert(
+            "mmm".to_string(),
+            ClaimRequirement::RegexMatch(r"^test.*".to_string()),
+        );
+
+        let config = JwtClaimsCheckerConfig { required_claims };
+
+        // Serialize multiple times to ensure stable order
+        let serialized1 = serde_json::to_string(&config).unwrap();
+        let serialized2 = serde_json::to_string(&config).unwrap();
+
+        // Both serializations should be identical
+        assert_eq!(serialized1, serialized2, "Serialization should be stable");
+
+        // Keys should be in alphabetical order
+        assert!(serialized1.find("aaa").unwrap() < serialized1.find("mmm").unwrap());
+        assert!(serialized1.find("mmm").unwrap() < serialized1.find("zzz").unwrap());
     }
 }
