@@ -129,8 +129,7 @@ pub struct ProximityKeywordsConfig {
     pub excluded_keywords: Vec<String>,
 }
 
-#[serde_as]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ClaimRequirement {
     /// Just check that the claim exists
     Present,
@@ -140,10 +139,60 @@ pub enum ClaimRequirement {
     RegexMatch(String),
 }
 
-#[serde_as]
+impl<'de> serde::Deserialize<'de> for ClaimRequirement {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        
+        if let serde_json::Value::String(ref s) = value {
+            if s == "Present" {
+                return Ok(ClaimRequirement::Present);
+            }
+        }
+        
+        if let serde_json::Value::Object(map) = value {
+            for (key, val) in map {
+                if let serde_json::Value::String(val_str) = val {
+                    match key.as_str() {
+                        "ExactValue" => return Ok(ClaimRequirement::ExactValue(val_str)),
+                        "RegexMatch" => return Ok(ClaimRequirement::RegexMatch(val_str)),
+                        _ => continue,
+                    }
+                }
+            }
+        }
+        
+        Err(serde::de::Error::custom("Invalid ClaimRequirement format"))
+    }
+}
+
+impl serde::Serialize for ClaimRequirement {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            ClaimRequirement::Present => serializer.serialize_str("Present"),
+            ClaimRequirement::ExactValue(val) => {
+                use serde::ser::SerializeMap;
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("ExactValue", val)?;
+                map.end()
+            }
+            ClaimRequirement::RegexMatch(val) => {
+                use serde::ser::SerializeMap;
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("RegexMatch", val)?;
+                map.end()
+            }
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct JwtClaimsCheckerConfig {
-    #[serde_as(deserialize_as = "DefaultOnNull")]
     #[serde(default)]
     pub required_claims: std::collections::HashMap<String, ClaimRequirement>,
 }
