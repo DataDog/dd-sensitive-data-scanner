@@ -9,7 +9,7 @@ long create_scanner(long rule_list, const char* encoded_labels, const char** err
 void delete_scanner(long scanner_id);
 
 // event is a non-null terminated TODO
-const char* scan(long scanner_id, const void* event, long event_size, long *retsize, long *retcap, const char** error);
+const char* scan(long scanner_id, const void* event, long event_size, long *retsize, long *retcap, const char** error, int with_validate_matching);
 
 void free_vec(const char* string, long len, long cap);
 void free_string(const char* string);

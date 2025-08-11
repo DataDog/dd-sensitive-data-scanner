@@ -2,8 +2,8 @@ use std::convert::From;
 use thiserror::Error;
 
 use crate::{
-    match_action::MatchActionValidationError, proximity_keywords::ProximityKeywordsValidationError,
-    RegexValidationError,
+    RegexValidationError, match_action::MatchActionValidationError,
+    proximity_keywords::ProximityKeywordsValidationError,
 };
 
 impl From<CreateScannerError> for i64 {
@@ -49,6 +49,8 @@ pub enum MatchValidationError {
 pub enum ScannerError {
     #[error("Transient error while scanning")]
     Transient(String),
+    #[error("Match validation error")]
+    MatchValidation(#[from] MatchValidationError),
 }
 
 #[cfg(test)]

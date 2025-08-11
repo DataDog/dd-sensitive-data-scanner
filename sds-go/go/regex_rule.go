@@ -79,6 +79,17 @@ type ProximityKeywordsConfig struct {
 	ExcludedKeywords        []string `json:"excluded_keywords"`
 }
 
+type MatchStatus string
+
+const (
+	// The ordering here is important, values further down the list have a higher priority when merging.
+	MatchStatusNotChecked   = MatchStatus("NotChecked")
+	MatchStatusNotAvailable = MatchStatus("NotAvailable")
+	MatchStatusInvalid      = MatchStatus("Invalid")
+	MatchStatusError        = MatchStatus("Error")
+	MatchStatusValid        = MatchStatus("Valid")
+)
+
 // RuleMatch stores the matches reported by the core library.
 type RuleMatch struct {
 	RuleIdx           uint32
@@ -87,6 +98,7 @@ type RuleMatch struct {
 	StartIndex        uint32
 	EndIndexExclusive uint32
 	ShiftOffset       int32
+	MatchStatus       MatchStatus
 }
 
 // MatchAction is used to configure the rules.

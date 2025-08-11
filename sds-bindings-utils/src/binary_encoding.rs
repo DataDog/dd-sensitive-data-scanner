@@ -138,11 +138,7 @@ pub fn encode_response(
 ) -> Option<Vec<u8>> {
     let mut out = vec![];
     encode_response_in_place(storage, status, return_matches, &mut out);
-    if out.is_empty() {
-        None
-    } else {
-        Some(out)
-    }
+    if out.is_empty() { None } else { Some(out) }
 }
 
 pub fn encode_response_in_place(
@@ -188,6 +184,10 @@ fn encode_error(out: &mut Vec<u8>, error: &ScannerError) {
             out.push(0);
             encode_bytes(out, message.as_bytes());
         }
+        ScannerError::MatchValidation(validation_error) => {
+            out.push(1);
+            encode_bytes(out, validation_error.to_string().as_bytes());
+        }
     }
 }
 
@@ -196,7 +196,7 @@ fn encode_success(out: &mut Vec<u8>) {
 }
 
 fn encode_match(out: &mut Vec<u8>, rule_match: &RuleMatch, return_matches: bool) {
-    out.push(5);
+    out.push(6);
     out.extend((rule_match.rule_index as u32).to_be_bytes());
 
     // TODO: this should write directly to the output
@@ -211,6 +211,9 @@ fn encode_match(out: &mut Vec<u8>, rule_match: &RuleMatch, return_matches: bool)
     out.extend((rule_match.end_index_exclusive as u32).to_be_bytes());
     out.extend((rule_match.shift_offset as u32).to_be_bytes());
 
+    let match_status = rule_match.match_status.to_string();
+    encode_bytes(out, match_status.as_bytes());
+
     // This is a breaking change, so it is opt-in for now until all bindings support it.
     if return_matches {
         let match_value = rule_match
@@ -220,6 +223,7 @@ fn encode_match(out: &mut Vec<u8>, rule_match: &RuleMatch, return_matches: bool)
             .unwrap_or(&[]);
         encode_bytes(out, match_value);
     }
+    out.extend((rule_match.rule_index as u32).to_be_bytes());
 }
 
 fn encode_path(out: &mut Vec<u8>, path: &Path) {

@@ -4,8 +4,8 @@ use std::slice;
 use std::sync::Arc;
 
 use crate::convert_panic_to_go_error;
-use dd_sds::{Scanner, Utf8Encoding};
-use sds_bindings_utils::{encode_response, BinaryEvent};
+use dd_sds::{ScanOptionBuilder, Scanner, Utf8Encoding};
+use sds_bindings_utils::{BinaryEvent, encode_response};
 
 /// # Safety
 ///
@@ -20,6 +20,7 @@ pub unsafe extern "C" fn scan(
     retsize: *mut i64,
     retcapacity: *mut i64,
     error_out: *mut *const c_char,
+    with_validate_matching: i32,
 ) -> *const c_char {
     match convert_panic_to_go_error(|| {
         let scanner =
@@ -31,7 +32,10 @@ pub unsafe extern "C" fn scan(
         let mut event = BinaryEvent::<Utf8Encoding>::new(data, false);
 
         // TODO: we might want to forward the error to go in the future
-        let matches = scanner.scan(&mut event);
+        let scan_options = ScanOptionBuilder::new()
+            .with_validate_matching(with_validate_matching != 0)
+            .build();
+        let matches = scanner.scan(&mut event, scan_options);
 
         if let Some(encoded_response) = encode_response(&event.storage, matches.as_deref(), false) {
             let mut str = std::mem::ManuallyDrop::new(encoded_response);
