@@ -3,7 +3,6 @@ use crate::scanner::config::RuleConfig;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::regex_store::get_memoized_regex;
-use crate::secondary_validation::Validator;
 use crate::validation::validate_and_create_regex;
 use crate::{CompiledRule, CreateScannerError, Labels};
 use serde::{Deserialize, Serialize};
@@ -110,10 +109,7 @@ impl RuleConfig for RegexRuleConfig {
             regex,
             included_keywords,
             excluded_keywords,
-            validator: self
-                .validator
-                .clone()
-                .map(|x| Arc::new(x) as Arc<dyn Validator>),
+            validator: self.validator.clone().map(|x| x.compile()),
             metrics: RuleMetrics::new(&rule_labels),
         }))
     }
@@ -131,6 +127,24 @@ pub struct ProximityKeywordsConfig {
     #[serde_as(deserialize_as = "DefaultOnNull")]
     #[serde(default)]
     pub excluded_keywords: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum ClaimRequirement {
+    /// Just check that the claim exists
+    Present,
+    /// Check that the claim exists and has an exact value
+    ExactValue(String),
+    /// Check that the claim exists and matches a regex pattern
+    RegexMatch(String),
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+pub struct JwtClaimsCheckerConfig {
+    #[serde_as(deserialize_as = "DefaultOnNull")]
+    #[serde(default)]
+    pub required_claims: std::collections::HashMap<String, ClaimRequirement>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumIter, AsRefStr)]
@@ -159,6 +173,7 @@ pub enum SecondaryValidator {
     IbanChecker,
     IrishPpsChecksum,
     ItalianNationalIdChecksum,
+    JwtClaimsChecker { config: JwtClaimsCheckerConfig },
     JwtExpirationChecker,
     LatviaNationalIdChecksum,
     LithuanianPersonalIdentificationNumberChecksum,

@@ -12,7 +12,7 @@ use sds_bindings_utils::{encode_response, BinaryEvent};
 /// This function makes use of `slice::from_raw_parts` which is unsafe as it dereferences a pointer to a c_void.
 /// It also dereferences `retsize` and `retcapacity` which are pointers to i64.
 /// The caller must ensure that the pointers are valid.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn scan(
     scanner_id: i64,
     event: *const c_void,
@@ -73,8 +73,8 @@ pub unsafe extern "C" fn scan(
     }
 }
 
-#[no_mangle]
-pub extern "C" fn free_vec(ptr: *const c_char, len: i64, cap: i64) {
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_vec(ptr: *const c_char, len: i64, cap: i64) {
     unsafe {
         // rust "owns" it again and will drop it leaving the scope
         drop(Vec::from_raw_parts(
@@ -85,8 +85,8 @@ pub extern "C" fn free_vec(ptr: *const c_char, len: i64, cap: i64) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn free_string(ptr: *const c_char) {
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_string(ptr: *const c_char) {
     unsafe {
         drop(std::ffi::CString::from_raw(ptr as *mut c_char));
     }

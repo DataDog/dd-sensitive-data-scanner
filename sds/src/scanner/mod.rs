@@ -392,7 +392,7 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn builder(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder {
+    pub fn builder(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder<'_> {
         ScannerBuilder::new(rules)
     }
 
@@ -436,7 +436,9 @@ impl Scanner {
             timeout(self.async_scan_timeout, fut)
         };
 
-        timeout.await.unwrap_or(Err(ScannerError::Transient))
+        timeout.await.unwrap_or(Err(ScannerError::Transient(
+            "Async scan timeout".to_string(),
+        )))
     }
 
     fn record_metrics(&self, output_rule_matches: &[RuleMatch], start: Instant) {
@@ -806,12 +808,12 @@ pub struct ScannerBuilder<'a> {
 }
 
 impl ScannerBuilder<'_> {
-    pub fn new(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder {
+    pub fn new(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder<'_> {
         ScannerBuilder {
             rules,
             labels: Labels::empty(),
             scanner_features: ScannerFeatures::default(),
-            async_scan_timeout: Duration::from_secs(1),
+            async_scan_timeout: Duration::from_secs(60),
         }
     }
 

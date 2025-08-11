@@ -3,6 +3,7 @@ package dd_sds
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -67,8 +68,16 @@ func CreateScanner(ruleConfigs []RuleConfig) (*Scanner, error) {
 		rule.Delete()
 	}
 
+	labels := [][2]string{}
+	labelsMarshalled, err := json.Marshal(labels)
+	if err != nil {
+		return nil, err
+	}
+	encodedLabelsJson := C.CString(string(labelsMarshalled))
+	defer C.free(unsafe.Pointer(encodedLabelsJson))
+
 	var errorString *C.char
-	id := C.create_scanner(C.long(ruleList.nativePtr), &errorString, C.bool(false) /* should_keywords_match_event_paths */)
+	id := C.create_scanner(C.long(ruleList.nativePtr), encodedLabelsJson, &errorString)
 
 	if id < 0 {
 		switch id {
@@ -393,7 +402,7 @@ func decodeStatusResponse(rawData []byte) ([]byte, error) {
 		switch rawData[1] {
 		case 0:
 			// Error: TransientError
-			return nil, fmt.Errorf("scan error: transient error that a future retry might fix")
+			return nil, fmt.Errorf("scan error: transient error that a future retry might fix: %s", string(nextString(bytes.NewBuffer(rawData[2:]))))
 		default:
 			return nil, fmt.Errorf("decodeResponse: unknown error byte marker: %x", rawData[1])
 		}
