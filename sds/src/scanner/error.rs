@@ -49,8 +49,10 @@ pub enum MatchValidationError {
 pub enum ScannerError {
     #[error("Transient error while scanning")]
     Transient(String),
-    #[error("Match validation error")]
-    MatchValidation(#[from] MatchValidationError),
+    #[error(
+        "Scanner configuration error: match validation requested but scanner not configured to return matches"
+    )]
+    MatchValidationNotConfigured,
 }
 
 #[cfg(test)]

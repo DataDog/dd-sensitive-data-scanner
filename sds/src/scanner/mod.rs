@@ -592,7 +592,8 @@ impl Scanner {
         }
 
         if options.with_validate_matching {
-            self.validate_matches(&mut output_rule_matches)?;
+            self.validate_matches(&mut output_rule_matches)
+                .map_err(|_| ScannerError::MatchValidationNotConfigured)?;
         }
 
         Ok(output_rule_matches)
