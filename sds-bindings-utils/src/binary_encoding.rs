@@ -184,13 +184,6 @@ fn encode_error(out: &mut Vec<u8>, error: &ScannerError) {
             out.push(0);
             encode_bytes(out, message.as_bytes());
         }
-        ScannerError::MatchValidationNotConfigured => {
-            out.push(1); // Error code for validation configuration errors
-            encode_bytes(
-                out,
-                b"Match validation requested but scanner not configured to return matches",
-            );
-        }
     }
 }
 

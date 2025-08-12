@@ -41,20 +41,19 @@ pub use path::{Path, PathSegment};
 pub use rule_match::{ReplacementType, RuleMatch};
 pub use scanner::shared_pool::{SharedPool, SharedPoolGuard};
 
-pub use scanner::error::MatchValidationError;
 pub use scanner::{
-    config::RuleConfig,
-    error::{CreateScannerError, ScannerError},
-    regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator},
-    regex_rule::RegexCaches,
-    scope::Scope,
     CompiledRule, MatchEmitter, RootCompiledRule, RootRuleConfig, RuleResult, RuleStatus,
     ScanOptionBuilder, Scanner, ScannerBuilder, SharedData, StringMatch, StringMatchesCtx,
+    config::RuleConfig,
+    error::{CreateScannerError, ScannerError},
+    regex_rule::RegexCaches,
+    regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator},
+    scope::Scope,
 };
 pub use scoped_ruleset::ExclusionCheck;
 pub use tokio::TOKIO_RUNTIME;
 pub use validation::{
-    get_regex_complexity_estimate_very_slow, validate_regex, RegexValidationError,
+    RegexValidationError, get_regex_complexity_estimate_very_slow, validate_regex,
 };
 
 #[cfg(any(feature = "testing", feature = "bench"))]

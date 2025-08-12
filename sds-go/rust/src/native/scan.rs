@@ -35,7 +35,7 @@ pub unsafe extern "C" fn scan(
         let scan_options = ScanOptionBuilder::new()
             .with_validate_matching(with_validate_matching != 0)
             .build();
-        let matches = scanner.scan(&mut event, scan_options);
+        let matches = scanner.scan_with_options(&mut event, scan_options);
 
         if let Some(encoded_response) = encode_response(&event.storage, matches.as_deref(), false) {
             let mut str = std::mem::ManuallyDrop::new(encoded_response);

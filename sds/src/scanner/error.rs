@@ -40,19 +40,9 @@ pub enum CreateScannerError {
 }
 
 #[derive(Debug, PartialEq, Eq, Error)]
-pub enum MatchValidationError {
-    #[error("No MatchValidationType provided")]
-    NoMatchValidationType,
-}
-
-#[derive(Debug, PartialEq, Eq, Error)]
 pub enum ScannerError {
     #[error("Transient error while scanning")]
     Transient(String),
-    #[error(
-        "Scanner configuration error: match validation requested but scanner not configured to return matches"
-    )]
-    MatchValidationNotConfigured,
 }
 
 #[cfg(test)]

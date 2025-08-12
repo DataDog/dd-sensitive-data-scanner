@@ -7,7 +7,7 @@ use crate::match_validation::{
     match_validator::MatchValidator,
 };
 
-use error::{MatchValidationError, MatchValidatorCreationError};
+use error::MatchValidatorCreationError;
 
 use self::metrics::ScannerMetrics;
 use crate::match_validation::match_validator::RAYON_THREAD_POOL;
@@ -500,6 +500,10 @@ impl Scanner {
         event: &mut E,
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
+        // If validation is requested, we need to collect match content even if the scanner
+        // wasn't originally configured to return matches
+        let need_match_content =
+            self.scanner_features.return_matches || options.with_validate_matching;
         // All matches, after some (but not all) false-positives have been removed.
         let mut rule_matches = InternalRuleMatchSet::new();
         let mut excluded_matches = AHashSet::new();
@@ -585,6 +589,7 @@ impl Scanner {
                     &path,
                     &mut rule_matches,
                     &mut output_rule_matches,
+                    need_match_content,
                 );
 
                 will_mutate
@@ -592,20 +597,13 @@ impl Scanner {
         }
 
         if options.with_validate_matching {
-            self.validate_matches(&mut output_rule_matches)
-                .map_err(|_| ScannerError::MatchValidationNotConfigured)?;
+            self.validate_matches(&mut output_rule_matches);
         }
 
         Ok(output_rule_matches)
     }
 
-    pub fn validate_matches(
-        &self,
-        rule_matches: &mut Vec<RuleMatch>,
-    ) -> Result<(), MatchValidationError> {
-        if !self.scanner_features.return_matches {
-            return Err(MatchValidationError::NoMatchValidationType);
-        }
+    pub fn validate_matches(&self, rule_matches: &mut Vec<RuleMatch>) {
         // Create MatchValidatorRuleMatch per match_validator_type to pass it to each match_validator
         let mut match_validator_rule_match_per_type = AHashMap::new();
 
@@ -648,7 +646,6 @@ impl Scanner {
         // Sort rule_matches by start index
         validated_rule_matches.sort_by_key(|rule_match| rule_match.start_index);
         *rule_matches = validated_rule_matches;
-        Ok(())
     }
 
     /// Apply mutations from actions, and shift indices to match the mutated values.
@@ -659,6 +656,7 @@ impl Scanner {
         path: &Path<'static>,
         rule_matches: &mut [InternalRuleMatch<E>],
         output_rule_matches: &mut Vec<RuleMatch>,
+        need_match_content: bool,
     ) {
         let mut utf8_byte_delta: isize = 0;
         let mut custom_index_delta: <E>::IndexShift = <E>::zero_shift();
@@ -670,6 +668,7 @@ impl Scanner {
                 rule_match,
                 &mut utf8_byte_delta,
                 &mut custom_index_delta,
+                need_match_content,
             ));
         }
     }
@@ -685,6 +684,7 @@ impl Scanner {
 
         // The difference between the custom index on the original string and the mutated string
         custom_index_delta: &mut <E>::IndexShift,
+        need_match_content: bool,
     ) -> RuleMatch {
         let rule = &self.rules[rule_match.rule_index];
 
@@ -694,7 +694,7 @@ impl Scanner {
 
         let mut matched_content_copy = None;
 
-        if self.scanner_features.return_matches {
+        if need_match_content {
             // This copies part of the is_mutating block but is seperate since can't mix compilation condition and code condition
             let mutated_utf8_match_start =
                 (rule_match.utf8_start as isize + *utf8_byte_delta) as usize;
