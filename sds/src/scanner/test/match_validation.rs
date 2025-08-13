@@ -47,9 +47,7 @@ fn test_should_error_if_no_match_validation() {
     assert_eq!(rule_match.len(), 1);
     assert_eq!(content, "hey [REDACTED]");
     assert_eq!(rule_match[0].match_value, None);
-    // Let's call validate and check that it panics
-    let err = scanner.validate_matches(&mut rule_match);
-    assert!(err.is_err());
+    scanner.validate_matches(&mut rule_match);
 }
 
 #[test]
@@ -152,7 +150,7 @@ fn test_aws_id_only_shall_not_validate() {
     let mut matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "this is an [AWS_ID]");
-    assert!(scanner.validate_matches(&mut matches).is_err());
+    scanner.validate_matches(&mut matches);
     assert_eq!(matches[0].match_status, MatchStatus::NotChecked);
 }
 
@@ -226,7 +224,7 @@ fn test_mock_same_http_validator_several_matches() {
         content,
         "this is a content with a [VALID] an [INVALID] and an [ERROR]"
     );
-    assert!(scanner.validate_matches(&mut matches).is_ok());
+    scanner.validate_matches(&mut matches);
     mock_service_valid.assert();
     mock_service_invalid.assert();
     mock_service_error.assert();
@@ -286,7 +284,7 @@ fn test_mock_multiple_http_validators_one_timeout() {
     let mut matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "this is a content with a [VALID]");
-    assert!(scanner.validate_matches(&mut matches).is_ok());
+    scanner.validate_matches(&mut matches);
     assert_eq!(matches[0].match_status, MatchStatus::Valid);
 }
 
@@ -321,7 +319,7 @@ fn test_mock_http_timeout() {
     let mut matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "this is a content with a [VALID]");
-    assert!(scanner.validate_matches(&mut matches).is_ok());
+    scanner.validate_matches(&mut matches);
     // This will be in the form "Error making HTTP request: "
     match &matches[0].match_status {
         MatchStatus::Error(val) => {
@@ -347,7 +345,7 @@ fn test_matches_from_rule_without_validation_are_not_ignored() {
     let mut matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "this is a content with a [VALID]");
-    assert!(scanner.validate_matches(&mut matches).is_ok());
+    scanner.validate_matches(&mut matches);
 
     // Even though the match doesn't have a match-validator, it is still returned, with a `NotAvailable` status
     assert_eq!(matches.len(), 1);
@@ -410,7 +408,7 @@ fn test_mock_multiple_match_validators() {
         content,
         "this is a content with a [VALID] an [AWS_ID] and an [AWS_SECRET]"
     );
-    assert!(scanner.validate_matches(&mut matches).is_ok());
+    scanner.validate_matches(&mut matches);
     mock_http_service_valid.assert();
     mock_aws_service_valid.assert();
     assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -455,7 +453,7 @@ fn test_mock_endpoint_with_multiple_hosts() {
         content,
         "this is a content with a [VALID] on multiple hosts"
     );
-    assert!(scanner.validate_matches(&mut matches).is_ok());
+    scanner.validate_matches(&mut matches);
     mock_http_service_us.assert();
     mock_http_service_eu.assert();
     assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -551,14 +549,15 @@ fn test_mock_aws_validator() {
         .unwrap();
 
     let mut content = fmt::format(format_args!(
-        "content with a valid aws_id {aws_id_valid}, an invalid aws_id {aws_id_invalid}, an error aws_id {aws_id_error} and an aws_secret {aws_secret_1} and an other aws_secret {aws_secret_2}"));
+        "content with a valid aws_id {aws_id_valid}, an invalid aws_id {aws_id_invalid}, an error aws_id {aws_id_error} and an aws_secret {aws_secret_1} and an other aws_secret {aws_secret_2}"
+    ));
     let mut matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 5);
     assert_eq!(
         content,
         "content with a valid aws_id [AWS_ID], an invalid aws_id [AWS_ID], an error aws_id [AWS_ID] and an aws_secret [AWS_SECRET] and an other aws_secret [AWS_SECRET]"
     );
-    assert!(scanner.validate_matches(&mut matches).is_ok());
+    scanner.validate_matches(&mut matches);
     mock_service_valid.assert();
     mock_service_invalid_1.assert();
     mock_service_invalid_2.assert();

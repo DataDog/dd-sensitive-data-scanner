@@ -335,7 +335,9 @@ pub struct ScanOptions {
     pub blocked_rules_idx: Vec<usize>,
     // The wildcarded_indices parameter is a map containing a list of tuples of (start, end) indices that should be treated as wildcards (for the message key only) per path.
     pub wildcarded_indices: AHashMap<Path<'static>, Vec<(usize, usize)>>,
-    pub with_validate_matching: bool,
+    // Whether to validate matches using third-party validators (e.g., checksum validation for credit cards).
+    // When enabled, the scanner automatically collects match content needed for validation.
+    pub validate_matches: bool,
 }
 
 impl Default for ScanOptions {
@@ -343,7 +345,7 @@ impl Default for ScanOptions {
         Self {
             blocked_rules_idx: vec![],
             wildcarded_indices: AHashMap::new(),
-            with_validate_matching: false,
+            validate_matches: false,
         }
     }
 }
@@ -351,7 +353,7 @@ impl Default for ScanOptions {
 pub struct ScanOptionBuilder {
     blocked_rules_idx: Vec<usize>,
     wildcarded_indices: AHashMap<Path<'static>, Vec<(usize, usize)>>,
-    with_validate_matching: bool,
+    validate_matches: bool,
 }
 
 impl ScanOptionBuilder {
@@ -359,7 +361,7 @@ impl ScanOptionBuilder {
         Self {
             blocked_rules_idx: vec![],
             wildcarded_indices: AHashMap::new(),
-            with_validate_matching: false,
+            validate_matches: false,
         }
     }
 
@@ -376,8 +378,8 @@ impl ScanOptionBuilder {
         self
     }
 
-    pub fn with_validate_matching(mut self, with_validate_matching: bool) -> Self {
-        self.with_validate_matching = with_validate_matching;
+    pub fn with_validate_matching(mut self, validate_matches: bool) -> Self {
+        self.validate_matches = validate_matches;
         self
     }
 
@@ -385,7 +387,7 @@ impl ScanOptionBuilder {
         ScanOptions {
             blocked_rules_idx: self.blocked_rules_idx,
             wildcarded_indices: self.wildcarded_indices,
-            with_validate_matching: self.with_validate_matching,
+            validate_matches: self.validate_matches,
         }
     }
 }
@@ -502,8 +504,7 @@ impl Scanner {
     ) -> Result<Vec<RuleMatch>, ScannerError> {
         // If validation is requested, we need to collect match content even if the scanner
         // wasn't originally configured to return matches
-        let need_match_content =
-            self.scanner_features.return_matches || options.with_validate_matching;
+        let need_match_content = self.scanner_features.return_matches || options.validate_matches;
         // All matches, after some (but not all) false-positives have been removed.
         let mut rule_matches = InternalRuleMatchSet::new();
         let mut excluded_matches = AHashSet::new();
@@ -596,7 +597,7 @@ impl Scanner {
             });
         }
 
-        if options.with_validate_matching {
+        if options.validate_matches {
             self.validate_matches(&mut output_rule_matches);
         }
 
