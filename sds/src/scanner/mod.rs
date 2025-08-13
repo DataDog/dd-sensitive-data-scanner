@@ -425,7 +425,7 @@ impl Scanner {
         event: &mut E,
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
-        self.scan_with_options_impl(event, options)
+        block_on(self.internal_scan_with_metrics(event, options))
     }
 
     // This function scans the given event with the rules configured in the scanner.
@@ -437,14 +437,6 @@ impl Scanner {
     ) -> Result<Vec<RuleMatch>, ScannerError> {
         self.scan_async_with_options(event, ScanOptions::default())
             .await
-    }
-
-    pub fn scan_with_options_impl<E: Event>(
-        &self,
-        event: &mut E,
-        options: ScanOptions,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
-        block_on(self.internal_scan_with_metrics(event, options))
     }
 
     pub async fn scan_async_with_options<E: Event>(
