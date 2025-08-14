@@ -116,7 +116,7 @@ func (s *Scanner) Delete() {
 	s.RuleConfigs = nil
 }
 
-func (s *Scanner) lowLevelScan(encodedEvent []byte) ([]byte, error) {
+func (s *Scanner) lowLevelScan(encodedEvent []byte, withValidateMatching bool) ([]byte, error) {
 	cdata := C.CBytes(encodedEvent)
 	defer C.free(cdata)
 
@@ -124,7 +124,13 @@ func (s *Scanner) lowLevelScan(encodedEvent []byte) ([]byte, error) {
 	var retcap int64
 	var errorString *C.char
 
-	rvdata := C.scan(C.long(s.Id), cdata, C.long(len(encodedEvent)), (*C.long)(unsafe.Pointer(&retsize)), (*C.long)(unsafe.Pointer(&retcap)), &errorString)
+	var cWithValidateMatching C.int
+	if withValidateMatching {
+		cWithValidateMatching = 1
+	} else {
+		cWithValidateMatching = 0
+	}
+	rvdata := C.scan(C.long(s.Id), cdata, C.long(len(encodedEvent)), (*C.long)(unsafe.Pointer(&retsize)), (*C.long)(unsafe.Pointer(&retcap)), &errorString, cWithValidateMatching)
 	if errorString != nil {
 		defer C.free_string(errorString)
 		return nil, fmt.Errorf("internal panic: %v", C.GoString(errorString))
@@ -147,8 +153,8 @@ func (s *Scanner) lowLevelScan(encodedEvent []byte) ([]byte, error) {
 	return response, nil
 }
 
-func (s *Scanner) scanEncodedMapEvent(encodedEvent []byte, event map[string]interface{}) (ScanResult, error) {
-	response, err := s.lowLevelScan(encodedEvent)
+func (s *Scanner) scanEncodedMapEvent(encodedEvent []byte, event map[string]interface{}, withValidateMatching bool) (ScanResult, error) {
+	response, err := s.lowLevelScan(encodedEvent, withValidateMatching)
 	if err != nil {
 		return ScanResult{}, err
 	}
@@ -162,8 +168,8 @@ func (s *Scanner) scanEncodedMapEvent(encodedEvent []byte, event map[string]inte
 	return result, nil
 }
 
-func (s *Scanner) scanEncodedStringEvent(encodedEvent []byte) (ScanResult, error) {
-	response, err := s.lowLevelScan(encodedEvent)
+func (s *Scanner) scanEncodedStringEvent(encodedEvent []byte, withValidateMatching bool) (ScanResult, error) {
+	response, err := s.lowLevelScan(encodedEvent, withValidateMatching)
 	if err != nil {
 		return ScanResult{}, err
 	}
@@ -179,7 +185,14 @@ func (s *Scanner) scanEncodedStringEvent(encodedEvent []byte) (ScanResult, error
 }
 
 // Scan sends the string event to the SDS shared library for processing.
+// withValidateMatching defaults to false.
 func (s *Scanner) Scan(event []byte) (ScanResult, error) {
+	return s.ScanWithValidation(event, false)
+}
+
+// ScanWithValidation sends the string event to the SDS shared library for processing
+// with explicit control over match validation.
+func (s *Scanner) ScanWithValidation(event []byte, withValidateMatching bool) (ScanResult, error) {
 	encodedEvent := make([]byte, 0)
 	encodedEvent, err := encodeStringEvent(event, encodedEvent)
 	if err != nil {
@@ -187,7 +200,7 @@ func (s *Scanner) Scan(event []byte) (ScanResult, error) {
 	}
 
 	var result ScanResult
-	if result, err = s.scanEncodedStringEvent(encodedEvent); err != nil {
+	if result, err = s.scanEncodedStringEvent(encodedEvent, withValidateMatching); err != nil {
 		return ScanResult{}, err
 	}
 
@@ -202,14 +215,23 @@ func (s *Scanner) Scan(event []byte) (ScanResult, error) {
 // ScanEventsMap sends a map event to the SDS shared library for processing.
 // In case of mutation, event is updated in place.
 // The returned ScanResult contains the mutated string in the Event attribute (not the event)
+// withValidateMatching defaults to false.
 func (s *Scanner) ScanEventsMap(event map[string]interface{}) (ScanResult, error) {
+	return s.ScanEventsMapWithValidation(event, false)
+}
+
+// ScanEventsMapWithValidation sends a map event to the SDS shared library for processing
+// with explicit control over match validation.
+// In case of mutation, event is updated in place.
+// The returned ScanResult contains the mutated string in the Event attribute (not the event)
+func (s *Scanner) ScanEventsMapWithValidation(event map[string]interface{}, withValidateMatching bool) (ScanResult, error) {
 	encodedEvent := make([]byte, 0)
 	encodedEvent, err := encodeMapEvent(event, encodedEvent)
 	if err != nil {
 		return ScanResult{}, err
 	}
 
-	return s.scanEncodedMapEvent(encodedEvent, event)
+	return s.scanEncodedMapEvent(encodedEvent, event, withValidateMatching)
 }
 
 // encodeStringEvent encodes teh given event to send it to the SDS shared library.
@@ -305,6 +327,21 @@ func decodeMatchResponse(result *ScanResult, buf *bytes.Buffer) {
 	endIndexExclusive := binary.BigEndian.Uint32(buf.Next(4))
 	shiftOffset := int32(binary.BigEndian.Uint32(buf.Next(4)))
 
+	// New fields added in the updated format
+	matchStatusStr := string(nextString(buf))
+
+	// Match value is only present if return_matches was true (which it isn't currently)
+	// For now, we assume return_matches is false, so no match value
+
+	// Rule index again (duplicate) - this is always present
+	_ = binary.BigEndian.Uint32(buf.Next(4))
+
+	// For backward compatibility with existing tests, only set MatchStatus if it's not NotAvailable
+	var matchStatus MatchStatus
+	if matchStatusStr != "NotAvailable" {
+		matchStatus = MatchStatus(matchStatusStr)
+	}
+
 	result.Matches = append(result.Matches, RuleMatch{
 		RuleIdx:           ruleIdx,
 		Path:              string(path),
@@ -312,6 +349,7 @@ func decodeMatchResponse(result *ScanResult, buf *bytes.Buffer) {
 		StartIndex:        startIndex,
 		EndIndexExclusive: endIndexExclusive,
 		ShiftOffset:       shiftOffset,
+		MatchStatus:       matchStatus,
 	})
 }
 
@@ -342,7 +380,9 @@ func decodeEventMapResponse(rawData []byte, event map[string]interface{}) (ScanR
 			if result.Event, err = applyStringMutationMap(buf, event); err != nil {
 				return ScanResult{}, fmt.Errorf("applyStringMutationMap: %v", err)
 			}
-		case 5: // Match
+		case 5: // Match (legacy)
+			decodeMatchResponse(&result, buf)
+		case 6: // Match (new format)
 			decodeMatchResponse(&result, buf)
 		default:
 			return ScanResult{}, fmt.Errorf("decodeEventMapResponse: can't decode response, unknown byte marker: %x", typ)
@@ -381,7 +421,9 @@ func decodeResponse(rawData []byte) (ScanResult, error) {
 			if result.Event, err = decodeMutation(buf); err != nil {
 				return ScanResult{}, fmt.Errorf("decodeResponse: %v", err)
 			}
-		case 5: // Match
+		case 5: // Match (legacy)
+			decodeMatchResponse(&result, buf)
+		case 6: // Match (new format)
 			decodeMatchResponse(&result, buf)
 		default:
 			return ScanResult{}, fmt.Errorf("decodeResponse: can't decode response, unknown byte marker: %x", typ)
@@ -403,6 +445,7 @@ func decodeStatusResponse(rawData []byte) ([]byte, error) {
 		case 0:
 			// Error: TransientError
 			return nil, fmt.Errorf("scan error: transient error that a future retry might fix: %s", string(nextString(bytes.NewBuffer(rawData[2:]))))
+
 		default:
 			return nil, fmt.Errorf("decodeResponse: unknown error byte marker: %x", rawData[1])
 		}

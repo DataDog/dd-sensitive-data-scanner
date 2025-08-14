@@ -2,8 +2,8 @@ use std::convert::From;
 use thiserror::Error;
 
 use crate::{
-    match_action::MatchActionValidationError, proximity_keywords::ProximityKeywordsValidationError,
-    RegexValidationError,
+    RegexValidationError, match_action::MatchActionValidationError,
+    proximity_keywords::ProximityKeywordsValidationError,
 };
 
 impl From<CreateScannerError> for i64 {
@@ -37,12 +37,6 @@ pub enum CreateScannerError {
     /// The match validator cannot be created
     #[error(transparent)]
     InvalidMatchValidator(#[from] MatchValidatorCreationError),
-}
-
-#[derive(Debug, PartialEq, Eq, Error)]
-pub enum MatchValidationError {
-    #[error("No MatchValidationType provided")]
-    NoMatchValidationType,
 }
 
 #[derive(Debug, PartialEq, Eq, Error)]
