@@ -70,60 +70,6 @@ func (t ThirdPartyActiveChecker) MarshalJSON() ([]byte, error) {
 	return json.Marshal((Alias)(t))
 }
 
-// For backward compatibility, use ThirdPartyActiveChecker as MatchValidationType
-type MatchValidationType = ThirdPartyActiveChecker
-
-// Helper functions to create validation types
-func NewAwsSecretValidation() ThirdPartyActiveChecker {
-	return ThirdPartyActiveChecker{
-		Type: "Aws",
-		Config: ThirdPartyActiveCheckerConfig{
-			ThirdPartyActiveCheckerConfigAws: &ThirdPartyActiveCheckerConfigAws{
-				Kind:           "AwsSecret",
-				AwsStsEndpoint: "https://sts.amazonaws.com",
-				Timeout:        Duration{Seconds: 3, Nanos: 0},
-			},
-		},
-	}
-}
-
-func NewAwsIdValidation() ThirdPartyActiveChecker {
-	return ThirdPartyActiveChecker{
-		Type: "Aws",
-		Config: ThirdPartyActiveCheckerConfig{
-			ThirdPartyActiveCheckerConfigAws: &ThirdPartyActiveCheckerConfigAws{
-				Kind: "AwsId",
-			},
-		},
-	}
-}
-
-func NewCustomHttpValidation(endpoint string) ThirdPartyActiveChecker {
-	return ThirdPartyActiveChecker{
-		Type: "CustomHttp",
-		Config: ThirdPartyActiveCheckerConfig{
-			ThirdPartyActiveCheckerConfigHttp: &ThirdPartyActiveCheckerConfigHttp{
-				Endpoint:      endpoint,
-				Method:        "GET",
-				RequestHeader: map[string]string{}, // Required field, even if empty
-				Timeout:       3,
-				ValidHttpStatusCodes: []StatusCodeRange{
-					{Start: 200, End: 300},
-				},
-				InvalidHttpStatusCodes: []StatusCodeRange{
-					{Start: 400, End: 500},
-				},
-			},
-		},
-	}
-}
-
-// For backward compatibility, keep the old constants but make them return proper structs
-var (
-	MatchValidationTypeAws        = NewAwsIdValidation()
-	MatchValidationTypeCustomHttp = NewCustomHttpValidation("https://api.example.com/validate")
-)
-
 type MatchActionType string
 type ReplacementType string
 

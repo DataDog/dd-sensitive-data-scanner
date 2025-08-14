@@ -820,3 +820,54 @@ func sortRulesMatch(left, right RuleMatch) bool {
 	// TODO(https://datadoghq.atlassian.net/browse/SDS-301): implement replacement type
 	return false
 }
+
+// Helper functions to create validation types
+func NewAwsSecretValidation() ThirdPartyActiveChecker {
+	return ThirdPartyActiveChecker{
+		Type: "Aws",
+		Config: ThirdPartyActiveCheckerConfig{
+			ThirdPartyActiveCheckerConfigAws: &ThirdPartyActiveCheckerConfigAws{
+				Kind:           "AwsSecret",
+				AwsStsEndpoint: "https://sts.amazonaws.com",
+				Timeout:        Duration{Seconds: 3, Nanos: 0},
+			},
+		},
+	}
+}
+
+func NewAwsIdValidation() ThirdPartyActiveChecker {
+	return ThirdPartyActiveChecker{
+		Type: "Aws",
+		Config: ThirdPartyActiveCheckerConfig{
+			ThirdPartyActiveCheckerConfigAws: &ThirdPartyActiveCheckerConfigAws{
+				Kind: "AwsId",
+			},
+		},
+	}
+}
+
+func NewCustomHttpValidation(endpoint string) ThirdPartyActiveChecker {
+	return ThirdPartyActiveChecker{
+		Type: "CustomHttp",
+		Config: ThirdPartyActiveCheckerConfig{
+			ThirdPartyActiveCheckerConfigHttp: &ThirdPartyActiveCheckerConfigHttp{
+				Endpoint:      endpoint,
+				Method:        "GET",
+				RequestHeader: map[string]string{}, // Required field, even if empty
+				Timeout:       3,
+				ValidHttpStatusCodes: []StatusCodeRange{
+					{Start: 200, End: 300},
+				},
+				InvalidHttpStatusCodes: []StatusCodeRange{
+					{Start: 400, End: 500},
+				},
+			},
+		},
+	}
+}
+
+// For backward compatibility, keep the old constants but make them return proper structs
+var (
+	MatchValidationTypeAws        = NewAwsIdValidation()
+	MatchValidationTypeCustomHttp = NewCustomHttpValidation("https://api.example.com/validate")
+)
