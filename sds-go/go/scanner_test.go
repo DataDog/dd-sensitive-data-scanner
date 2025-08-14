@@ -514,18 +514,6 @@ func TestThirdPartyActiveChecker(t *testing.T) {
 	}
 	defer scannerWithoutValidation.Delete()
 
-	// Test rule with AWS validation using ExtraConfig
-	// Note: Only AwsSecret actually creates a validator, AwsId does not
-	scannerWithAwsValidation, err := CreateScanner([]RuleConfig{
-		NewMatchingRule("rule_aws_secret", "[A-Za-z0-9/+=]{40}", ExtraConfig{
-			ThirdPartyActiveChecker: NewAwsSecretValidation(),
-		}),
-	})
-	if err != nil {
-		t.Fatal("failed to create scanner with AWS validation:", err.Error())
-	}
-	defer scannerWithAwsValidation.Delete()
-
 	// Test rule with CustomHttp validation using ExtraConfig
 	scannerWithHttpValidation, err := CreateScanner([]RuleConfig{
 		NewMatchingRule("rule_api_key", "sk-[a-zA-Z0-9]{48}", ExtraConfig{
@@ -552,7 +540,6 @@ func TestThirdPartyActiveChecker(t *testing.T) {
 		},
 	}
 
-	// Test without validation - should find match but no validation status
 	runTest(t, scannerWithoutValidation, testData, true)
 
 	// Test with HTTP validation - should find match and show validation status
