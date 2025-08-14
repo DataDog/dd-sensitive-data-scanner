@@ -540,7 +540,8 @@ func TestThirdPartyActiveChecker(t *testing.T) {
 		},
 	}
 
-	runTest(t, scannerWithoutValidation, testData, true)
+	// Test without validation - should find match but no validation status
+	runTest(t, scannerWithoutValidation, testData, false)
 
 	// Test with HTTP validation - should find match and show validation status
 	testDataHttp := map[string]testResult{
