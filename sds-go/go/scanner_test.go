@@ -362,7 +362,7 @@ func TestScanStringEvent(t *testing.T) {
 		},
 	}
 
-	runTest(t, scanner, testData)
+	runTest(t, scanner, testData, false)
 }
 
 func TestScanStringEventMultipleMutations(t *testing.T) {
@@ -405,7 +405,7 @@ func TestScanStringEventMultipleMutations(t *testing.T) {
 		},
 	}
 
-	runTest(t, scanner, testData)
+	runTest(t, scanner, testData, false)
 }
 
 func TestProximityKeywords(t *testing.T) {
@@ -442,7 +442,7 @@ func TestProximityKeywords(t *testing.T) {
 			}},
 	}
 
-	runTest(t, scanner, testData)
+	runTest(t, scanner, testData, false)
 }
 
 func TestSecondaryValidator(t *testing.T) {
@@ -486,7 +486,7 @@ func TestSecondaryValidator(t *testing.T) {
 			},
 		},
 	}
-	runTest(t, scannerWithoutChecksum, testData)
+	runTest(t, scannerWithoutChecksum, testData, false)
 
 	testData = map[string]testResult{
 		"4556997807150071 4111 1111 1111 1111": {
@@ -501,7 +501,64 @@ func TestSecondaryValidator(t *testing.T) {
 			}},
 		},
 	}
-	runTest(t, scannerWithChecksum, testData)
+	runTest(t, scannerWithChecksum, testData, false)
+}
+
+func TestThirdPartyActiveChecker(t *testing.T) {
+	// Test rule without third party validation
+	scannerWithoutValidation, err := CreateScanner([]RuleConfig{
+		NewMatchingRule("rule_aws_key", "AKIA[0-9A-Z]{16}", ExtraConfig{}),
+	})
+	if err != nil {
+		t.Fatal("failed to create scanner without validation:", err.Error())
+	}
+	defer scannerWithoutValidation.Delete()
+
+	// Test rule with CustomHttp validation using ExtraConfig
+	scannerWithHttpValidation, err := CreateScanner([]RuleConfig{
+		NewMatchingRule("rule_api_key", "sk-[a-zA-Z0-9]{48}", ExtraConfig{
+			ThirdPartyActiveChecker: NewCustomHttpValidation("https://api.example.com/validate"),
+		}),
+	})
+	if err != nil {
+		t.Fatal("failed to create scanner with HTTP validation:", err.Error())
+	}
+	defer scannerWithHttpValidation.Delete()
+
+	// Test data with AWS key that should match
+	testData := map[string]testResult{
+		"AKIAIOSFODNN7EXAMPLE": {
+			mutated: false,
+			str:     "AKIAIOSFODNN7EXAMPLE",
+			rules: []RuleMatch{{
+				RuleIdx:           0,
+				StartIndex:        0,
+				ReplacementType:   ReplacementTypeNone,
+				EndIndexExclusive: 20,
+				ShiftOffset:       0,
+			}},
+		},
+	}
+
+	// Test without validation - should find match but no validation status
+	runTest(t, scannerWithoutValidation, testData, false)
+
+	// Test with HTTP validation - should find match and show validation status
+	testDataHttp := map[string]testResult{
+		"sk-1234567890abcdef1234567890abcdef12345678901234567890": {
+			mutated: false,
+			str:     "sk-1234567890abcdef1234567890abcdef12345678901234567890",
+			rules: []RuleMatch{{
+				RuleIdx:           0,
+				StartIndex:        0,
+				ReplacementType:   ReplacementTypeNone,
+				EndIndexExclusive: 51,
+				ShiftOffset:       0,
+				MatchStatus:       MatchStatus("Error(Error making HTTP request: error sending request for url (https://api.example.com/validate))"), // Full error message from HTTP validation
+			}},
+		},
+	}
+	runTest(t, scannerWithHttpValidation, testDataHttp, true)
 }
 
 func TestPartialRedactStart(t *testing.T) {
@@ -537,7 +594,7 @@ func TestPartialRedactStart(t *testing.T) {
 		},
 	}
 
-	runTest(t, scanner, testData)
+	runTest(t, scanner, testData, false)
 }
 
 func TestPartialRedactEnd(t *testing.T) {
@@ -573,7 +630,7 @@ func TestPartialRedactEnd(t *testing.T) {
 		},
 	}
 
-	runTest(t, scanner, testData)
+	runTest(t, scanner, testData, false)
 }
 
 func TestExclude(t *testing.T) {
@@ -622,7 +679,7 @@ func TestExclude(t *testing.T) {
 		},
 	}
 
-	runTest(t, scanner, testData)
+	runTest(t, scanner, testData, false)
 }
 
 func TestIncludeExclude(t *testing.T) {
@@ -666,7 +723,7 @@ func TestIncludeExclude(t *testing.T) {
 		},
 	}
 
-	runTest(t, scanner, testData)
+	runTest(t, scanner, testData, false)
 }
 
 func runTestMap(t *testing.T, scanner *Scanner, testData map[string]mapTestResult) {
@@ -701,9 +758,9 @@ func runTestMap(t *testing.T, scanner *Scanner, testData map[string]mapTestResul
 	}
 }
 
-func runTest(t *testing.T, scanner *Scanner, testData map[string]testResult) {
+func runTest(t *testing.T, scanner *Scanner, testData map[string]testResult, withThirdPartyActiveChecking bool) {
 	for event, expected := range testData {
-		result, err := scanner.Scan([]byte(event))
+		result, err := scanner.ScanWithValidation([]byte(event), withThirdPartyActiveChecking)
 		if err != nil {
 			t.Fatal("failed to scan the event:", err.Error())
 		}
@@ -750,4 +807,49 @@ func sortRulesMatch(left, right RuleMatch) bool {
 	}
 	// TODO(https://datadoghq.atlassian.net/browse/SDS-301): implement replacement type
 	return false
+}
+
+// Helper functions to create validation types
+func NewAwsSecretValidation() ThirdPartyActiveChecker {
+	return ThirdPartyActiveChecker{
+		Type: "Aws",
+		Config: ThirdPartyActiveCheckerConfig{
+			ThirdPartyActiveCheckerConfigAws: &ThirdPartyActiveCheckerConfigAws{
+				Kind:           "AwsSecret",
+				AwsStsEndpoint: "https://sts.amazonaws.com",
+				Timeout:        Duration{Seconds: 3, Nanos: 0},
+			},
+		},
+	}
+}
+
+func NewAwsIdValidation() ThirdPartyActiveChecker {
+	return ThirdPartyActiveChecker{
+		Type: "Aws",
+		Config: ThirdPartyActiveCheckerConfig{
+			ThirdPartyActiveCheckerConfigAws: &ThirdPartyActiveCheckerConfigAws{
+				Kind: "AwsId",
+			},
+		},
+	}
+}
+
+func NewCustomHttpValidation(endpoint string) ThirdPartyActiveChecker {
+	return ThirdPartyActiveChecker{
+		Type: "CustomHttp",
+		Config: ThirdPartyActiveCheckerConfig{
+			ThirdPartyActiveCheckerConfigHttp: &ThirdPartyActiveCheckerConfigHttp{
+				Endpoint:      endpoint,
+				Method:        "GET",
+				RequestHeader: map[string]string{}, // Required field, even if empty
+				Timeout:       3,
+				ValidHttpStatusCodes: []StatusCodeRange{
+					{Start: 200, End: 300},
+				},
+				InvalidHttpStatusCodes: []StatusCodeRange{
+					{Start: 400, End: 500},
+				},
+			},
+		},
+	}
 }

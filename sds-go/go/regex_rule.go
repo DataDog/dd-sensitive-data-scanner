@@ -13,11 +13,61 @@ import (
 )
 
 type RegexRuleConfig struct {
-	Id                 string                   `json:"id"`
-	Pattern            string                   `json:"pattern"`
-	MatchAction        MatchAction              `json:"match_action"`
-	ProximityKeywords  *ProximityKeywordsConfig `json:"proximity_keywords,omitempty"`
-	SecondaryValidator SecondaryValidator       `json:"validator,omitempty"`
+	Id                      string                   `json:"id"`
+	Pattern                 string                   `json:"pattern"`
+	MatchAction             MatchAction              `json:"match_action"`
+	ProximityKeywords       *ProximityKeywordsConfig `json:"proximity_keywords,omitempty"`
+	SecondaryValidator      SecondaryValidator       `json:"validator,omitempty"`
+	ThirdPartyActiveChecker ThirdPartyActiveChecker  `json:"third_party_active_checker,omitempty"`
+}
+
+// ThirdPartyActiveChecker is used to validate if a given match is still active or not. It applies well to tokens that have an expiration date for instance.
+type ThirdPartyActiveChecker struct {
+	Type   string                        `json:"type"`
+	Config ThirdPartyActiveCheckerConfig `json:"config"`
+}
+
+type ThirdPartyActiveCheckerConfig struct {
+	*ThirdPartyActiveCheckerConfigAws
+	*ThirdPartyActiveCheckerConfigHttp
+}
+
+type Duration struct {
+	Seconds uint64 `json:"secs"`
+	Nanos   uint64 `json:"nanos"`
+}
+
+type ThirdPartyActiveCheckerConfigAws struct {
+	Kind           string   `json:"kind"`
+	AwsStsEndpoint string   `json:"aws_sts_endpoint"`
+	Timeout        Duration `json:"timeout"`
+}
+
+type StatusCodeRange struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
+type ThirdPartyActiveCheckerConfigHttp struct {
+	Endpoint               string            `json:"endpoint"`
+	Hosts                  []string          `json:"hosts,omitempty"`
+	Method                 string            `json:"http_method"`
+	RequestHeader          map[string]string `json:"request_headers"`
+	ValidHttpStatusCodes   []StatusCodeRange `json:"valid_http_status_code"`
+	InvalidHttpStatusCodes []StatusCodeRange `json:"invalid_http_status_code"`
+	Timeout                int               `json:"timeout_seconds"`
+}
+
+// MarshalJSON implements custom JSON marshaling to handle empty validation types
+func (t ThirdPartyActiveChecker) MarshalJSON() ([]byte, error) {
+	// If Type is empty, marshal as null to omit the field
+	if t.Type == "" {
+		return []byte("null"), nil
+	}
+
+	// Otherwise, marshal normally
+	type Alias ThirdPartyActiveChecker
+	return json.Marshal((Alias)(t))
 }
 
 type MatchActionType string
@@ -52,8 +102,9 @@ const (
 
 // ExtraConfig is used to provide more configuration while creating the rules.
 type ExtraConfig struct {
-	ProximityKeywords  *ProximityKeywordsConfig
-	SecondaryValidator SecondaryValidator
+	ProximityKeywords       *ProximityKeywordsConfig
+	SecondaryValidator      SecondaryValidator
+	ThirdPartyActiveChecker ThirdPartyActiveChecker
 }
 
 // CreateProximityKeywordsConfig creates a ProximityKeywordsConfig.
@@ -120,8 +171,9 @@ func NewMatchingRule(id string, pattern string, extraConfig ExtraConfig) RegexRu
 		MatchAction: MatchAction{
 			Type: MatchActionNone,
 		},
-		ProximityKeywords:  extraConfig.ProximityKeywords,
-		SecondaryValidator: extraConfig.SecondaryValidator,
+		ProximityKeywords:       extraConfig.ProximityKeywords,
+		SecondaryValidator:      extraConfig.SecondaryValidator,
+		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
 	}
 }
 
@@ -151,8 +203,9 @@ func NewRedactingRule(id string, pattern string, redactionValue string, extraCon
 			Type:           MatchActionRedact,
 			RedactionValue: redactionValue,
 		},
-		ProximityKeywords:  extraConfig.ProximityKeywords,
-		SecondaryValidator: extraConfig.SecondaryValidator,
+		ProximityKeywords:       extraConfig.ProximityKeywords,
+		SecondaryValidator:      extraConfig.SecondaryValidator,
+		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
 	}
 }
 
@@ -164,8 +217,9 @@ func NewHashRule(id string, pattern string, extraConfig ExtraConfig) RegexRuleCo
 		MatchAction: MatchAction{
 			Type: MatchActionHash,
 		},
-		ProximityKeywords:  extraConfig.ProximityKeywords,
-		SecondaryValidator: extraConfig.SecondaryValidator,
+		ProximityKeywords:       extraConfig.ProximityKeywords,
+		SecondaryValidator:      extraConfig.SecondaryValidator,
+		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
 	}
 }
 
@@ -179,8 +233,9 @@ func NewPartialRedactRule(id string, pattern string, characterCount uint32, dire
 			CharacterCount: characterCount,
 			Direction:      direction,
 		},
-		ProximityKeywords:  extraConfig.ProximityKeywords,
-		SecondaryValidator: extraConfig.SecondaryValidator,
+		ProximityKeywords:       extraConfig.ProximityKeywords,
+		SecondaryValidator:      extraConfig.SecondaryValidator,
+		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
 	}
 }
 
