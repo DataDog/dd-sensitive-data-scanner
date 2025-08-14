@@ -865,9 +865,3 @@ func NewCustomHttpValidation(endpoint string) ThirdPartyActiveChecker {
 		},
 	}
 }
-
-// For backward compatibility, keep the old constants but make them return proper structs
-var (
-	MatchValidationTypeAws        = NewAwsIdValidation()
-	MatchValidationTypeCustomHttp = NewCustomHttpValidation("https://api.example.com/validate")
-)
