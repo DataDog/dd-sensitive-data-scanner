@@ -21,7 +21,7 @@ mod iban_checker;
 mod irish_pps_checksum;
 mod iso_7064_checksum;
 mod italian_national_id_checksum;
-mod jwt_claims_checker;
+pub mod jwt_claims_checker;
 mod jwt_expiration_checker;
 mod latvia_national_id_checksum;
 mod lithuanian_personal_identification_number_checksum;
@@ -66,8 +66,8 @@ pub use crate::secondary_validation::hungarian_tin_checksum::HungarianTinChecksu
 pub use crate::secondary_validation::iban_checker::IbanChecker;
 pub use crate::secondary_validation::irish_pps_checksum::IrishPpsChecksum;
 pub use crate::secondary_validation::iso_7064_checksum::{
-    Mod11_10checksum, Mod11_2checksum, Mod1271_36Checksum, Mod27_26checksum, Mod37_2checksum,
-    Mod37_36checksum, Mod661_26checksum, Mod97_10checksum,
+    Mod11_2checksum, Mod11_10checksum, Mod27_26checksum, Mod37_2checksum, Mod37_36checksum,
+    Mod97_10checksum, Mod661_26checksum, Mod1271_36Checksum,
 };
 pub use crate::secondary_validation::italian_national_id_checksum::ItalianNationalIdChecksum;
 pub use crate::secondary_validation::jwt_claims_checker::JwtClaimsChecker;

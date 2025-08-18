@@ -1,9 +1,26 @@
-use crate::scanner::regex_rule::config::{ClaimRequirement, JwtClaimsCheckerConfig};
 use crate::secondary_validation::Validator;
 use ahash::AHashMap;
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "type", content = "config")]
+pub enum ClaimRequirement {
+    /// Just check that the claim exists
+    Present,
+    /// Check that the claim exists and has an exact value
+    ExactValue(String),
+    /// Check that the claim exists and matches a regex pattern
+    RegexMatch(String),
+}
+
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+pub struct JwtClaimsCheckerConfig {
+    #[serde(default)]
+    pub required_claims: std::collections::HashMap<String, ClaimRequirement>,
+}
 
 pub struct JwtClaimsChecker {
     pub required_claims: Vec<(String, ClaimRequirement)>,
@@ -109,7 +126,8 @@ fn validate_claim_requirement(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+    use crate::secondary_validation::jwt_claims_checker::ClaimRequirement::{Present, RegexMatch};
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use std::collections::HashMap;
 
     fn generate_jwt_with_claims(claims: &str) -> String {
@@ -279,5 +297,31 @@ mod tests {
         let config = JwtClaimsCheckerConfig::default();
         let checker = JwtClaimsChecker::new(config);
         assert!(!checker.is_valid_match("header.payload")); // Missing signature
+    }
+
+    #[test]
+    fn test_deserialize_config_present() {
+        assert_eq!(
+            serde_json::from_str::<JwtClaimsCheckerConfig>(
+                r#"{"required_claims": {"a": {"type": "Present"}}}"#
+            )
+            .unwrap(),
+            JwtClaimsCheckerConfig {
+                required_claims: [("a".to_owned(), Present)].into()
+            }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_config_regex() {
+        assert_eq!(
+            serde_json::from_str::<JwtClaimsCheckerConfig>(
+                r#"{"required_claims": {"a": {"type": "RegexMatch", "config": "myregex"}}}"#
+            )
+            .unwrap(),
+            JwtClaimsCheckerConfig {
+                required_claims: [("a".to_owned(), RegexMatch("myregex".to_owned()))].into()
+            }
+        );
     }
 }
