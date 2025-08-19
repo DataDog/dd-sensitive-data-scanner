@@ -17,18 +17,18 @@ pub enum ClaimRequirement {
 }
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
-pub struct JwtClaimsCheckerConfig {
+pub struct JwtClaimsValidatorConfig {
     #[serde(default)]
     pub required_claims: std::collections::HashMap<String, ClaimRequirement>,
 }
 
-pub struct JwtClaimsChecker {
+pub struct JwtClaimsValidator {
     pub required_claims: Vec<(String, ClaimRequirement)>,
     patterns: AHashMap<String, Regex>,
 }
 
-impl JwtClaimsChecker {
-    pub fn new(config: JwtClaimsCheckerConfig) -> Self {
+impl JwtClaimsValidator {
+    pub fn new(config: JwtClaimsValidatorConfig) -> Self {
         let mut patterns = AHashMap::new();
         for (claim_name, requirement) in &config.required_claims {
             if let ClaimRequirement::RegexMatch(pattern) = requirement {
@@ -42,7 +42,7 @@ impl JwtClaimsChecker {
     }
 }
 
-impl Validator for JwtClaimsChecker {
+impl Validator for JwtClaimsValidator {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         if let Some((_, payload)) = decode_segments(regex_match) {
             validate_required_claims(&payload, &self.required_claims, &self.patterns)
@@ -126,7 +126,7 @@ fn validate_claim_requirement(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secondary_validation::jwt_claims_checker::ClaimRequirement::{Present, RegexMatch};
+    use crate::secondary_validation::jwt_claims_validator::ClaimRequirement::{Present, RegexMatch};
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use std::collections::HashMap;
 
@@ -159,8 +159,8 @@ mod tests {
     fn test_valid_jwt_with_claims_no_requirements() {
         let jwt =
             generate_jwt_with_claims(r#"{"sub":"1234567890","name":"John Doe","iat":1516239022}"#);
-        let config = JwtClaimsCheckerConfig::default();
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig::default();
+        let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
 
@@ -172,8 +172,8 @@ mod tests {
         required_claims.insert("sub".to_string(), ClaimRequirement::Present);
         required_claims.insert("name".to_string(), ClaimRequirement::Present);
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
 
@@ -192,8 +192,8 @@ mod tests {
             ClaimRequirement::ExactValue("my-service".to_string()),
         );
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
 
@@ -211,8 +211,8 @@ mod tests {
             ClaimRequirement::RegexMatch(r"^[^@]+@[^@]+\.[^@]+$".to_string()),
         );
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
 
@@ -223,8 +223,8 @@ mod tests {
         required_claims.insert("sub".to_string(), ClaimRequirement::Present);
         required_claims.insert("aud".to_string(), ClaimRequirement::Present); // aud is missing
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
     }
 
@@ -237,8 +237,8 @@ mod tests {
             ClaimRequirement::ExactValue("my-service".to_string()),
         );
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
     }
 
@@ -255,8 +255,8 @@ mod tests {
             ClaimRequirement::RegexMatch(r"^[^@]+@[^@]+\.[^@]+$".to_string()),
         );
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
     }
 
@@ -280,33 +280,33 @@ mod tests {
             ClaimRequirement::RegexMatch(r"^[^@]+@[^@]+\.[^@]+$".to_string()),
         );
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
 
     #[test]
     fn test_invalid_jwt_malformed() {
-        let config = JwtClaimsCheckerConfig::default();
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig::default();
+        let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match("invalid_jwt"));
     }
 
     #[test]
     fn test_invalid_jwt_wrong_segments() {
-        let config = JwtClaimsCheckerConfig::default();
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig::default();
+        let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match("header.payload")); // Missing signature
     }
 
     #[test]
     fn test_deserialize_config_present() {
         assert_eq!(
-            serde_json::from_str::<JwtClaimsCheckerConfig>(
+            serde_json::from_str::<JwtClaimsValidatorConfig>(
                 r#"{"required_claims": {"a": {"type": "Present"}}}"#
             )
             .unwrap(),
-            JwtClaimsCheckerConfig {
+            JwtClaimsValidatorConfig {
                 required_claims: [("a".to_owned(), Present)].into()
             }
         );
@@ -315,11 +315,11 @@ mod tests {
     #[test]
     fn test_deserialize_config_regex() {
         assert_eq!(
-            serde_json::from_str::<JwtClaimsCheckerConfig>(
+            serde_json::from_str::<JwtClaimsValidatorConfig>(
                 r#"{"required_claims": {"a": {"type": "RegexMatch", "config": "myregex"}}}"#
             )
             .unwrap(),
-            JwtClaimsCheckerConfig {
+            JwtClaimsValidatorConfig {
                 required_claims: [("a".to_owned(), RegexMatch("myregex".to_owned()))].into()
             }
         );

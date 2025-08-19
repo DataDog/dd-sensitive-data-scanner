@@ -3,7 +3,7 @@ use crate::scanner::config::RuleConfig;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::regex_store::get_memoized_regex;
-use crate::secondary_validation::jwt_claims_checker::JwtClaimsCheckerConfig;
+use crate::secondary_validation::jwt_claims_validator::JwtClaimsValidatorConfig;
 use crate::validation::validate_and_create_regex;
 use crate::{CompiledRule, CreateScannerError, Labels};
 use serde::{Deserialize, Serialize};
@@ -156,7 +156,7 @@ pub enum SecondaryValidator {
     IbanChecker,
     IrishPpsChecksum,
     ItalianNationalIdChecksum,
-    JwtClaimsChecker { config: JwtClaimsCheckerConfig },
+    JwtClaimsValidator { config: JwtClaimsValidatorConfig },
     JwtExpirationChecker,
     LatviaNationalIdChecksum,
     LithuanianPersonalIdentificationNumberChecksum,
@@ -321,7 +321,7 @@ mod test {
     //         ClaimRequirement::RegexMatch(r"^test.*".to_string()),
     //     );
     //
-    //     let config = JwtClaimsCheckerConfig { required_claims };
+    //     let config = JwtClaimsValidatorConfig { required_claims };
     //
     //     // Serialize multiple times to ensure stable order
     //     let serialized1 = serde_json::to_string(&config).unwrap();
