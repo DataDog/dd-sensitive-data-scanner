@@ -19,7 +19,7 @@ pub enum ClaimRequirement {
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct JwtClaimsValidatorConfig {
     #[serde(default)]
-    pub required_claims: std::collections::HashMap<String, ClaimRequirement>,
+    pub required_claims: std::collections::BTreeMap<String, ClaimRequirement>,
 }
 
 pub struct JwtClaimsValidator {
@@ -128,7 +128,7 @@ mod tests {
     use super::*;
     use crate::secondary_validation::jwt_claims_validator::ClaimRequirement::{Present, RegexMatch};
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     fn generate_jwt_with_claims(claims: &str) -> String {
         let header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"; // {"alg":"HS256","typ":"JWT"}
@@ -168,7 +168,7 @@ mod tests {
     fn test_valid_jwt_with_required_claims_present() {
         let jwt =
             generate_jwt_with_claims(r#"{"sub":"1234567890","name":"John Doe","iat":1516239022}"#);
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert("sub".to_string(), ClaimRequirement::Present);
         required_claims.insert("name".to_string(), ClaimRequirement::Present);
 
@@ -182,7 +182,7 @@ mod tests {
         let jwt = generate_jwt_with_claims(
             r#"{"sub":"1234567890","issuer":"my-service","role":"admin"}"#,
         );
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert(
             "sub".to_string(),
             ClaimRequirement::ExactValue("1234567890".to_string()),
@@ -201,7 +201,7 @@ mod tests {
     fn test_valid_jwt_with_regex_match() {
         let jwt =
             generate_jwt_with_claims(r#"{"sub":"user-1234567890","email":"john.doe@example.com"}"#);
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert(
             "sub".to_string(),
             ClaimRequirement::RegexMatch(r"^user-\d+$".to_string()),
@@ -219,7 +219,7 @@ mod tests {
     #[test]
     fn test_invalid_jwt_missing_required_claims() {
         let jwt = generate_jwt_with_claims(r#"{"sub":"1234567890","name":"John Doe"}"#);
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert("sub".to_string(), ClaimRequirement::Present);
         required_claims.insert("aud".to_string(), ClaimRequirement::Present); // aud is missing
 
@@ -231,7 +231,7 @@ mod tests {
     #[test]
     fn test_invalid_jwt_wrong_exact_value() {
         let jwt = generate_jwt_with_claims(r#"{"sub":"1234567890","issuer":"wrong-service"}"#);
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert(
             "issuer".to_string(),
             ClaimRequirement::ExactValue("my-service".to_string()),
@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn test_invalid_jwt_regex_no_match() {
         let jwt = generate_jwt_with_claims(r#"{"sub":"invalid-user","email":"invalid-email"}"#);
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert(
             "sub".to_string(),
             ClaimRequirement::RegexMatch(r"^user-\d+$".to_string()),
@@ -265,7 +265,7 @@ mod tests {
         let jwt = generate_jwt_with_claims(
             r#"{"sub":"user-123","issuer":"my-service","role":"admin","email":"user@example.com"}"#,
         );
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert(
             "sub".to_string(),
             ClaimRequirement::RegexMatch(r"^user-\d+$".to_string()),
