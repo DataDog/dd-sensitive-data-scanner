@@ -1,17 +1,34 @@
-use crate::scanner::regex_rule::config::{ClaimRequirement, JwtClaimsCheckerConfig};
 use crate::secondary_validation::Validator;
 use ahash::AHashMap;
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
-pub struct JwtClaimsChecker {
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "type", content = "config")]
+pub enum ClaimRequirement {
+    /// Just check that the claim exists
+    Present,
+    /// Check that the claim exists and has an exact value
+    ExactValue(String),
+    /// Check that the claim exists and matches a regex pattern
+    RegexMatch(String),
+}
+
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+pub struct JwtClaimsValidatorConfig {
+    #[serde(default)]
+    pub required_claims: std::collections::BTreeMap<String, ClaimRequirement>,
+}
+
+pub struct JwtClaimsValidator {
     pub required_claims: Vec<(String, ClaimRequirement)>,
     patterns: AHashMap<String, Regex>,
 }
 
-impl JwtClaimsChecker {
-    pub fn new(config: JwtClaimsCheckerConfig) -> Self {
+impl JwtClaimsValidator {
+    pub fn new(config: JwtClaimsValidatorConfig) -> Self {
         let mut patterns = AHashMap::new();
         for (claim_name, requirement) in &config.required_claims {
             if let ClaimRequirement::RegexMatch(pattern) = requirement {
@@ -25,7 +42,7 @@ impl JwtClaimsChecker {
     }
 }
 
-impl Validator for JwtClaimsChecker {
+impl Validator for JwtClaimsValidator {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         if let Some((_, payload)) = decode_segments(regex_match) {
             validate_required_claims(&payload, &self.required_claims, &self.patterns)
@@ -109,8 +126,9 @@ fn validate_claim_requirement(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-    use std::collections::HashMap;
+    use crate::secondary_validation::jwt_claims_validator::ClaimRequirement::{Present, RegexMatch};
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+    use std::collections::BTreeMap;
 
     fn generate_jwt_with_claims(claims: &str) -> String {
         let header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"; // {"alg":"HS256","typ":"JWT"}
@@ -141,8 +159,8 @@ mod tests {
     fn test_valid_jwt_with_claims_no_requirements() {
         let jwt =
             generate_jwt_with_claims(r#"{"sub":"1234567890","name":"John Doe","iat":1516239022}"#);
-        let config = JwtClaimsCheckerConfig::default();
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig::default();
+        let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
 
@@ -150,12 +168,12 @@ mod tests {
     fn test_valid_jwt_with_required_claims_present() {
         let jwt =
             generate_jwt_with_claims(r#"{"sub":"1234567890","name":"John Doe","iat":1516239022}"#);
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert("sub".to_string(), ClaimRequirement::Present);
         required_claims.insert("name".to_string(), ClaimRequirement::Present);
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
 
@@ -164,7 +182,7 @@ mod tests {
         let jwt = generate_jwt_with_claims(
             r#"{"sub":"1234567890","issuer":"my-service","role":"admin"}"#,
         );
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert(
             "sub".to_string(),
             ClaimRequirement::ExactValue("1234567890".to_string()),
@@ -174,8 +192,8 @@ mod tests {
             ClaimRequirement::ExactValue("my-service".to_string()),
         );
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
 
@@ -183,7 +201,7 @@ mod tests {
     fn test_valid_jwt_with_regex_match() {
         let jwt =
             generate_jwt_with_claims(r#"{"sub":"user-1234567890","email":"john.doe@example.com"}"#);
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert(
             "sub".to_string(),
             ClaimRequirement::RegexMatch(r"^user-\d+$".to_string()),
@@ -193,41 +211,41 @@ mod tests {
             ClaimRequirement::RegexMatch(r"^[^@]+@[^@]+\.[^@]+$".to_string()),
         );
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
 
     #[test]
     fn test_invalid_jwt_missing_required_claims() {
         let jwt = generate_jwt_with_claims(r#"{"sub":"1234567890","name":"John Doe"}"#);
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert("sub".to_string(), ClaimRequirement::Present);
         required_claims.insert("aud".to_string(), ClaimRequirement::Present); // aud is missing
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
     }
 
     #[test]
     fn test_invalid_jwt_wrong_exact_value() {
         let jwt = generate_jwt_with_claims(r#"{"sub":"1234567890","issuer":"wrong-service"}"#);
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert(
             "issuer".to_string(),
             ClaimRequirement::ExactValue("my-service".to_string()),
         );
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
     }
 
     #[test]
     fn test_invalid_jwt_regex_no_match() {
         let jwt = generate_jwt_with_claims(r#"{"sub":"invalid-user","email":"invalid-email"}"#);
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert(
             "sub".to_string(),
             ClaimRequirement::RegexMatch(r"^user-\d+$".to_string()),
@@ -237,8 +255,8 @@ mod tests {
             ClaimRequirement::RegexMatch(r"^[^@]+@[^@]+\.[^@]+$".to_string()),
         );
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
     }
 
@@ -247,7 +265,7 @@ mod tests {
         let jwt = generate_jwt_with_claims(
             r#"{"sub":"user-123","issuer":"my-service","role":"admin","email":"user@example.com"}"#,
         );
-        let mut required_claims = HashMap::new();
+        let mut required_claims = BTreeMap::new();
         required_claims.insert(
             "sub".to_string(),
             ClaimRequirement::RegexMatch(r"^user-\d+$".to_string()),
@@ -262,22 +280,48 @@ mod tests {
             ClaimRequirement::RegexMatch(r"^[^@]+@[^@]+\.[^@]+$".to_string()),
         );
 
-        let config = JwtClaimsCheckerConfig { required_claims };
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
 
     #[test]
     fn test_invalid_jwt_malformed() {
-        let config = JwtClaimsCheckerConfig::default();
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig::default();
+        let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match("invalid_jwt"));
     }
 
     #[test]
     fn test_invalid_jwt_wrong_segments() {
-        let config = JwtClaimsCheckerConfig::default();
-        let checker = JwtClaimsChecker::new(config);
+        let config = JwtClaimsValidatorConfig::default();
+        let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match("header.payload")); // Missing signature
+    }
+
+    #[test]
+    fn test_deserialize_config_present() {
+        assert_eq!(
+            serde_json::from_str::<JwtClaimsValidatorConfig>(
+                r#"{"required_claims": {"a": {"type": "Present"}}}"#
+            )
+            .unwrap(),
+            JwtClaimsValidatorConfig {
+                required_claims: [("a".to_owned(), Present)].into()
+            }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_config_regex() {
+        assert_eq!(
+            serde_json::from_str::<JwtClaimsValidatorConfig>(
+                r#"{"required_claims": {"a": {"type": "RegexMatch", "config": "myregex"}}}"#
+            )
+            .unwrap(),
+            JwtClaimsValidatorConfig {
+                required_claims: [("a".to_owned(), RegexMatch("myregex".to_owned()))].into()
+            }
+        );
     }
 }

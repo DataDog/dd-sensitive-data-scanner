@@ -3,11 +3,12 @@ use crate::scanner::config::RuleConfig;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::regex_store::get_memoized_regex;
+use crate::secondary_validation::jwt_claims_validator::JwtClaimsValidatorConfig;
 use crate::validation::validate_and_create_regex;
 use crate::{CompiledRule, CreateScannerError, Labels};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use serde_with::DefaultOnNull;
+use serde_with::serde_as;
 use std::sync::Arc;
 use strum::{AsRefStr, EnumIter};
 
@@ -129,24 +130,6 @@ pub struct ProximityKeywordsConfig {
     pub excluded_keywords: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub enum ClaimRequirement {
-    /// Just check that the claim exists
-    Present,
-    /// Check that the claim exists and has an exact value
-    ExactValue(String),
-    /// Check that the claim exists and matches a regex pattern
-    RegexMatch(String),
-}
-
-#[serde_as]
-#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
-pub struct JwtClaimsCheckerConfig {
-    #[serde_as(deserialize_as = "DefaultOnNull")]
-    #[serde(default)]
-    pub required_claims: std::collections::HashMap<String, ClaimRequirement>,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumIter, AsRefStr)]
 #[serde(tag = "type")]
 pub enum SecondaryValidator {
@@ -173,7 +156,7 @@ pub enum SecondaryValidator {
     IbanChecker,
     IrishPpsChecksum,
     ItalianNationalIdChecksum,
-    JwtClaimsChecker { config: JwtClaimsCheckerConfig },
+    JwtClaimsValidator { config: JwtClaimsValidatorConfig },
     JwtExpirationChecker,
     LatviaNationalIdChecksum,
     LithuanianPersonalIdentificationNumberChecksum,
@@ -314,6 +297,41 @@ mod test {
             .collect();
         let mut sorted_validator_names = validator_names.clone();
         sorted_validator_names.sort();
-        assert_eq!(sorted_validator_names, validator_names, "Secondary validators should be sorted by alphabetical order, but it's not the case, expected order:");
+        assert_eq!(
+            sorted_validator_names, validator_names,
+            "Secondary validators should be sorted by alphabetical order, but it's not the case, expected order:"
+        );
+    }
+
+    // TODO: Why does this need to be in order? The config should either be a Vec, or drop the order requirement
+    #[test]
+    fn test_jwt_claims_validator_config_serialization_order() {
+        use crate::secondary_validation::jwt_claims_validator::ClaimRequirement;
+        use std::collections::BTreeMap;
+    
+        // Create a config with claims in non-alphabetical order
+        let mut required_claims = BTreeMap::new();
+        required_claims.insert("zzz".to_string(), ClaimRequirement::Present);
+        required_claims.insert(
+            "aaa".to_string(),
+            ClaimRequirement::ExactValue("test".to_string()),
+        );
+        required_claims.insert(
+            "mmm".to_string(),
+            ClaimRequirement::RegexMatch(r"^test.*".to_string()),
+        );
+    
+        let config = JwtClaimsValidatorConfig { required_claims };
+    
+        // Serialize multiple times to ensure stable order
+        let serialized1 = serde_json::to_string(&config).unwrap();
+        let serialized2 = serde_json::to_string(&config).unwrap();
+    
+        // Both serializations should be identical
+        assert_eq!(serialized1, serialized2, "Serialization should be stable");
+    
+        // Keys should be in alphabetical order
+        assert!(serialized1.find("aaa").unwrap() < serialized1.find("mmm").unwrap());
+        assert!(serialized1.find("mmm").unwrap() < serialized1.find("zzz").unwrap());
     }
 }

@@ -17,7 +17,7 @@ mod path;
 mod proximity_keywords;
 mod rule_match;
 mod scanner;
-mod scoped_ruleset;
+pub(crate) mod scoped_ruleset;
 mod secondary_validation;
 mod simple_event;
 mod stats;
