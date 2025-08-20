@@ -8,6 +8,18 @@ pub enum MatchStatus {
     Valid,
 }
 
+impl std::fmt::Display for MatchStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MatchStatus::NotChecked => write!(f, "NotChecked"),
+            MatchStatus::NotAvailable => write!(f, "NotAvailable"),
+            MatchStatus::Invalid => write!(f, "Invalid"),
+            MatchStatus::Error(msg) => write!(f, "Error({})", msg),
+            MatchStatus::Valid => write!(f, "Valid"),
+        }
+    }
+}
+
 impl MatchStatus {
     // Order matters as we want to update the match_status only if the new match_status has higher priority.
     // (in case of split key where we try different combinations of id and secret (aws use-case))

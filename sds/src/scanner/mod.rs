@@ -7,7 +7,7 @@ use crate::match_validation::{
     match_validator::MatchValidator,
 };
 
-use error::{MatchValidationError, MatchValidatorCreationError};
+use error::MatchValidatorCreationError;
 
 use self::metrics::ScannerMetrics;
 use crate::match_validation::match_validator::RAYON_THREAD_POOL;
@@ -16,7 +16,7 @@ use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scanner::config::RuleConfig;
 use crate::scanner::internal_rule_match_set::InternalRuleMatchSet;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
-use crate::scanner::regex_rule::{access_regex_caches, RegexCaches};
+use crate::scanner::regex_rule::{RegexCaches, access_regex_caches};
 use crate::scanner::scope::Scope;
 pub use crate::scanner::shared_data::SharedData;
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
@@ -204,11 +204,11 @@ impl StringMatchesCtx<'_> {
     pub fn process_async(
         &self,
         func: impl for<'a> FnOnce(
-                &'a mut AsyncStringMatchesCtx,
-            )
-                -> Pin<Box<dyn Future<Output = Result<(), ScannerError>> + Send + 'a>>
-            + Send
-            + 'static,
+            &'a mut AsyncStringMatchesCtx,
+        )
+            -> Pin<Box<dyn Future<Output = Result<(), ScannerError>> + Send + 'a>>
+        + Send
+        + 'static,
     ) -> RuleResult {
         let rule_index = self.rule_index;
 
@@ -335,6 +335,9 @@ pub struct ScanOptions {
     pub blocked_rules_idx: Vec<usize>,
     // The wildcarded_indices parameter is a map containing a list of tuples of (start, end) indices that should be treated as wildcards (for the message key only) per path.
     pub wildcarded_indices: AHashMap<Path<'static>, Vec<(usize, usize)>>,
+    // Whether to validate matches using third-party validators (e.g., checksum validation for credit cards).
+    // When enabled, the scanner automatically collects match content needed for validation.
+    pub validate_matches: bool,
 }
 
 impl Default for ScanOptions {
@@ -342,6 +345,7 @@ impl Default for ScanOptions {
         Self {
             blocked_rules_idx: vec![],
             wildcarded_indices: AHashMap::new(),
+            validate_matches: false,
         }
     }
 }
@@ -349,6 +353,7 @@ impl Default for ScanOptions {
 pub struct ScanOptionBuilder {
     blocked_rules_idx: Vec<usize>,
     wildcarded_indices: AHashMap<Path<'static>, Vec<(usize, usize)>>,
+    validate_matches: bool,
 }
 
 impl ScanOptionBuilder {
@@ -356,6 +361,7 @@ impl ScanOptionBuilder {
         Self {
             blocked_rules_idx: vec![],
             wildcarded_indices: AHashMap::new(),
+            validate_matches: false,
         }
     }
 
@@ -372,10 +378,16 @@ impl ScanOptionBuilder {
         self
     }
 
+    pub fn with_validate_matching(mut self, validate_matches: bool) -> Self {
+        self.validate_matches = validate_matches;
+        self
+    }
+
     pub fn build(self) -> ScanOptions {
         ScanOptions {
             blocked_rules_idx: self.blocked_rules_idx,
             wildcarded_indices: self.wildcarded_indices,
+            validate_matches: self.validate_matches,
         }
     }
 }
@@ -399,8 +411,21 @@ impl Scanner {
     // This function scans the given event with the rules configured in the scanner.
     // The event parameter is a mutable reference to the event that should be scanned (implemented the Event trait).
     // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
+    // This version uses default scan options (no validation, no blocked rules, no wildcarded indices).
     pub fn scan<E: Event>(&self, event: &mut E) -> Result<Vec<RuleMatch>, ScannerError> {
         self.scan_with_options(event, ScanOptions::default())
+    }
+
+    // This function scans the given event with the rules configured in the scanner.
+    // The event parameter is a mutable reference to the event that should be scanned (implemented the Event trait).
+    // The options parameter allows customizing the scan behavior (validation, blocked rules, etc.).
+    // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
+    pub fn scan_with_options<E: Event>(
+        &self,
+        event: &mut E,
+        options: ScanOptions,
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
+        block_on(self.internal_scan_with_metrics(event, options))
     }
 
     // This function scans the given event with the rules configured in the scanner.
@@ -412,14 +437,6 @@ impl Scanner {
     ) -> Result<Vec<RuleMatch>, ScannerError> {
         self.scan_async_with_options(event, ScanOptions::default())
             .await
-    }
-
-    pub fn scan_with_options<E: Event>(
-        &self,
-        event: &mut E,
-        options: ScanOptions,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
-        block_on(self.internal_scan_with_metrics(event, options))
     }
 
     pub async fn scan_async_with_options<E: Event>(
@@ -477,6 +494,9 @@ impl Scanner {
         event: &mut E,
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
+        // If validation is requested, we need to collect match content even if the scanner
+        // wasn't originally configured to return matches
+        let need_match_content = self.scanner_features.return_matches || options.validate_matches;
         // All matches, after some (but not all) false-positives have been removed.
         let mut rule_matches = InternalRuleMatchSet::new();
         let mut excluded_matches = AHashSet::new();
@@ -562,22 +582,21 @@ impl Scanner {
                     &path,
                     &mut rule_matches,
                     &mut output_rule_matches,
+                    need_match_content,
                 );
 
                 will_mutate
             });
         }
 
+        if options.validate_matches {
+            self.validate_matches(&mut output_rule_matches);
+        }
+
         Ok(output_rule_matches)
     }
 
-    pub fn validate_matches(
-        &self,
-        rule_matches: &mut Vec<RuleMatch>,
-    ) -> Result<(), MatchValidationError> {
-        if !self.scanner_features.return_matches {
-            return Err(MatchValidationError::NoMatchValidationType);
-        }
+    pub fn validate_matches(&self, rule_matches: &mut Vec<RuleMatch>) {
         // Create MatchValidatorRuleMatch per match_validator_type to pass it to each match_validator
         let mut match_validator_rule_match_per_type = AHashMap::new();
 
@@ -620,7 +639,6 @@ impl Scanner {
         // Sort rule_matches by start index
         validated_rule_matches.sort_by_key(|rule_match| rule_match.start_index);
         *rule_matches = validated_rule_matches;
-        Ok(())
     }
 
     /// Apply mutations from actions, and shift indices to match the mutated values.
@@ -631,6 +649,7 @@ impl Scanner {
         path: &Path<'static>,
         rule_matches: &mut [InternalRuleMatch<E>],
         output_rule_matches: &mut Vec<RuleMatch>,
+        need_match_content: bool,
     ) {
         let mut utf8_byte_delta: isize = 0;
         let mut custom_index_delta: <E>::IndexShift = <E>::zero_shift();
@@ -642,6 +661,7 @@ impl Scanner {
                 rule_match,
                 &mut utf8_byte_delta,
                 &mut custom_index_delta,
+                need_match_content,
             ));
         }
     }
@@ -657,6 +677,7 @@ impl Scanner {
 
         // The difference between the custom index on the original string and the mutated string
         custom_index_delta: &mut <E>::IndexShift,
+        need_match_content: bool,
     ) -> RuleMatch {
         let rule = &self.rules[rule_match.rule_index];
 
@@ -666,7 +687,7 @@ impl Scanner {
 
         let mut matched_content_copy = None;
 
-        if self.scanner_features.return_matches {
+        if need_match_content {
             // This copies part of the is_mutating block but is seperate since can't mix compilation condition and code condition
             let mutated_utf8_match_start =
                 (rule_match.utf8_start as isize + *utf8_byte_delta) as usize;
