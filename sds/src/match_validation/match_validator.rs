@@ -1,5 +1,5 @@
-use crate::scanner::RootCompiledRule;
 use crate::RuleMatch;
+use crate::scanner::RootCompiledRule;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::sync::LazyLock;
 use std::vec::Vec;

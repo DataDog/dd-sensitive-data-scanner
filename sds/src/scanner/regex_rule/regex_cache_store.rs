@@ -1,5 +1,5 @@
-use crate::scanner::regex_rule::regex_store::{RegexCacheKey, SharedRegex};
 use crate::SharedPool;
+use crate::scanner::regex_rule::regex_store::{RegexCacheKey, SharedRegex};
 use lazy_static::lazy_static;
 use regex_automata::meta::Regex as MetaRegex;
 use slotmap::SecondaryMap;

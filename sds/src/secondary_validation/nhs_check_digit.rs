@@ -1,4 +1,4 @@
-use crate::secondary_validation::{get_previous_digit, Validator};
+use crate::secondary_validation::{Validator, get_previous_digit};
 
 pub struct NhsCheckDigit;
 

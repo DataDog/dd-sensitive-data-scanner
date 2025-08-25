@@ -8,14 +8,14 @@ use super::input::Input;
 use super::unicode_property_names::UNICODE_PROPERTY_NAMES;
 use crate::parser::ast::Literal;
 use crate::parser::error::ParseError;
+use nom::IResult;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_until};
 use nom::character::complete::{digit1, none_of, one_of};
 use nom::combinator::{eof, map, opt, recognize};
 use nom::error::ErrorKind;
-use nom::multi::{many0, many1, many_m_n, separated_list1};
+use nom::multi::{many_m_n, many0, many1, separated_list1};
 use nom::sequence::{delimited, tuple};
-use nom::IResult;
 use std::rc::Rc;
 use std::str::FromStr;
 
@@ -559,7 +559,7 @@ impl<'a> From<UnrecoverableError<'a>> for nom::Err<nom::error::Error<Input<'a>>>
 
 #[cfg(test)]
 mod test {
-    use crate::parser::regex_parser::{parse_regex_pattern, RECURSION_LIMIT};
+    use crate::parser::regex_parser::{RECURSION_LIMIT, parse_regex_pattern};
 
     fn generate_pattern_with_depth(depth: usize) -> String {
         "(".repeat(depth) + "x" + &")".repeat(depth)

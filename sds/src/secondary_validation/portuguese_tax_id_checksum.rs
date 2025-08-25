@@ -1,4 +1,4 @@
-use crate::secondary_validation::{get_next_digit, Validator};
+use crate::secondary_validation::{Validator, get_next_digit};
 
 /// Validates the checksum of Portuguese Tax ID numbers (NIF).
 /// See: https://pt.wikipedia.org/wiki/Número_de_identificação_fiscal

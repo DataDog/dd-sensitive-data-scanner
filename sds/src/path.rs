@@ -2,8 +2,8 @@ use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 
 use crate::proximity_keywords::{
-    should_bypass_standardize_path, standardize_path_chars, BypassStandardizePathResult,
-    UNIFIED_LINK_CHAR,
+    BypassStandardizePathResult, UNIFIED_LINK_CHAR, should_bypass_standardize_path,
+    standardize_path_chars,
 };
 use serde::{Deserialize, Serialize};
 

@@ -14,11 +14,11 @@ use crate::scanner::regex_rule::config::{
     ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator::*,
 };
 use crate::scanner::scope::Scope;
-use crate::scanner::{get_next_regex_start, CreateScannerError, Scanner};
+use crate::scanner::{CreateScannerError, Scanner, get_next_regex_start};
 use crate::validation::RegexValidationError;
 
-use crate::{simple_event::SimpleEvent, PartialRedactDirection, Path, PathSegment, RuleMatch};
 use crate::{Encoding, Utf8Encoding};
+use crate::{PartialRedactDirection, Path, PathSegment, RuleMatch, simple_event::SimpleEvent};
 
 use regex_automata::Match;
 use std::collections::BTreeMap;

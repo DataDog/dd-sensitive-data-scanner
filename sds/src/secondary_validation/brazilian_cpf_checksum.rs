@@ -1,5 +1,5 @@
-use crate::secondary_validation::get_previous_digit;
 use crate::secondary_validation::Validator;
+use crate::secondary_validation::get_previous_digit;
 
 pub struct BrazilianCpfChecksum;
 

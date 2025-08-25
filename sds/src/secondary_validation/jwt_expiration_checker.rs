@@ -1,5 +1,5 @@
 use crate::secondary_validation::Validator;
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::Utc;
 use serde_json::Value as JsonValue;
 
@@ -73,7 +73,9 @@ mod tests {
     #[test]
     fn test_decode_segments() {
         // {"alg":"HS256","typ":"JWT"}"."{"exp":1728872000}".signature
-        let result = decode_segments("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Mjg4NzIwMDB9.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c");
+        let result = decode_segments(
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Mjg4NzIwMDB9.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+        );
         assert!(result.is_some());
         let (header, payload) = result.unwrap();
         assert_eq!(

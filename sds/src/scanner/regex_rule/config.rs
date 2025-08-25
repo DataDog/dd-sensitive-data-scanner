@@ -308,7 +308,7 @@ mod test {
     fn test_jwt_claims_validator_config_serialization_order() {
         use crate::secondary_validation::jwt_claims_validator::ClaimRequirement;
         use std::collections::BTreeMap;
-    
+
         // Create a config with claims in non-alphabetical order
         let mut required_claims = BTreeMap::new();
         required_claims.insert("zzz".to_string(), ClaimRequirement::Present);
@@ -320,16 +320,16 @@ mod test {
             "mmm".to_string(),
             ClaimRequirement::RegexMatch(r"^test.*".to_string()),
         );
-    
+
         let config = JwtClaimsValidatorConfig { required_claims };
-    
+
         // Serialize multiple times to ensure stable order
         let serialized1 = serde_json::to_string(&config).unwrap();
         let serialized2 = serde_json::to_string(&config).unwrap();
-    
+
         // Both serializations should be identical
         assert_eq!(serialized1, serialized2, "Serialization should be stable");
-    
+
         // Keys should be in alphabetical order
         assert!(serialized1.find("aaa").unwrap() < serialized1.find("mmm").unwrap());
         assert!(serialized1.find("mmm").unwrap() < serialized1.find("zzz").unwrap());

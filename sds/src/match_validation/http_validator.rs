@@ -3,8 +3,8 @@ use super::{
     match_validator::MatchValidator,
 };
 use crate::match_validation::match_validator::RAYON_THREAD_POOL;
-use crate::{match_validation::config::HttpMethod, MatchStatus, RuleMatch};
-use crate::{scanner::RootCompiledRule, HttpValidatorOption};
+use crate::{HttpValidatorOption, scanner::RootCompiledRule};
+use crate::{MatchStatus, RuleMatch, match_validation::config::HttpMethod};
 use ahash::AHashMap;
 use lazy_static::lazy_static;
 use reqwest::blocking::Response;

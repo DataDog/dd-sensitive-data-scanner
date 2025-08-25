@@ -126,7 +126,9 @@ fn validate_claim_requirement(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secondary_validation::jwt_claims_validator::ClaimRequirement::{Present, RegexMatch};
+    use crate::secondary_validation::jwt_claims_validator::ClaimRequirement::{
+        Present, RegexMatch,
+    };
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use std::collections::BTreeMap;
 

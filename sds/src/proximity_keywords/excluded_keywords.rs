@@ -1,5 +1,5 @@
 use crate::proximity_keywords::{
-    prev_char_with_index, ProximityKeywordsRegex, EXCLUDED_KEYWORDS_REMOVED_CHARS,
+    EXCLUDED_KEYWORDS_REMOVED_CHARS, ProximityKeywordsRegex, prev_char_with_index,
 };
 use metrics::Counter;
 use nom::AsChar;

@@ -694,7 +694,7 @@ fn convert_flag(flag: &SdsFlag) -> RegexFlag {
 
 #[cfg(test)]
 mod test {
-    use crate::normalization::rust_regex_adapter::{convert_to_rust_regex, QUANTIFIER_LIMIT};
+    use crate::normalization::rust_regex_adapter::{QUANTIFIER_LIMIT, convert_to_rust_regex};
     use crate::parser::error::ParseError;
     use crate::parser::unicode_property_names::UNICODE_PROPERTY_NAMES;
     use regex::Regex;
@@ -873,12 +873,14 @@ mod test {
         );
 
         // range repetition (only the max needs to be tested since it must be larger than the min)
-        assert!(convert_to_rust_regex(&format!(
-            "x{{{},{}}}",
-            QUANTIFIER_LIMIT - 1,
-            QUANTIFIER_LIMIT
-        ))
-        .is_ok());
+        assert!(
+            convert_to_rust_regex(&format!(
+                "x{{{},{}}}",
+                QUANTIFIER_LIMIT - 1,
+                QUANTIFIER_LIMIT
+            ))
+            .is_ok()
+        );
         assert_eq!(
             convert_to_rust_regex(&format!(
                 "x{{{},{}}}",

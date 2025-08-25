@@ -2,12 +2,12 @@ use crate::match_action::MatchAction;
 use crate::scanner::regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig};
 use crate::scanner::scope::Scope;
 use crate::scanner::{RootRuleConfig, ScannerBuilder};
-use crate::{simple_event::SimpleEvent, Path, PathSegment};
+use crate::{Path, PathSegment, simple_event::SimpleEvent};
 use metrics::{Key, Label};
-use metrics_util::debugging::DebugValue;
-use metrics_util::debugging::DebuggingRecorder;
 use metrics_util::CompositeKey;
 use metrics_util::MetricKind::Counter;
+use metrics_util::debugging::DebugValue;
+use metrics_util::debugging::DebuggingRecorder;
 use std::collections::BTreeMap;
 
 #[test]
