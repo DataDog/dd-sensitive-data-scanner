@@ -3,7 +3,7 @@
 use core::panic::UnwindSafe;
 use dd_sds::{RootRuleConfig, RuleConfig};
 use serde::de::DeserializeOwned;
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{CStr, CString, c_char};
 use std::io::{Error, ErrorKind};
 use std::sync::{Arc, Mutex};
 

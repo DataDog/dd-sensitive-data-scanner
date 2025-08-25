@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::{encoding::Utf8Encoding, Event, EventVisitor, Path, PathSegment, ScannerError};
+use crate::{Event, EventVisitor, Path, PathSegment, ScannerError, encoding::Utf8Encoding};
 
 static FIRST_VISIT_KEY: &str = "message";
 

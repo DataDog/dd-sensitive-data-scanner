@@ -110,8 +110,10 @@ mod test {
         assert!(BtcChecksum.is_valid_match("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4")); // lowercase should work
 
         // Bech32m (taproot)
-        assert!(BtcChecksum
-            .is_valid_match("bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0"));
+        assert!(
+            BtcChecksum
+                .is_valid_match("bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0")
+        );
 
         // Invalid: Testnet addresses
         assert!(!BtcChecksum.is_valid_match("tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"));

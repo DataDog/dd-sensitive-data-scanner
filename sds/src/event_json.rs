@@ -94,7 +94,7 @@ impl Event for HashMap<String, serde_json::Value, RandomState> {
 mod test {
     use std::collections::HashMap;
 
-    use serde_json::{json, Map, Value};
+    use serde_json::{Map, Value, json};
 
     use crate::VisitStringResult;
 

@@ -1,17 +1,17 @@
 use crate::proximity_keywords::{
-    contains_keyword_in_path, get_prefix_start, is_index_within_prefix,
-    CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords,
+    CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords, contains_keyword_in_path,
+    get_prefix_start, is_index_within_prefix,
 };
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::regex_store::SharedRegex;
 use crate::scanner::{
-    get_next_regex_start, is_false_positive_match, RuleResult, RuleStatus, StringMatchesCtx,
+    RuleResult, RuleStatus, StringMatchesCtx, get_next_regex_start, is_false_positive_match,
 };
 use crate::secondary_validation::Validator;
 use crate::{CompiledRule, ExclusionCheck, Path, StringMatch};
 use ahash::AHashSet;
-use regex_automata::meta::Cache;
 use regex_automata::Input;
+use regex_automata::meta::Cache;
 use std::sync::Arc;
 
 /// This is the internal representation of a rule after it has been validated / compiled.

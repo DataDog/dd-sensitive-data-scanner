@@ -163,13 +163,13 @@ where
         let active_trees_range = tree_nodes_len - num_active_trees..tree_nodes_len;
 
         for tree_index in active_trees_range {
-            if !self.tree_nodes[tree_index].index_wildcard_match || !segment.is_index() {
-                if let Some(child) = self.tree_nodes[tree_index].rule_tree.children.get(&segment) {
-                    self.tree_nodes.push(ActiveRuleTree {
-                        rule_tree: child,
-                        index_wildcard_match: false,
-                    });
-                }
+            if (!self.tree_nodes[tree_index].index_wildcard_match || !segment.is_index())
+                && let Some(child) = self.tree_nodes[tree_index].rule_tree.children.get(&segment)
+            {
+                self.tree_nodes.push(ActiveRuleTree {
+                    rule_tree: child,
+                    index_wildcard_match: false,
+                });
             }
 
             if self.add_implicit_index_wildcards && segment.is_index() {

@@ -7,10 +7,10 @@ pub use crate::proximity_keywords::included_keywords::*;
 use crate::proximity_keywords::ProximityKeywordsValidationError::{
     EmptyKeyword, InvalidLookAheadCharacterCount, KeywordTooLong, TooManyKeywords,
 };
-use crate::scanner::regex_rule::{get_memoized_regex, SharedRegex};
+use crate::scanner::regex_rule::{SharedRegex, get_memoized_regex};
 use crate::{Labels, ProximityKeywordsConfig};
 use metrics::counter;
-use regex_automata::{meta, Input};
+use regex_automata::{Input, meta};
 use regex_syntax::ast::{
     Alternation, Assertion, AssertionKind, Ast, Concat, Flag, Flags, FlagsItem, FlagsItemKind,
     Group, GroupKind, Literal, LiteralKind, Position, Span,
@@ -806,8 +806,14 @@ mod test {
             _ => ("".to_string(), "".to_string()),
         };
 
-        assert_eq!(content_pattern, "(?:(?-u:\\b)|(?:_))hello(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))world\\*|(?:\\-|_|\\.| |/)aws(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))aws(?:\\-|_|\\.| |/)access(?:(?-u:\\b)|(?:_))");
-        assert_eq!(path_pattern, "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*|_aws(?-u:\\b)|(?-u:\\b)aws\\.access(?-u:\\b)");
+        assert_eq!(
+            content_pattern,
+            "(?:(?-u:\\b)|(?:_))hello(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))world\\*|(?:\\-|_|\\.| |/)aws(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))aws(?:\\-|_|\\.| |/)access(?:(?-u:\\b)|(?:_))"
+        );
+        assert_eq!(
+            path_pattern,
+            "(?-u:\\b)hello(?-u:\\b)|(?-u:\\b)world\\*|_aws(?-u:\\b)|(?-u:\\b)aws\\.access(?-u:\\b)"
+        );
     }
 
     #[test]

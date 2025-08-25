@@ -2,7 +2,7 @@ use crate::stats::GLOBAL_STATS;
 use ahash::AHashMap;
 use lazy_static::lazy_static;
 use regex_automata::meta::{Cache, Regex as MetaRegex};
-use slotmap::{new_key_type, SlotMap};
+use slotmap::{SlotMap, new_key_type};
 use std::ops::Deref;
 use std::sync::Weak;
 use std::sync::{Arc, Mutex};
@@ -121,38 +121,41 @@ impl RegexStore {
         if self.gc_counter >= GC_FREQUENCY {
             self.gc();
         }
-        match self.get(pattern) { Some(existing_regex) => {
-            existing_regex
-        } _ => {
-            let shared_regex = Arc::new(regex);
+        match self.get(pattern) {
+            Some(existing_regex) => existing_regex,
+            _ => {
+                let shared_regex = Arc::new(regex);
 
-            let regex_cache = shared_regex.create_cache();
-            let cache_key = self.key_map.insert(WeakSharedRegex {
-                regex: Arc::downgrade(&shared_regex),
-                cache_size: regex_cache.memory_usage() + std::mem::size_of::<Cache>(),
-            });
-            if let Some(old_cache_key) = self.pattern_index.insert(pattern.to_owned(), cache_key) {
-                // cleanup old value (which must be a "dead" reference since `get` returned None)
-                if let Some(weak_ref) = self.key_map.remove(old_cache_key) {
-                    GLOBAL_STATS.add_total_regex_cache(-(weak_ref.cache_size as i64));
-                    debug_assert!(weak_ref.regex.strong_count() == 0)
+                let regex_cache = shared_regex.create_cache();
+                let cache_key = self.key_map.insert(WeakSharedRegex {
+                    regex: Arc::downgrade(&shared_regex),
+                    cache_size: regex_cache.memory_usage() + std::mem::size_of::<Cache>(),
+                });
+                if let Some(old_cache_key) =
+                    self.pattern_index.insert(pattern.to_owned(), cache_key)
+                {
+                    // cleanup old value (which must be a "dead" reference since `get` returned None)
+                    if let Some(weak_ref) = self.key_map.remove(old_cache_key) {
+                        GLOBAL_STATS.add_total_regex_cache(-(weak_ref.cache_size as i64));
+                        debug_assert!(weak_ref.regex.strong_count() == 0)
+                    }
+                }
+
+                GLOBAL_STATS.set_total_regexes(self.key_map.len());
+
+                SharedRegex {
+                    regex: shared_regex,
+                    cache_key,
                 }
             }
-
-            GLOBAL_STATS.set_total_regexes(self.key_map.len());
-
-            SharedRegex {
-                regex: shared_regex,
-                cache_key,
-            }
-        }}
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
     use crate::scanner::regex_rule::regex_store::{
-        get_memoized_regex_with_custom_store, RegexStore, GC_FREQUENCY,
+        GC_FREQUENCY, RegexStore, get_memoized_regex_with_custom_store,
     };
     use regex_automata::meta::Regex;
     use std::sync::Mutex;

@@ -5,5 +5,5 @@
 mod binary_encoding;
 
 pub use binary_encoding::{
-    encode_async_response, encode_response, encode_response_in_place, BinaryEvent,
+    BinaryEvent, encode_async_response, encode_response, encode_response_in_place,
 };

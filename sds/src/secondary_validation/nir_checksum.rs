@@ -1,6 +1,6 @@
 use std::str::Chars;
 
-use crate::secondary_validation::{get_next_digit, Validator};
+use crate::secondary_validation::{Validator, get_next_digit};
 
 pub struct NirChecksum;
 

@@ -53,12 +53,12 @@ impl IncludedKeywordSearch<'_> {
 
 #[cfg(test)]
 mod test {
-    use crate::proximity_keywords::{
-        compile_keywords_proximity_config, CompiledIncludedProximityKeywords, IncludedKeywordSearch,
-    };
-    use crate::scanner::regex_rule::config::ProximityKeywordsConfig;
-    use crate::scanner::regex_rule::RegexCaches;
     use crate::Labels;
+    use crate::proximity_keywords::{
+        CompiledIncludedProximityKeywords, IncludedKeywordSearch, compile_keywords_proximity_config,
+    };
+    use crate::scanner::regex_rule::RegexCaches;
+    use crate::scanner::regex_rule::config::ProximityKeywordsConfig;
 
     fn collect_keyword_matches(mut search: IncludedKeywordSearch) -> Vec<usize> {
         let mut caches = RegexCaches::new();

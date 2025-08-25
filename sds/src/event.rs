@@ -1,7 +1,7 @@
+use crate::PathSegment;
 use crate::encoding::{Encoding, Utf8Encoding};
 use crate::path::Path;
 use crate::scanner::error::ScannerError;
-use crate::PathSegment;
 
 /// Any object that can be scanned by SDS needs to implement `Event`.
 /// You can think of an Event as a "JSON-like" object that has a nested map of values with String

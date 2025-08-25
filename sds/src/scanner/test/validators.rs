@@ -1,7 +1,7 @@
-use crate::scanner::RootRuleConfig;
 use crate::SecondaryValidator::{
     ChineseIdChecksum, GithubTokenChecksum, IbanChecker, JwtExpirationChecker, NhsCheckDigit,
 };
+use crate::scanner::RootRuleConfig;
 use crate::{MatchAction, RegexRuleConfig, ScannerBuilder, SecondaryValidator};
 use chrono::Utc;
 

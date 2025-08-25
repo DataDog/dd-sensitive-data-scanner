@@ -1,5 +1,5 @@
 use iso_iec_7064::{
-    System, MOD_11_10, MOD_11_2, MOD_1271_36, MOD_27_26, MOD_37_2, MOD_37_36, MOD_661_26, MOD_97_10,
+    MOD_11_2, MOD_11_10, MOD_27_26, MOD_37_2, MOD_37_36, MOD_97_10, MOD_661_26, MOD_1271_36, System,
 };
 
 use crate::secondary_validation::Validator;

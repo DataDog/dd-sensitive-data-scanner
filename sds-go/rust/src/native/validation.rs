@@ -1,6 +1,6 @@
 use crate::handle_panic_ptr_return;
 use dd_sds::validate_regex as validate_regex_impl;
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{CStr, CString, c_char};
 
 /// # Safety
 ///

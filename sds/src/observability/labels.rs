@@ -124,7 +124,7 @@ mod test {
         assert!(label_list.contains(&Label::new("key_4", "value_4")));
     }
 
-    use serde_test::{assert_de_tokens_error, assert_tokens, Token};
+    use serde_test::{Token, assert_de_tokens_error, assert_tokens};
 
     #[test]
     fn test_deserialization_empty() {

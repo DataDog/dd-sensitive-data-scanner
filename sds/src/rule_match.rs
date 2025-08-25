@@ -1,5 +1,5 @@
 use crate::match_validation::match_status::MatchStatus;
-use crate::{encoding::Encoding, path::Path, StringMatch};
+use crate::{StringMatch, encoding::Encoding, path::Path};
 use std::fmt::Debug;
 use std::fmt::{Display, Formatter};
 

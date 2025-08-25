@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use metrics::{counter, gauge, Counter, Gauge};
+use metrics::{Counter, Gauge, counter, gauge};
 use std::sync::atomic::{AtomicI64, Ordering};
 
 lazy_static! {

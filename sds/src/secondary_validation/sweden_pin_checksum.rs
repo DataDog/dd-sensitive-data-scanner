@@ -1,5 +1,5 @@
 pub struct SwedenPINChecksum;
-use crate::secondary_validation::{sum_all_digits, Validator};
+use crate::secondary_validation::{Validator, sum_all_digits};
 
 const MULTIPLIERS: [u32; 9] = [2, 1, 2, 1, 2, 1, 2, 1, 2];
 

@@ -1,5 +1,5 @@
 use crate::Labels;
-use metrics::{counter, Counter};
+use metrics::{Counter, counter};
 
 pub struct RuleMetrics {
     pub false_positive_excluded_attributes: Counter,

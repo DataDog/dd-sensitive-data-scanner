@@ -1,5 +1,5 @@
 use crate::normalization::rust_regex_adapter::{
-    convert_to_rust_regex, convert_to_rust_regex_ast, QUANTIFIER_LIMIT,
+    QUANTIFIER_LIMIT, convert_to_rust_regex, convert_to_rust_regex_ast,
 };
 use crate::parser::error::ParseError;
 use moka::sync::Cache;
@@ -151,8 +151,8 @@ fn build_regex(
 #[cfg(test)]
 mod test {
     use crate::validation::{
-        get_regex_complexity_estimate_very_slow, validate_and_create_regex, validate_regex,
-        RegexValidationError,
+        RegexValidationError, get_regex_complexity_estimate_very_slow, validate_and_create_regex,
+        validate_regex,
     };
 
     #[test]

@@ -1,5 +1,5 @@
-use crate::scanner::test::build_test_scanner;
 use crate::scanner::RootRuleConfig;
+use crate::scanner::test::build_test_scanner;
 use crate::{MatchAction, ProximityKeywordsConfig, RegexRuleConfig, ScannerBuilder, SimpleEvent};
 use std::collections::BTreeMap;
 
