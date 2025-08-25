@@ -786,10 +786,10 @@ impl Scanner {
         'rule_matches: while let Some(rule_match) = rule_matches.pop() {
             if self.rules[rule_match.rule_index].match_action.is_mutating() {
                 // Mutating rules are kept only if they don't overlap with a previous rule.
-                if let Some(last) = retained_rules.last() {
-                    if last.utf8_end > rule_match.utf8_start {
-                        continue;
-                    }
+                if let Some(last) = retained_rules.last()
+                    && last.utf8_end > rule_match.utf8_start
+                {
+                    continue;
                 }
             } else {
                 // Only retain if it doesn't overlap with any other rule. Since mutating matches are sorted before non-mutated matches
@@ -876,19 +876,19 @@ impl ScannerBuilder<'_> {
         let mut match_validators_per_type = AHashMap::new();
 
         for rule in self.rules.iter() {
-            if let Some(match_validation_type) = &rule.get_third_party_active_checker() {
-                if match_validation_type.can_create_match_validator() {
-                    let internal_type = match_validation_type.get_internal_match_validation_type();
-                    let match_validator = match_validation_type.into_match_validator();
-                    if let Ok(match_validator) = match_validator {
-                        if !match_validators_per_type.contains_key(&internal_type) {
-                            match_validators_per_type.insert(internal_type, match_validator);
-                        }
-                    } else {
-                        return Err(CreateScannerError::InvalidMatchValidator(
-                            MatchValidatorCreationError::InternalError,
-                        ));
+            if let Some(match_validation_type) = &rule.get_third_party_active_checker()
+                && match_validation_type.can_create_match_validator()
+            {
+                let internal_type = match_validation_type.get_internal_match_validation_type();
+                let match_validator = match_validation_type.into_match_validator();
+                if let Ok(match_validator) = match_validator {
+                    if !match_validators_per_type.contains_key(&internal_type) {
+                        match_validators_per_type.insert(internal_type, match_validator);
                     }
+                } else {
+                    return Err(CreateScannerError::InvalidMatchValidator(
+                        MatchValidatorCreationError::InternalError,
+                    ));
                 }
             }
         }
@@ -1072,18 +1072,17 @@ fn is_false_positive_match(
     content: &str,
     check_excluded_keywords: bool,
 ) -> bool {
-    if check_excluded_keywords {
-        if let Some(excluded_keywords) = &rule.excluded_keywords {
-            if excluded_keywords.is_false_positive_match(content, regex_match.start()) {
-                return true;
-            }
-        }
+    if check_excluded_keywords
+        && let Some(excluded_keywords) = &rule.excluded_keywords
+        && excluded_keywords.is_false_positive_match(content, regex_match.start())
+    {
+        return true;
     }
 
-    if let Some(validator) = rule.validator.as_ref() {
-        if !validator.is_valid_match(&content[regex_match.range()]) {
-            return true;
-        };
+    if let Some(validator) = rule.validator.as_ref()
+        && !validator.is_valid_match(&content[regex_match.range()])
+    {
+        return true;
     }
     false
 }

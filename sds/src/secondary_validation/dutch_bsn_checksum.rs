@@ -11,11 +11,11 @@ impl Validator for DutchBsnChecksum {
 
         let mut sum = 0;
         for (idx, digit) in valid_chars.rev().enumerate() {
-            if let Some(digit) = digit.to_digit(10) {
-                if let Some(weight) = MULTIPLIERS.get(idx) {
-                    sum = (sum + weight * digit as i32) % MODULO;
-                    continue;
-                }
+            if let Some(digit) = digit.to_digit(10)
+                && let Some(weight) = MULTIPLIERS.get(idx)
+            {
+                sum = (sum + weight * digit as i32) % MODULO;
+                continue;
             }
             return false;
         }

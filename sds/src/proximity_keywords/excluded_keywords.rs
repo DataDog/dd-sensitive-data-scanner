@@ -47,11 +47,11 @@ fn get_span_bounds_scan(
 
     // Try to take 1 char from the match first (for boundary checking)
     let mut bytes_added_to_end = 0;
-    if let Some(c) = content[i..].chars().next() {
-        if !EXCLUDED_KEYWORDS_REMOVED_CHARS.contains(&c) {
-            bytes_added_to_end = c.len();
-            prefix.push(c);
-        }
+    if let Some(c) = content[i..].chars().next()
+        && !EXCLUDED_KEYWORDS_REMOVED_CHARS.contains(&c)
+    {
+        bytes_added_to_end = c.len();
+        prefix.push(c);
     }
 
     // collect `look_ahead_char_count` chars without the excluded chars
