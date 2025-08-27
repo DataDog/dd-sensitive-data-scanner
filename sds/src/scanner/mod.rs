@@ -615,9 +615,11 @@ impl Scanner {
         content: &str,
     ) {
         rule_matches.retain(|rule_match| {
-            match &self.rules[rule_match.rule_index].suppression_config {
-                Some(suppression_config) => !suppression_config.should_match_be_suppressed(content),
-                None => true,
+            if let Some(suppression_config) = &self.rules[rule_match.rule_index].suppression_config
+            {
+                !suppression_config.should_match_be_suppressed(content)
+            } else {
+                true
             }
         });
     }
