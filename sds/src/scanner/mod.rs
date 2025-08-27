@@ -12,7 +12,7 @@ use error::MatchValidatorCreationError;
 use self::metrics::ScannerMetrics;
 use crate::match_validation::match_validator::RAYON_THREAD_POOL;
 use crate::observability::labels::Labels;
-use crate::rule_match::{self, InternalRuleMatch, RuleMatch};
+use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scanner::config::RuleConfig;
 use crate::scanner::internal_rule_match_set::InternalRuleMatchSet;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
@@ -614,15 +614,9 @@ impl Scanner {
         rule_matches: &mut Vec<InternalRuleMatch<E>>,
         content: &str,
     ) {
-        println!("Suppressing matches");
         rule_matches.retain(|rule_match| {
-            // event.visit_event(|visitor|)
             match &self.rules[rule_match.rule_index].suppression_config {
-                Some(suppression_config) => {
-                    let should_suppress = suppression_config.should_match_be_suppressed(content);
-                    println!("Should suppress: {}", should_suppress);
-                    !should_suppress
-                }
+                Some(suppression_config) => !suppression_config.should_match_be_suppressed(content),
                 None => true,
             }
         });
