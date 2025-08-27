@@ -17,7 +17,7 @@ use crate::scanner::scope::Scope;
 use crate::scanner::{CreateScannerError, Scanner, get_next_regex_start};
 use crate::validation::RegexValidationError;
 
-use crate::{CustomHttpConfig, Encoding, HttpMethod, SecondaryValidator, Utf8Encoding};
+use crate::{Encoding, Utf8Encoding};
 use crate::{PartialRedactDirection, Path, PathSegment, RuleMatch, simple_event::SimpleEvent};
 
 use regex_automata::Match;
