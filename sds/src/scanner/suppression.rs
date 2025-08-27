@@ -21,17 +21,24 @@ pub struct CompiledSuppressionConfig {
 
 impl CompiledSuppressionConfig {
     pub fn should_match_be_suppressed(&self, match_content: &str) -> bool {
-        let exact_match = self.exact_match.contains(match_content);
-        let starts_with = self
+        if self.exact_match.contains(match_content) {
+            return true;
+        }
+        if self
             .starts_with
             .iter()
-            .any(|start| match_content.starts_with(start));
-        let ends_with = self
+            .any(|start| match_content.starts_with(start))
+        {
+            return true;
+        }
+        if self
             .ends_with
             .iter()
-            .any(|end| match_content.ends_with(end));
-
-        exact_match || starts_with || ends_with
+            .any(|end| match_content.ends_with(end))
+        {
+            return true;
+        }
+        false
     }
 }
 
