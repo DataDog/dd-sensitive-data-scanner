@@ -12,13 +12,14 @@ use error::MatchValidatorCreationError;
 use self::metrics::ScannerMetrics;
 use crate::match_validation::match_validator::RAYON_THREAD_POOL;
 use crate::observability::labels::Labels;
-use crate::rule_match::{InternalRuleMatch, RuleMatch};
+use crate::rule_match::{self, InternalRuleMatch, RuleMatch};
 use crate::scanner::config::RuleConfig;
 use crate::scanner::internal_rule_match_set::InternalRuleMatchSet;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::{RegexCaches, access_regex_caches};
 use crate::scanner::scope::Scope;
 pub use crate::scanner::shared_data::SharedData;
+use crate::scanner::suppression::{CompiledSuppressionConfig, SuppressionConfig};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::stats::GLOBAL_STATS;
@@ -45,6 +46,7 @@ pub mod regex_rule;
 pub mod scope;
 pub mod shared_data;
 pub mod shared_pool;
+pub mod suppression;
 
 mod internal_rule_match_set;
 #[cfg(test)]
@@ -81,6 +83,7 @@ pub struct RootRuleConfig<T> {
     #[deprecated(note = "Use `third_party_active_checker` instead")]
     match_validation_type: Option<MatchValidationType>,
     third_party_active_checker: Option<MatchValidationType>,
+    suppression_config: Option<SuppressionConfig>,
     #[serde(flatten)]
     pub inner: T,
 }
@@ -106,6 +109,7 @@ impl<T> RootRuleConfig<T> {
             scope: Scope::all(),
             match_validation_type: None,
             third_party_active_checker: None,
+            suppression_config: None,
             inner,
         }
     }
@@ -117,6 +121,7 @@ impl<T> RootRuleConfig<T> {
             scope: self.scope,
             match_validation_type: self.match_validation_type,
             third_party_active_checker: self.third_party_active_checker,
+            suppression_config: self.suppression_config,
             inner: func(self.inner),
         }
     }
@@ -136,6 +141,11 @@ impl<T> RootRuleConfig<T> {
         match_validation_type: MatchValidationType,
     ) -> Self {
         self.third_party_active_checker = Some(match_validation_type);
+        self
+    }
+
+    pub fn suppression_config(mut self, suppression_config: SuppressionConfig) -> Self {
+        self.suppression_config = Some(suppression_config);
         self
     }
 
@@ -159,6 +169,7 @@ pub struct RootCompiledRule {
     pub scope: Scope,
     pub match_action: MatchAction,
     pub match_validation_type: Option<MatchValidationType>,
+    pub suppression_config: Option<CompiledSuppressionConfig>,
 }
 
 impl RootCompiledRule {
@@ -571,6 +582,8 @@ impl Scanner {
                     });
                 }
 
+                self.suppress_matches::<E::Encoding>(&mut rule_matches, content);
+
                 self.sort_and_remove_overlapping_rules::<E::Encoding>(&mut rule_matches);
 
                 let will_mutate = rule_matches
@@ -594,6 +607,25 @@ impl Scanner {
         }
 
         Ok(output_rule_matches)
+    }
+
+    pub fn suppress_matches<E: Encoding>(
+        &self,
+        rule_matches: &mut Vec<InternalRuleMatch<E>>,
+        content: &str,
+    ) {
+        println!("Suppressing matches");
+        rule_matches.retain(|rule_match| {
+            // event.visit_event(|visitor|)
+            match &self.rules[rule_match.rule_index].suppression_config {
+                Some(suppression_config) => {
+                    let should_suppress = suppression_config.should_match_be_suppressed(content);
+                    println!("Should suppress: {}", should_suppress);
+                    !should_suppress
+                }
+                None => true,
+            }
+        });
     }
 
     pub fn validate_matches(&self, rule_matches: &mut Vec<RuleMatch>) {
@@ -929,6 +961,7 @@ impl ScannerBuilder<'_> {
                     scope: config.scope.clone(),
                     match_action: config.match_action.clone(),
                     match_validation_type: config.get_third_party_active_checker().cloned(),
+                    suppression_config: config.suppression_config.clone().map(|config| config.into()),
                 })
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;

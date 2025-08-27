@@ -17,7 +17,7 @@ use crate::scanner::scope::Scope;
 use crate::scanner::{CreateScannerError, Scanner, get_next_regex_start};
 use crate::validation::RegexValidationError;
 
-use crate::{Encoding, Utf8Encoding};
+use crate::{CustomHttpConfig, Encoding, HttpMethod, SecondaryValidator, Utf8Encoding};
 use crate::{PartialRedactDirection, Path, PathSegment, RuleMatch, simple_event::SimpleEvent};
 
 use regex_automata::Match;
@@ -388,6 +388,36 @@ fn test_excluded_keywords() {
     let mut content = "he**o world".to_string();
     let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(content, "he**o [REDACTED]");
+    assert_eq!(matches.len(), 1);
+}
+
+#[test]
+fn test_match_suppression() {
+    let suppression_test_rule = RootRuleConfig::new(RegexRuleConfig::new(r".*@.*\.com").build())
+        .match_action(MatchAction::Redact {
+            replacement: "[REDACTED]".to_string(),
+        })
+        .suppression_config(SuppressionConfig {
+            ends_with: vec!["@datadoghq.com".to_string()],
+            exact_match: vec![],
+            starts_with: vec![],
+        });
+
+    let scanner = ScannerBuilder::new(&[suppression_test_rule])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
+
+    // This match should be suppressed because it ends with @datadoghq.com
+    let mut content = "arthur@datadoghq.com".to_string();
+    let matches = scanner.scan(&mut content).unwrap();
+    assert_eq!(content, "arthur@datadoghq.com");
+    assert_eq!(matches.len(), 0);
+
+    // This match should not be suppressed because it doesn't end with @datadoghq.com
+    let mut content = "nathan@yahoo.com".to_string();
+    let matches = scanner.scan(&mut content).unwrap();
+    assert_eq!(content, "[REDACTED]");
     assert_eq!(matches.len(), 1);
 }
 
