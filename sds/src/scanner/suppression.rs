@@ -52,6 +52,16 @@ impl From<SuppressionConfig> for CompiledSuppressionConfig {
     }
 }
 
+impl Default for SuppressionConfig {
+    fn default() -> Self {
+        Self {
+            starts_with: vec![],
+            ends_with: vec![],
+            exact_match: vec![],
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
 
