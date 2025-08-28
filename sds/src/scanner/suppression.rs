@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct SuppressionConfig {
     #[serde(default)]
     pub starts_with: Vec<String>,
@@ -48,16 +48,6 @@ impl From<SuppressionConfig> for CompiledSuppressionConfig {
             starts_with: config.starts_with,
             ends_with: config.ends_with,
             exact_match: config.exact_match.into_iter().collect(),
-        }
-    }
-}
-
-impl Default for SuppressionConfig {
-    fn default() -> Self {
-        Self {
-            starts_with: vec![],
-            ends_with: vec![],
-            exact_match: vec![],
         }
     }
 }
