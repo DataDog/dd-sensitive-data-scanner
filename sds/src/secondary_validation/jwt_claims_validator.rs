@@ -176,8 +176,13 @@ mod tests {
     fn generate_jwt_with_claims(claims: &str) -> String {
         let header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"; // {"alg":"HS256","typ":"JWT"}
         let payload_encoded = URL_SAFE_NO_PAD.encode(claims.as_bytes());
-        let signature = "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
-        format!("{header}.{payload_encoded}.{signature}")
+        format!("{header}.{payload_encoded}.sign")
+    }
+
+    fn generate_jwt_with_header_and_claims(header_json: &str, claims: &str) -> String {
+        let header_encoded = URL_SAFE_NO_PAD.encode(header_json.as_bytes());
+        let payload_encoded = URL_SAFE_NO_PAD.encode(claims.as_bytes());
+        format!("{header_encoded}.{payload_encoded}.sign")
     }
 
     #[test]
@@ -366,5 +371,151 @@ mod tests {
                 required_claims: [("a".to_owned(), RegexMatch("myregex".to_owned()))].into()
             }
         );
+    }
+
+    #[test]
+    fn test_header_claim_validation() {
+        // Create a JWT with custom header containing a "kid" claim
+        let header_json = r#"{"alg":"HS256","typ":"JWT","kid":"key-123"}"#;
+        let payload_json = r#"{"sub":"1234567890","name":"John Doe"}"#;
+        let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
+
+        // Configure validator to require "kid" claim in header
+        let mut required_claims = BTreeMap::new();
+        required_claims.insert("header.kid".to_string(), ClaimRequirement::Present);
+
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
+        assert!(checker.is_valid_match(&jwt));
+    }
+
+    #[test]
+    fn test_header_claim_validation_with_exact_value() {
+        // Create a JWT with custom header containing a "kid" claim
+        let header_json = r#"{"alg":"HS256","typ":"JWT","kid":"key-123","env":"production"}"#;
+        let payload_json = r#"{"sub":"1234567890","name":"John Doe"}"#;
+        let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
+
+        // Configure validator to require specific values in header
+        let mut required_claims = BTreeMap::new();
+        required_claims.insert(
+            "header.kid".to_string(),
+            ClaimRequirement::ExactValue("key-123".to_string()),
+        );
+        required_claims.insert(
+            "header.env".to_string(),
+            ClaimRequirement::ExactValue("production".to_string()),
+        );
+
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
+        assert!(checker.is_valid_match(&jwt));
+    }
+
+    #[test]
+    fn test_header_vs_payload_claim_separation() {
+        // Create a JWT where the same claim name exists in both header and payload with different values
+        let header_json = r#"{"alg":"HS256","typ":"JWT","env":"header-env","version":"1.0"}"#;
+        let payload_json = r#"{"sub":"1234567890","env":"payload-env","version":"2.0"}"#;
+        let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
+
+        // Configure validator to require specific values from header and payload separately
+        let mut required_claims = BTreeMap::new();
+        required_claims.insert(
+            "header.env".to_string(),
+            ClaimRequirement::ExactValue("header-env".to_string()),
+        );
+        required_claims.insert(
+            "header.version".to_string(),
+            ClaimRequirement::ExactValue("1.0".to_string()),
+        );
+        required_claims.insert(
+            "env".to_string(),
+            ClaimRequirement::ExactValue("payload-env".to_string()),
+        );
+        required_claims.insert(
+            "version".to_string(),
+            ClaimRequirement::ExactValue("2.0".to_string()),
+        );
+
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
+        assert!(checker.is_valid_match(&jwt));
+    }
+
+    #[test]
+    fn test_header_claim_validation_fails_when_missing() {
+        // Create a JWT with default header (no custom claims)
+        let header_json = r#"{"alg":"HS256","typ":"JWT"}"#;
+        let payload_json = r#"{"sub":"1234567890","name":"John Doe"}"#;
+        let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
+
+        // Configure validator to require "kid" claim in header (which doesn't exist)
+        let mut required_claims = BTreeMap::new();
+        required_claims.insert("header.kid".to_string(), ClaimRequirement::Present);
+
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
+        assert!(!checker.is_valid_match(&jwt));
+    }
+
+    #[test]
+    fn test_header_claim_validation_fails_wrong_value() {
+        // Create a JWT with custom header containing a "kid" claim
+        let header_json = r#"{"alg":"HS256","typ":"JWT","kid":"wrong-key"}"#;
+        let payload_json = r#"{"sub":"1234567890","name":"John Doe"}"#;
+        let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
+
+        // Configure validator to require specific "kid" value in header
+        let mut required_claims = BTreeMap::new();
+        required_claims.insert(
+            "header.kid".to_string(),
+            ClaimRequirement::ExactValue("key-123".to_string()),
+        );
+
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
+        assert!(!checker.is_valid_match(&jwt));
+    }
+
+    #[test]
+    fn test_confusion_prevention_payload_claim_in_header_requirement() {
+        // Create a JWT where "kid" exists in payload but we require it in header
+        let header_json = r#"{"alg":"HS256","typ":"JWT"}"#;
+        let payload_json = r#"{"sub":"1234567890","kid":"key-from-payload"}"#;
+        let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
+
+        // Configure validator to require "kid" in header (but it's only in payload)
+        let mut required_claims = BTreeMap::new();
+        required_claims.insert("header.kid".to_string(), ClaimRequirement::Present);
+
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
+        // Should fail because "kid" is in payload, not header
+        assert!(!checker.is_valid_match(&jwt));
+    }
+
+    #[test]
+    fn test_header_claim_regex_validation() {
+        // Create a JWT with custom header containing versioned key ID
+        let header_json =
+            r#"{"alg":"HS256","typ":"JWT","kid":"key-v123","service":"auth-service"}"#;
+        let payload_json = r#"{"sub":"1234567890","name":"John Doe"}"#;
+        let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
+
+        // Configure validator to use regex for header claims
+        let mut required_claims = BTreeMap::new();
+        required_claims.insert(
+            "header.kid".to_string(),
+            ClaimRequirement::RegexMatch(r"^key-v\d+$".to_string()),
+        );
+        required_claims.insert(
+            "header.service".to_string(),
+            ClaimRequirement::RegexMatch(r"^auth-.*".to_string()),
+        );
+
+        let config = JwtClaimsValidatorConfig { required_claims };
+        let checker = JwtClaimsValidator::new(config);
+        assert!(checker.is_valid_match(&jwt));
     }
 }
