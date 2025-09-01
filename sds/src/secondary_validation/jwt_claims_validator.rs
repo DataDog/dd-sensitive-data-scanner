@@ -56,9 +56,11 @@ impl JwtClaimsValidator {
 
 impl Validator for JwtClaimsValidator {
     fn is_valid_match(&self, regex_match: &str) -> bool {
-        if let Some((_, payload)) = decode_segments(regex_match) {
+        if let Some((header, payload)) = decode_segments(regex_match) {
             validate_required_claims(
+                &header,
                 &payload,
+                &self.header_required_claims,
                 &self.payload_required_claims,
                 &self.patterns,
             )
@@ -90,22 +92,45 @@ fn decode_segment(segment: &str) -> Option<JsonValue> {
 }
 
 fn validate_required_claims(
+    header: &JsonValue,
     payload: &JsonValue,
-    required_claims: &[(String, ClaimRequirement)],
+    header_required_claims: &[(String, ClaimRequirement)],
+    payload_required_claims: &[(String, ClaimRequirement)],
     patterns: &AHashMap<String, Regex>,
 ) -> bool {
-    if let Some(payload_obj) = payload.as_object() {
-        // Check each required claim
-        required_claims.iter().all(|(claim_name, requirement)| {
-            if let Some(claim_value) = payload_obj.get(claim_name) {
-                validate_claim_requirement(claim_value, requirement, patterns.get(claim_name))
-            } else {
-                false
-            }
-        })
-    } else {
-        false
+    let mut matched_anything = false;
+    let mut checks_passed = true;
+    if let Some(header_obj) = header.as_object() {
+        checks_passed &= header_required_claims
+            .iter()
+            .all(|(claim_name, requirement)| {
+                const HEADER_PREFIX_LENGTH: usize = 7; // "header." length
+                let header_field_name = &claim_name[HEADER_PREFIX_LENGTH..];
+                if let Some(claim_value) = header_obj.get(header_field_name) {
+                    validate_claim_requirement(claim_value, requirement, patterns.get(claim_name))
+                } else {
+                    false
+                }
+            });
+        matched_anything = true;
+    } else if header_required_claims.len() > 0 {
+        false;
     }
+    if let Some(payload_obj) = payload.as_object() {
+        checks_passed &= payload_required_claims
+            .iter()
+            .all(|(claim_name, requirement)| {
+                if let Some(claim_value) = payload_obj.get(claim_name) {
+                    validate_claim_requirement(claim_value, requirement, patterns.get(claim_name))
+                } else {
+                    false
+                }
+            });
+        matched_anything = true;
+    } else if payload_required_claims.len() > 0 {
+        false;
+    }
+    matched_anything && checks_passed
 }
 
 fn validate_claim_requirement(
