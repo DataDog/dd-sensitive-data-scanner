@@ -23,7 +23,8 @@ pub struct JwtClaimsValidatorConfig {
 }
 
 pub struct JwtClaimsValidator {
-    pub required_claims: Vec<(String, ClaimRequirement)>,
+    pub header_required_claims: Vec<(String, ClaimRequirement)>,
+    pub payload_required_claims: Vec<(String, ClaimRequirement)>,
     patterns: AHashMap<String, Regex>,
 }
 
@@ -35,8 +36,19 @@ impl JwtClaimsValidator {
                 patterns.insert(claim_name.clone(), Regex::new(pattern).unwrap());
             }
         }
+
         Self {
-            required_claims: config.required_claims.into_iter().collect(),
+            header_required_claims: config
+                .required_claims
+                .clone()
+                .into_iter()
+                .filter(|(claim_name, _)| claim_name.starts_with("header."))
+                .collect(),
+            payload_required_claims: config
+                .required_claims
+                .into_iter()
+                .filter(|(claim_name, _)| !claim_name.starts_with("header."))
+                .collect(),
             patterns,
         }
     }
@@ -45,7 +57,11 @@ impl JwtClaimsValidator {
 impl Validator for JwtClaimsValidator {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         if let Some((_, payload)) = decode_segments(regex_match) {
-            validate_required_claims(&payload, &self.required_claims, &self.patterns)
+            validate_required_claims(
+                &payload,
+                &self.payload_required_claims,
+                &self.patterns,
+            )
         } else {
             // If JWT segments cannot be decoded, the JWT is not well formatted
             false
