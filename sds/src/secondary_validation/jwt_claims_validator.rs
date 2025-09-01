@@ -98,7 +98,6 @@ fn validate_required_claims(
     payload_required_claims: &[(String, ClaimRequirement)],
     patterns: &AHashMap<String, Regex>,
 ) -> bool {
-    let mut matched_anything = false;
     let mut checks_passed = true;
     if let Some(header_obj) = header.as_object() {
         checks_passed &= header_required_claims
@@ -112,9 +111,8 @@ fn validate_required_claims(
                     false
                 }
             });
-        matched_anything = true;
-    } else if header_required_claims.len() > 0 {
-        false;
+    } else if !header_required_claims.is_empty() {
+        return false;
     }
     if let Some(payload_obj) = payload.as_object() {
         checks_passed &= payload_required_claims
@@ -126,11 +124,10 @@ fn validate_required_claims(
                     false
                 }
             });
-        matched_anything = true;
-    } else if payload_required_claims.len() > 0 {
-        false;
+    } else if !payload_required_claims.is_empty() {
+        return false;
     }
-    matched_anything && checks_passed
+    checks_passed
 }
 
 fn validate_claim_requirement(
