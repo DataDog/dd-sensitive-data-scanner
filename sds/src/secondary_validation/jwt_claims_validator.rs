@@ -567,4 +567,31 @@ mod tests {
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
+
+    #[test]
+    fn test_numeric_claim_regex_validation() {
+        // Create a JWT with custom header containing versioned key ID
+        let header_json = r#"{"alg":"HS256","typ":"JWT"}"#;
+        let payload_json = r#"{"iat": 1756904571,"scope": 123,"sub": 1211208433496121,"version": 2,"app": 1211208544034048,"exp": 1756908171}"#;
+        let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
+
+        // Configure validator to use regex for header claims
+        let mut required_claims = BTreeMap::new();
+        required_claims.insert("scope".to_string(), ClaimRequirement::Present);
+        required_claims.insert(
+            "app".to_string(),
+            ClaimRequirement::RegexMatch(r"^\d{16}$".to_string()),
+        );
+        required_claims.insert(
+            "version".to_string(),
+            ClaimRequirement::ExactValue("2".to_string()),
+        );
+
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: BTreeMap::new(),
+        };
+        let checker = JwtClaimsValidator::new(config);
+        assert!(checker.is_valid_match(&jwt));
+    }
 }
