@@ -303,7 +303,7 @@ mod test {
         );
     }
 
-    // TODO: Why does this need to be in order? The config should either be a Vec, or drop the order requirement
+    // The order has to be stable to pass linter checks. Otherwise, each instantiation will change the file
     #[test]
     fn test_jwt_claims_validator_config_serialization_order() {
         use crate::secondary_validation::jwt_claims_validator::ClaimRequirement;
@@ -321,7 +321,10 @@ mod test {
             ClaimRequirement::RegexMatch(r"^test.*".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: std::collections::BTreeMap::new(),
+        };
 
         // Serialize multiple times to ensure stable order
         let serialized1 = serde_json::to_string(&config).unwrap();
