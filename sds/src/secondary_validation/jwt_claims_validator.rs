@@ -130,6 +130,8 @@ fn validate_claim_requirement(
             // Check for exact string match
             if let Some(actual) = claim_value.as_str() {
                 actual == expected
+            } else if let Some(actual) = claim_value.as_number() {
+                actual.to_string() == *expected
             } else {
                 false // We only match string values
             }
@@ -139,6 +141,10 @@ fn validate_claim_requirement(
             if let Some(actual) = claim_value.as_str() {
                 cached_pattern
                     .map(|pattern| pattern.is_match(actual))
+                    .unwrap_or(false)
+            } else if let Some(actual) = claim_value.as_number() {
+                cached_pattern
+                    .map(|pattern| pattern.is_match(&actual.to_string()))
                     .unwrap_or(false)
             } else {
                 false // Can only regex match string values
