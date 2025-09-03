@@ -97,30 +97,14 @@ fn decode_segment(segment: &str) -> Option<JsonValue> {
 }
 
 fn validate_required_claims(
-    header: &JsonValue,
     payload: &JsonValue,
-    header_required_claims: &[(String, ClaimRequirement)],
-    payload_required_claims: &[(String, ClaimRequirement)],
+    required_claims: &[(String, ClaimRequirement)],
     patterns: &AHashMap<String, Regex>,
 ) -> bool {
-    let mut checks_passed = true;
-    if let Some(header_obj) = header.as_object() {
-        checks_passed &= header_required_claims
-            .iter()
-            .all(|(claim_name, requirement)| {
-                const HEADER_PREFIX_LENGTH: usize = 7; // "header." length
-                let header_field_name = &claim_name[HEADER_PREFIX_LENGTH..];
-                if let Some(claim_value) = header_obj.get(header_field_name) {
-                    validate_claim_requirement(claim_value, requirement, patterns.get(claim_name))
-                } else {
-                    false
-                }
-            });
-    } else if !header_required_claims.is_empty() {
-        return false;
-    }
-    if let Some(payload_obj) = payload.as_object() {
-        checks_passed &= payload_required_claims
+    if required_claims.is_empty() {
+        true
+    } else if let Some(payload_obj) = payload.as_object() {
+        required_claims
             .iter()
             .all(|(claim_name, requirement)| {
                 if let Some(claim_value) = payload_obj.get(claim_name) {
@@ -128,11 +112,10 @@ fn validate_required_claims(
                 } else {
                     false
                 }
-            });
-    } else if !payload_required_claims.is_empty() {
-        return false;
+            })
+    } else {
+        false
     }
-    checks_passed
 }
 
 fn validate_claim_requirement(
