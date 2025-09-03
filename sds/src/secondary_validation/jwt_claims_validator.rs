@@ -205,7 +205,10 @@ mod tests {
         required_claims.insert("sub".to_string(), ClaimRequirement::Present);
         required_claims.insert("name".to_string(), ClaimRequirement::Present);
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig { 
+            required_claims, 
+            required_headers: BTreeMap::new() 
+        };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
@@ -225,7 +228,10 @@ mod tests {
             ClaimRequirement::ExactValue("my-service".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig { 
+            required_claims, 
+            required_headers: BTreeMap::new() 
+        };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
@@ -244,7 +250,10 @@ mod tests {
             ClaimRequirement::RegexMatch(r"^[^@]+@[^@]+\.[^@]+$".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig { 
+            required_claims, 
+            required_headers: BTreeMap::new() 
+        };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
@@ -256,7 +265,10 @@ mod tests {
         required_claims.insert("sub".to_string(), ClaimRequirement::Present);
         required_claims.insert("aud".to_string(), ClaimRequirement::Present); // aud is missing
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig { 
+            required_claims, 
+            required_headers: BTreeMap::new() 
+        };
         let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
     }
@@ -270,7 +282,10 @@ mod tests {
             ClaimRequirement::ExactValue("my-service".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig { 
+            required_claims, 
+            required_headers: BTreeMap::new() 
+        };
         let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
     }
@@ -288,7 +303,10 @@ mod tests {
             ClaimRequirement::RegexMatch(r"^[^@]+@[^@]+\.[^@]+$".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig { 
+            required_claims, 
+            required_headers: BTreeMap::new() 
+        };
         let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
     }
@@ -313,7 +331,10 @@ mod tests {
             ClaimRequirement::RegexMatch(r"^[^@]+@[^@]+\.[^@]+$".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig { 
+            required_claims, 
+            required_headers: BTreeMap::new() 
+        };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
@@ -340,7 +361,8 @@ mod tests {
             )
             .unwrap(),
             JwtClaimsValidatorConfig {
-                required_claims: [("a".to_owned(), Present)].into()
+                required_claims: [("a".to_owned(), Present)].into(),
+                required_headers: BTreeMap::new()
             }
         );
     }
@@ -353,7 +375,22 @@ mod tests {
             )
             .unwrap(),
             JwtClaimsValidatorConfig {
-                required_claims: [("a".to_owned(), RegexMatch("myregex".to_owned()))].into()
+                required_claims: [("a".to_owned(), RegexMatch("myregex".to_owned()))].into(),
+                required_headers: BTreeMap::new()
+            }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_config_with_headers() {
+        assert_eq!(
+            serde_json::from_str::<JwtClaimsValidatorConfig>(
+                r#"{"required_claims": {"sub": {"type": "Present"}}, "required_headers": {"kid": {"type": "ExactValue", "config": "key-123"}}}"#
+            )
+            .unwrap(),
+            JwtClaimsValidatorConfig {
+                required_claims: [("sub".to_owned(), Present)].into(),
+                required_headers: [("kid".to_owned(), ClaimRequirement::ExactValue("key-123".to_owned()))].into()
             }
         );
     }
@@ -366,10 +403,13 @@ mod tests {
         let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
 
         // Configure validator to require "kid" claim in header
-        let mut required_claims = BTreeMap::new();
-        required_claims.insert("header.kid".to_string(), ClaimRequirement::Present);
+        let mut required_headers = BTreeMap::new();
+        required_headers.insert("kid".to_string(), ClaimRequirement::Present);
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig { 
+            required_claims: BTreeMap::new(),
+            required_headers 
+        };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
@@ -382,17 +422,20 @@ mod tests {
         let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
 
         // Configure validator to require specific values in header
-        let mut required_claims = BTreeMap::new();
-        required_claims.insert(
-            "header.kid".to_string(),
+        let mut required_headers = BTreeMap::new();
+        required_headers.insert(
+            "kid".to_string(),
             ClaimRequirement::ExactValue("key-123".to_string()),
         );
-        required_claims.insert(
-            "header.env".to_string(),
+        required_headers.insert(
+            "env".to_string(),
             ClaimRequirement::ExactValue("production".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig { 
+            required_claims: BTreeMap::new(),
+            required_headers 
+        };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
@@ -407,14 +450,6 @@ mod tests {
         // Configure validator to require specific values from header and payload separately
         let mut required_claims = BTreeMap::new();
         required_claims.insert(
-            "header.env".to_string(),
-            ClaimRequirement::ExactValue("header-env".to_string()),
-        );
-        required_claims.insert(
-            "header.version".to_string(),
-            ClaimRequirement::ExactValue("1.0".to_string()),
-        );
-        required_claims.insert(
             "env".to_string(),
             ClaimRequirement::ExactValue("payload-env".to_string()),
         );
@@ -423,7 +458,20 @@ mod tests {
             ClaimRequirement::ExactValue("2.0".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let mut required_headers = BTreeMap::new();
+        required_headers.insert(
+            "env".to_string(),
+            ClaimRequirement::ExactValue("header-env".to_string()),
+        );
+        required_headers.insert(
+            "version".to_string(),
+            ClaimRequirement::ExactValue("1.0".to_string()),
+        );
+
+        let config = JwtClaimsValidatorConfig { 
+            required_claims, 
+            required_headers 
+        };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
@@ -436,10 +484,13 @@ mod tests {
         let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
 
         // Configure validator to require "kid" claim in header (which doesn't exist)
-        let mut required_claims = BTreeMap::new();
-        required_claims.insert("header.kid".to_string(), ClaimRequirement::Present);
+        let mut required_headers = BTreeMap::new();
+        required_headers.insert("kid".to_string(), ClaimRequirement::Present);
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig { 
+            required_claims: BTreeMap::new(),
+            required_headers 
+        };
         let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
     }
@@ -452,13 +503,16 @@ mod tests {
         let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
 
         // Configure validator to require specific "kid" value in header
-        let mut required_claims = BTreeMap::new();
-        required_claims.insert(
-            "header.kid".to_string(),
+        let mut required_headers = BTreeMap::new();
+        required_headers.insert(
+            "kid".to_string(),
             ClaimRequirement::ExactValue("key-123".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig { 
+            required_claims: BTreeMap::new(),
+            required_headers 
+        };
         let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
     }
@@ -471,10 +525,13 @@ mod tests {
         let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
 
         // Configure validator to require "kid" in header (but it's only in payload)
-        let mut required_claims = BTreeMap::new();
-        required_claims.insert("header.kid".to_string(), ClaimRequirement::Present);
+        let mut required_headers = BTreeMap::new();
+        required_headers.insert("kid".to_string(), ClaimRequirement::Present);
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig { 
+            required_claims: BTreeMap::new(),
+            required_headers 
+        };
         let checker = JwtClaimsValidator::new(config);
         // Should fail because "kid" is in payload, not header
         assert!(!checker.is_valid_match(&jwt));
@@ -489,17 +546,20 @@ mod tests {
         let jwt = generate_jwt_with_header_and_claims(header_json, payload_json);
 
         // Configure validator to use regex for header claims
-        let mut required_claims = BTreeMap::new();
-        required_claims.insert(
-            "header.kid".to_string(),
+        let mut required_headers = BTreeMap::new();
+        required_headers.insert(
+            "kid".to_string(),
             ClaimRequirement::RegexMatch(r"^key-v\d+$".to_string()),
         );
-        required_claims.insert(
-            "header.service".to_string(),
+        required_headers.insert(
+            "service".to_string(),
             ClaimRequirement::RegexMatch(r"^auth-.*".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { required_claims };
+        let config = JwtClaimsValidatorConfig { 
+            required_claims: BTreeMap::new(),
+            required_headers 
+        };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
     }
