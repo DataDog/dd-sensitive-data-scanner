@@ -321,9 +321,9 @@ mod test {
             ClaimRequirement::RegexMatch(r"^test.*".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { 
-            required_claims, 
-            required_headers: std::collections::BTreeMap::new() 
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: std::collections::BTreeMap::new(),
         };
 
         // Serialize multiple times to ensure stable order

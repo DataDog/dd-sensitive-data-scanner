@@ -41,7 +41,7 @@ impl JwtClaimsValidator {
                 payload_patterns.insert(claim_name.clone(), Regex::new(pattern).unwrap());
             }
         }
-        
+
         for (claim_name, requirement) in &config.required_headers {
             if let ClaimRequirement::RegexMatch(pattern) = requirement {
                 header_patterns.insert(claim_name.clone(), Regex::new(pattern).unwrap());
@@ -104,15 +104,13 @@ fn validate_required_claims(
     if required_claims.is_empty() {
         true
     } else if let Some(payload_obj) = payload.as_object() {
-        required_claims
-            .iter()
-            .all(|(claim_name, requirement)| {
-                if let Some(claim_value) = payload_obj.get(claim_name) {
-                    validate_claim_requirement(claim_value, requirement, patterns.get(claim_name))
-                } else {
-                    false
-                }
-            })
+        required_claims.iter().all(|(claim_name, requirement)| {
+            if let Some(claim_value) = payload_obj.get(claim_name) {
+                validate_claim_requirement(claim_value, requirement, patterns.get(claim_name))
+            } else {
+                false
+            }
+        })
     } else {
         false
     }
@@ -205,9 +203,9 @@ mod tests {
         required_claims.insert("sub".to_string(), ClaimRequirement::Present);
         required_claims.insert("name".to_string(), ClaimRequirement::Present);
 
-        let config = JwtClaimsValidatorConfig { 
-            required_claims, 
-            required_headers: BTreeMap::new() 
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: BTreeMap::new(),
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
@@ -228,9 +226,9 @@ mod tests {
             ClaimRequirement::ExactValue("my-service".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { 
-            required_claims, 
-            required_headers: BTreeMap::new() 
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: BTreeMap::new(),
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
@@ -250,9 +248,9 @@ mod tests {
             ClaimRequirement::RegexMatch(r"^[^@]+@[^@]+\.[^@]+$".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { 
-            required_claims, 
-            required_headers: BTreeMap::new() 
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: BTreeMap::new(),
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
@@ -265,9 +263,9 @@ mod tests {
         required_claims.insert("sub".to_string(), ClaimRequirement::Present);
         required_claims.insert("aud".to_string(), ClaimRequirement::Present); // aud is missing
 
-        let config = JwtClaimsValidatorConfig { 
-            required_claims, 
-            required_headers: BTreeMap::new() 
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: BTreeMap::new(),
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
@@ -282,9 +280,9 @@ mod tests {
             ClaimRequirement::ExactValue("my-service".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { 
-            required_claims, 
-            required_headers: BTreeMap::new() 
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: BTreeMap::new(),
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
@@ -303,9 +301,9 @@ mod tests {
             ClaimRequirement::RegexMatch(r"^[^@]+@[^@]+\.[^@]+$".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { 
-            required_claims, 
-            required_headers: BTreeMap::new() 
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: BTreeMap::new(),
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
@@ -331,9 +329,9 @@ mod tests {
             ClaimRequirement::RegexMatch(r"^[^@]+@[^@]+\.[^@]+$".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { 
-            required_claims, 
-            required_headers: BTreeMap::new() 
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: BTreeMap::new(),
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
@@ -406,9 +404,9 @@ mod tests {
         let mut required_headers = BTreeMap::new();
         required_headers.insert("kid".to_string(), ClaimRequirement::Present);
 
-        let config = JwtClaimsValidatorConfig { 
+        let config = JwtClaimsValidatorConfig {
             required_claims: BTreeMap::new(),
-            required_headers 
+            required_headers,
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
@@ -432,9 +430,9 @@ mod tests {
             ClaimRequirement::ExactValue("production".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { 
+        let config = JwtClaimsValidatorConfig {
             required_claims: BTreeMap::new(),
-            required_headers 
+            required_headers,
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
@@ -468,9 +466,9 @@ mod tests {
             ClaimRequirement::ExactValue("1.0".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { 
-            required_claims, 
-            required_headers 
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers,
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
@@ -487,9 +485,9 @@ mod tests {
         let mut required_headers = BTreeMap::new();
         required_headers.insert("kid".to_string(), ClaimRequirement::Present);
 
-        let config = JwtClaimsValidatorConfig { 
+        let config = JwtClaimsValidatorConfig {
             required_claims: BTreeMap::new(),
-            required_headers 
+            required_headers,
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
@@ -509,9 +507,9 @@ mod tests {
             ClaimRequirement::ExactValue("key-123".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { 
+        let config = JwtClaimsValidatorConfig {
             required_claims: BTreeMap::new(),
-            required_headers 
+            required_headers,
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(!checker.is_valid_match(&jwt));
@@ -528,9 +526,9 @@ mod tests {
         let mut required_headers = BTreeMap::new();
         required_headers.insert("kid".to_string(), ClaimRequirement::Present);
 
-        let config = JwtClaimsValidatorConfig { 
+        let config = JwtClaimsValidatorConfig {
             required_claims: BTreeMap::new(),
-            required_headers 
+            required_headers,
         };
         let checker = JwtClaimsValidator::new(config);
         // Should fail because "kid" is in payload, not header
@@ -556,9 +554,9 @@ mod tests {
             ClaimRequirement::RegexMatch(r"^auth-.*".to_string()),
         );
 
-        let config = JwtClaimsValidatorConfig { 
+        let config = JwtClaimsValidatorConfig {
             required_claims: BTreeMap::new(),
-            required_headers 
+            required_headers,
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
