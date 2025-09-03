@@ -19,37 +19,40 @@ pub enum ClaimRequirement {
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct JwtClaimsValidatorConfig {
     #[serde(default)]
+    pub required_headers: std::collections::BTreeMap<String, ClaimRequirement>,
+    #[serde(default)]
     pub required_claims: std::collections::BTreeMap<String, ClaimRequirement>,
 }
 
 pub struct JwtClaimsValidator {
     pub header_required_claims: Vec<(String, ClaimRequirement)>,
     pub payload_required_claims: Vec<(String, ClaimRequirement)>,
-    patterns: AHashMap<String, Regex>,
+    header_patterns: AHashMap<String, Regex>,
+    payload_patterns: AHashMap<String, Regex>,
 }
 
 impl JwtClaimsValidator {
     pub fn new(config: JwtClaimsValidatorConfig) -> Self {
-        let mut patterns = AHashMap::new();
+        let mut payload_patterns = AHashMap::new();
+        let mut header_patterns = AHashMap::new();
+
         for (claim_name, requirement) in &config.required_claims {
             if let ClaimRequirement::RegexMatch(pattern) = requirement {
-                patterns.insert(claim_name.clone(), Regex::new(pattern).unwrap());
+                payload_patterns.insert(claim_name.clone(), Regex::new(pattern).unwrap());
+            }
+        }
+        
+        for (claim_name, requirement) in &config.required_headers {
+            if let ClaimRequirement::RegexMatch(pattern) = requirement {
+                header_patterns.insert(claim_name.clone(), Regex::new(pattern).unwrap());
             }
         }
 
         Self {
-            header_required_claims: config
-                .required_claims
-                .clone()
-                .into_iter()
-                .filter(|(claim_name, _)| claim_name.starts_with("header."))
-                .collect(),
-            payload_required_claims: config
-                .required_claims
-                .into_iter()
-                .filter(|(claim_name, _)| !claim_name.starts_with("header."))
-                .collect(),
-            patterns,
+            header_required_claims: config.required_headers.into_iter().collect(),
+            payload_required_claims: config.required_claims.into_iter().collect(),
+            header_patterns,
+            payload_patterns,
         }
     }
 }
@@ -58,11 +61,13 @@ impl Validator for JwtClaimsValidator {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         if let Some((header, payload)) = decode_segments(regex_match) {
             validate_required_claims(
-                &header,
                 &payload,
-                &self.header_required_claims,
                 &self.payload_required_claims,
-                &self.patterns,
+                &self.payload_patterns,
+            ) && validate_required_claims(
+                &header,
+                &self.header_required_claims,
+                &self.header_patterns,
             )
         } else {
             // If JWT segments cannot be decoded, the JWT is not well formatted
