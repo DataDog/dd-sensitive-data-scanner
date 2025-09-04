@@ -861,7 +861,7 @@ impl ScannerBuilder<'_> {
             rules,
             labels: Labels::empty(),
             scanner_features: ScannerFeatures::default(),
-            async_scan_timeout: Duration::from_secs(60),
+            async_scan_timeout: Duration::from_secs(60 * 5),
         }
     }
 
