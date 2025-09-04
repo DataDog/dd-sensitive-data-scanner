@@ -397,7 +397,7 @@ fn test_match_suppression() {
         .match_action(MatchAction::Redact {
             replacement: "[REDACTED]".to_string(),
         })
-        .suppression_config(Suppressions {
+        .suppressions(Suppressions {
             ends_with: vec!["@datadoghq.com".to_string()],
             exact_match: vec![],
             starts_with: vec![],

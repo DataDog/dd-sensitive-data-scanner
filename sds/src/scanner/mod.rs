@@ -83,7 +83,7 @@ pub struct RootRuleConfig<T> {
     #[deprecated(note = "Use `third_party_active_checker` instead")]
     match_validation_type: Option<MatchValidationType>,
     third_party_active_checker: Option<MatchValidationType>,
-    suppression_config: Option<Suppressions>,
+    suppressions: Option<Suppressions>,
     #[serde(flatten)]
     pub inner: T,
 }
@@ -109,7 +109,7 @@ impl<T> RootRuleConfig<T> {
             scope: Scope::all(),
             match_validation_type: None,
             third_party_active_checker: None,
-            suppression_config: None,
+            suppressions: None,
             inner,
         }
     }
@@ -121,7 +121,7 @@ impl<T> RootRuleConfig<T> {
             scope: self.scope,
             match_validation_type: self.match_validation_type,
             third_party_active_checker: self.third_party_active_checker,
-            suppression_config: self.suppression_config,
+            suppressions: self.suppressions,
             inner: func(self.inner),
         }
     }
@@ -144,8 +144,8 @@ impl<T> RootRuleConfig<T> {
         self
     }
 
-    pub fn suppression_config(mut self, suppression_config: Suppressions) -> Self {
-        self.suppression_config = Some(suppression_config);
+    pub fn suppressions(mut self, suppressions: Suppressions) -> Self {
+        self.suppressions = Some(suppressions);
         self
     }
 
@@ -169,7 +169,7 @@ pub struct RootCompiledRule {
     pub scope: Scope,
     pub match_action: MatchAction,
     pub match_validation_type: Option<MatchValidationType>,
-    pub suppression_config: Option<CompiledSuppressions>,
+    pub suppressions: Option<CompiledSuppressions>,
 }
 
 impl RootCompiledRule {
@@ -615,9 +615,8 @@ impl Scanner {
         content: &str,
     ) {
         rule_matches.retain(|rule_match| {
-            if let Some(suppression_config) = &self.rules[rule_match.rule_index].suppression_config
-            {
-                !suppression_config.should_match_be_suppressed(content)
+            if let Some(suppressions) = &self.rules[rule_match.rule_index].suppressions {
+                !suppressions.should_match_be_suppressed(content)
             } else {
                 true
             }
@@ -957,7 +956,7 @@ impl ScannerBuilder<'_> {
                     scope: config.scope.clone(),
                     match_action: config.match_action.clone(),
                     match_validation_type: config.get_third_party_active_checker().cloned(),
-                    suppression_config: config.suppression_config.clone().map(|config| config.into()),
+                    suppressions: config.suppressions.clone().map(|config| config.into()),
                 })
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;
