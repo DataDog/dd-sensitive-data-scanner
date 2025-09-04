@@ -41,7 +41,7 @@ pub use path::{Path, PathSegment};
 pub use rule_match::{ReplacementType, RuleMatch};
 pub use scanner::shared_pool::{SharedPool, SharedPoolGuard};
 
-pub use scanner::suppression::SuppressionConfig;
+pub use scanner::suppression::Suppressions;
 pub use scanner::{
     CompiledRule, MatchEmitter, RootCompiledRule, RootRuleConfig, RuleResult, RuleStatus,
     ScanOptionBuilder, Scanner, ScannerBuilder, SharedData, StringMatch, StringMatchesCtx,
