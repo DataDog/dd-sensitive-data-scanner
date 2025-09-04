@@ -19,7 +19,7 @@ use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::{RegexCaches, access_regex_caches};
 use crate::scanner::scope::Scope;
 pub use crate::scanner::shared_data::SharedData;
-use crate::scanner::suppression::{CompiledSuppressionConfig, SuppressionConfig};
+use crate::scanner::suppression::{CompiledSuppressions, Suppressions};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::stats::GLOBAL_STATS;
@@ -83,7 +83,7 @@ pub struct RootRuleConfig<T> {
     #[deprecated(note = "Use `third_party_active_checker` instead")]
     match_validation_type: Option<MatchValidationType>,
     third_party_active_checker: Option<MatchValidationType>,
-    suppression_config: Option<SuppressionConfig>,
+    suppression_config: Option<Suppressions>,
     #[serde(flatten)]
     pub inner: T,
 }
@@ -144,7 +144,7 @@ impl<T> RootRuleConfig<T> {
         self
     }
 
-    pub fn suppression_config(mut self, suppression_config: SuppressionConfig) -> Self {
+    pub fn suppression_config(mut self, suppression_config: Suppressions) -> Self {
         self.suppression_config = Some(suppression_config);
         self
     }
@@ -169,7 +169,7 @@ pub struct RootCompiledRule {
     pub scope: Scope,
     pub match_action: MatchAction,
     pub match_validation_type: Option<MatchValidationType>,
-    pub suppression_config: Option<CompiledSuppressionConfig>,
+    pub suppression_config: Option<CompiledSuppressions>,
 }
 
 impl RootCompiledRule {
