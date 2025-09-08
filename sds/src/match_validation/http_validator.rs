@@ -136,7 +136,7 @@ impl MatchValidator for HttpValidator {
                             self.handle_reqwest_response(match_status, &val);
                         }
                         Err(err) => {
-                            let mut msg = String::from("Error making HTTP request");
+                            let mut msg = String::from(format!("Error making HTTP request: {err}"));
                             if err.is_timeout() {
                                 msg.push_str(": timeout");
                             } else if err.is_connect() {
