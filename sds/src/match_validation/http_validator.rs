@@ -8,6 +8,7 @@ use crate::{MatchStatus, RuleMatch, match_validation::config::HttpMethod};
 use ahash::AHashMap;
 use lazy_static::lazy_static;
 use reqwest::blocking::Response;
+use std::error::Error as StdError;
 use std::{fmt, ops::Range, time::Duration};
 
 lazy_static! {
@@ -135,10 +136,19 @@ impl MatchValidator for HttpValidator {
                             self.handle_reqwest_response(match_status, &val);
                         }
                         Err(err) => {
-                            // TODO(trosenblatt) emit a metrics for this
-                            *match_status = MatchStatus::Error(fmt::format(format_args!(
-                                "Error making HTTP request: {err}"
-                            )));
+                            let mut msg = format!("Error making HTTP request: {err}");
+                            if err.is_timeout() {
+                                msg.push_str(": timeout");
+                            } else if err.is_connect() {
+                                msg.push_str(": connect error");
+                            }
+                            if let Some(status) = err.status() {
+                                msg.push_str(format!(": status {}", status.as_u16()).as_str());
+                            }
+                            if let Some(source) = StdError::source(&err) {
+                                msg.push_str(format!(": {}", source).as_str());
+                            }
+                            *match_status = MatchStatus::Error(msg);
                         }
                     }
                 },
