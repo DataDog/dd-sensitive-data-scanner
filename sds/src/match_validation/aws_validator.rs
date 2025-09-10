@@ -1,3 +1,4 @@
+use std::error::Error as StdError;
 use std::fmt;
 
 use super::{
@@ -164,9 +165,19 @@ impl MatchValidator for AwsValidator {
                     match res {
                         Ok(val) => handle_reqwest_response(match_status, &val),
                         Err(err) => {
-                            *match_status = MatchStatus::Error(fmt::format(format_args!(
-                                "Error making HTTP request: {err}"
-                            )));
+                            let mut msg = format!("Error making HTTP request: {err}");
+                            if err.is_timeout() {
+                                msg.push_str(": timeout");
+                            } else if err.is_connect() {
+                                msg.push_str(": connect error");
+                            }
+                            if let Some(status) = err.status() {
+                                msg.push_str(format!(": status {}", status.as_u16()).as_str());
+                            }
+                            if let Some(source) = StdError::source(&err) {
+                                msg.push_str(format!(": {}", source).as_str());
+                            }
+                            *match_status = MatchStatus::Error(msg);
                         }
                     };
                 });
