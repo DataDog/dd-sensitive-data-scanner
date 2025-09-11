@@ -15,7 +15,21 @@ use reqwest::Client;
 
 lazy_static! {
     static ref AWS_CLIENT: Client = Client::new();
-    static ref AWS_BLOCKING_CLIENT: reqwest::blocking::Client = reqwest::blocking::Client::new();
+    static ref AWS_BLOCKING_CLIENT: reqwest::blocking::Client = {
+        let mut builder = reqwest::blocking::Client::builder();
+
+        if let Ok(proxy_url) = std::env::var("DD_SDS_HTTP_PROXY") {
+            if !proxy_url.is_empty() {
+                if let Ok(proxy) = reqwest::Proxy::all(&proxy_url) {
+                    builder = builder.proxy(proxy);
+                }
+            }
+        }
+
+        builder
+            .build()
+            .expect("failed to build reqwest blocking client for AwsValidator")
+    };
     // Right now the regex matched the secret key with extra characters, this regex aims to extract the secret key only
     static ref AWS_SECRET_REGEX: regex::Regex =
         regex::Regex::new(r"([A-Za-z0-9\/+]{40})\b").unwrap();
