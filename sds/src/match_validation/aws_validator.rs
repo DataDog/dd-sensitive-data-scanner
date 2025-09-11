@@ -19,10 +19,8 @@ lazy_static! {
         let mut builder = reqwest::blocking::Client::builder();
 
         if let Ok(proxy_url) = std::env::var("DD_SDS_HTTP_PROXY") {
-            if !proxy_url.is_empty() {
-                if let Ok(proxy) = reqwest::Proxy::all(&proxy_url) {
-                    builder = builder.proxy(proxy);
-                }
+            if let Ok(proxy) = reqwest::Proxy::all(&proxy_url) {
+                builder = builder.proxy(proxy);
             }
         }
 
