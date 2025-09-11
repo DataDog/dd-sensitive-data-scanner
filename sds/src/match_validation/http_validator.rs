@@ -12,7 +12,18 @@ use std::error::Error as StdError;
 use std::{fmt, ops::Range, time::Duration};
 
 lazy_static! {
-    static ref BLOCKING_HTTP_CLIENT: reqwest::blocking::Client = reqwest::blocking::Client::new();
+    static ref BLOCKING_HTTP_CLIENT: reqwest::blocking::Client = {
+        let mut builder = reqwest::blocking::Client::builder();
+
+        // Prefer explicit SDS proxy, then fall back to standard env vars.
+        if let Ok(proxy_url) = std::env::var("DD_SDS_HTTP_PROXY") && !proxy_url.is_empty() && let Ok(proxy) = reqwest::Proxy::all(&proxy_url) {
+            builder = builder.proxy(proxy);
+        }
+
+        builder
+            .build()
+            .expect("failed to build reqwest blocking client for HttpValidator")
+    };
 }
 
 pub struct HttpValidator {
