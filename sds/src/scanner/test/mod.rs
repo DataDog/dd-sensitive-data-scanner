@@ -422,6 +422,65 @@ fn test_match_suppression() {
 }
 
 #[test]
+fn test_match_suppression_invalid() {
+    let duplicate_suppressions = Suppressions {
+        ends_with: vec!["@datadoghq.com".to_string(), "@datadoghq.com".to_string()],
+        exact_match: vec![],
+        starts_with: vec![],
+    };
+    let suppression_too_long = Suppressions {
+        ends_with: vec!["a".repeat(1001)],
+        exact_match: vec![],
+        starts_with: vec![],
+    };
+    let suppression_too_many = Suppressions {
+        ends_with: vec!["@datadoghq.com".to_string(); 31],
+        exact_match: vec![],
+        starts_with: vec![],
+    };
+    let suppression_empty = Suppressions {
+        ends_with: vec!["".to_string()],
+        exact_match: vec![],
+        starts_with: vec![],
+    };
+
+    let test_cases = vec![
+        (
+            duplicate_suppressions,
+            CreateScannerError::InvalidSuppressions(
+                SuppressionValidationError::DuplicateSuppression,
+            ),
+        ),
+        (
+            suppression_too_long,
+            CreateScannerError::InvalidSuppressions(SuppressionValidationError::SuppressionTooLong),
+        ),
+        (
+            suppression_too_many,
+            CreateScannerError::InvalidSuppressions(
+                SuppressionValidationError::TooManySuppressions,
+            ),
+        ),
+        (
+            suppression_empty,
+            CreateScannerError::InvalidSuppressions(SuppressionValidationError::EmptySuppression),
+        ),
+    ];
+    for (suppressions, expected_error) in test_cases {
+        let suppression_test_rule =
+            RootRuleConfig::new(RegexRuleConfig::new(r".*@.*\.com").build())
+                .match_action(MatchAction::Redact {
+                    replacement: "[REDACTED]".to_string(),
+                })
+                .suppressions(suppressions);
+
+        let scanner = ScannerBuilder::new(&[suppression_test_rule]).build();
+        let err = scanner.map(|_| ()).unwrap_err();
+        assert_eq!(err, expected_error);
+    }
+}
+
+#[test]
 fn test_multiple_partial_redactions() {
     let rule = RootRuleConfig::new(RegexRuleConfig::new("...").build()).match_action(
         MatchAction::PartialRedact {

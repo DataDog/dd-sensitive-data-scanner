@@ -19,7 +19,7 @@ use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::{RegexCaches, access_regex_caches};
 use crate::scanner::scope::Scope;
 pub use crate::scanner::shared_data::SharedData;
-use crate::scanner::suppression::{CompiledSuppressions, Suppressions};
+use crate::scanner::suppression::{CompiledSuppressions, SuppressionValidationError, Suppressions};
 use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::stats::GLOBAL_STATS;
@@ -951,12 +951,16 @@ impl ScannerBuilder<'_> {
             })
             .map(|(config, inner)| {
                 config.match_action.validate()?;
+                let compiled_suppressions = match &config.suppressions {
+                    Some(s) => Some(s.clone().try_into()?),
+                    None => None,
+                };
                 Ok(RootCompiledRule {
                     inner: inner?,
                     scope: config.scope.clone(),
                     match_action: config.match_action.clone(),
                     match_validation_type: config.get_third_party_active_checker().cloned(),
-                    suppressions: config.suppressions.clone().map(|config| config.into()),
+                    suppressions: compiled_suppressions,
                 })
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;

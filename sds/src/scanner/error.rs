@@ -3,7 +3,7 @@ use thiserror::Error;
 
 use crate::{
     RegexValidationError, match_action::MatchActionValidationError,
-    proximity_keywords::ProximityKeywordsValidationError,
+    proximity_keywords::ProximityKeywordsValidationError, scanner::SuppressionValidationError,
 };
 
 impl From<CreateScannerError> for i64 {
@@ -13,6 +13,7 @@ impl From<CreateScannerError> for i64 {
             CreateScannerError::InvalidKeywords(_) => -3,
             CreateScannerError::InvalidMatchAction(_) => -4,
             CreateScannerError::InvalidMatchValidator(_) => -5,
+            CreateScannerError::InvalidSuppressions(_) => -6,
         }
     }
 }
@@ -37,6 +38,9 @@ pub enum CreateScannerError {
     /// The match validator cannot be created
     #[error(transparent)]
     InvalidMatchValidator(#[from] MatchValidatorCreationError),
+    /// The suppressions are invalid (too many suppressions, duplicate suppressions, etc.)
+    #[error(transparent)]
+    InvalidSuppressions(#[from] SuppressionValidationError),
 }
 
 #[derive(Debug, PartialEq, Eq, Error)]
