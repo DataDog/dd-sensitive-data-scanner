@@ -28,14 +28,14 @@ jobs:
   sds:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
       - name: "Rust checks"
         run: bash ./scripts/rust_checks.sh
   sds-go:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
       - run: source "$HOME/.cargo/env"
       - name: "Build the SDS Go/Rust wrapper"
         run: make build-sds-go
@@ -58,7 +58,7 @@ jobs:
   license-3rdparty:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
       - name: "Install dd-rust-license-tool"
         run: cargo install dd-rust-license-tool
       - name: "Check LICENSE-3rdparty.csv"
