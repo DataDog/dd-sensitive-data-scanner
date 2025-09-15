@@ -22,7 +22,7 @@ pub enum SuppressionValidationError {
     #[error("No more than {} suppressions are allowed", MAX_SUPPRESSIONS_COUNT)]
     TooManySuppressions,
 
-    #[error("Empty suppressions are not allowed")]
+    #[error("Individual suppressions cannot be empty")]
     EmptySuppression,
 
     #[error(
