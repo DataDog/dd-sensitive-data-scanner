@@ -1,5 +1,4 @@
 use crate::secondary_validation::Validator;
-use ethaddr::Address;
 
 // 1.0 means 100% uniformly random. 0.90 is meant as a somewhat strict starting point
 const NORMALIZED_ENTROPY_THRESHOLD: f32 = 0.90;
@@ -90,39 +89,13 @@ mod test {
     use crate::secondary_validation::Validator;
     use crate::secondary_validation::entropy::EntropyCheck;
 
-    // #[test]
-    // fn test_entropy() {
-    //     for input in vec![
-    //         // not real
-    //         "S0methingKindaEnligshLooking",
-    //         "just generic english text",
-    //         "Just generic english text",
-    //         // "real"
-    //         "48b0ee9e-953f-dede-2695-ca96cd3c750e",
-    //         "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",
-    //         "Iuef48CRCq9pVo0O7KhEfcpYdtsK",
-    //         "ATATT3xFfGF0GfzfABO7-w-AdvXhHYHF4FnAa1jDw5jlp5U6e5flMKFVQ6eXpOhYyuaXg5pe7ZsHIknCKs3CeS_tTjuLVtQhcfap3JQ0q9oRM1_FqnNZQpYjF7MKtxrIDxGHgrWh2kyAsXcLHCbuydTdAbSvZXVfNX25wb0EozWMKJFWfQL6Wtk=AB5D27B0",
-    //     ] {
-    //         let charset_size = detect_charset_size(input);
-    //         let custom_entropy = raw_shannon_entropy_alphanumeric(input);
-    //         let max_entropy = (charset_size as f32).log2();
-    //
-    //         println!(
-    //             "Input: {}\nEntropy= {} Custom={} Charset={}, normalized={}\n=======================",
-    //             input,
-    //             shannon_entropy(input),
-    //             custom_entropy,
-    //             charset_size,
-    //             custom_entropy / max_entropy
-    //         );
-    //     }
-    //
-    //     panic!();
-    // }
-
     #[test]
     fn validate_entropy_validator() {
-        let valid_inputs = vec![];
+        let valid_inputs = vec![
+            "48b0ee9e-953f-dede-2695-ca96cd3c750e",
+            "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",
+            "ATATT3xFfGF0GfzfABO7-w-AdvXhHYHF4FnAa1jDw5jlp5U6e5flMKFVQ6eXpOhYyuaXg5pe7ZsHIknCKs3CeS_tTjuLVtQhcfap3JQ0q9oRM1_FqnNZQpYjF7MKtxrIDxGHgrWh2kyAsXcLHCbuydTdAbSvZXVfNX25wb0EozWMKJFWfQL6Wtk=AB5D27B0",
+        ];
 
         for passport in valid_inputs {
             println!("Valid input: {passport}");

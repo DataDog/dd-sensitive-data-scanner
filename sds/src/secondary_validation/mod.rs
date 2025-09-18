@@ -147,7 +147,7 @@ impl SecondaryValidator {
             }
             SecondaryValidator::DutchBsnChecksum => Arc::new(DutchBsnChecksum),
             SecondaryValidator::DutchPassportChecksum => Arc::new(DutchPassportChecksum),
-            SecondaryValidator::Entropy => Arc::new(EntropyCheck),
+            SecondaryValidator::EntropyCheck => Arc::new(EntropyCheck),
             SecondaryValidator::EthereumChecksum => Arc::new(EthereumChecksum),
             SecondaryValidator::FinnishHetuChecksum => Arc::new(FinnishHetuChecksum),
             SecondaryValidator::FranceNifChecksum => Arc::new(FranceNifChecksum),
