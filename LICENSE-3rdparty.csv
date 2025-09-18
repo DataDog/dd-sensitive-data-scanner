@@ -51,6 +51,7 @@ dyn-clone,https://github.com/dtolnay/dyn-clone,MIT OR Apache-2.0,David Tolnay <d
 either,https://github.com/rayon-rs/either,MIT OR Apache-2.0,bluss
 encoding_rs,https://github.com/hsivonen/encoding_rs,(Apache-2.0 OR MIT) AND BSD-3-Clause,Henri Sivonen <hsivonen@hsivonen.fi>
 endian-type,https://github.com/Lolirofle/endian-type,MIT,Lolirofle <lolipopple@hotmail.com>
+entropy,https://github.com/smackysnacks/entropy,MIT,Mack Stump <mack.stump@gmail.com>
 equivalent,https://github.com/indexmap-rs/equivalent,Apache-2.0 OR MIT,The equivalent Authors
 ethaddr,https://github.com/nlordell/ethprim-rs,MIT OR Apache-2.0,Nicholas Rodrigues Lordello <nlordell@gmail.com>
 ethbloom,https://github.com/paritytech/parity-common,MIT OR Apache-2.0,Parity Technologies <admin@parity.io>
