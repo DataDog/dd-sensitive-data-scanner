@@ -8,6 +8,7 @@ mod coordination_number_checksum;
 mod czech_tin_checksum;
 mod dutch_bsn_checksum;
 mod dutch_passport_checksum;
+mod entropy;
 mod ethereum_checksum;
 mod finnish_hetu_checksum;
 mod france_nif_checksum;
@@ -40,6 +41,7 @@ mod spain_dni_checksum;
 mod spanish_nuss_checksum;
 mod sweden_pin_checksum;
 mod verhoeff_checksum;
+
 #[cfg(test)]
 pub use jwt_expiration_checker::generate_jwt;
 
@@ -54,6 +56,7 @@ pub use crate::secondary_validation::coordination_number_checksum::CoordinationN
 pub use crate::secondary_validation::czech_tin_checksum::CzechTaxIdentificationNumberChecksum;
 pub use crate::secondary_validation::dutch_bsn_checksum::DutchBsnChecksum;
 pub use crate::secondary_validation::dutch_passport_checksum::DutchPassportChecksum;
+pub use crate::secondary_validation::entropy::EntropyCheck;
 pub use crate::secondary_validation::ethereum_checksum::EthereumChecksum;
 pub use crate::secondary_validation::finnish_hetu_checksum::FinnishHetuChecksum;
 use crate::secondary_validation::france_nif_checksum::FranceNifChecksum;
@@ -144,6 +147,7 @@ impl SecondaryValidator {
             }
             SecondaryValidator::DutchBsnChecksum => Arc::new(DutchBsnChecksum),
             SecondaryValidator::DutchPassportChecksum => Arc::new(DutchPassportChecksum),
+            SecondaryValidator::Entropy => Arc::new(EntropyCheck),
             SecondaryValidator::EthereumChecksum => Arc::new(EthereumChecksum),
             SecondaryValidator::FinnishHetuChecksum => Arc::new(FinnishHetuChecksum),
             SecondaryValidator::FranceNifChecksum => Arc::new(FranceNifChecksum),

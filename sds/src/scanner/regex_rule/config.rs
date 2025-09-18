@@ -144,6 +144,7 @@ pub enum SecondaryValidator {
     CzechTaxIdentificationNumberChecksum,
     DutchBsnChecksum,
     DutchPassportChecksum,
+    EntropyCheck,
     EthereumChecksum,
     FinnishHetuChecksum,
     FranceNifChecksum,
