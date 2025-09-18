@@ -73,6 +73,7 @@ fn raw_shannon_entropy_alphanumeric(input: &str) -> f32 {
         counts[c as usize] += 1;
     }
 
+    #[allow(clippy::needless_range_loop)]
     for i in ('0' as usize)..('z' as usize) {
         let count = counts[i];
         if count == 0 {
