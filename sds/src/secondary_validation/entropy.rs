@@ -66,9 +66,6 @@ fn raw_shannon_entropy_alphanumeric(input: &str) -> f32 {
     let mut num_bytes = 0;
 
     for c in input.chars().filter(|c| c.is_ascii_alphanumeric()) {
-        if !c.is_ascii_alphanumeric() {
-            continue;
-        }
         num_bytes += 1;
         counts[c as usize] += 1;
     }
@@ -98,9 +95,9 @@ mod test {
             "ATATT3xFfGF0GfzfABO7-w-AdvXhHYHF4FnAa1jDw5jlp5U6e5flMKFVQ6eXpOhYyuaXg5pe7ZsHIknCKs3CeS_tTjuLVtQhcfap3JQ0q9oRM1_FqnNZQpYjF7MKtxrIDxGHgrWh2kyAsXcLHCbuydTdAbSvZXVfNX25wb0EozWMKJFWfQL6Wtk=AB5D27B0",
         ];
 
-        for passport in valid_inputs {
-            println!("Valid input: {passport}");
-            assert!(EntropyCheck.is_valid_match(passport));
+        for input in valid_inputs {
+            println!("Valid input: {input}");
+            assert!(EntropyCheck.is_valid_match(input));
         }
 
         let invalid_inputs = vec![
@@ -110,9 +107,9 @@ mod test {
             "YOUR_API_KEY_GOES_HERE",
         ];
 
-        for passport in invalid_inputs {
-            println!("Invalid input: {passport}");
-            assert!(!EntropyCheck.is_valid_match(passport));
+        for input in invalid_inputs {
+            println!("Invalid input: {input}");
+            assert!(!EntropyCheck.is_valid_match(input));
         }
     }
 }
