@@ -200,8 +200,11 @@ impl Iterator for TruePositiveSearch<'_> {
                 return None;
             }
             let input = Input::new(self.content).range(self.start..);
-
-            if let Some(regex_match) = self.rule.regex.search_with(self.cache, &input) {
+            let mut caps = self.rule.regex.create_captures();
+            self.rule
+                .regex
+                .search_captures_with(self.cache, &input, &mut caps);
+            if let Some(regex_match) = caps.get_match() {
                 // this is only checking extra validators (e.g. checksums)
                 let is_false_positive_match = is_false_positive_match(
                     &regex_match,
