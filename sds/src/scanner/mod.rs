@@ -616,7 +616,9 @@ impl Scanner {
     ) {
         rule_matches.retain(|rule_match| {
             if let Some(suppressions) = &self.rules[rule_match.rule_index].suppressions {
-                !suppressions.should_match_be_suppressed(content)
+                !suppressions.should_match_be_suppressed(
+                    &content[rule_match.utf8_start..rule_match.utf8_end],
+                )
             } else {
                 true
             }
