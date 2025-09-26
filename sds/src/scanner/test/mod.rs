@@ -447,7 +447,7 @@ fn test_match_suppression_suppress_half_of_the_matches() {
     assert_eq!(matches.len(), 1);
     assert_eq!(
         content,
-        "my main email is [REDACTED] while my secondary email is nathan@yahoo.com"
+        "my main email is arthur@datadoghq.com while my secondary email is [REDACTED]"
     );
 }
 
