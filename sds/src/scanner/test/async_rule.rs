@@ -27,7 +27,7 @@ impl CompiledRule for AsyncCompiledRule {
         ctx.process_async(move |ctx| {
             Box::pin(async move {
                 tokio::time::sleep(wait).await;
-                ctx.emit_match(StringMatch { start: 10, end: 16 });
+                ctx.emit_match(StringMatch { start: 10, end: 16 }, 1.0);
                 Ok(())
             })
         })

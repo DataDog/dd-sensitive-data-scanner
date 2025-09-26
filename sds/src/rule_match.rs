@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::fmt::{Display, Formatter};
 
 /// Metadata about a rule match.
-#[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Debug)]
 pub struct RuleMatch {
     /// The index of the rule that matched. This preserves the order
     /// of rules that were passed into the scanner.
@@ -35,6 +35,54 @@ pub struct RuleMatch {
 
     // match status updated by the validate_matches scanner method
     pub match_status: MatchStatus,
+
+    pub match_confidence: f64,
+}
+
+impl PartialEq for RuleMatch {
+    fn eq(&self, other: &Self) -> bool {
+        self.rule_index == other.rule_index
+            && self.path == other.path
+            && self.replacement_type == other.replacement_type
+            && self.start_index == other.start_index
+            && self.end_index_exclusive == other.end_index_exclusive
+            && self.shift_offset == other.shift_offset
+            && self.match_value == other.match_value
+            && self.match_status == other.match_status
+    }
+}
+
+impl Eq for RuleMatch {}
+
+impl PartialOrd for RuleMatch {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for RuleMatch {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (
+            &self.rule_index,
+            &self.path,
+            &self.replacement_type,
+            &self.start_index,
+            &self.end_index_exclusive,
+            &self.shift_offset,
+            &self.match_value,
+            &self.match_status,
+        )
+            .cmp(&(
+                &other.rule_index,
+                &other.path,
+                &other.replacement_type,
+                &other.start_index,
+                &other.end_index_exclusive,
+                &other.shift_offset,
+                &other.match_value,
+                &other.match_status,
+            ))
+    }
 }
 
 pub struct InternalRuleMatch<E: Encoding> {
@@ -52,16 +100,20 @@ pub struct InternalRuleMatch<E: Encoding> {
 
     /// The end index of the match, converted to a different encoding
     pub custom_end: <E as Encoding>::Index,
+
+    /// The confidence score for the match
+    pub match_confidence: f64,
 }
 
 impl<E: Encoding> InternalRuleMatch<E> {
-    pub fn new(rule_index: usize, string_match: StringMatch) -> Self {
+    pub fn new(rule_index: usize, string_match: StringMatch, match_confidence: f64) -> Self {
         Self {
             rule_index,
             utf8_start: string_match.start,
             utf8_end: string_match.end,
             custom_start: E::zero_index(),
             custom_end: E::zero_index(),
+            match_confidence,
         }
     }
 

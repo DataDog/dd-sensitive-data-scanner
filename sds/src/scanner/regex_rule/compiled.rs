@@ -50,7 +50,7 @@ impl CompiledRule for RegexCompiledRule {
                     ctx.excluded_matches,
                 );
                 for string_match in true_positive_search {
-                    ctx.match_emitter.emit(string_match);
+                    ctx.match_emitter.emit(string_match, 1.0);
                 }
             }
         }
@@ -101,7 +101,7 @@ impl RegexCompiledRule {
                     // is used instead of the end since the included keyword can overlap with
                     // a previous match (maybe this can be removed in the future?)
                     included_keyword_matches.skip_to(true_positive_match.start);
-                    ctx.match_emitter.emit(true_positive_match);
+                    ctx.match_emitter.emit(true_positive_match, 1.0);
 
                     // Continue search since another true positive could potentially be found within the same prefix
                 } else {
@@ -156,7 +156,7 @@ impl RegexCompiledRule {
         );
 
         for string_match in true_positive_search {
-            ctx.match_emitter.emit(string_match);
+            ctx.match_emitter.emit(string_match, 1.0);
         }
     }
 

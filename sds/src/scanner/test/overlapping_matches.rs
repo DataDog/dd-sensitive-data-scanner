@@ -33,6 +33,7 @@ fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
             match_value: None,
 
             match_status: MatchStatus::NotAvailable,
+            match_confidence: 1.0,
         }
     );
 
@@ -49,6 +50,7 @@ fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
             match_value: None,
 
             match_status: MatchStatus::NotAvailable,
+            match_confidence: 1.0,
         }
     );
 
@@ -65,6 +67,7 @@ fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
             match_value: None,
 
             match_status: MatchStatus::NotAvailable,
+            match_confidence: 1.0,
         }
     );
 }
@@ -103,6 +106,7 @@ fn test_overlapping_mutation_higher_priority() {
             match_value: None,
 
             match_status: MatchStatus::NotAvailable,
+            match_confidence: 1.0,
         }
     );
 }
@@ -138,6 +142,7 @@ fn test_overlapping_start_offset() {
             match_value: None,
 
             match_status: MatchStatus::NotAvailable,
+            match_confidence: 1.0,
         }
     );
 }
@@ -173,6 +178,7 @@ fn test_overlapping_length() {
             match_value: None,
 
             match_status: MatchStatus::NotAvailable,
+            match_confidence: 1.0,
         }
     );
 }
@@ -208,6 +214,7 @@ fn test_overlapping_rule_order() {
             match_value: None,
 
             match_status: MatchStatus::NotAvailable,
+            match_confidence: 1.0,
         }
     );
 }

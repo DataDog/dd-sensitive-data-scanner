@@ -37,7 +37,8 @@ impl CompiledRule for DumbCompiledRule {
         _path: &Path,
         ctx: &mut StringMatchesCtx,
     ) -> RuleResult {
-        ctx.match_emitter.emit(StringMatch { start: 10, end: 16 });
+        ctx.match_emitter
+            .emit(StringMatch { start: 10, end: 16 }, 1.0);
         Ok(RuleStatus::Done)
     }
 }
@@ -447,7 +448,7 @@ fn test_match_suppression_suppress_half_of_the_matches() {
     assert_eq!(matches.len(), 1);
     assert_eq!(
         content,
-        "my main email is [REDACTED] while my secondary email is nathan@yahoo.com"
+        "my main email is arthur@datadoghq.com while my secondary email is [REDACTED]"
     );
 }
 
@@ -539,6 +540,7 @@ fn test_multiple_partial_redactions() {
             match_value: None,
 
             match_status: MatchStatus::NotAvailable,
+            match_confidence: 1.0,
         }
     );
 
@@ -555,6 +557,7 @@ fn test_multiple_partial_redactions() {
             match_value: None,
 
             match_status: MatchStatus::NotAvailable,
+            match_confidence: 1.0,
         }
     );
 
@@ -571,6 +574,7 @@ fn test_multiple_partial_redactions() {
             match_value: None,
 
             match_status: MatchStatus::NotAvailable,
+            match_confidence: 1.0,
         }
     );
 }

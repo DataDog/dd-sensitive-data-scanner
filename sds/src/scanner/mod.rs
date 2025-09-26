@@ -59,18 +59,18 @@ pub struct StringMatch {
 }
 
 pub trait MatchEmitter<T = ()> {
-    fn emit(&mut self, string_match: StringMatch) -> T;
+    fn emit(&mut self, string_match: StringMatch, match_confidence: f64) -> T;
 }
 
 // This implements MatchEmitter for mutable closures (so you can use a closure instead of a custom
 // struct that implements MatchEmitter)
 impl<F, T> MatchEmitter<T> for F
 where
-    F: FnMut(StringMatch) -> T,
+    F: FnMut(StringMatch, f64) -> T,
 {
-    fn emit(&mut self, string_match: StringMatch) -> T {
+    fn emit(&mut self, string_match: StringMatch, match_confidence: f64) -> T {
         // This just calls the closure (itself)
-        (self)(string_match)
+        (self)(string_match, match_confidence)
     }
 }
 
@@ -242,12 +242,12 @@ impl StringMatchesCtx<'_> {
 }
 
 pub struct AsyncStringMatchesCtx {
-    rule_matches: Vec<StringMatch>,
+    rule_matches: Vec<(StringMatch, f64)>,
 }
 
 impl AsyncStringMatchesCtx {
-    pub fn emit_match(&mut self, string_match: StringMatch) {
-        self.rule_matches.push(string_match);
+    pub fn emit_match(&mut self, string_match: StringMatch, match_confidence: f64) {
+        self.rule_matches.push((string_match, match_confidence));
     }
 }
 
@@ -267,7 +267,7 @@ pub struct PendingRuleJob {
 
 pub struct AsyncRuleInfo {
     rule_index: usize,
-    rule_matches: Vec<StringMatch>,
+    rule_matches: Vec<(StringMatch, f64)>,
 }
 
 /// A rule result that cannot be async
@@ -538,7 +538,7 @@ impl Scanner {
                 rule_info
                     .rule_matches
                     .into_iter()
-                    .map(|x| InternalRuleMatch::new(rule_info.rule_index, x)),
+                    .map(|x| InternalRuleMatch::new(rule_info.rule_index, x.0, x.1)),
             );
         }
 
@@ -779,6 +779,7 @@ impl Scanner {
             shift_offset,
             match_value: matched_content_copy,
             match_status,
+            match_confidence: rule_match.match_confidence,
         }
     }
 
@@ -1035,11 +1036,15 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
             let rule = &self.scanner.rules[rule_index];
             {
                 // creating the emitter is basically free, it will get mostly optimized away
-                let mut emitter = |rule_match: StringMatch| {
+                let mut emitter = |rule_match: StringMatch, match_confidence: f64| {
                     // This should never happen, but to ensure no empty match is ever generated
                     // (which may cause an infinite loop), this will panic instead.
                     assert_ne!(rule_match.start, rule_match.end, "empty match detected");
-                    path_rules_matches.push(InternalRuleMatch::new(rule_index, rule_match));
+                    path_rules_matches.push(InternalRuleMatch::new(
+                        rule_index,
+                        rule_match,
+                        match_confidence,
+                    ));
                 };
 
                 rule.init_per_string_data(&self.scanner.labels, &mut per_string_data);
