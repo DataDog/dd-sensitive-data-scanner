@@ -93,7 +93,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                             let results = scanner.scan(input).unwrap();
                             matches += results.len();
                         }
-                        assert_eq!(matches, 35);
+                        assert_eq!(matches, 36);
                     });
                 }
                 thread_pool.join();
@@ -111,7 +111,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     thread_pool.execute(move || {
                         let mut sample_event = sample_event.clone();
                         let results = scanner.scan(&mut sample_event).unwrap();
-                        assert_eq!(results.len(), 35);
+                        assert_eq!(results.len(), 36);
                     });
                 }
                 thread_pool.join()
@@ -163,7 +163,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                         let results = scanner.scan(input).unwrap();
                         matches += results.len();
                     }
-                    assert_eq!(matches, 35);
+                    assert_eq!(matches, 36);
                 }
             })
         },
@@ -179,7 +179,7 @@ pub fn multithread_scanning(c: &mut Criterion) {
                     let scanner = Arc::clone(&scanner_with_keywords);
                     let mut sample_event = sample_event.clone();
                     let results = scanner.scan(&mut sample_event).unwrap();
-                    assert_eq!(results.len(), 35);
+                    assert_eq!(results.len(), 36);
                 }
             })
         },
