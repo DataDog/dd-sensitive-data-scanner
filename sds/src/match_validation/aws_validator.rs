@@ -18,7 +18,7 @@ lazy_static! {
     static ref AWS_BLOCKING_CLIENT: reqwest::blocking::Client = {
         let mut builder = reqwest::blocking::Client::builder();
 
-        if let Ok(proxy_url) = std::env::var("DD_SDS_HTTP_PROXY") && !proxy_url.is_empty() && let Ok(proxy) = reqwest::Proxy::all(&proxy_url) {
+        if let Ok(proxy_url) = std::env::var("HTTPS_PROXY") && !proxy_url.is_empty() && let Ok(proxy) = reqwest::Proxy::all(&proxy_url) {
             builder = builder.proxy(proxy);
         }
 
