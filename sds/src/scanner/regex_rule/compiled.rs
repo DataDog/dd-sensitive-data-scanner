@@ -3,6 +3,7 @@ use crate::proximity_keywords::{
     get_prefix_start, is_index_within_prefix,
 };
 use crate::scanner::metrics::RuleMetrics;
+use crate::scanner::regex_rule::regex_cache_store::RegexCacheValue;
 use crate::scanner::regex_rule::regex_store::SharedRegex;
 use crate::scanner::{
     RuleResult, RuleStatus, StringMatchesCtx, get_next_regex_start, is_false_positive_match,
@@ -12,6 +13,7 @@ use crate::{CompiledRule, ExclusionCheck, Path, StringMatch};
 use ahash::AHashSet;
 use regex_automata::Input;
 use regex_automata::meta::Cache;
+use regex_automata::util::captures::Captures;
 use std::sync::Arc;
 
 /// This is the internal representation of a rule after it has been validated / compiled.
@@ -41,10 +43,11 @@ impl CompiledRule for RegexCompiledRule {
                 );
             }
             None => {
+                let cache_value = ctx.regex_caches.get(&self.regex);
                 let true_positive_search = self.true_positive_matches(
                     content,
                     0,
-                    ctx.regex_caches.get(&self.regex),
+                    cache_value,
                     true,
                     ctx.exclusion_check,
                     ctx.excluded_matches,
@@ -80,10 +83,11 @@ impl RegexCompiledRule {
         'included_keyword_search: while let Some(included_keyword_match) =
             included_keyword_matches.next(ctx.regex_caches)
         {
+            let cache_value = ctx.regex_caches.get(&self.regex);
             let true_positive_search = self.true_positive_matches(
                 content,
                 included_keyword_match.end,
-                ctx.regex_caches.get(&self.regex),
+                cache_value,
                 false,
                 ctx.exclusion_check,
                 ctx.excluded_matches,
@@ -128,9 +132,10 @@ impl RegexCompiledRule {
 
         {
             let input = Input::new(content);
+            let cache_value = ctx.regex_caches.get(&self.regex);
             if self
                 .regex
-                .search_with(ctx.regex_caches.get(&self.regex), &input)
+                .search_with(&mut cache_value.cache, &input)
                 .is_some()
             {
                 has_verified_kws_in_path = Some(contains_keyword_in_path(
@@ -146,10 +151,12 @@ impl RegexCompiledRule {
             return;
         }
 
+        let cache_value = ctx.regex_caches.get(&self.regex);
+
         let true_positive_search = self.true_positive_matches(
             content,
             0,
-            ctx.regex_caches.get(&self.regex),
+            cache_value,
             false,
             ctx.exclusion_check,
             ctx.excluded_matches,
@@ -164,7 +171,7 @@ impl RegexCompiledRule {
         &'a self,
         content: &'a str,
         start: usize,
-        cache: &'a mut Cache,
+        cache: &'a mut RegexCacheValue,
         check_excluded_keywords: bool,
         exclusion_check: &'a ExclusionCheck<'a>,
         excluded_matches: &'a mut AHashSet<String>,
@@ -173,7 +180,8 @@ impl RegexCompiledRule {
             rule: self,
             content,
             start,
-            cache,
+            cache: &mut cache.cache,
+            captures: &mut cache.captures,
             check_excluded_keywords,
             exclusion_check,
             excluded_matches,
@@ -189,6 +197,7 @@ pub struct TruePositiveSearch<'a> {
     check_excluded_keywords: bool,
     exclusion_check: &'a ExclusionCheck<'a>,
     excluded_matches: &'a mut AHashSet<String>,
+    captures: &'a mut Captures,
 }
 
 impl Iterator for TruePositiveSearch<'_> {
@@ -200,39 +209,51 @@ impl Iterator for TruePositiveSearch<'_> {
                 return None;
             }
             let input = Input::new(self.content).range(self.start..);
+            if self
+                .rule
+                .regex
+                .search_half_with(self.cache, &input)
+                .is_some()
+            {
+                self.captures.clear();
+                self.rule
+                    .regex
+                    .search_captures_with(self.cache, &input, self.captures);
+                if let Some(regex_match) = self.captures.get_match() {
+                    // this is only checking extra validators (e.g. checksums)
+                    let is_false_positive_match = is_false_positive_match(
+                        &regex_match,
+                        self.rule,
+                        self.content,
+                        self.check_excluded_keywords,
+                    );
 
-            if let Some(regex_match) = self.rule.regex.search_with(self.cache, &input) {
-                // this is only checking extra validators (e.g. checksums)
-                let is_false_positive_match = is_false_positive_match(
-                    &regex_match,
-                    self.rule,
-                    self.content,
-                    self.check_excluded_keywords,
-                );
-
-                if is_false_positive_match {
-                    if let Some(next) = get_next_regex_start(self.content, &regex_match) {
-                        self.start = next;
+                    if is_false_positive_match {
+                        if let Some(next) = get_next_regex_start(self.content, &regex_match) {
+                            self.start = next;
+                        } else {
+                            // There are no more chars to scan
+                            return None;
+                        }
                     } else {
-                        // There are no more chars to scan
-                        return None;
+                        // The next match will start at the end of this match. This is fine because
+                        // patterns that can match empty matches are rejected.
+                        self.start = regex_match.end();
+
+                        if self.exclusion_check.is_excluded(self.rule.rule_index) {
+                            // Matches from excluded paths are saved and used to treat additional equal matches as false positives.
+                            // Matches are checked against this `excluded_matches` set after all scanning has been done.
+                            self.excluded_matches
+                                .insert(self.content[regex_match.range()].to_string());
+                        } else {
+                            return Some(StringMatch {
+                                start: regex_match.start(),
+                                end: regex_match.end(),
+                            });
+                        }
                     }
                 } else {
-                    // The next match will start at the end of this match. This is fine because
-                    // patterns that can match empty matches are rejected.
-                    self.start = regex_match.end();
-
-                    if self.exclusion_check.is_excluded(self.rule.rule_index) {
-                        // Matches from excluded paths are saved and used to treat additional equal matches as false positives.
-                        // Matches are checked against this `excluded_matches` set after all scanning has been done.
-                        self.excluded_matches
-                            .insert(self.content[regex_match.range()].to_string());
-                    } else {
-                        return Some(StringMatch {
-                            start: regex_match.start(),
-                            end: regex_match.end(),
-                        });
-                    }
+                    return None;
                 }
             } else {
                 return None;

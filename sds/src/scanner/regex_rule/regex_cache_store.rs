@@ -21,7 +21,12 @@ pub fn access_regex_caches<T>(func: impl FnOnce(&mut RegexCaches) -> T) -> T {
 }
 
 pub struct RegexCaches {
-    map: SecondaryMap<RegexCacheKey, regex_automata::meta::Cache>,
+    map: SecondaryMap<RegexCacheKey, RegexCacheValue>,
+}
+
+pub struct RegexCacheValue {
+    pub cache: regex_automata::meta::Cache,
+    pub captures: regex_automata::util::captures::Captures,
 }
 
 impl RegexCaches {
@@ -31,7 +36,7 @@ impl RegexCaches {
         }
     }
 
-    pub fn get(&mut self, shared_regex: &SharedRegex) -> &mut regex_automata::meta::Cache {
+    pub fn get(&mut self, shared_regex: &SharedRegex) -> &mut RegexCacheValue {
         self.raw_get(shared_regex.cache_key, &shared_regex.regex)
     }
 
@@ -39,10 +44,13 @@ impl RegexCaches {
         &mut self,
         key: RegexCacheKey,
         regex: &MetaRegex,
-    ) -> &mut regex_automata::meta::Cache {
+    ) -> &mut RegexCacheValue {
         self.map
             .entry(key)
             .unwrap()
-            .or_insert_with(|| regex.create_cache())
+            .or_insert_with(|| RegexCacheValue {
+                cache: regex.create_cache(),
+                captures: regex.create_captures(),
+            })
     }
 }
