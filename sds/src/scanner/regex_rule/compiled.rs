@@ -136,7 +136,7 @@ impl RegexCompiledRule {
             let cache_value = ctx.regex_caches.get(&self.regex);
             if self
                 .regex
-                .search_with(&mut cache_value.cache, &input)
+                .search_half_with(&mut cache_value.cache, &input)
                 .is_some()
             {
                 has_verified_kws_in_path = Some(contains_keyword_in_path(
