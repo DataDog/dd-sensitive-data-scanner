@@ -1,28 +1,9 @@
+use crate::scanner::regex_rule::config::{ClaimRequirement, JwtClaimsValidatorConfig};
 use crate::secondary_validation::Validator;
 use ahash::AHashMap;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(tag = "type", content = "config")]
-pub enum ClaimRequirement {
-    /// Just check that the claim exists
-    Present,
-    /// Check that the claim exists and has an exact value
-    ExactValue(String),
-    /// Check that the claim exists and matches a regex pattern
-    RegexMatch(String),
-}
-
-#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
-pub struct JwtClaimsValidatorConfig {
-    #[serde(default)]
-    pub required_headers: std::collections::BTreeMap<String, ClaimRequirement>,
-    #[serde(default)]
-    pub required_claims: std::collections::BTreeMap<String, ClaimRequirement>,
-}
 
 pub struct JwtClaimsValidator {
     pub header_required_claims: Vec<(String, ClaimRequirement)>,
@@ -156,9 +137,6 @@ fn validate_claim_requirement(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secondary_validation::jwt_claims_validator::ClaimRequirement::{
-        Present, RegexMatch,
-    };
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use std::collections::BTreeMap;
 
@@ -365,7 +343,7 @@ mod tests {
             )
             .unwrap(),
             JwtClaimsValidatorConfig {
-                required_claims: [("a".to_owned(), Present)].into(),
+                required_claims: [("a".to_owned(), ClaimRequirement::Present)].into(),
                 required_headers: BTreeMap::new()
             }
         );
@@ -379,7 +357,11 @@ mod tests {
             )
             .unwrap(),
             JwtClaimsValidatorConfig {
-                required_claims: [("a".to_owned(), RegexMatch("myregex".to_owned()))].into(),
+                required_claims: [(
+                    "a".to_owned(),
+                    ClaimRequirement::RegexMatch("myregex".to_owned())
+                )]
+                .into(),
                 required_headers: BTreeMap::new()
             }
         );
@@ -393,7 +375,7 @@ mod tests {
             )
             .unwrap(),
             JwtClaimsValidatorConfig {
-                required_claims: [("sub".to_owned(), Present)].into(),
+                required_claims: [("sub".to_owned(), ClaimRequirement::Present)].into(),
                 required_headers: [("kid".to_owned(), ClaimRequirement::ExactValue("key-123".to_owned()))].into()
             }
         );
