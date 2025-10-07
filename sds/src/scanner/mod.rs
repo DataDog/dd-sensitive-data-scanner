@@ -29,7 +29,6 @@ use crate::{
 };
 use ahash::{AHashMap, AHashSet};
 use futures::executor::block_on;
-use regex_automata::Match;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::ops::Deref;
@@ -1090,10 +1089,10 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
 }
 
 // Calculates the next starting position for a regex match if a the previous match is a false positive
-fn get_next_regex_start(content: &str, regex_match: &Match) -> Option<usize> {
+fn get_next_regex_start(content: &str, regex_match: (usize, usize)) -> Option<usize> {
     // The next valid UTF8 char after the start of the regex match is used
-    if let Some((i, _)) = content[regex_match.start()..].char_indices().nth(1) {
-        Some(regex_match.start() + i)
+    if let Some((i, _)) = content[regex_match.0..].char_indices().nth(1) {
+        Some(regex_match.0 + i)
     } else {
         // There are no more chars left in the string to scan
         None
@@ -1101,20 +1100,20 @@ fn get_next_regex_start(content: &str, regex_match: &Match) -> Option<usize> {
 }
 
 fn is_false_positive_match(
-    regex_match: &Match,
+    regex_match_range: (usize, usize),
     rule: &RegexCompiledRule,
     content: &str,
     check_excluded_keywords: bool,
 ) -> bool {
     if check_excluded_keywords
         && let Some(excluded_keywords) = &rule.excluded_keywords
-        && excluded_keywords.is_false_positive_match(content, regex_match.start())
+        && excluded_keywords.is_false_positive_match(content, regex_match_range.0)
     {
         return true;
     }
 
     if let Some(validator) = rule.validator.as_ref()
-        && !validator.is_valid_match(&content[regex_match.range()])
+        && !validator.is_valid_match(&content[regex_match_range.0..regex_match_range.1])
     {
         return true;
     }

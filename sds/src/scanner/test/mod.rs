@@ -20,7 +20,6 @@ use crate::validation::RegexValidationError;
 use crate::{Encoding, Utf8Encoding};
 use crate::{PartialRedactDirection, Path, PathSegment, RuleMatch, simple_event::SimpleEvent};
 
-use regex_automata::Match;
 use std::collections::BTreeMap;
 
 use super::CompiledRule;
@@ -823,8 +822,8 @@ fn test_internal_overlapping_matches() {
 #[test]
 fn test_next_regex_start_after_false_positive() {
     let content = "          testtest";
-    let regex_match = Match::must(0, 10..14);
-    assert_eq!(get_next_regex_start(content, &regex_match), Some(11));
+    let regex_match = (10, 14);
+    assert_eq!(get_next_regex_start(content, regex_match), Some(11));
 }
 
 #[test]
@@ -850,5 +849,28 @@ fn test_excluded_keyword_with_excluded_chars_in_content() {
 
     let matches = scanner.scan(&mut content).unwrap();
     // This should match because "test" is not found, so it's not a false-positive
+    assert_eq!(matches.len(), 1);
+}
+
+#[test]
+fn test_capture_group() {
+    let suppression_test_rule = RootRuleConfig::new(
+        RegexRuleConfig::new(r"hello (?<capture_group>world)")
+            .with_pattern_capture_group("capture_group")
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    });
+
+    let scanner = ScannerBuilder::new(&[suppression_test_rule])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
+
+    let mut content = "hello world i am here".to_string();
+    let matches = scanner.scan(&mut content).unwrap();
+    // Only the "world" part of the match should be redacted
+    assert_eq!(content, "hello [REDACTED] i am here");
     assert_eq!(matches.len(), 1);
 }

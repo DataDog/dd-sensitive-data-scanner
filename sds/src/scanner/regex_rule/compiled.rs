@@ -24,6 +24,7 @@ pub struct RegexCompiledRule {
     pub excluded_keywords: Option<CompiledExcludedProximityKeywords>,
     pub validator: Option<Arc<dyn Validator>>,
     pub metrics: RuleMetrics,
+    pub pattern_capture_group: Option<String>,
 }
 
 impl CompiledRule for RegexCompiledRule {
@@ -215,21 +216,33 @@ impl Iterator for TruePositiveSearch<'_> {
                 .search_half_with(self.cache, &input)
                 .is_some()
             {
-                self.captures.clear();
-                self.rule
-                    .regex
-                    .search_captures_with(self.cache, &input, self.captures);
-                if let Some(regex_match) = self.captures.get_match() {
+                let regex_match_option = match &self.rule.pattern_capture_group {
+                    Some(capture_group) => {
+                        self.captures.clear();
+                        self.rule
+                            .regex
+                            .search_captures_with(self.cache, &input, self.captures);
+                        self.captures
+                            .get_group_by_name(capture_group)
+                            .map(|span| (span.start, span.end))
+                    }
+                    None => self
+                        .rule
+                        .regex
+                        .search_with(self.cache, &input)
+                        .map(|re_match| (re_match.start(), re_match.end())),
+                };
+                if let Some(regex_match_range) = regex_match_option {
                     // this is only checking extra validators (e.g. checksums)
                     let is_false_positive_match = is_false_positive_match(
-                        &regex_match,
+                        regex_match_range,
                         self.rule,
                         self.content,
                         self.check_excluded_keywords,
                     );
 
                     if is_false_positive_match {
-                        if let Some(next) = get_next_regex_start(self.content, &regex_match) {
+                        if let Some(next) = get_next_regex_start(self.content, regex_match_range) {
                             self.start = next;
                         } else {
                             // There are no more chars to scan
@@ -238,17 +251,18 @@ impl Iterator for TruePositiveSearch<'_> {
                     } else {
                         // The next match will start at the end of this match. This is fine because
                         // patterns that can match empty matches are rejected.
-                        self.start = regex_match.end();
+                        self.start = regex_match_range.1;
 
                         if self.exclusion_check.is_excluded(self.rule.rule_index) {
                             // Matches from excluded paths are saved and used to treat additional equal matches as false positives.
                             // Matches are checked against this `excluded_matches` set after all scanning has been done.
-                            self.excluded_matches
-                                .insert(self.content[regex_match.range()].to_string());
+                            self.excluded_matches.insert(
+                                self.content[regex_match_range.0..regex_match_range.1].to_string(),
+                            );
                         } else {
                             return Some(StringMatch {
-                                start: regex_match.start(),
-                                end: regex_match.end(),
+                                start: regex_match_range.0,
+                                end: regex_match_range.1,
                             });
                         }
                     }
