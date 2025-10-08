@@ -36,7 +36,9 @@ impl IncludedKeywordSearch<'_> {
 
         if let Some(included_keyword_match) =
             self.keywords.keywords_pattern.content_regex.search_with(
-                regex_caches.get(&self.keywords.keywords_pattern.content_regex),
+                &mut regex_caches
+                    .get(&self.keywords.keywords_pattern.content_regex)
+                    .cache,
                 &input,
             )
         {

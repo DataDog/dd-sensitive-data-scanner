@@ -22,6 +22,7 @@ pub struct RegexRuleConfig {
     #[serde_as(deserialize_as = "DefaultOnNull")]
     #[serde(default)]
     pub labels: Labels,
+    pub pattern_capture_group: Option<String>,
 }
 
 impl RegexRuleConfig {
@@ -32,6 +33,7 @@ impl RegexRuleConfig {
             proximity_keywords: None,
             validator: None,
             labels: Labels::default(),
+            pattern_capture_group: None,
         }
     }
 
@@ -45,6 +47,10 @@ impl RegexRuleConfig {
 
     pub fn with_labels(&self, labels: Labels) -> Self {
         self.mutate_clone(|x| x.labels = labels)
+    }
+
+    pub fn with_pattern_capture_group(&self, pattern_capture_group: &str) -> Self {
+        self.mutate_clone(|x| x.pattern_capture_group = Some(pattern_capture_group.to_string()))
     }
 
     pub fn build(&self) -> Arc<dyn RuleConfig> {
@@ -111,6 +117,7 @@ impl RuleConfig for RegexRuleConfig {
             excluded_keywords,
             validator: self.validator.clone().map(|x| x.compile()),
             metrics: RuleMetrics::new(&rule_labels),
+            pattern_capture_group: self.pattern_capture_group.clone(),
         }))
     }
 }
@@ -228,6 +235,23 @@ mod test {
                 proximity_keywords: None,
                 validator: None,
                 labels: Labels::empty(),
+                pattern_capture_group: None,
+            }
+        );
+    }
+
+    #[test]
+    fn should_use_capture_group() {
+        let rule_config = RegexRuleConfig::new("hey (?<capture_group>world)")
+            .with_pattern_capture_group("capture_group");
+        assert_eq!(
+            rule_config,
+            RegexRuleConfig {
+                pattern: "hey (?<capture_group>world)".to_string(),
+                proximity_keywords: None,
+                validator: None,
+                labels: Labels::empty(),
+                pattern_capture_group: Some("capture_group".to_string()),
             }
         );
     }

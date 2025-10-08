@@ -3,6 +3,7 @@ use crate::proximity_keywords::{
     get_prefix_start, is_index_within_prefix,
 };
 use crate::scanner::metrics::RuleMetrics;
+use crate::scanner::regex_rule::regex_cache_store::RegexCacheValue;
 use crate::scanner::regex_rule::regex_store::SharedRegex;
 use crate::scanner::{
     RuleResult, RuleStatus, StringMatchesCtx, get_next_regex_start, is_false_positive_match,
@@ -12,6 +13,7 @@ use crate::{CompiledRule, ExclusionCheck, Path, StringMatch};
 use ahash::AHashSet;
 use regex_automata::Input;
 use regex_automata::meta::Cache;
+use regex_automata::util::captures::Captures;
 use std::sync::Arc;
 
 /// This is the internal representation of a rule after it has been validated / compiled.
@@ -22,6 +24,7 @@ pub struct RegexCompiledRule {
     pub excluded_keywords: Option<CompiledExcludedProximityKeywords>,
     pub validator: Option<Arc<dyn Validator>>,
     pub metrics: RuleMetrics,
+    pub pattern_capture_group: Option<String>,
 }
 
 impl CompiledRule for RegexCompiledRule {
@@ -41,10 +44,11 @@ impl CompiledRule for RegexCompiledRule {
                 );
             }
             None => {
+                let cache_value = ctx.regex_caches.get(&self.regex);
                 let true_positive_search = self.true_positive_matches(
                     content,
                     0,
-                    ctx.regex_caches.get(&self.regex),
+                    cache_value,
                     true,
                     ctx.exclusion_check,
                     ctx.excluded_matches,
@@ -80,10 +84,11 @@ impl RegexCompiledRule {
         'included_keyword_search: while let Some(included_keyword_match) =
             included_keyword_matches.next(ctx.regex_caches)
         {
+            let cache_value = ctx.regex_caches.get(&self.regex);
             let true_positive_search = self.true_positive_matches(
                 content,
                 included_keyword_match.end,
-                ctx.regex_caches.get(&self.regex),
+                cache_value,
                 false,
                 ctx.exclusion_check,
                 ctx.excluded_matches,
@@ -128,9 +133,10 @@ impl RegexCompiledRule {
 
         {
             let input = Input::new(content);
+            let cache_value = ctx.regex_caches.get(&self.regex);
             if self
                 .regex
-                .search_with(ctx.regex_caches.get(&self.regex), &input)
+                .search_half_with(&mut cache_value.cache, &input)
                 .is_some()
             {
                 has_verified_kws_in_path = Some(contains_keyword_in_path(
@@ -146,10 +152,12 @@ impl RegexCompiledRule {
             return;
         }
 
+        let cache_value = ctx.regex_caches.get(&self.regex);
+
         let true_positive_search = self.true_positive_matches(
             content,
             0,
-            ctx.regex_caches.get(&self.regex),
+            cache_value,
             false,
             ctx.exclusion_check,
             ctx.excluded_matches,
@@ -164,7 +172,7 @@ impl RegexCompiledRule {
         &'a self,
         content: &'a str,
         start: usize,
-        cache: &'a mut Cache,
+        cache: &'a mut RegexCacheValue,
         check_excluded_keywords: bool,
         exclusion_check: &'a ExclusionCheck<'a>,
         excluded_matches: &'a mut AHashSet<String>,
@@ -173,7 +181,8 @@ impl RegexCompiledRule {
             rule: self,
             content,
             start,
-            cache,
+            cache: &mut cache.cache,
+            captures: &mut cache.captures,
             check_excluded_keywords,
             exclusion_check,
             excluded_matches,
@@ -189,6 +198,28 @@ pub struct TruePositiveSearch<'a> {
     check_excluded_keywords: bool,
     exclusion_check: &'a ExclusionCheck<'a>,
     excluded_matches: &'a mut AHashSet<String>,
+    captures: &'a mut Captures,
+}
+
+impl TruePositiveSearch<'_> {
+    fn perform_regex_scan(&mut self, input: &Input) -> Option<(usize, usize)> {
+        match &self.rule.pattern_capture_group {
+            Some(capture_group) => {
+                self.captures.clear();
+                self.rule
+                    .regex
+                    .search_captures_with(self.cache, input, self.captures);
+                self.captures
+                    .get_group_by_name(capture_group)
+                    .map(|span| (span.start, span.end))
+            }
+            None => self
+                .rule
+                .regex
+                .search_with(self.cache, input)
+                .map(|re_match| (re_match.start(), re_match.end())),
+        }
+    }
 }
 
 impl Iterator for TruePositiveSearch<'_> {
@@ -200,42 +231,40 @@ impl Iterator for TruePositiveSearch<'_> {
                 return None;
             }
             let input = Input::new(self.content).range(self.start..);
+            self.rule.regex.search_half_with(self.cache, &input)?;
 
-            if let Some(regex_match) = self.rule.regex.search_with(self.cache, &input) {
-                // this is only checking extra validators (e.g. checksums)
-                let is_false_positive_match = is_false_positive_match(
-                    &regex_match,
-                    self.rule,
-                    self.content,
-                    self.check_excluded_keywords,
-                );
+            let regex_match_range = self.perform_regex_scan(&input)?;
+            // this is only checking extra validators (e.g. checksums)
+            let is_false_positive_match = is_false_positive_match(
+                regex_match_range,
+                self.rule,
+                self.content,
+                self.check_excluded_keywords,
+            );
 
-                if is_false_positive_match {
-                    if let Some(next) = get_next_regex_start(self.content, &regex_match) {
-                        self.start = next;
-                    } else {
-                        // There are no more chars to scan
-                        return None;
-                    }
+            if is_false_positive_match {
+                if let Some(next) = get_next_regex_start(self.content, regex_match_range) {
+                    self.start = next;
                 } else {
-                    // The next match will start at the end of this match. This is fine because
-                    // patterns that can match empty matches are rejected.
-                    self.start = regex_match.end();
-
-                    if self.exclusion_check.is_excluded(self.rule.rule_index) {
-                        // Matches from excluded paths are saved and used to treat additional equal matches as false positives.
-                        // Matches are checked against this `excluded_matches` set after all scanning has been done.
-                        self.excluded_matches
-                            .insert(self.content[regex_match.range()].to_string());
-                    } else {
-                        return Some(StringMatch {
-                            start: regex_match.start(),
-                            end: regex_match.end(),
-                        });
-                    }
+                    // There are no more chars to scan
+                    return None;
                 }
             } else {
-                return None;
+                // The next match will start at the end of this match. This is fine because
+                // patterns that can match empty matches are rejected.
+                self.start = regex_match_range.1;
+
+                if self.exclusion_check.is_excluded(self.rule.rule_index) {
+                    // Matches from excluded paths are saved and used to treat additional equal matches as false positives.
+                    // Matches are checked against this `excluded_matches` set after all scanning has been done.
+                    self.excluded_matches
+                        .insert(self.content[regex_match_range.0..regex_match_range.1].to_string());
+                } else {
+                    return Some(StringMatch {
+                        start: regex_match_range.0,
+                        end: regex_match_range.1,
+                    });
+                }
             }
         }
     }
