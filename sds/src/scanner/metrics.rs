@@ -20,6 +20,7 @@ pub struct ScannerMetrics {
     pub num_scanned_events: Counter,
     pub duration_ns: Counter,
     pub match_count: Counter,
+    pub suppressed_match_count: Counter,
 }
 
 impl ScannerMetrics {
@@ -28,6 +29,7 @@ impl ScannerMetrics {
             num_scanned_events: counter!("scanned_events", labels.clone()),
             duration_ns: counter!("scanning.duration", labels.clone()),
             match_count: counter!("scanning.match_count", labels.clone()),
+            suppressed_match_count: counter!("scanning.suppressed_match_count", labels.clone()),
         }
     }
 }
