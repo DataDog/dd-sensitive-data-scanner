@@ -3,7 +3,6 @@ use crate::scanner::config::RuleConfig;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::regex_store::get_memoized_regex;
-use crate::secondary_validation::jwt_claims_validator::JwtClaimsValidatorConfig;
 use crate::validation::validate_and_create_regex;
 use crate::{CompiledRule, CreateScannerError, Labels};
 use serde::{Deserialize, Serialize};
@@ -192,9 +191,29 @@ pub enum SecondaryValidator {
     SwedenPINChecksum,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "type", content = "config")]
+pub enum ClaimRequirement {
+    /// Just check that the claim exists
+    Present,
+    /// Check that the claim exists and has an exact value
+    ExactValue(String),
+    /// Check that the claim exists and matches a regex pattern
+    RegexMatch(String),
+}
+
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+pub struct JwtClaimsValidatorConfig {
+    #[serde(default)]
+    pub required_headers: std::collections::BTreeMap<String, ClaimRequirement>,
+    #[serde(default)]
+    pub required_claims: std::collections::BTreeMap<String, ClaimRequirement>,
+}
+
 #[cfg(test)]
 mod test {
     use crate::{AwsType, CustomHttpConfig, MatchValidationType, RootRuleConfig};
+    use std::collections::BTreeMap;
     use strum::IntoEnumIterator;
 
     use super::*;
@@ -331,9 +350,6 @@ mod test {
     // The order has to be stable to pass linter checks. Otherwise, each instantiation will change the file
     #[test]
     fn test_jwt_claims_validator_config_serialization_order() {
-        use crate::secondary_validation::jwt_claims_validator::ClaimRequirement;
-        use std::collections::BTreeMap;
-
         // Create a config with claims in non-alphabetical order
         let mut required_claims = BTreeMap::new();
         required_claims.insert("zzz".to_string(), ClaimRequirement::Present);

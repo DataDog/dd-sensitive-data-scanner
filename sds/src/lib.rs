@@ -48,7 +48,10 @@ pub use scanner::{
     config::RuleConfig,
     error::{CreateScannerError, ScannerError},
     regex_rule::RegexCaches,
-    regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator},
+    regex_rule::config::{
+        ClaimRequirement, JwtClaimsValidatorConfig, ProximityKeywordsConfig, RegexRuleConfig,
+        SecondaryValidator,
+    },
     scope::Scope,
 };
 pub use scoped_ruleset::ExclusionCheck;
