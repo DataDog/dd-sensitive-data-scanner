@@ -231,18 +231,9 @@ impl Iterator for TruePositiveSearch<'_> {
                 return None;
             }
             let input = Input::new(self.content).range(self.start..);
-            if self
-                .rule
-                .regex
-                .search_half_with(self.cache, &input)
-                .is_none()
-            {
-                return None;
-            }
-            let regex_match_range = match self.perform_regex_scan(&input) {
-                Some(regex_match_range) => regex_match_range,
-                None => return None,
-            };
+            self.rule.regex.search_half_with(self.cache, &input)?;
+
+            let regex_match_range = self.perform_regex_scan(&input)?;
             // this is only checking extra validators (e.g. checksums)
             let is_false_positive_match = is_false_positive_match(
                 regex_match_range,
