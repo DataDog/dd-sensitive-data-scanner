@@ -210,8 +210,7 @@ mod tests {
 
     #[test]
     fn test_valid_jwt_with_not_expired_claims_present() {
-        let jwt =
-            generate_jwt_with_claims(r#"{"exp":1,"not_exp":9223372036854775807}"#);
+        let jwt = generate_jwt_with_claims(r#"{"exp":1,"not_exp":9223372036854775807}"#);
         let mut required_claims = BTreeMap::new();
         required_claims.insert("not_exp".to_string(), ClaimRequirement::NotExpired);
 
@@ -225,8 +224,7 @@ mod tests {
 
     #[test]
     fn test_valid_jwt_with_expired_claims_present() {
-        let jwt =
-            generate_jwt_with_claims(r#"{"exp":1,"not_exp":9223372036854775807}"#);
+        let jwt = generate_jwt_with_claims(r#"{"exp":1,"not_exp":9223372036854775807}"#);
         let mut required_claims = BTreeMap::new();
         required_claims.insert("exp".to_string(), ClaimRequirement::NotExpired);
 
