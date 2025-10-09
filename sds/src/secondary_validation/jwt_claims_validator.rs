@@ -114,9 +114,10 @@ fn validate_claim_requirement(
                 let now = Utc::now().timestamp();
                 claim_value > now
             } else {
-                // if the expiration claim is not an integer, we consider it as an invalid match
-                // exp is a reserved claim for NumericDate (https://www.rfc-editor.org/rfc/rfc7519#section-4.1.4)
+                // if the expiration claim is not an integer, we consider it as an invalid match.
+                // This was originally designed for the exp header claim, which requires a numeric value (https://www.rfc-editor.org/rfc/rfc7519#section-4.1.4)
                 // The NumericDate is the UNIX timestamp (https://www.rfc-editor.org/rfc/rfc7519#section-2)
+                // If we end up meeting different standards, we can adjust this logic.
                 false
             }
         }
