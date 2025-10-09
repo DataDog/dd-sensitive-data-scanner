@@ -196,6 +196,8 @@ pub enum SecondaryValidator {
 pub enum ClaimRequirement {
     /// Just check that the claim exists
     Present,
+    /// Check that the claim exists and is not expired
+    NotExpired,
     /// Check that the claim exists and has an exact value
     ExactValue(String),
     /// Check that the claim exists and matches a regex pattern

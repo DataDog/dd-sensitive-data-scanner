@@ -2,6 +2,7 @@ use crate::scanner::regex_rule::config::{ClaimRequirement, JwtClaimsValidatorCon
 use crate::secondary_validation::Validator;
 use ahash::AHashMap;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use chrono::Utc;
 use regex::Regex;
 use serde_json::Value as JsonValue;
 
@@ -106,6 +107,18 @@ fn validate_claim_requirement(
         ClaimRequirement::Present => {
             // Just check that the claim exists (we already know it does if we're here)
             claim_value != &JsonValue::Null
+        }
+        ClaimRequirement::NotExpired => {
+            // Check that the claim exists and is not expired
+            if let Some(claim_value) = claim_value.as_i64() {
+                let now = Utc::now().timestamp();
+                claim_value > now
+            } else {
+                // if the expiration claim is not an integer, we consider it as an invalid match
+                // exp is a reserved claim for NumericDate (https://www.rfc-editor.org/rfc/rfc7519#section-4.1.4)
+                // The NumericDate is the UNIX timestamp (https://www.rfc-editor.org/rfc/rfc7519#section-2)
+                false
+            }
         }
         ClaimRequirement::ExactValue(expected) => {
             // Check for exact string match
