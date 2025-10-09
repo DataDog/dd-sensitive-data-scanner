@@ -209,6 +209,36 @@ mod tests {
     }
 
     #[test]
+    fn test_valid_jwt_with_not_expired_claims_present() {
+        let jwt =
+            generate_jwt_with_claims(r#"{"exp":1,"not_exp":9223372036854775807}"#);
+        let mut required_claims = BTreeMap::new();
+        required_claims.insert("not_exp".to_string(), ClaimRequirement::NotExpired);
+
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: BTreeMap::new(),
+        };
+        let checker = JwtClaimsValidator::new(config);
+        assert!(checker.is_valid_match(&jwt));
+    }
+
+    #[test]
+    fn test_valid_jwt_with_expired_claims_present() {
+        let jwt =
+            generate_jwt_with_claims(r#"{"exp":1,"not_exp":9223372036854775807}"#);
+        let mut required_claims = BTreeMap::new();
+        required_claims.insert("exp".to_string(), ClaimRequirement::NotExpired);
+
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: BTreeMap::new(),
+        };
+        let checker = JwtClaimsValidator::new(config);
+        assert!(!checker.is_valid_match(&jwt));
+    }
+
+    #[test]
     fn test_valid_jwt_with_exact_value_match() {
         let jwt = generate_jwt_with_claims(
             r#"{"sub":"1234567890","issuer":"my-service","role":"admin"}"#,

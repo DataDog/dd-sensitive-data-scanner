@@ -355,6 +355,7 @@ mod test {
         // Create a config with claims in non-alphabetical order
         let mut required_claims = BTreeMap::new();
         required_claims.insert("zzz".to_string(), ClaimRequirement::Present);
+        required_claims.insert("exp".to_string(), ClaimRequirement::NotExpired);
         required_claims.insert(
             "aaa".to_string(),
             ClaimRequirement::ExactValue("test".to_string()),
@@ -377,7 +378,8 @@ mod test {
         assert_eq!(serialized1, serialized2, "Serialization should be stable");
 
         // Keys should be in alphabetical order
-        assert!(serialized1.find("aaa").unwrap() < serialized1.find("mmm").unwrap());
+        assert!(serialized1.find("aaa").unwrap() < serialized1.find("exp").unwrap());
+        assert!(serialized1.find("exp").unwrap() < serialized1.find("mmm").unwrap());
         assert!(serialized1.find("mmm").unwrap() < serialized1.find("zzz").unwrap());
     }
 }
