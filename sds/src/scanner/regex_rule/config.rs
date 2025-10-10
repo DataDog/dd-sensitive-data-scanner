@@ -3,7 +3,7 @@ use crate::scanner::config::RuleConfig;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::regex_store::get_memoized_regex;
-use crate::validation::validate_and_create_regex;
+use crate::validation::{RegexPatternCaptureGroupsValidationError, validate_and_create_regex};
 use crate::{CompiledRule, CreateScannerError, Labels};
 use serde::{Deserialize, Serialize};
 use serde_with::DefaultOnNull;
@@ -92,6 +92,35 @@ impl RegexRuleConfig {
                 excluded_keywords: vec![],
             })
     }
+
+    fn is_pattern_capture_groups_valid(
+        &self,
+    ) -> Result<(), RegexPatternCaptureGroupsValidationError> {
+        if self.pattern_capture_groups.is_none() {
+            return Ok(());
+        }
+        let pattern_capture_groups = self.pattern_capture_groups.as_ref().unwrap();
+        if pattern_capture_groups.len() != 1 {
+            // We currently only allow one capture group
+            return Err(RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups);
+        }
+        let pattern_capture_group = pattern_capture_groups.first().unwrap();
+        if let Ok(re) = regex::Regex::new(pattern_capture_group) {
+            if re
+                .capture_names()
+                .filter(|name| name.is_some())
+                .flatten()
+                .any(|name| name == pattern_capture_group)
+            {
+                Ok(())
+            } else {
+                Err(RegexPatternCaptureGroupsValidationError::CaptureGroupNotPresent)
+            }
+        } else {
+            // This should never happen as the regex is validated first
+            Err(RegexPatternCaptureGroupsValidationError::InvalidSyntax)
+        }
+    }
 }
 
 impl RuleConfig for RegexRuleConfig {
@@ -109,6 +138,8 @@ impl RuleConfig for RegexRuleConfig {
             .as_ref()
             .map(|config| compile_keywords_proximity_config(config, &rule_labels))
             .unwrap_or(Ok((None, None)))?;
+
+        self.is_pattern_capture_groups_valid()?;
 
         Ok(Box::new(RegexCompiledRule {
             rule_index,
