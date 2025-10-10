@@ -2,6 +2,7 @@ use crate::scanner::regex_rule::config::{ClaimRequirement, JwtClaimsValidatorCon
 use crate::secondary_validation::Validator;
 use ahash::AHashMap;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use chrono::Utc;
 use regex::Regex;
 use serde_json::Value as JsonValue;
 
@@ -107,6 +108,19 @@ fn validate_claim_requirement(
             // Just check that the claim exists (we already know it does if we're here)
             claim_value != &JsonValue::Null
         }
+        ClaimRequirement::NotExpired => {
+            // Check that the claim exists and is not expired
+            if let Some(claim_value) = claim_value.as_i64() {
+                let now = Utc::now().timestamp();
+                claim_value > now
+            } else {
+                // if the expiration claim is not an integer, we consider it as an invalid match.
+                // This was originally designed for the exp header claim, which requires a numeric value (https://www.rfc-editor.org/rfc/rfc7519#section-4.1.4)
+                // The NumericDate is the UNIX timestamp (https://www.rfc-editor.org/rfc/rfc7519#section-2)
+                // If we end up meeting different standards, we can adjust this logic.
+                false
+            }
+        }
         ClaimRequirement::ExactValue(expected) => {
             // Check for exact string match
             if let Some(actual) = claim_value.as_str() {
@@ -193,6 +207,34 @@ mod tests {
         };
         let checker = JwtClaimsValidator::new(config);
         assert!(checker.is_valid_match(&jwt));
+    }
+
+    #[test]
+    fn test_valid_jwt_with_not_expired_claims_present() {
+        let jwt = generate_jwt_with_claims(r#"{"exp":1,"not_exp":9223372036854775807}"#);
+        let mut required_claims = BTreeMap::new();
+        required_claims.insert("not_exp".to_string(), ClaimRequirement::NotExpired);
+
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: BTreeMap::new(),
+        };
+        let checker = JwtClaimsValidator::new(config);
+        assert!(checker.is_valid_match(&jwt));
+    }
+
+    #[test]
+    fn test_valid_jwt_with_expired_claims_present() {
+        let jwt = generate_jwt_with_claims(r#"{"exp":1,"not_exp":9223372036854775807}"#);
+        let mut required_claims = BTreeMap::new();
+        required_claims.insert("exp".to_string(), ClaimRequirement::NotExpired);
+
+        let config = JwtClaimsValidatorConfig {
+            required_claims,
+            required_headers: BTreeMap::new(),
+        };
+        let checker = JwtClaimsValidator::new(config);
+        assert!(!checker.is_valid_match(&jwt));
     }
 
     #[test]
