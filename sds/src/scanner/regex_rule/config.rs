@@ -54,6 +54,17 @@ impl RegexRuleConfig {
         self.mutate_clone(|x| x.pattern_capture_groups = Some(pattern_capture_groups))
     }
 
+    pub fn with_pattern_capture_group(&self, pattern_capture_group: &str) -> Self {
+        self.mutate_clone(|x| match x.pattern_capture_groups {
+            Some(ref mut pattern_capture_groups) => {
+                pattern_capture_groups.push(pattern_capture_group.to_string());
+            }
+            None => {
+                x.pattern_capture_groups = Some(vec![pattern_capture_group.to_string()]);
+            }
+        })
+    }
+
     pub fn build(&self) -> Arc<dyn RuleConfig> {
         Arc::new(self.clone())
     }
