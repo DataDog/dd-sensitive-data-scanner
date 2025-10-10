@@ -105,7 +105,7 @@ impl RegexRuleConfig {
             return Err(RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups);
         }
         let pattern_capture_group = pattern_capture_groups.first().unwrap();
-        if let Ok(re) = regex::Regex::new(pattern_capture_group) {
+        if let Ok(re) = regex::Regex::new(&self.pattern) {
             if re
                 .capture_names()
                 .filter(|name| name.is_some())
@@ -408,5 +408,52 @@ mod test {
         // Keys should be in alphabetical order
         assert!(serialized1.find("aaa").unwrap() < serialized1.find("mmm").unwrap());
         assert!(serialized1.find("mmm").unwrap() < serialized1.find("zzz").unwrap());
+    }
+
+    #[test]
+    fn test_capture_groups_validation() {
+        let rule_config = RegexRuleConfig::new("hello (?<capture_group>world)")
+            .with_pattern_capture_groups(vec!["capture_group".to_string()]);
+        assert_eq!(rule_config.is_pattern_capture_groups_valid(), Ok(()));
+
+        let test_cases: Vec<(
+            &str,
+            Vec<String>,
+            Result<(), RegexPatternCaptureGroupsValidationError>,
+        )> = vec![
+            (
+                "hello (?<capture_group>world)",
+                vec!["capture_group".to_string()],
+                Ok(()),
+            ),
+            (
+                "hello (?<capture_group>world) and (?<another_group>world)",
+                vec!["capture_group".to_string()],
+                Ok(()),
+            ),
+            (
+                "hello (?<capture_grou>world)",
+                vec!["capture_group".to_string()],
+                Err(RegexPatternCaptureGroupsValidationError::CaptureGroupNotPresent),
+            ),
+            (
+                "hello (?<capture_group>world)",
+                vec!["capture_group".to_string(), "capture_group2".to_string()],
+                Err(RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups),
+            ),
+            (
+                "hello (?<capture_group>world",
+                vec!["capture_group".to_string()],
+                Err(RegexPatternCaptureGroupsValidationError::InvalidSyntax),
+            ),
+        ];
+        for (pattern, capture_groups, expected_result) in test_cases {
+            let rule_config =
+                RegexRuleConfig::new(pattern).with_pattern_capture_groups(capture_groups);
+            assert_eq!(
+                rule_config.is_pattern_capture_groups_valid(),
+                expected_result
+            );
+        }
     }
 }
