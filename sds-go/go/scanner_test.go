@@ -853,3 +853,31 @@ func NewCustomHttpValidation(endpoint string) ThirdPartyActiveChecker {
 		},
 	}
 }
+
+func TestScanStringWithCaptureGroup(t *testing.T) {
+	var extraConfig ExtraConfig
+	extraConfig.PatternCaptureGroups = []string{"capture_group"}
+	rule := NewMatchingRule("rule_secret", "hello (?<capture_group>world)", extraConfig)
+	rule.MatchAction = MatchAction{
+		Type:           MatchActionRedact,
+		RedactionValue: "[REDACTED]",
+	}
+	rules := []RuleConfig{
+		rule,
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create the scanner:", err.Error())
+	}
+	defer scanner.Delete()
+	event := "hello world i am here"
+	result, err := scanner.Scan([]byte(event))
+	if err != nil {
+		t.Fatal("failed to scan the event:", err.Error())
+	}
+	expected := "hello [REDACTED] i am here"
+	if string(result.Event) != expected {
+		t.Fatalf("Scanner did not mutate the event as expected. Expected: '%s', Received: '%s'", expected, string(result.Event))
+	}
+}
