@@ -5,6 +5,7 @@ use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::regex_store::get_memoized_regex;
 use crate::validation::{RegexPatternCaptureGroupsValidationError, validate_and_create_regex};
 use crate::{CompiledRule, CreateScannerError, Labels};
+use regex_automata::util::captures::GroupInfo;
 use serde::{Deserialize, Serialize};
 use serde_with::DefaultOnNull;
 use serde_with::serde_as;
@@ -92,34 +93,30 @@ impl RegexRuleConfig {
                 excluded_keywords: vec![],
             })
     }
+}
 
-    fn is_pattern_capture_groups_valid(
-        &self,
-    ) -> Result<(), RegexPatternCaptureGroupsValidationError> {
-        if self.pattern_capture_groups.is_none() {
-            return Ok(());
-        }
-        let pattern_capture_groups = self.pattern_capture_groups.as_ref().unwrap();
-        if pattern_capture_groups.len() != 1 {
-            // We currently only allow one capture group
-            return Err(RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups);
-        }
-        let pattern_capture_group = pattern_capture_groups.first().unwrap();
-        if let Ok(re) = regex::Regex::new(&self.pattern) {
-            if re
-                .capture_names()
-                .filter(|name| name.is_some())
-                .flatten()
-                .any(|name| name == pattern_capture_group)
-            {
-                Ok(())
-            } else {
-                Err(RegexPatternCaptureGroupsValidationError::CaptureGroupNotPresent)
-            }
-        } else {
-            // This should never happen as the regex is validated first
-            Err(RegexPatternCaptureGroupsValidationError::InvalidSyntax)
-        }
+fn is_pattern_capture_groups_valid(
+    pattern_capture_groups: &Option<Vec<String>>,
+    group_info: &GroupInfo,
+) -> Result<(), RegexPatternCaptureGroupsValidationError> {
+    if pattern_capture_groups.is_none() {
+        return Ok(());
+    }
+    let pattern_capture_groups = pattern_capture_groups.as_ref().unwrap();
+    if pattern_capture_groups.len() != 1 {
+        // We currently only allow one capture group
+        return Err(RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups);
+    }
+    let pattern_capture_group = pattern_capture_groups.first().unwrap();
+    if group_info
+        .all_names()
+        .filter(|(_, _, name)| name.is_some())
+        .map(|(_, _, name)| name.unwrap())
+        .any(|name| name == pattern_capture_group)
+    {
+        Ok(())
+    } else {
+        Err(RegexPatternCaptureGroupsValidationError::CaptureGroupNotPresent)
     }
 }
 
@@ -139,7 +136,7 @@ impl RuleConfig for RegexRuleConfig {
             .map(|config| compile_keywords_proximity_config(config, &rule_labels))
             .unwrap_or(Ok((None, None)))?;
 
-        self.is_pattern_capture_groups_valid()?;
+        is_pattern_capture_groups_valid(&self.pattern_capture_groups, regex.group_info())?;
 
         Ok(Box::new(RegexCompiledRule {
             rule_index,
@@ -412,10 +409,6 @@ mod test {
 
     #[test]
     fn test_capture_groups_validation() {
-        let rule_config = RegexRuleConfig::new("hello (?<capture_group>world)")
-            .with_pattern_capture_groups(vec!["capture_group".to_string()]);
-        assert_eq!(rule_config.is_pattern_capture_groups_valid(), Ok(()));
-
         let test_cases: Vec<(
             &str,
             Vec<String>,
@@ -441,17 +434,17 @@ mod test {
                 vec!["capture_group".to_string(), "capture_group2".to_string()],
                 Err(RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups),
             ),
-            (
-                "hello (?<capture_group>world",
-                vec!["capture_group".to_string()],
-                Err(RegexPatternCaptureGroupsValidationError::InvalidSyntax),
-            ),
         ];
         for (pattern, capture_groups, expected_result) in test_cases {
             let rule_config =
                 RegexRuleConfig::new(pattern).with_pattern_capture_groups(capture_groups);
             assert_eq!(
-                rule_config.is_pattern_capture_groups_valid(),
+                is_pattern_capture_groups_valid(
+                    &rule_config.pattern_capture_groups,
+                    &get_memoized_regex(pattern, validate_and_create_regex)
+                        .unwrap()
+                        .group_info()
+                ),
                 expected_result
             );
         }
