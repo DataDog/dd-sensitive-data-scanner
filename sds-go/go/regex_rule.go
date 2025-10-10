@@ -19,6 +19,7 @@ type RegexRuleConfig struct {
 	ProximityKeywords       *ProximityKeywordsConfig `json:"proximity_keywords,omitempty"`
 	SecondaryValidator      SecondaryValidator       `json:"validator,omitempty"`
 	ThirdPartyActiveChecker ThirdPartyActiveChecker  `json:"third_party_active_checker,omitempty"`
+	PatternCaptureGroups    []string                 `json:"pattern_capture_groups,omitempty"`
 }
 
 // ThirdPartyActiveChecker is used to validate if a given match is still active or not. It applies well to tokens that have an expiration date for instance.
@@ -105,6 +106,7 @@ type ExtraConfig struct {
 	ProximityKeywords       *ProximityKeywordsConfig
 	SecondaryValidator      SecondaryValidator
 	ThirdPartyActiveChecker ThirdPartyActiveChecker
+	PatternCaptureGroups    []string
 }
 
 // CreateProximityKeywordsConfig creates a ProximityKeywordsConfig.
@@ -174,6 +176,7 @@ func NewMatchingRule(id string, pattern string, extraConfig ExtraConfig) RegexRu
 		ProximityKeywords:       extraConfig.ProximityKeywords,
 		SecondaryValidator:      extraConfig.SecondaryValidator,
 		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
+		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
 	}
 }
 
@@ -206,6 +209,7 @@ func NewRedactingRule(id string, pattern string, redactionValue string, extraCon
 		ProximityKeywords:       extraConfig.ProximityKeywords,
 		SecondaryValidator:      extraConfig.SecondaryValidator,
 		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
+		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
 	}
 }
 
@@ -220,6 +224,7 @@ func NewHashRule(id string, pattern string, extraConfig ExtraConfig) RegexRuleCo
 		ProximityKeywords:       extraConfig.ProximityKeywords,
 		SecondaryValidator:      extraConfig.SecondaryValidator,
 		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
+		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
 	}
 }
 

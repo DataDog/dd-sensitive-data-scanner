@@ -30,6 +30,18 @@ pub enum RegexValidationError {
     ExceededQuantifierLimit,
 }
 
+#[derive(Debug, PartialEq, Eq, Error, Clone)]
+pub enum RegexPatternCaptureGroupsValidationError {
+    #[error("We only allow one capture group")]
+    TooManyCaptureGroups,
+
+    #[error("The capture group is not present in the regex")]
+    CaptureGroupNotPresent,
+
+    #[error("The regex is invalid")]
+    InvalidSyntax,
+}
+
 impl From<ParseError> for RegexValidationError {
     fn from(err: ParseError) -> Self {
         match err {

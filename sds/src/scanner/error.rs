@@ -4,6 +4,7 @@ use thiserror::Error;
 use crate::{
     RegexValidationError, match_action::MatchActionValidationError,
     proximity_keywords::ProximityKeywordsValidationError, scanner::SuppressionValidationError,
+    validation::RegexPatternCaptureGroupsValidationError,
 };
 
 impl From<CreateScannerError> for i64 {
@@ -14,6 +15,7 @@ impl From<CreateScannerError> for i64 {
             CreateScannerError::InvalidMatchAction(_) => -4,
             CreateScannerError::InvalidMatchValidator(_) => -5,
             CreateScannerError::InvalidSuppressions(_) => -6,
+            CreateScannerError::InvalidPatternCaptureGroups(_) => -7,
         }
     }
 }
@@ -41,6 +43,9 @@ pub enum CreateScannerError {
     /// The suppressions are invalid (too many suppressions, duplicate suppressions, etc.)
     #[error(transparent)]
     InvalidSuppressions(#[from] SuppressionValidationError),
+    /// The pattern capture groups are invalid (too many capture groups, capture group not present, etc.)
+    #[error(transparent)]
+    InvalidPatternCaptureGroups(#[from] RegexPatternCaptureGroupsValidationError),
 }
 
 #[derive(Debug, PartialEq, Eq, Error)]

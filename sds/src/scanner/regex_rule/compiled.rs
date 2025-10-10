@@ -24,7 +24,7 @@ pub struct RegexCompiledRule {
     pub excluded_keywords: Option<CompiledExcludedProximityKeywords>,
     pub validator: Option<Arc<dyn Validator>>,
     pub metrics: RuleMetrics,
-    pub pattern_capture_group: Option<String>,
+    pub pattern_capture_groups: Option<Vec<String>>,
 }
 
 impl CompiledRule for RegexCompiledRule {
@@ -203,14 +203,18 @@ pub struct TruePositiveSearch<'a> {
 
 impl TruePositiveSearch<'_> {
     fn perform_regex_scan(&mut self, input: &Input) -> Option<(usize, usize)> {
-        match &self.rule.pattern_capture_group {
+        match &self.rule.pattern_capture_groups {
             Some(capture_group) => {
                 self.captures.clear();
                 self.rule
                     .regex
                     .search_captures_with(self.cache, input, self.captures);
                 self.captures
-                    .get_group_by_name(capture_group)
+                    .get_group_by_name(
+                        capture_group
+                            .first()
+                            .expect("pattern_capture_group is empty"),
+                    )
                     .map(|span| (span.start, span.end))
             }
             None => self
