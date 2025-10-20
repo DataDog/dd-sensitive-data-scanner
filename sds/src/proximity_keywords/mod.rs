@@ -4,6 +4,9 @@ mod included_keywords;
 pub use crate::proximity_keywords::excluded_keywords::CompiledExcludedProximityKeywords;
 pub use crate::proximity_keywords::included_keywords::*;
 
+use crate::ast_utils::{
+    any_char, literal_ast, non_capturing_group, should_push_word_boundary, span, word_boundary,
+};
 use crate::proximity_keywords::ProximityKeywordsValidationError::{
     EmptyKeyword, InvalidLookAheadCharacterCount, KeywordTooLong, TooManyKeywords,
 };
@@ -11,10 +14,7 @@ use crate::scanner::regex_rule::{SharedRegex, get_memoized_regex};
 use crate::{Labels, ProximityKeywordsConfig};
 use metrics::counter;
 use regex_automata::{Input, meta};
-use regex_syntax::ast::{
-    Alternation, Assertion, AssertionKind, Ast, Concat, Flag, Flags, FlagsItem, FlagsItemKind,
-    Group, GroupKind, Literal, LiteralKind, Position, Span,
-};
+use regex_syntax::ast::{Alternation, Ast, Concat};
 use thiserror::Error;
 
 const MAX_KEYWORD_COUNT: usize = 50;
@@ -231,12 +231,8 @@ fn compile_keywords(
     )))
 }
 
-fn should_push_word_boundary(c: char) -> bool {
-    c.is_ascii_alphabetic() || c.is_ascii_digit()
-}
-
 /// Transform a keyword in an AST, the keyword MUST NOT be empty
-fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
+pub(crate) fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
     let mut keyword_pattern: Vec<Ast> = vec![];
     if should_push_word_boundary(keyword.chars().next().unwrap()) {
         keyword_pattern.push(word_boundary_or_link_char())
@@ -262,21 +258,17 @@ fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
     })
 }
 
-fn any_char(chars: &[char]) -> Ast {
-    let mut asts = vec![];
-
-    for c in chars {
-        asts.push(Ast::Literal(literal_ast(*c)));
-    }
-
-    Ast::Group(Group {
-        span: span(),
-        kind: GroupKind::NonCapturing(Flags {
+fn word_boundary_or_link_char() -> Ast {
+    non_capturing_group(
+        Ast::Alternation(Alternation {
             span: span(),
-            items: vec![],
+            asts: vec![
+                word_boundary(),
+                any_char(MULTI_WORD_KEYWORDS_WORD_BOUNDARY_LINK_CHARS),
+            ],
         }),
-        ast: Box::new(Ast::Alternation(Alternation { span: span(), asts })),
-    })
+        vec![],
+    )
 }
 
 #[derive(Clone, Copy)]
@@ -407,69 +399,6 @@ fn calculate_keyword_path_pattern(keyword: &str) -> Ast {
         span: span(),
         asts: keyword_pattern,
     })
-}
-
-fn literal_ast(c: char) -> Literal {
-    let kind = if regex_syntax::is_meta_character(c) {
-        LiteralKind::Meta
-    } else {
-        LiteralKind::Verbatim
-    };
-    Literal {
-        span: span(),
-        kind,
-        c,
-    }
-}
-
-// creates a unused span required for the RegexAst
-fn span() -> Span {
-    Span::new(Position::new(0, 0, 0), Position::new(0, 0, 0))
-}
-
-fn word_boundary_or_link_char() -> Ast {
-    non_capturing_group(
-        Ast::Alternation(Alternation {
-            span: span(),
-            asts: vec![
-                word_boundary(),
-                any_char(MULTI_WORD_KEYWORDS_WORD_BOUNDARY_LINK_CHARS),
-            ],
-        }),
-        vec![],
-    )
-}
-
-fn non_capturing_group(inner: Ast, flags: Vec<FlagsItem>) -> Ast {
-    Ast::Group(Group {
-        span: span(),
-        kind: GroupKind::NonCapturing(Flags {
-            span: span(),
-            items: flags,
-        }),
-        ast: Box::new(inner),
-    })
-}
-
-fn word_boundary() -> Ast {
-    // The "Unicode" flag is disabled to disable the equivalent of Hyperscans UCP flag
-    let inner = Ast::Assertion(Assertion {
-        span: span(),
-        kind: AssertionKind::WordBoundary,
-    });
-
-    let flags = vec![
-        FlagsItem {
-            span: span(),
-            kind: FlagsItemKind::Negation,
-        },
-        FlagsItem {
-            span: span(),
-            kind: FlagsItemKind::Flag(Flag::Unicode),
-        },
-    ];
-
-    non_capturing_group(inner, flags)
 }
 
 #[derive(Debug, PartialEq, Eq, Error)]
