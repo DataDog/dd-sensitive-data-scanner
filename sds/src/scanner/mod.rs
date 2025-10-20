@@ -499,50 +499,14 @@ impl Scanner {
         result
     }
 
-    async fn internal_scan<E: Event>(
+    fn process_rule_matches<E: Event>(
         &self,
         event: &mut E,
-        options: ScanOptions,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
-        // If validation is requested, we need to collect match content even if the scanner
-        // wasn't originally configured to return matches
-        let need_match_content = self.scanner_features.return_matches || options.validate_matches;
-        // All matches, after some (but not all) false-positives have been removed.
-        let mut rule_matches = InternalRuleMatchSet::new();
-        let mut excluded_matches = AHashSet::new();
-        let mut async_jobs = vec![];
-
-        access_regex_caches(|regex_caches| {
-            self.scoped_ruleset.visit_string_rule_combinations(
-                event,
-                ScannerContentVisitor {
-                    scanner: self,
-                    regex_caches,
-                    rule_matches: &mut rule_matches,
-                    blocked_rules: &options.blocked_rules_idx,
-                    excluded_matches: &mut excluded_matches,
-                    per_event_data: SharedData::new(),
-                    wildcarded_indexes: &options.wildcarded_indices,
-                    async_jobs: &mut async_jobs,
-                },
-            )
-        })?;
-
-        // The async jobs were already spawned on the tokio runtime, so the
-        // results just need to be collected
-        for job in async_jobs {
-            let rule_info = job.fut.await.unwrap()?;
-            rule_matches.push_async_matches(
-                &job.path,
-                rule_info
-                    .rule_matches
-                    .into_iter()
-                    .map(|x| InternalRuleMatch::new(rule_info.rule_index, x)),
-            );
-        }
-
-        let mut output_rule_matches = vec![];
-
+        rule_matches: InternalRuleMatchSet<E::Encoding>,
+        excluded_matches: AHashSet<String>,
+        output_rule_matches: &mut Vec<RuleMatch>,
+        need_match_content: bool,
+    ) {
         for (path, mut rule_matches) in rule_matches.into_iter() {
             // All rule matches in each inner list are for a single path, so they can be processed independently.
             event.visit_string_mut(&path, |content| {
@@ -593,13 +557,66 @@ impl Scanner {
                     content,
                     &path,
                     &mut rule_matches,
-                    &mut output_rule_matches,
+                    output_rule_matches,
                     need_match_content,
                 );
 
                 will_mutate
             });
         }
+    }
+
+    async fn internal_scan<E: Event>(
+        &self,
+        event: &mut E,
+        options: ScanOptions,
+    ) -> Result<Vec<RuleMatch>, ScannerError> {
+        // If validation is requested, we need to collect match content even if the scanner
+        // wasn't originally configured to return matches
+        let need_match_content = self.scanner_features.return_matches || options.validate_matches;
+        // All matches, after some (but not all) false-positives have been removed.
+        let mut rule_matches = InternalRuleMatchSet::new();
+        let mut excluded_matches = AHashSet::new();
+        let mut async_jobs = vec![];
+
+        access_regex_caches(|regex_caches| {
+            self.scoped_ruleset.visit_string_rule_combinations(
+                event,
+                ScannerContentVisitor {
+                    scanner: self,
+                    regex_caches,
+                    rule_matches: &mut rule_matches,
+                    blocked_rules: &options.blocked_rules_idx,
+                    excluded_matches: &mut excluded_matches,
+                    per_event_data: SharedData::new(),
+                    wildcarded_indexes: &options.wildcarded_indices,
+                    async_jobs: &mut async_jobs,
+                },
+            )
+        })?;
+
+        // The async jobs were already spawned on the tokio runtime, so the
+        // results just need to be collected
+        for job in async_jobs {
+            let rule_info = job.fut.await.unwrap()?;
+            rule_matches.push_async_matches(
+                &job.path,
+                rule_info
+                    .rule_matches
+                    .into_iter()
+                    .map(|x| InternalRuleMatch::new(rule_info.rule_index, x)),
+            );
+        }
+
+        let mut output_rule_matches = vec![];
+
+        self.process_rule_matches(
+            event,
+            rule_matches,
+            excluded_matches,
+            &mut output_rule_matches,
+            need_match_content,
+        );
 
         if options.validate_matches {
             self.validate_matches(&mut output_rule_matches);
