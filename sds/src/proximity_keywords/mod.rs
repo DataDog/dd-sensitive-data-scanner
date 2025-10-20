@@ -232,7 +232,7 @@ fn compile_keywords(
 }
 
 /// Transform a keyword in an AST, the keyword MUST NOT be empty
-pub(crate) fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
+fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
     let mut keyword_pattern: Vec<Ast> = vec![];
     if should_push_word_boundary(keyword.chars().next().unwrap()) {
         keyword_pattern.push(word_boundary_or_link_char())
