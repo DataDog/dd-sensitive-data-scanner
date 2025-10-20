@@ -56,7 +56,7 @@ impl CompiledSuppressions {
         if let Some(suppressions) = &self.suppressions_pattern {
             suppressions
                 .search_half_with(
-                    &mut regex_caches.get(&suppressions).cache,
+                    &mut regex_caches.get(suppressions).cache,
                     &Input::new(match_content).earliest(true),
                 )
                 .is_some()
@@ -161,12 +161,13 @@ mod test {
             exact_match: vec!["nathan@yahoo.com".to_string()],
         };
         let compiled_config = CompiledSuppressions::try_from(config).unwrap();
-        assert!(compiled_config.should_match_be_suppressed("mary@datadoghq.com"));
-        assert!(compiled_config.should_match_be_suppressed("nathan@yahoo.com"));
-        assert!(compiled_config.should_match_be_suppressed("john@datadoghq.com"));
-        assert!(!compiled_config.should_match_be_suppressed("john@yahoo.com"));
-        assert!(!compiled_config.should_match_be_suppressed("john mary john"));
-        assert!(compiled_config.should_match_be_suppressed("mary john john"));
+        let mut caches = RegexCaches::new();
+        assert!(compiled_config.should_match_be_suppressed("mary@datadoghq.com", &mut caches));
+        assert!(compiled_config.should_match_be_suppressed("nathan@yahoo.com", &mut caches));
+        assert!(compiled_config.should_match_be_suppressed("john@datadoghq.com", &mut caches));
+        assert!(!compiled_config.should_match_be_suppressed("john@yahoo.com", &mut caches));
+        assert!(!compiled_config.should_match_be_suppressed("john mary john", &mut caches));
+        assert!(compiled_config.should_match_be_suppressed("mary john john", &mut caches));
     }
 
     #[test]
