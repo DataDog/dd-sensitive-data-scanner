@@ -507,6 +507,9 @@ impl Scanner {
         output_rule_matches: &mut Vec<RuleMatch>,
         need_match_content: bool,
     ) {
+        if rule_matches.is_empty() {
+            return;
+        }
         access_regex_caches(|regex_caches| {
             for (path, mut rule_matches) in rule_matches.into_iter() {
                 // All rule matches in each inner list are for a single path, so they can be processed independently.

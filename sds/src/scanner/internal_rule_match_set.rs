@@ -23,6 +23,10 @@ impl<E: Encoding> InternalRuleMatchSet<E> {
         self.sync_matches.push((path.into_static(), matches));
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.sync_matches.is_empty() && self.async_matches.is_empty()
+    }
+
     pub fn push_async_matches(
         &mut self,
         path: &Path,
