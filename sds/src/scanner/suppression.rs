@@ -1,11 +1,12 @@
 use ahash::AHashSet;
-use regex_automata::meta;
+use regex_automata::{Input, meta};
 use regex_syntax::ast::{Alternation, Assertion, AssertionKind, Ast, Concat, Flags, Group};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 
 use crate::{
+    RegexCaches,
     ast_utils::{literal_ast, span},
     scanner::regex_rule::{SharedRegex, get_memoized_regex},
 };
@@ -47,9 +48,18 @@ pub struct CompiledSuppressions {
 }
 
 impl CompiledSuppressions {
-    pub fn should_match_be_suppressed(&self, match_content: &str) -> bool {
+    pub fn should_match_be_suppressed(
+        &self,
+        match_content: &str,
+        regex_caches: &mut RegexCaches,
+    ) -> bool {
         if let Some(suppressions) = &self.suppressions_pattern {
-            suppressions.is_match(match_content)
+            suppressions
+                .search_half_with(
+                    &mut regex_caches.get(&suppressions).cache,
+                    &Input::new(match_content).earliest(true),
+                )
+                .is_some()
         } else {
             false
         }

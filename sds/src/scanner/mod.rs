@@ -615,9 +615,13 @@ impl Scanner {
     ) {
         rule_matches.retain(|rule_match| {
             if let Some(suppressions) = &self.rules[rule_match.rule_index].suppressions {
-                let match_should_be_suppressed = suppressions.should_match_be_suppressed(
-                    &content[rule_match.utf8_start..rule_match.utf8_end],
-                );
+                let mut match_should_be_suppressed;
+                access_regex_caches(|regex_caches| {
+                    match_should_be_suppressed = suppressions.should_match_be_suppressed(
+                        &content[rule_match.utf8_start..rule_match.utf8_end],
+                    );
+                });
+
                 if match_should_be_suppressed {
                     self.metrics.suppressed_match_count.increment(1);
                 }
