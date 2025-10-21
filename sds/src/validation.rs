@@ -38,6 +38,9 @@ pub enum RegexPatternCaptureGroupsValidationError {
     #[error("The capture group '{0}' is not present in the regex")]
     CaptureGroupNotPresent(String),
 
+    #[error("The targeted capture group must be 'sds_match'")]
+    TargetedCaptureGroupMustBeSdsMatch,
+
     #[error("The regex is invalid")]
     InvalidSyntax,
 }
