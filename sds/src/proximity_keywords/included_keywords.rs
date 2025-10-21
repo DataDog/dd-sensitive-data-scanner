@@ -182,6 +182,26 @@ mod test {
     }
 
     #[test]
+    fn test_included_keyword_content() {
+        let included_keywords = compile_keywords(30, &["aws_access_key_id", "phone"]);
+
+        let should_match = vec!["a aws_access_key_id the key", "this is my phone 0011992211"];
+
+        // Should match
+        for content in should_match {
+            assert!(
+                !collect_keyword_matches(included_keywords.keyword_matches(content)).is_empty()
+            );
+        }
+
+        // phone should not match on phoneNumber
+        let should_not_match = vec!["this is my phoneNumber 0011992211"];
+        for content in should_not_match {
+            assert!(collect_keyword_matches(included_keywords.keyword_matches(content)).is_empty());
+        }
+    }
+
+    #[test]
     fn multi_word_keyword_matches() {
         let keywords = compile_keywords(30, &["hello world"]);
 

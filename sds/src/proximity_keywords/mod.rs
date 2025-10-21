@@ -871,6 +871,7 @@ mod test {
                 "aws_access_key_id".to_string(),
                 "aws-access".to_string(),
                 "accessKey".to_string(),
+                "phone".to_string(),
             ],
             vec![],
         )
@@ -883,6 +884,8 @@ mod test {
             "aws.access.keys",
             "aws.access%key",
             "aws.access.key.identity",
+            "aws.access.phone",
+            "aws.access.phoneNumber",
             "access.key.aws.another.long.keyword",
         ];
 
