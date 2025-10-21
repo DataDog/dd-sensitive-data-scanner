@@ -44,6 +44,11 @@ pub enum SuppressionValidationError {
 }
 
 pub struct CompiledSuppressions {
+    /// The regex pattern that is used to match against the content of the match.
+    /// We use a regex instead of a set of Vec<String> with all the suppressions because:
+    /// * We get case insensitivity for free
+    /// * Lower-casing the content of the match means re-allocating the strings each time a match is found - which is more expensive than a regex
+    /// * Nathan had benchmarked it and found that regex was faster than lower-casing in the context of included keywords
     pub suppressions_pattern: Option<SharedRegex>,
 }
 
