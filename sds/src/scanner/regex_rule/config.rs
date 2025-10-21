@@ -116,7 +116,11 @@ fn is_pattern_capture_groups_valid(
     let pattern_capture_groups = pattern_capture_groups.as_ref().unwrap();
     if pattern_capture_groups.len() != 1 {
         // We currently only allow one capture group
-        return Err(RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups);
+        return Err(
+            RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups(
+                pattern_capture_groups.len(),
+            ),
+        );
     }
     let pattern_capture_group = pattern_capture_groups.first().unwrap();
     if group_info
@@ -127,7 +131,11 @@ fn is_pattern_capture_groups_valid(
     {
         Ok(())
     } else {
-        Err(RegexPatternCaptureGroupsValidationError::CaptureGroupNotPresent)
+        Err(
+            RegexPatternCaptureGroupsValidationError::CaptureGroupNotPresent(
+                pattern_capture_group.clone(),
+            ),
+        )
     }
 }
 
@@ -442,12 +450,16 @@ mod test {
             (
                 "hello (?<capture_grou>world)",
                 vec!["capture_group".to_string()],
-                Err(RegexPatternCaptureGroupsValidationError::CaptureGroupNotPresent),
+                Err(
+                    RegexPatternCaptureGroupsValidationError::CaptureGroupNotPresent(
+                        "capture_group".to_string(),
+                    ),
+                ),
             ),
             (
                 "hello (?<capture_group>world)",
                 vec!["capture_group".to_string(), "capture_group2".to_string()],
-                Err(RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups),
+                Err(RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups(2)),
             ),
         ];
         for (pattern, capture_groups, expected_result) in test_cases {
