@@ -499,6 +499,79 @@ impl Scanner {
         result
     }
 
+    fn process_rule_matches<E: Event>(
+        &self,
+        event: &mut E,
+        rule_matches: InternalRuleMatchSet<E::Encoding>,
+        excluded_matches: AHashSet<String>,
+        output_rule_matches: &mut Vec<RuleMatch>,
+        need_match_content: bool,
+    ) {
+        if rule_matches.is_empty() {
+            return;
+        }
+        access_regex_caches(|regex_caches| {
+            for (path, mut rule_matches) in rule_matches.into_iter() {
+                // All rule matches in each inner list are for a single path, so they can be processed independently.
+                event.visit_string_mut(&path, |content| {
+                    // calculate_indices requires that matches are sorted by start index
+                    rule_matches.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
+
+                    <<E as Event>::Encoding>::calculate_indices(
+                        content,
+                        rule_matches.iter_mut().map(
+                            |rule_match: &mut InternalRuleMatch<E::Encoding>| EncodeIndices {
+                                utf8_start: rule_match.utf8_start,
+                                utf8_end: rule_match.utf8_end,
+                                custom_start: &mut rule_match.custom_start,
+                                custom_end: &mut rule_match.custom_end,
+                            },
+                        ),
+                    );
+
+                    if self.scanner_features.multipass_v0_enabled {
+                        // Now that the `excluded_matches` set is fully populated, filter out any matches
+                        // that are the same as excluded matches (also known as "Multi-pass V0")
+                        rule_matches.retain(|rule_match| {
+                            if self.rules[rule_match.rule_index]
+                                .inner
+                                .should_exclude_multipass_v0()
+                            {
+                                let is_false_positive = excluded_matches
+                                    .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
+                                if is_false_positive && self.scanner_features.multipass_v0_enabled {
+                                    self.rules[rule_match.rule_index]
+                                        .on_excluded_match_multipass_v0();
+                                }
+                                !is_false_positive
+                            } else {
+                                true
+                            }
+                        });
+                    }
+
+                    self.suppress_matches::<E::Encoding>(&mut rule_matches, content, regex_caches);
+
+                    self.sort_and_remove_overlapping_rules::<E::Encoding>(&mut rule_matches);
+
+                    let will_mutate = rule_matches.iter().any(|rule_match| {
+                        self.rules[rule_match.rule_index].match_action.is_mutating()
+                    });
+
+                    self.apply_match_actions(
+                        content,
+                        &path,
+                        &mut rule_matches,
+                        output_rule_matches,
+                        need_match_content,
+                    );
+
+                    will_mutate
+                });
+            }
+        });
+    }
+
     async fn internal_scan<E: Event>(
         &self,
         event: &mut E,
@@ -543,63 +616,13 @@ impl Scanner {
 
         let mut output_rule_matches = vec![];
 
-        for (path, mut rule_matches) in rule_matches.into_iter() {
-            // All rule matches in each inner list are for a single path, so they can be processed independently.
-            event.visit_string_mut(&path, |content| {
-                // calculate_indices requires that matches are sorted by start index
-                rule_matches.sort_unstable_by_key(|rule_match| rule_match.utf8_start);
-
-                <<E as Event>::Encoding>::calculate_indices(
-                    content,
-                    rule_matches.iter_mut().map(
-                        |rule_match: &mut InternalRuleMatch<E::Encoding>| EncodeIndices {
-                            utf8_start: rule_match.utf8_start,
-                            utf8_end: rule_match.utf8_end,
-                            custom_start: &mut rule_match.custom_start,
-                            custom_end: &mut rule_match.custom_end,
-                        },
-                    ),
-                );
-
-                if self.scanner_features.multipass_v0_enabled {
-                    // Now that the `excluded_matches` set is fully populated, filter out any matches
-                    // that are the same as excluded matches (also known as "Multi-pass V0")
-                    rule_matches.retain(|rule_match| {
-                        if self.rules[rule_match.rule_index]
-                            .inner
-                            .should_exclude_multipass_v0()
-                        {
-                            let is_false_positive = excluded_matches
-                                .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
-                            if is_false_positive && self.scanner_features.multipass_v0_enabled {
-                                self.rules[rule_match.rule_index].on_excluded_match_multipass_v0();
-                            }
-                            !is_false_positive
-                        } else {
-                            true
-                        }
-                    });
-                }
-
-                self.suppress_matches::<E::Encoding>(&mut rule_matches, content);
-
-                self.sort_and_remove_overlapping_rules::<E::Encoding>(&mut rule_matches);
-
-                let will_mutate = rule_matches
-                    .iter()
-                    .any(|rule_match| self.rules[rule_match.rule_index].match_action.is_mutating());
-
-                self.apply_match_actions(
-                    content,
-                    &path,
-                    &mut rule_matches,
-                    &mut output_rule_matches,
-                    need_match_content,
-                );
-
-                will_mutate
-            });
-        }
+        self.process_rule_matches(
+            event,
+            rule_matches,
+            excluded_matches,
+            &mut output_rule_matches,
+            need_match_content,
+        );
 
         if options.validate_matches {
             self.validate_matches(&mut output_rule_matches);
@@ -612,12 +635,15 @@ impl Scanner {
         &self,
         rule_matches: &mut Vec<InternalRuleMatch<E>>,
         content: &str,
+        regex_caches: &mut RegexCaches,
     ) {
         rule_matches.retain(|rule_match| {
             if let Some(suppressions) = &self.rules[rule_match.rule_index].suppressions {
                 let match_should_be_suppressed = suppressions.should_match_be_suppressed(
                     &content[rule_match.utf8_start..rule_match.utf8_end],
+                    regex_caches,
                 );
+
                 if match_should_be_suppressed {
                     self.metrics.suppressed_match_count.increment(1);
                 }

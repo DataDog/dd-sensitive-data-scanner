@@ -397,9 +397,9 @@ fn test_match_suppression() {
             replacement: "[REDACTED]".to_string(),
         })
         .suppressions(Suppressions {
-            ends_with: vec!["@datadoghq.com".to_string()],
-            exact_match: vec![],
-            starts_with: vec![],
+            ends_with: vec!["@datadoghq.com".to_string(), "@google.com".to_string()],
+            exact_match: vec!["admin@yahoo.com".to_string()],
+            starts_with: vec!["arthur".to_string()],
         });
 
     let scanner = ScannerBuilder::new(&[suppression_test_rule])
