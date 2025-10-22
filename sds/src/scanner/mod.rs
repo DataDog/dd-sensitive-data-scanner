@@ -983,7 +983,7 @@ impl ScannerBuilder<'_> {
             .map(|(config, inner)| {
                 config.match_action.validate()?;
                 let compiled_suppressions = match &config.suppressions {
-                    Some(s) => Some(s.clone().try_into()?),
+                    Some(s) => s.compile()?,
                     None => None,
                 };
                 Ok(RootCompiledRule {

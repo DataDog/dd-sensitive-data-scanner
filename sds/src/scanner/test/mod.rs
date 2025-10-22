@@ -451,6 +451,36 @@ fn test_match_suppression_suppress_half_of_the_matches() {
 }
 
 #[test]
+fn test_no_suppressions_does_not_suppress_matches() {
+    let suppression_test_rule =
+        RootRuleConfig::new(RegexRuleConfig::new(r"\b\w*@\w*\.com\b").build())
+            .match_action(MatchAction::Redact {
+                replacement: "[REDACTED]".to_string(),
+            })
+            .suppressions(Suppressions {
+                ends_with: vec![],
+                exact_match: vec![],
+                starts_with: vec![],
+            });
+
+    let scanner = ScannerBuilder::new(&[suppression_test_rule])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
+
+    // This match should be suppressed because it ends with @datadoghq.com
+    let mut content =
+        "my main email is arthur@datadoghq.com while my secondary email is nathan@yahoo.com"
+            .to_string();
+    let matches = scanner.scan(&mut content).unwrap();
+    assert_eq!(matches.len(), 2);
+    assert_eq!(
+        content,
+        "my main email is [REDACTED] while my secondary email is [REDACTED]"
+    );
+}
+
+#[test]
 fn test_match_suppression_invalid() {
     let duplicate_suppressions = Suppressions {
         ends_with: vec!["@datadoghq.com".to_string(), "@datadoghq.com".to_string()],
