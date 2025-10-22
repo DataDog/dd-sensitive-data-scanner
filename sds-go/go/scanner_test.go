@@ -856,8 +856,8 @@ func NewCustomHttpValidation(endpoint string) ThirdPartyActiveChecker {
 
 func TestScanStringWithCaptureGroup(t *testing.T) {
 	var extraConfig ExtraConfig
-	extraConfig.PatternCaptureGroups = []string{"capture_group"}
-	rule := NewMatchingRule("rule_secret", "hello (?<capture_group>world)", extraConfig)
+	extraConfig.PatternCaptureGroups = []string{"sds_match"}
+	rule := NewMatchingRule("rule_secret", "hello (?<sds_match>world)", extraConfig)
 	rule.MatchAction = MatchAction{
 		Type:           MatchActionRedact,
 		RedactionValue: "[REDACTED]",

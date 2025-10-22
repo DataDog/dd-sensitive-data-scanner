@@ -32,11 +32,14 @@ pub enum RegexValidationError {
 
 #[derive(Debug, PartialEq, Eq, Error, Clone)]
 pub enum RegexPatternCaptureGroupsValidationError {
-    #[error("We only allow one capture group")]
-    TooManyCaptureGroups,
+    #[error("We only allow one capture group, but {0} were provided")]
+    TooManyCaptureGroups(usize),
 
-    #[error("The capture group is not present in the regex")]
-    CaptureGroupNotPresent,
+    #[error("The capture group '{0}' is not present in the regex")]
+    CaptureGroupNotPresent(String),
+
+    #[error("The targeted capture group must be 'sds_match'")]
+    TargetedCaptureGroupMustBeSdsMatch,
 
     #[error("The regex is invalid")]
     InvalidSyntax,

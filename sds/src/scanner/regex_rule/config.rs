@@ -116,19 +116,31 @@ fn is_pattern_capture_groups_valid(
     let pattern_capture_groups = pattern_capture_groups.as_ref().unwrap();
     if pattern_capture_groups.len() != 1 {
         // We currently only allow one capture group
-        return Err(RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups);
+        return Err(
+            RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups(
+                pattern_capture_groups.len(),
+            ),
+        );
     }
     let pattern_capture_group = pattern_capture_groups.first().unwrap();
-    if group_info
+    if !group_info
         .all_names()
         .filter(|(_, _, name)| name.is_some())
         .map(|(_, _, name)| name.unwrap())
         .any(|name| name == pattern_capture_group)
     {
-        Ok(())
-    } else {
-        Err(RegexPatternCaptureGroupsValidationError::CaptureGroupNotPresent)
+        return Err(
+            RegexPatternCaptureGroupsValidationError::CaptureGroupNotPresent(
+                pattern_capture_group.clone(),
+            ),
+        );
     }
+    // At this point, the capture group is in the regex, and there is exactly one.
+    // Currently, it must be called `sds_match`.
+    if pattern_capture_group != "sds_match" {
+        return Err(RegexPatternCaptureGroupsValidationError::TargetedCaptureGroupMustBeSdsMatch);
+    }
+    Ok(())
 }
 
 impl RuleConfig for RegexRuleConfig {
@@ -430,24 +442,33 @@ mod test {
             Result<(), RegexPatternCaptureGroupsValidationError>,
         )> = vec![
             (
-                "hello (?<capture_group>world)",
-                vec!["capture_group".to_string()],
+                "hello (?<sds_match>world)",
+                vec!["sds_match".to_string()],
                 Ok(()),
             ),
             (
-                "hello (?<capture_group>world) and (?<another_group>world)",
+                "hello (?<capture_group>world)",
                 vec!["capture_group".to_string()],
+                Err(RegexPatternCaptureGroupsValidationError::TargetedCaptureGroupMustBeSdsMatch),
+            ),
+            (
+                "hello (?<sds_match>world) and (?<another_group>world)",
+                vec!["sds_match".to_string()],
                 Ok(()),
             ),
             (
                 "hello (?<capture_grou>world)",
                 vec!["capture_group".to_string()],
-                Err(RegexPatternCaptureGroupsValidationError::CaptureGroupNotPresent),
+                Err(
+                    RegexPatternCaptureGroupsValidationError::CaptureGroupNotPresent(
+                        "capture_group".to_string(),
+                    ),
+                ),
             ),
             (
-                "hello (?<capture_group>world)",
-                vec!["capture_group".to_string(), "capture_group2".to_string()],
-                Err(RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups),
+                "hello (?<sds_match>world)",
+                vec!["sds_match".to_string(), "sds_match2".to_string()],
+                Err(RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups(2)),
             ),
         ];
         for (pattern, capture_groups, expected_result) in test_cases {
