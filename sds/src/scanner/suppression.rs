@@ -117,7 +117,7 @@ fn compile_suppressions_pattern(config: &Suppressions) -> Option<Ast> {
     asts.extend(suppressions_ast(&config.ends_with, false, true));
     asts.extend(suppressions_ast(&config.exact_match, true, true));
     if asts.is_empty() {
-        return None;
+        None
     } else {
         Some(Ast::Alternation(Alternation { span: span(), asts }))
     }
