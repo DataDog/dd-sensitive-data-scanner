@@ -89,32 +89,38 @@ fn validate_suppressions_list(suppressions: &[String]) -> Result<(), Suppression
     Ok(())
 }
 
-impl TryFrom<Suppressions> for CompiledSuppressions {
-    type Error = SuppressionValidationError;
+impl Suppressions {
+    pub fn compile(&self) -> Result<Option<CompiledSuppressions>, SuppressionValidationError> {
+        validate_suppressions_list(&self.starts_with)?;
+        validate_suppressions_list(&self.ends_with)?;
+        validate_suppressions_list(&self.exact_match)?;
+        if let Some(suppressions_ast) = compile_suppressions_pattern(self) {
+            let pattern = suppressions_ast.to_string();
+            let mut builder = meta::Regex::builder();
+            let regex_builder = builder
+                .syntax(regex_automata::util::syntax::Config::default().case_insensitive(true));
 
-    fn try_from(config: Suppressions) -> Result<Self, SuppressionValidationError> {
-        validate_suppressions_list(&config.starts_with)?;
-        validate_suppressions_list(&config.ends_with)?;
-        validate_suppressions_list(&config.exact_match)?;
-        let suppressions_ast = compile_suppressions_pattern(&config);
-        let pattern = suppressions_ast.to_string();
-        let mut builder = meta::Regex::builder();
-        let regex_builder =
-            builder.syntax(regex_automata::util::syntax::Config::default().case_insensitive(true));
-
-        let suppressions_regex = get_memoized_regex(&pattern, |p| regex_builder.build(p)).unwrap();
-        Ok(Self {
-            suppressions_pattern: Some(suppressions_regex),
-        })
+            let suppressions_regex =
+                get_memoized_regex(&pattern, |p| regex_builder.build(p)).unwrap();
+            Ok(Some(CompiledSuppressions {
+                suppressions_pattern: Some(suppressions_regex),
+            }))
+        } else {
+            Ok(None)
+        }
     }
 }
 
-fn compile_suppressions_pattern(config: &Suppressions) -> Ast {
+fn compile_suppressions_pattern(config: &Suppressions) -> Option<Ast> {
     let mut asts = vec![];
     asts.extend(suppressions_ast(&config.starts_with, true, false));
     asts.extend(suppressions_ast(&config.ends_with, false, true));
     asts.extend(suppressions_ast(&config.exact_match, true, true));
-    Ast::Alternation(Alternation { span: span(), asts })
+    if asts.is_empty() {
+        return None;
+    } else {
+        Some(Ast::Alternation(Alternation { span: span(), asts }))
+    }
 }
 
 fn suppressions_ast(suppressions: &[String], start_anchor: bool, end_anchor: bool) -> Vec<Ast> {
@@ -165,7 +171,7 @@ mod test {
             ends_with: vec!["@datadoghq.com".to_string()],
             exact_match: vec!["nathan@yahoo.com".to_string()],
         };
-        let compiled_config = CompiledSuppressions::try_from(config).unwrap();
+        let compiled_config = config.compile().unwrap().unwrap();
         let mut caches = RegexCaches::new();
         assert!(compiled_config.should_match_be_suppressed("mary@datadoghq.com", &mut caches));
         assert!(compiled_config.should_match_be_suppressed("nathan@yahoo.com", &mut caches));
@@ -182,7 +188,7 @@ mod test {
             ends_with: vec!["@datadoghq.com".to_string()],
             exact_match: vec!["nathan@yahoo.com".to_string()],
         };
-        let ast = compile_suppressions_pattern(&config);
+        let ast = compile_suppressions_pattern(&config).unwrap();
         assert_eq!(
             ast.to_string(),
             r"(?:^mary)|(?:^john)|(?:@datadoghq\.com$)|(?:^nathan@yahoo\.com$)"
