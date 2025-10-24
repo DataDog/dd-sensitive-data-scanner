@@ -29,7 +29,7 @@ pub unsafe extern "C" fn scan(
         // event to process
         let data = unsafe { slice::from_raw_parts(event.cast(), event_size as usize) }.to_vec();
 
-        let mut event = BinaryEvent::<Utf8Encoding>::new(data, false);
+        let mut event = BinaryEvent::<Utf8Encoding>::new(data, false, None);
 
         // TODO: we might want to forward the error to go in the future
         let scan_options = ScanOptionBuilder::new()
