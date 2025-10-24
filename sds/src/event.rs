@@ -20,6 +20,8 @@ pub trait Event: Sized {
     /// that was previously used in `visit_event'. This is used to replace redacted content.
     /// `visit` returns a bool indicating if the string was mutated.
     fn visit_string_mut(&mut self, path: &Path, visit: impl FnMut(&mut String) -> bool);
+
+    fn get_id(&self) -> Option<&str>;
 }
 
 pub trait EventVisitor<'path> {
@@ -50,6 +52,10 @@ impl Event for String {
 
     fn visit_string_mut(&mut self, _path: &Path, mut visit: impl FnMut(&mut String) -> bool) {
         (visit)(self);
+    }
+
+    fn get_id(&self) -> Option<&str> {
+        None
     }
 }
 

@@ -722,6 +722,10 @@ fn test_calculate_indices_is_called_with_sorted_start_index() {
     struct OrderAssertEvent(SimpleEvent);
 
     impl crate::Event for OrderAssertEvent {
+        fn get_id(&self) -> Option<&str> {
+            None
+        }
+
         type Encoding = AssertOrderEncoding;
 
         fn visit_event<'a>(
