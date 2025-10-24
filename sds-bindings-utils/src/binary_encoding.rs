@@ -21,15 +21,17 @@ pub struct BinaryEvent<E: Encoding> {
     // storage of strings that are being mutated
     pub storage: BTreeMap<Path<'static>, (bool, String)>,
     strings_are_valid_utf8: bool,
+    event_id: Option<String>,
     _phantom: PhantomData<E>,
 }
 
 impl<E: Encoding> BinaryEvent<E> {
-    pub fn new(bytes: Vec<u8>, strings_are_valid_utf8: bool) -> Self {
+    pub fn new(bytes: Vec<u8>, strings_are_valid_utf8: bool, event_id: Option<String>) -> Self {
         Self {
             bytes,
             storage: BTreeMap::new(),
             strings_are_valid_utf8,
+            event_id,
             _phantom: PhantomData::default(),
         }
     }
@@ -37,6 +39,10 @@ impl<E: Encoding> BinaryEvent<E> {
 
 impl<E: Encoding> Event for BinaryEvent<E> {
     type Encoding = E;
+
+    fn get_id(&self) -> Option<&str> {
+        self.event_id.as_ref().map(|s| s.as_ref())
+    }
 
     fn visit_event<'a>(
         &'a mut self,

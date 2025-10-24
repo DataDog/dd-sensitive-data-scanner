@@ -16,6 +16,10 @@ pub enum SimpleEvent {
 impl Event for SimpleEvent {
     type Encoding = Utf8Encoding;
 
+    fn get_id(&self) -> Option<&str> {
+        None
+    }
+
     fn visit_event<'path>(
         &'path mut self,
         visitor: &mut impl EventVisitor<'path>,

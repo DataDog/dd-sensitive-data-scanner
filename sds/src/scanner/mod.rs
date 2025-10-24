@@ -199,6 +199,7 @@ pub struct StringMatchesCtx<'a> {
     pub per_string_data: &'a mut SharedData,
     pub per_scanner_data: &'a SharedData,
     pub per_event_data: &'a mut SharedData,
+    pub event_id: Option<&'a str>,
 }
 
 impl StringMatchesCtx<'_> {
@@ -597,6 +598,7 @@ impl Scanner {
                     per_event_data: SharedData::new(),
                     wildcarded_indexes: &options.wildcarded_indices,
                     async_jobs: &mut async_jobs,
+                    event_id: event.get_id(),
                 },
             )
         })?;
@@ -1040,6 +1042,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     per_event_data: SharedData,
     wildcarded_indexes: &'a AHashMap<Path<'static>, Vec<(usize, usize)>>,
     async_jobs: &'a mut Vec<PendingRuleJob>,
+    event_id: Option<&str>,
 }
 
 impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
@@ -1086,6 +1089,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     per_string_data: &mut per_string_data,
                     per_scanner_data: &self.scanner.per_scanner_data,
                     per_event_data: &mut self.per_event_data,
+                    event_id: self.event_id,
                 };
 
                 let async_status = rule.get_string_matches(content, path, &mut ctx)?;
