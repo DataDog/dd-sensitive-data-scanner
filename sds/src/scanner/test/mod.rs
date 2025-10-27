@@ -468,7 +468,7 @@ fn test_no_suppressions_does_not_suppress_matches() {
         .build()
         .unwrap();
 
-    // This match should be suppressed because it ends with @datadoghq.com
+    // Matches should not be suppressed because there are no suppressions
     let mut content =
         "my main email is arthur@datadoghq.com while my secondary email is nathan@yahoo.com"
             .to_string();
