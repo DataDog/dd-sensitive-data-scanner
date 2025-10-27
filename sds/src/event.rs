@@ -21,7 +21,9 @@ pub trait Event: Sized {
     /// `visit` returns a bool indicating if the string was mutated.
     fn visit_string_mut(&mut self, path: &Path, visit: impl FnMut(&mut String) -> bool);
 
-    fn get_id(&self) -> Option<&str>;
+    fn get_id(&self) -> Option<&str> {
+        None
+    }
 }
 
 pub trait EventVisitor<'path> {
@@ -52,10 +54,6 @@ impl Event for String {
 
     fn visit_string_mut(&mut self, _path: &Path, mut visit: impl FnMut(&mut String) -> bool) {
         (visit)(self);
-    }
-
-    fn get_id(&self) -> Option<&str> {
-        None
     }
 }
 

@@ -7,10 +7,6 @@ use crate::{Event, EventVisitor, Path, PathSegment, ScannerError, Utf8Encoding};
 impl Event for serde_json::Value {
     type Encoding = Utf8Encoding;
 
-    fn get_id(&self) -> Option<&str> {
-        None
-    }
-
     fn visit_event<'a>(
         &'a mut self,
         visitor: &mut impl EventVisitor<'a>,
@@ -70,10 +66,6 @@ impl Event for serde_json::Value {
 
 impl Event for HashMap<String, serde_json::Value, RandomState> {
     type Encoding = Utf8Encoding;
-
-    fn get_id(&self) -> Option<&str> {
-        None
-    }
 
     fn visit_event<'a>(
         &'a mut self,
