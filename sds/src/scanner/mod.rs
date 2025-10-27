@@ -598,7 +598,7 @@ impl Scanner {
                     per_event_data: SharedData::new(),
                     wildcarded_indexes: &options.wildcarded_indices,
                     async_jobs: &mut async_jobs,
-                    event_id: event.get_id(),
+                    event_id: event.get_id().map(|s| s.to_string()),
                 },
             )
         })?;
@@ -1042,7 +1042,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     per_event_data: SharedData,
     wildcarded_indexes: &'a AHashMap<Path<'static>, Vec<(usize, usize)>>,
     async_jobs: &'a mut Vec<PendingRuleJob>,
-    event_id: Option<&str>,
+    event_id: Option<String>,
 }
 
 impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
@@ -1089,7 +1089,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     per_string_data: &mut per_string_data,
                     per_scanner_data: &self.scanner.per_scanner_data,
                     per_event_data: &mut self.per_event_data,
-                    event_id: self.event_id,
+                    event_id: self.event_id.as_deref(),
                 };
 
                 let async_status = rule.get_string_matches(content, path, &mut ctx)?;
