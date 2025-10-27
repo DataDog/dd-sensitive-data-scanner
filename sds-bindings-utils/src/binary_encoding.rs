@@ -41,7 +41,7 @@ impl<E: Encoding> Event for BinaryEvent<E> {
     type Encoding = E;
 
     fn get_id(&self) -> Option<&str> {
-        self.event_id.as_ref().map(|s| s.as_ref())
+        self.event_id.as_deref()
     }
 
     fn visit_event<'a>(
