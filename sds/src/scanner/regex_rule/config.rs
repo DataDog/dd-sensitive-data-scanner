@@ -171,6 +171,10 @@ impl RuleConfig for RegexRuleConfig {
             pattern_capture_groups: self.pattern_capture_groups.clone(),
         }))
     }
+
+    fn as_regex_rule(&self) -> Option<&RegexRuleConfig> {
+        Some(self)
+    }
 }
 
 #[serde_as]

@@ -5,6 +5,7 @@ use metrics::Counter;
 use nom::AsChar;
 use regex_automata::Input;
 
+#[derive(Clone)]
 pub struct CompiledExcludedProximityKeywords {
     pub look_ahead_character_count: usize,
     pub keywords_pattern: ProximityKeywordsRegex,

@@ -32,6 +32,14 @@ pub enum MatchAction {
     },
 }
 
+impl MatchAction {
+    pub fn redact(replacement: &str) -> Self {
+        Self::Redact {
+            replacement: replacement.to_string(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum PartialRedactDirection {
     FirstCharacters,

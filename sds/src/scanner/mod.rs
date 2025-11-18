@@ -12,7 +12,7 @@ use error::MatchValidatorCreationError;
 use self::metrics::ScannerMetrics;
 use crate::match_validation::match_validator::RAYON_THREAD_POOL;
 use crate::observability::labels::Labels;
-use crate::rule_match::{InternalRuleMatch, RuleMatch};
+use crate::rule_match::{DebugRuleMatch, DebugRuleMatchStatus, InternalRuleMatch, RuleMatch};
 use crate::scanner::config::RuleConfig;
 use crate::scanner::internal_rule_match_set::InternalRuleMatchSet;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
@@ -47,6 +47,7 @@ pub mod shared_data;
 pub mod shared_pool;
 pub mod suppression;
 
+mod debug_scan;
 mod internal_rule_match_set;
 #[cfg(test)]
 mod test;
@@ -124,6 +125,10 @@ impl<T> RootRuleConfig<T> {
             inner: func(self.inner),
         }
     }
+
+    // pub fn map_dyn(self) -> RootRuleConfig<Arc<dyn RuleConfig>> {
+    //     self.map_inner(|x| x as )
+    // }
 
     pub fn match_action(mut self, action: MatchAction) -> Self {
         self.match_action = action;
@@ -303,6 +308,14 @@ pub trait CompiledRule: Send + Sync {
 
     fn on_excluded_match_multipass_v0(&self) {
         // default is to do nothing
+    }
+
+    fn as_regex_rule(&self) -> Option<&RegexCompiledRule> {
+        None
+    }
+
+    fn as_regex_rule_mut(&mut self) -> Option<&mut RegexCompiledRule> {
+        None
     }
 }
 

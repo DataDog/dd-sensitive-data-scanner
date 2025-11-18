@@ -1,6 +1,7 @@
 use crate::Labels;
 use metrics::{Counter, counter};
 
+#[derive(Clone)]
 pub struct RuleMetrics {
     pub false_positive_excluded_attributes: Counter,
 }

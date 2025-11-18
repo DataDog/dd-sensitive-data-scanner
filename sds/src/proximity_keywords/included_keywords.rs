@@ -3,6 +3,7 @@ use crate::scanner::regex_rule::RegexCaches;
 use regex_automata::Input;
 use std::ops::Range;
 
+#[derive(Clone)]
 pub struct CompiledIncludedProximityKeywords {
     pub look_ahead_character_count: usize,
     pub keywords_pattern: super::ProximityKeywordsRegex,

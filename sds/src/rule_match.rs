@@ -3,6 +3,23 @@ use crate::{StringMatch, encoding::Encoding, path::Path};
 use std::fmt::Debug;
 use std::fmt::{Display, Formatter};
 
+#[derive(Debug)]
+pub struct DebugRuleMatch {
+    pub rule_match: RuleMatch,
+    pub status: DebugRuleMatchStatus,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum DebugRuleMatchStatus {
+    Matched,
+    MissingIncludedKeyword,
+    IncludedKeywordTooFar,
+    ExcludedKeyword,
+    NotInIncludedNamespace,
+    Suppressed,
+    ChecksumFailed,
+}
+
 /// Metadata about a rule match.
 #[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub struct RuleMatch {

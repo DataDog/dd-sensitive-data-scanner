@@ -25,7 +25,7 @@ pub const TYPE: &str = "type";
 /// If this list contains more than a couple chars, some optimizations may be needed below
 const EXCLUDED_KEYWORDS_REMOVED_CHARS: &[char] = &['-', '_'];
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProximityKeywordsRegex {
     pub content_regex: SharedRegex,
     pub path_regex: SharedRegex,
