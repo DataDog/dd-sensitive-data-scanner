@@ -12,7 +12,7 @@ use error::MatchValidatorCreationError;
 use self::metrics::ScannerMetrics;
 use crate::match_validation::match_validator::RAYON_THREAD_POOL;
 use crate::observability::labels::Labels;
-use crate::rule_match::{DebugRuleMatch, DebugRuleMatchStatus, InternalRuleMatch, RuleMatch};
+use crate::rule_match::{InternalRuleMatch, RuleMatch};
 use crate::scanner::config::RuleConfig;
 use crate::scanner::internal_rule_match_set::InternalRuleMatchSet;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
@@ -39,6 +39,7 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
 pub mod config;
+pub mod debug_scan;
 pub mod error;
 pub mod metrics;
 pub mod regex_rule;
@@ -47,7 +48,6 @@ pub mod shared_data;
 pub mod shared_pool;
 pub mod suppression;
 
-mod debug_scan;
 mod internal_rule_match_set;
 #[cfg(test)]
 mod test;

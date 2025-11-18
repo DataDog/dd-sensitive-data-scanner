@@ -61,6 +61,8 @@ pub use validation::{
     RegexValidationError, get_regex_complexity_estimate_very_slow, validate_regex,
 };
 
+pub use scanner::debug_scan::debug_scan;
+
 #[cfg(any(feature = "testing", feature = "bench"))]
 pub use crate::{
     scoped_ruleset::{ContentVisitor, RuleIndexVisitor, ScopedRuleSet},

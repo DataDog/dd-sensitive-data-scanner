@@ -1,7 +1,23 @@
-use crate::rule_match::{DebugRuleMatch, DebugRuleMatchStatus};
-use crate::{Event, RegexRuleConfig, RootRuleConfig, RuleConfig, Scanner, ScannerError};
+use crate::{Event, RegexRuleConfig, RootRuleConfig, RuleConfig, RuleMatch, Scanner, ScannerError};
 use std::ops::Deref;
 use std::sync::Arc;
+
+#[derive(Debug)]
+pub struct DebugRuleMatch {
+    pub rule_match: RuleMatch,
+    pub status: DebugRuleMatchStatus,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum DebugRuleMatchStatus {
+    Matched,
+    MissingIncludedKeyword,
+    IncludedKeywordTooFar,
+    ExcludedKeyword,
+    NotInIncludedNamespace,
+    Suppressed,
+    ChecksumFailed,
+}
 
 pub fn debug_scan<E: Event>(
     event: &mut E,
@@ -86,8 +102,6 @@ pub fn debug_scan<E: Event>(
 #[cfg(test)]
 mod test {
     use super::*;
-
-    use crate::rule_match::DebugRuleMatchStatus;
     use crate::{
         MatchAction, MatchStatus, ProximityKeywordsConfig, RegexRuleConfig, RootRuleConfig, Scanner,
     };
