@@ -1,5 +1,4 @@
-use crate::{Event, RegexRuleConfig, RootRuleConfig, RuleConfig, RuleMatch, Scanner, ScannerError};
-use std::ops::Deref;
+use crate::{Event, RootRuleConfig, RuleConfig, RuleMatch, Scanner, ScannerError};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -30,7 +29,6 @@ pub fn debug_scan<E: Event>(
         .unwrap();
 
     let full_matches = full_scanner.scan(event)?;
-    println!("Full Matches: {:?}", full_matches);
 
     let mut output: Vec<DebugRuleMatch> = full_matches
         .into_iter()
@@ -46,33 +44,25 @@ pub fn debug_scan<E: Event>(
     if let Some(regex_rule) = rule.inner.as_regex_rule() {
         let mut regex_rule = regex_rule.clone();
 
-        if let Some(proximity_keywords) = &mut regex_rule.proximity_keywords {
-            if !proximity_keywords.included_keywords.is_empty() {
-                proximity_keywords.included_keywords = vec![];
-                // let mut inner = rule.inner.deref().clone();
-                // inner.proximity_keywords.as_mut().unwrap().included_keywords = vec![];
+        if let Some(proximity_keywords) = &mut regex_rule.proximity_keywords
+            && !proximity_keywords.included_keywords.is_empty()
+        {
+            proximity_keywords.included_keywords = vec![];
 
-                // rule.
+            let scanner = Scanner::builder(&[rule.clone().map_inner(|_| regex_rule.build())])
+                .build()
+                .unwrap();
 
-                let scanner = Scanner::builder(&[rule.clone().map_inner(|_| regex_rule.build())])
-                    .build()
-                    .unwrap();
-
-                let matches = scanner.scan(event)?;
-                println!("Without keywords Matches: {:?}", matches);
-                for m in matches {
-                    if !output.iter().find(|x| x.rule_match == m).is_some() {
-                        output.push(DebugRuleMatch {
-                            rule_match: m,
-                            status: DebugRuleMatchStatus::MissingIncludedKeyword,
-                        });
-                    }
+            let matches = scanner.scan(event)?;
+            for m in matches {
+                if !output.iter().any(|x| x.rule_match == m) {
+                    output.push(DebugRuleMatch {
+                        rule_match: m,
+                        status: DebugRuleMatchStatus::MissingIncludedKeyword,
+                    });
                 }
             }
-            //     println!("Scanning without included keywords");
-            //     // let mut rule = regex_rule.clone();
-            //     // rule.included_keywords = None;
-            //     self.rules[0].
+            // }
         }
     }
 
@@ -102,9 +92,7 @@ pub fn debug_scan<E: Event>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        MatchAction, MatchStatus, ProximityKeywordsConfig, RegexRuleConfig, RootRuleConfig, Scanner,
-    };
+    use crate::{MatchAction, RegexRuleConfig, RootRuleConfig};
 
     #[test]
     fn test_full_match() {
