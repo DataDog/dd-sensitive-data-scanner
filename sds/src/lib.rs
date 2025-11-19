@@ -8,7 +8,6 @@ mod event;
 mod match_action;
 
 mod ast_utils;
-#[cfg(any(test, feature = "testing", feature = "bench"))]
 mod event_json;
 mod match_validation;
 mod normalization;

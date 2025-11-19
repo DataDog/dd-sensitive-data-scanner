@@ -39,9 +39,6 @@ pub fn debug_scan<E: Event>(
         })
         .collect();
 
-    // let original_regex_rule = self.rules[0].as_regex_rule().cloned().unwrap();
-    //
-
     if let Some(regex_rule) = rule.inner.as_regex_rule() {
         let mut regex_rule = regex_rule.clone();
 
@@ -63,7 +60,6 @@ pub fn debug_scan<E: Event>(
                     });
                 }
             }
-            // }
         }
     }
 
