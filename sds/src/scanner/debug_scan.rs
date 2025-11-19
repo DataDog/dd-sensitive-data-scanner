@@ -1,13 +1,14 @@
 use crate::{Event, RootRuleConfig, RuleConfig, RuleMatch, Scanner, ScannerError};
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DebugRuleMatch {
     pub rule_match: RuleMatch,
     pub status: DebugRuleMatchStatus,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum DebugRuleMatchStatus {
     Matched,
     MissingIncludedKeyword,
