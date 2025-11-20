@@ -18,6 +18,7 @@ pub enum DebugRuleMatchStatus {
     IncludedKeywordTooFar,
     ExcludedKeyword,
     NotInIncludedScope,
+    InExcludedScope,
     Suppressed,
     ChecksumFailed,
 }
@@ -82,6 +83,7 @@ pub fn debug_scan<E: Event>(
         debug_scan_regex(event, &rule, regex_rule, &mut output)?;
     }
     debug_scan_included_scope(event, &rule, &mut output)?;
+    debug_scan_excluded_scope(event, &rule, &mut output)?;
     debug_scan_suppressions(event, &rule, &mut output)?;
 
     Ok(output)
@@ -94,6 +96,7 @@ pub fn debug_scan<E: Event>(
 
     // custom function
     // IncludedKeywordTooFar,
+    // excluded namespace
 }
 
 fn debug_scan_regex<E: Event>(
@@ -184,6 +187,38 @@ fn debug_scan_included_scope<E: Event>(
 
     let matches = scanner.scan(event)?;
     add_status_if_no_match(matches, output, DebugRuleMatchStatus::NotInIncludedScope);
+    Ok(())
+}
+
+fn debug_scan_excluded_scope<E: Event>(
+    event: &mut E,
+    root_rule: &RootRuleConfig<Arc<dyn RuleConfig>>,
+    output: &mut Vec<DebugRuleMatch>
+) -> Result<(), ScannerError> {
+    let new_scope = match &root_rule.scope {
+        Scope::Include { include, exclude } => {
+            if exclude.is_empty() {
+                return Ok(());
+            }
+            Scope::Include {include: include.clone(), exclude: vec![]}
+        }
+        Scope::Exclude(exclude) => {
+            if exclude.is_empty() {
+                return Ok(());
+            }
+            Scope::Exclude(vec![])
+        }
+    };
+
+    let mut root_rule = root_rule.clone();
+    root_rule.scope = new_scope;
+
+    let scanner = Scanner::builder(&[root_rule])
+        .build()
+        .unwrap();
+
+    let matches = scanner.scan(event)?;
+    add_status_if_no_match(matches, output, DebugRuleMatchStatus::InExcludedScope);
     Ok(())
 }
 
@@ -371,6 +406,27 @@ mod test {
             DebugRuleMatchStatus::NotInIncludedScope
         );
         assert_eq!(matches[0].rule_match.start_index, 10);
+    }
+
+    #[test]
+    fn test_excluded_scope() {
+        let rule = RootRuleConfig::new(
+            RegexRuleConfig::new("secret").build(),
+        )
+            .match_action(MatchAction::redact("[REDACTED]"))
+            .scope(Scope::exclude(vec![Path::from(vec![PathSegment::from("tag")])]));
+
+        let mut map = BTreeMap::new();
+        map.insert("tag".to_string(), SimpleEvent::String("Contains a secret".to_string()));
+
+        let mut event = SimpleEvent::Map(map);
+        let matches = debug_scan(&mut event, rule).unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(
+            matches[0].status,
+            DebugRuleMatchStatus::InExcludedScope
+        );
     }
 
     #[test]
