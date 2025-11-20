@@ -1,4 +1,4 @@
-use crate::{Event, MatchAction, RegexRuleConfig, RootRuleConfig, RuleConfig, RuleMatch, Scanner, ScannerError};
+use crate::{Event, MatchAction, RegexRuleConfig, RootRuleConfig, RuleConfig, RuleMatch, Scanner, ScannerError, Scope};
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +14,7 @@ pub enum DebugRuleMatchStatus {
     MissingIncludedKeyword,
     IncludedKeywordTooFar,
     ExcludedKeyword,
-    NotInIncludedNamespace,
+    NotInIncludedScope,
     Suppressed,
     ChecksumFailed,
 }
@@ -52,22 +52,19 @@ pub fn debug_scan<E: Event>(
     /*
     --- TODO ---
     - suppressions position / text
-    - keyword position / text
+    - keyword position / text (included and excluded)
 
 
      */
-
-    // custom function
-    // IncludedKeywordTooFar,
-
-    // scan with excluded keywords removed
-    // ExcludedKeyword,
 
     // scan with full event
     // NotInIncludedNamespace,
 
     // scan without checksum
     // ChecksumFailed,
+
+    // custom function
+    // IncludedKeywordTooFar,
 }
 
 fn debug_scan_regex<E: Event>(
@@ -79,6 +76,7 @@ fn debug_scan_regex<E: Event>(
     debug_scan_included_keywords(event, root_rule, regex_rule, output)?;
     debug_scan_suppressions(event, root_rule, output)?;
     debug_scan_excluded_keywords(event, root_rule, regex_rule, output)?;
+    debug_scan_included_namespace(event, root_rule, regex_rule, output)?;
     Ok(())
 }
 
@@ -135,6 +133,33 @@ fn debug_scan_excluded_keywords<E: Event>(
     Ok(())
 }
 
+fn debug_scan_included_namespace<E: Event>(
+    event: &mut E,
+    root_rule: &RootRuleConfig<Arc<dyn RuleConfig>>,
+    regex_rule: &RegexRuleConfig,
+    output: &mut Vec<DebugRuleMatch>
+) -> Result<(), ScannerError> {
+    let new_scope = match &root_rule.scope {
+        Scope::Include { include: _, exclude } => {
+            Scope::Exclude(exclude.clone())
+        }
+        _ => {
+            return Ok(())
+        }
+    };
+
+    let mut root_rule = root_rule.clone();
+    root_rule.scope = new_scope;
+
+    let scanner = Scanner::builder(&[root_rule.clone().map_inner(|_| regex_rule.build())])
+        .build()
+        .unwrap();
+
+    let matches = scanner.scan(event)?;
+    add_status_if_no_match(matches, output, DebugRuleMatchStatus::NotInIncludedScope);
+    Ok(())
+}
+
 fn debug_scan_suppressions<E: Event>(
     event: &mut E,
     root_rule: &RootRuleConfig<Arc<dyn RuleConfig>>,
@@ -176,8 +201,9 @@ fn add_status_if_no_match(
 
 #[cfg(test)]
 mod test {
+    use std::collections::BTreeMap;
     use super::*;
-    use crate::{MatchAction, RegexRuleConfig, RootRuleConfig, Suppressions};
+    use crate::{MatchAction, Path, PathSegment, RegexRuleConfig, RootRuleConfig, SimpleEvent, Suppressions};
 
     #[test]
     fn test_full_match() {
@@ -251,6 +277,29 @@ mod test {
         assert_eq!(
             matches[0].status,
             DebugRuleMatchStatus::Suppressed
+        );
+        assert_eq!(matches[0].rule_match.start_index, 10);
+    }
+
+    #[test]
+    fn test_included_scope() {
+        let rule = RootRuleConfig::new(
+            RegexRuleConfig::new("secret").build(),
+        )
+            .match_action(MatchAction::redact("[REDACTED]"))
+            .scope(Scope::include(vec![Path::from(vec![PathSegment::from("tag")])]));
+
+        let mut map = BTreeMap::new();
+        map.insert("tag".to_string(), SimpleEvent::String("Not a match".to_string()));
+        map.insert("tag2".to_string(), SimpleEvent::String("This is a secret".to_string()));
+
+        let mut event = SimpleEvent::Map(map);
+        let matches = debug_scan(&mut event, rule).unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(
+            matches[0].status,
+            DebugRuleMatchStatus::NotInIncludedScope
         );
         assert_eq!(matches[0].rule_match.start_index, 10);
     }
