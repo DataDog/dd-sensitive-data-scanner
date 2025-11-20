@@ -13,7 +13,7 @@ struct WeakSharedRegex {
     cache_size: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SharedRegex {
     pub(super) regex: Arc<MetaRegex>,
     pub(super) cache_key: RegexCacheKey,

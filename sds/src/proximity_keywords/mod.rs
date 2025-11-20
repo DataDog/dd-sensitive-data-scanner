@@ -25,7 +25,7 @@ pub const TYPE: &str = "type";
 /// If this list contains more than a couple chars, some optimizations may be needed below
 const EXCLUDED_KEYWORDS_REMOVED_CHARS: &[char] = &['-', '_'];
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProximityKeywordsRegex {
     pub content_regex: SharedRegex,
     pub path_regex: SharedRegex,
@@ -126,24 +126,24 @@ pub struct PrefixStart {
 
 pub fn is_index_within_prefix(
     content: &str,
-    prefix_start: usize,
-    target: usize,
+    keyword_start: usize,
+    match_start: usize,
     prefix_size: usize,
 ) -> bool {
-    debug_assert!(target > prefix_start);
-    debug_assert!(content.is_char_boundary(prefix_start));
-    debug_assert!(content.is_char_boundary(target));
+    debug_assert!(match_start > keyword_start);
+    debug_assert!(content.is_char_boundary(keyword_start));
+    debug_assert!(content.is_char_boundary(match_start));
 
     // A unicode char can't be less than 1 byte, so do a quick check assuming 1 byte per char
-    if prefix_start + prefix_size > target {
+    if keyword_start + prefix_size > match_start {
         return true;
     }
 
     // Slower method that works with unicode chars
-    content[prefix_start..]
+    content[keyword_start..]
         .char_indices()
         .nth(prefix_size)
-        .is_none_or(|(i, _)| prefix_start + i >= target)
+        .is_none_or(|(i, _)| keyword_start + i >= match_start)
 }
 
 pub fn get_prefix_start(
