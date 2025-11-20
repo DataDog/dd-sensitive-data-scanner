@@ -53,15 +53,7 @@ pub fn debug_scan<E: Event>(
     --- TODO ---
     - suppressions position / text
     - keyword position / text (included and excluded)
-
-
      */
-
-    // scan with full event
-    // NotInIncludedNamespace,
-
-    // scan without checksum
-    // ChecksumFailed,
 
     // custom function
     // IncludedKeywordTooFar,
@@ -76,7 +68,8 @@ fn debug_scan_regex<E: Event>(
     debug_scan_included_keywords(event, root_rule, regex_rule, output)?;
     debug_scan_suppressions(event, root_rule, output)?;
     debug_scan_excluded_keywords(event, root_rule, regex_rule, output)?;
-    debug_scan_included_namespace(event, root_rule, regex_rule, output)?;
+    debug_scan_included_scope(event, root_rule, output)?;
+    debug_scan_checksum(event, root_rule, regex_rule, output)?;
     Ok(())
 }
 
@@ -133,10 +126,9 @@ fn debug_scan_excluded_keywords<E: Event>(
     Ok(())
 }
 
-fn debug_scan_included_namespace<E: Event>(
+fn debug_scan_included_scope<E: Event>(
     event: &mut E,
     root_rule: &RootRuleConfig<Arc<dyn RuleConfig>>,
-    regex_rule: &RegexRuleConfig,
     output: &mut Vec<DebugRuleMatch>
 ) -> Result<(), ScannerError> {
     let new_scope = match &root_rule.scope {
@@ -151,12 +143,34 @@ fn debug_scan_included_namespace<E: Event>(
     let mut root_rule = root_rule.clone();
     root_rule.scope = new_scope;
 
-    let scanner = Scanner::builder(&[root_rule.clone().map_inner(|_| regex_rule.build())])
+    let scanner = Scanner::builder(&[root_rule])
         .build()
         .unwrap();
 
     let matches = scanner.scan(event)?;
     add_status_if_no_match(matches, output, DebugRuleMatchStatus::NotInIncludedScope);
+    Ok(())
+}
+
+fn debug_scan_checksum<E: Event>(
+    event: &mut E,
+    root_rule: &RootRuleConfig<Arc<dyn RuleConfig>>,
+    regex_rule: &RegexRuleConfig,
+    output: &mut Vec<DebugRuleMatch>
+) -> Result<(), ScannerError> {
+    if regex_rule.validator.is_none() {
+       return Ok(());
+    }
+
+    let mut regex_rule = regex_rule.clone();
+    regex_rule.validator = None;
+
+    let scanner = Scanner::builder(&[root_rule.clone().map_inner(|_| regex_rule.build())])
+        .build()
+        .unwrap();
+
+    let matches = scanner.scan(event)?;
+    add_status_if_no_match(matches, output, DebugRuleMatchStatus::ChecksumFailed);
     Ok(())
 }
 
@@ -203,7 +217,7 @@ fn add_status_if_no_match(
 mod test {
     use std::collections::BTreeMap;
     use super::*;
-    use crate::{MatchAction, Path, PathSegment, RegexRuleConfig, RootRuleConfig, SimpleEvent, Suppressions};
+    use crate::{MatchAction, Path, PathSegment, RegexRuleConfig, RootRuleConfig, SecondaryValidator, SimpleEvent, Suppressions};
 
     #[test]
     fn test_full_match() {
@@ -302,5 +316,21 @@ mod test {
             DebugRuleMatchStatus::NotInIncludedScope
         );
         assert_eq!(matches[0].rule_match.start_index, 10);
+    }
+
+    #[test]
+    fn test_checksum() {
+        let rule = RootRuleConfig::new(
+            RegexRuleConfig::new("[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{4}").with_validator(Some(SecondaryValidator::LuhnChecksum)).build(),
+        );
+
+        let mut event = "1234-1234-1234-1235".to_string();
+        let matches = debug_scan(&mut event, rule).unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(
+            matches[0].status,
+            DebugRuleMatchStatus::ChecksumFailed
+        );
     }
 }
