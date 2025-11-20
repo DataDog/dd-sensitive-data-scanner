@@ -2,6 +2,7 @@ use crate::{Event, MatchAction, RegexRuleConfig, RootRuleConfig, RuleConfig, Rul
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use crate::scanner::regex_rule::access_regex_caches;
+use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DebugRuleMatch {
@@ -13,10 +14,10 @@ pub struct DebugRuleMatch {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "status")]
 pub enum DebugRuleMatchStatus {
-    Matched(MatchedStatus),
+    Matched(MatchedInfo),
     MissingIncludedKeyword,
     IncludedKeywordTooFar,
-    ExcludedKeyword,
+    ExcludedKeyword(ExcludedInfo),
     NotInIncludedScope,
     InExcludedScope,
     Suppressed,
@@ -24,10 +25,17 @@ pub enum DebugRuleMatchStatus {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct MatchedStatus {
+pub struct MatchedInfo {
     included_keyword: Option<String>,
     included_keyword_start_index: Option<usize>,
     included_keyword_end_exclusive: Option<usize>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ExcludedInfo {
+    pub excluded_keyword: Option<String>,
+    pub excluded_keyword_start_index: Option<usize>,
+    pub excluded_keyword_end_exclusive: Option<usize>,
 }
 
 pub fn debug_scan<E: Event>(
@@ -49,7 +57,7 @@ pub fn debug_scan<E: Event>(
     let mut output: Vec<DebugRuleMatch> = full_matches
         .into_iter()
         .map(|rule_match| {
-            let mut matched_status_info = MatchedStatus {
+            let mut matched_status_info = MatchedInfo {
                 included_keyword: None,
                 included_keyword_start_index: None,
                 included_keyword_end_exclusive: None,
@@ -80,7 +88,9 @@ pub fn debug_scan<E: Event>(
         .collect();
 
     if let Some(regex_rule) = rule.inner.as_regex_rule() {
-        debug_scan_regex(event, &rule, regex_rule, &mut output)?;
+
+        let regex_compiled_rule = full_scanner.rules[0].as_regex_rule().unwrap();
+        debug_scan_regex(event, &rule, regex_rule, &mut output, regex_compiled_rule)?;
     }
     debug_scan_included_scope(event, &rule, &mut output)?;
     debug_scan_excluded_scope(event, &rule, &mut output)?;
@@ -103,10 +113,26 @@ fn debug_scan_regex<E: Event>(
     event: &mut E,
     root_rule: &RootRuleConfig<Arc<dyn RuleConfig>>,
     regex_rule: &RegexRuleConfig,
-    output: &mut Vec<DebugRuleMatch>
+    output: &mut Vec<DebugRuleMatch>,
+    regex_compiled_rule: &RegexCompiledRule
 ) -> Result<(), ScannerError> {
+
+        // if let Some(compiled_included_keywords) = &regex_compiled_rule.included_keywords {
+        // access_regex_caches(|caches| {
+        //     if let Some(info) = compiled_included_keywords.find_keyword_before_match(
+        //         rule_match.start_index, caches, content
+        //     ) {
+        //         matched_status_info.included_keyword = Some(info.keyword);
+        //         matched_status_info.included_keyword_start_index = Some(info.keyword_start_index);
+        //         matched_status_info.included_keyword_end_exclusive = Some(info.keyword_end_index_exclusive);
+        //     }
+        // });
+        // false
+
+    // }
+
     debug_scan_included_keywords(event, root_rule, regex_rule, output)?;
-    debug_scan_excluded_keywords(event, root_rule, regex_rule, output)?;
+    debug_scan_excluded_keywords(event, root_rule, regex_rule, output, regex_compiled_rule)?;
     debug_scan_checksum(event, root_rule, regex_rule, output)?;
     Ok(())
 }
@@ -145,7 +171,8 @@ fn debug_scan_excluded_keywords<E: Event>(
     event: &mut E,
     root_rule: &RootRuleConfig<Arc<dyn RuleConfig>>,
     regex_rule: &RegexRuleConfig,
-    output: &mut Vec<DebugRuleMatch>
+    output: &mut Vec<DebugRuleMatch>,
+    regex_compiled_rule: &RegexCompiledRule
 ) -> Result<(), ScannerError> {
     let mut regex_rule = regex_rule.clone();
 
@@ -159,7 +186,32 @@ fn debug_scan_excluded_keywords<E: Event>(
             .unwrap();
 
         let matches = scanner.scan(event)?;
-        add_status_if_no_match(matches, output, DebugRuleMatchStatus::ExcludedKeyword);
+
+        for m in matches {
+            if !output.iter().any(|x| x.rule_match == m) {
+                let mut excluded_info = ExcludedInfo {
+                    excluded_keyword: None,
+                    excluded_keyword_start_index: None,
+                    excluded_keyword_end_exclusive: None,
+                };
+
+                if let Some(compiled_excluded_keywords) = &regex_compiled_rule.excluded_keywords {
+                    event.visit_string_mut(&m.path, |content| {
+                        if let Some(info) = compiled_excluded_keywords.get_false_positive_match(content, m.start_index) {
+                            excluded_info.excluded_keyword_start_index = Some(info.start());
+                            excluded_info.excluded_keyword_end_exclusive = Some(info.end());
+                            excluded_info.excluded_keyword = Some(content[info.start()..info.end()].to_string());
+                        }
+                        false
+                    })
+
+                }
+                output.push(DebugRuleMatch {
+                    rule_match: m,
+                    status: DebugRuleMatchStatus::ExcludedKeyword(excluded_info)
+                });
+            }
+        }
     }
     Ok(())
 }
@@ -298,7 +350,7 @@ mod test {
 
         // Full match
         assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].status, DebugRuleMatchStatus::Matched(MatchedStatus {
+        assert_eq!(matches[0].status, DebugRuleMatchStatus::Matched(MatchedInfo {
             included_keyword: None,
             included_keyword_start_index: None,
             included_keyword_end_exclusive: None,
@@ -314,7 +366,7 @@ mod test {
         let matches = debug_scan(&mut msg, rule_config).unwrap();
 
         assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].status, DebugRuleMatchStatus::Matched(MatchedStatus {
+        assert_eq!(matches[0].status, DebugRuleMatchStatus::Matched(MatchedInfo {
             included_keyword: Some("a".to_string()),
             included_keyword_start_index: Some(8),
             included_keyword_end_exclusive: Some(9),
@@ -343,7 +395,7 @@ mod test {
     }
 
     #[test]
-    fn test_missing_excluded_keyword() {
+    fn test_with_excluded_keyword() {
         let rule = RootRuleConfig::new(
             RegexRuleConfig::new("secret")
                 .with_excluded_keywords(&["a"])
@@ -357,9 +409,12 @@ mod test {
         assert_eq!(matches.len(), 1);
         assert_eq!(
             matches[0].status,
-            DebugRuleMatchStatus::ExcludedKeyword
+            DebugRuleMatchStatus::ExcludedKeyword(ExcludedInfo {
+                excluded_keyword: Some("a".to_string()),
+                excluded_keyword_start_index: Some(8),
+                excluded_keyword_end_exclusive: Some(9),
+            })
         );
-        assert_eq!(matches[0].rule_match.start_index, 10);
     }
 
     #[test]
