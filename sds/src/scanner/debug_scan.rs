@@ -27,7 +27,7 @@ pub enum DebugRuleMatchStatus {
 pub struct MatchedStatus {
     included_keyword: Option<String>,
     included_keyword_start_index: Option<usize>,
-    included_keyw0rd_end_exclusive: Option<usize>,
+    included_keyword_end_exclusive: Option<usize>,
 }
 
 pub fn debug_scan<E: Event>(
