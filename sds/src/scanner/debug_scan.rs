@@ -52,7 +52,7 @@ pub fn debug_scan<E: Event>(
             let mut matched_status_info = MatchedStatus {
                 included_keyword: None,
                 included_keyword_start_index: None,
-                included_keyw0rd_end_exclusive: None,
+                included_keyword_end_exclusive: None,
             };
             if let Some(compiled_regex_rule) = full_scanner.rules[0].as_regex_rule() {
                 if let Some(compiled_included_keywords) = &compiled_regex_rule.included_keywords {
@@ -64,7 +64,7 @@ pub fn debug_scan<E: Event>(
                             ) {
                                 matched_status_info.included_keyword = Some(info.keyword);
                                 matched_status_info.included_keyword_start_index = Some(info.keyword_start_index);
-                                matched_status_info.included_keyw0rd_end_exclusive = Some(info.keyword_end_index_exclusive);
+                                matched_status_info.included_keyword_end_exclusive = Some(info.keyword_end_index_exclusive);
                             }
                         });
                         false
@@ -301,7 +301,7 @@ mod test {
         assert_eq!(matches[0].status, DebugRuleMatchStatus::Matched(MatchedStatus {
             included_keyword: None,
             included_keyword_start_index: None,
-            included_keyw0rd_end_exclusive: None,
+            included_keyword_end_exclusive: None,
         }));
         assert_eq!(matches[0].rule_match.start_index, 10);
     }
@@ -317,7 +317,7 @@ mod test {
         assert_eq!(matches[0].status, DebugRuleMatchStatus::Matched(MatchedStatus {
             included_keyword: Some("a".to_string()),
             included_keyword_start_index: Some(8),
-            included_keyw0rd_end_exclusive: Some(9),
+            included_keyword_end_exclusive: Some(9),
         }));
         assert_eq!(matches[0].rule_match.start_index, 10);
     }
