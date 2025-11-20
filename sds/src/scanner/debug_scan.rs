@@ -49,6 +49,14 @@ pub fn debug_scan<E: Event>(
 
     Ok(output)
 
+    /*
+    --- TODO ---
+    - suppressions position / text
+    - keyword position / text
+
+
+     */
+
     // custom function
     // IncludedKeywordTooFar,
 
@@ -57,9 +65,6 @@ pub fn debug_scan<E: Event>(
 
     // scan with full event
     // NotInIncludedNamespace,
-
-    // directly call supressions
-    // Suppressed,
 
     // scan without checksum
     // ChecksumFailed,
@@ -73,6 +78,7 @@ fn debug_scan_regex<E: Event>(
 ) -> Result<(), ScannerError> {
     debug_scan_included_keywords(event, root_rule, regex_rule, output)?;
     debug_scan_suppressions(event, root_rule, output)?;
+    debug_scan_excluded_keywords(event, root_rule, regex_rule, output)?;
     Ok(())
 }
 
@@ -102,6 +108,29 @@ fn debug_scan_included_keywords<E: Event>(
                 });
             }
         }
+    }
+    Ok(())
+}
+
+fn debug_scan_excluded_keywords<E: Event>(
+    event: &mut E,
+    root_rule: &RootRuleConfig<Arc<dyn RuleConfig>>,
+    regex_rule: &RegexRuleConfig,
+    output: &mut Vec<DebugRuleMatch>
+) -> Result<(), ScannerError> {
+    let mut regex_rule = regex_rule.clone();
+
+    if let Some(proximity_keywords) = &mut regex_rule.proximity_keywords
+        && !proximity_keywords.excluded_keywords.is_empty()
+    {
+        proximity_keywords.excluded_keywords = vec![];
+
+        let scanner = Scanner::builder(&[root_rule.clone().map_inner(|_| regex_rule.build())])
+            .build()
+            .unwrap();
+
+        let matches = scanner.scan(event)?;
+        add_status_if_no_match(matches, output, DebugRuleMatchStatus::ExcludedKeyword);
     }
     Ok(())
 }
@@ -164,7 +193,7 @@ mod test {
     }
 
     #[test]
-    fn test_missing_keyword() {
+    fn test_missing_included_keyword() {
         let rule = RootRuleConfig::new(
             RegexRuleConfig::new("secret")
                 .with_included_keywords(&["value"])
@@ -179,6 +208,26 @@ mod test {
         assert_eq!(
             matches[0].status,
             DebugRuleMatchStatus::MissingIncludedKeyword
+        );
+        assert_eq!(matches[0].rule_match.start_index, 10);
+    }
+
+    #[test]
+    fn test_missing_excluded_keyword() {
+        let rule = RootRuleConfig::new(
+            RegexRuleConfig::new("secret")
+                .with_excluded_keywords(&["a"])
+                .build(),
+        )
+            .match_action(MatchAction::redact("[REDACTED]"));
+
+        let mut msg = "This is a secret".to_string();
+        let matches = debug_scan(&mut msg, rule).unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(
+            matches[0].status,
+            DebugRuleMatchStatus::ExcludedKeyword
         );
         assert_eq!(matches[0].rule_match.start_index, 10);
     }
