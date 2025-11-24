@@ -857,7 +857,7 @@ impl Scanner {
             // Longer matches
             let ord = ord.then(a.len().cmp(&b.len()).reverse());
 
-            // Matches with secondary validation
+            // Matches with higher precedence come first
             let ord = ord.then(
                 self.rules[a.rule_index]
                     .precedence
