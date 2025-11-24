@@ -73,6 +73,19 @@ where
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Precedence {
+    Catchall,
+    Generic,
+    Specific,
+}
+
+impl Default for Precedence {
+    fn default() -> Self {
+        Self::Specific
+    }
+}
+
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RootRuleConfig<T> {
@@ -83,6 +96,8 @@ pub struct RootRuleConfig<T> {
     match_validation_type: Option<MatchValidationType>,
     third_party_active_checker: Option<MatchValidationType>,
     suppressions: Option<Suppressions>,
+    #[serde(default)]
+    precedence: Option<Precedence>,
     #[serde(flatten)]
     pub inner: T,
 }
@@ -109,6 +124,7 @@ impl<T> RootRuleConfig<T> {
             match_validation_type: None,
             third_party_active_checker: None,
             suppressions: None,
+            precedence: None,
             inner,
         }
     }
@@ -121,12 +137,18 @@ impl<T> RootRuleConfig<T> {
             match_validation_type: self.match_validation_type,
             third_party_active_checker: self.third_party_active_checker,
             suppressions: self.suppressions,
+            precedence: self.precedence,
             inner: func(self.inner),
         }
     }
 
     pub fn match_action(mut self, action: MatchAction) -> Self {
         self.match_action = action;
+        self
+    }
+
+    pub fn precedence(mut self, precedence: Precedence) -> Self {
+        self.precedence = Some(precedence);
         self
     }
 
@@ -169,6 +191,7 @@ pub struct RootCompiledRule {
     pub match_action: MatchAction,
     pub match_validation_type: Option<MatchValidationType>,
     pub suppressions: Option<CompiledSuppressions>,
+    pub precedence: Precedence,
 }
 
 impl RootCompiledRule {
@@ -834,6 +857,14 @@ impl Scanner {
             // Longer matches
             let ord = ord.then(a.len().cmp(&b.len()).reverse());
 
+            // Matches with secondary validation
+            let ord = ord.then(
+                self.rules[a.rule_index]
+                    .precedence
+                    .cmp(&self.rules[b.rule_index].precedence)
+                    .reverse(),
+            );
+
             // Matches from earlier rules
             let ord = ord.then(a.rule_index.cmp(&b.rule_index));
 
@@ -994,6 +1025,7 @@ impl ScannerBuilder<'_> {
                     match_action: config.match_action.clone(),
                     match_validation_type: config.get_third_party_active_checker().cloned(),
                     suppressions: compiled_suppressions,
+                    precedence: config.precedence.clone().unwrap_or_default(),
                 })
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;

@@ -904,3 +904,37 @@ fn test_capture_group() {
     assert_eq!(content, "hello [REDACTED] i am here");
     assert_eq!(matches.len(), 1);
 }
+
+#[test]
+fn test_precedence_ordering() {
+    assert!(Precedence::Specific > Precedence::Generic);
+    assert!(Precedence::Generic > Precedence::Catchall);
+}
+
+#[test]
+fn test_precedence_ordering_in_scanner() {
+    let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("abc").build())
+        .precedence(Precedence::Specific)
+        .match_action(MatchAction::Redact {
+            replacement: "[SPECIFIC]".to_string(),
+        });
+    let rule_1 = RootRuleConfig::new(RegexRuleConfig::new("abc").build())
+        .precedence(Precedence::Generic)
+        .match_action(MatchAction::Redact {
+            replacement: "[GENERIC]".to_string(),
+        });
+    let rule_2 = RootRuleConfig::new(RegexRuleConfig::new("abc").build())
+        .precedence(Precedence::Catchall)
+        .match_action(MatchAction::Redact {
+            replacement: "[CATCHALL]".to_string(),
+        });
+
+    // We place the catchall rule first to show the specific rule takes precedence.
+    let scanner = ScannerBuilder::new(&[rule_2, rule_1, rule_0])
+        .build()
+        .unwrap();
+    let mut content = "abc".to_string();
+    let matches = scanner.scan(&mut content).unwrap();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(content, "[SPECIFIC]");
+}
