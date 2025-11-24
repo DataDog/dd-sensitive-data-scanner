@@ -73,7 +73,7 @@ where
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Copy)]
 pub enum Precedence {
     Catchall,
     Generic,
@@ -1025,7 +1025,7 @@ impl ScannerBuilder<'_> {
                     match_action: config.match_action.clone(),
                     match_validation_type: config.get_third_party_active_checker().cloned(),
                     suppressions: compiled_suppressions,
-                    precedence: config.precedence.clone().unwrap_or_default(),
+                    precedence: config.precedence.unwrap_or_default(),
                 })
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;
