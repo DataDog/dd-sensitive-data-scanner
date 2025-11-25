@@ -97,7 +97,7 @@ pub struct RootRuleConfig<T> {
     third_party_active_checker: Option<MatchValidationType>,
     suppressions: Option<Suppressions>,
     #[serde(default)]
-    precedence: Option<Precedence>,
+    precedence: Precedence,
     #[serde(flatten)]
     pub inner: T,
 }
@@ -124,7 +124,7 @@ impl<T> RootRuleConfig<T> {
             match_validation_type: None,
             third_party_active_checker: None,
             suppressions: None,
-            precedence: None,
+            precedence: Precedence::default(),
             inner,
         }
     }
@@ -148,7 +148,7 @@ impl<T> RootRuleConfig<T> {
     }
 
     pub fn precedence(mut self, precedence: Precedence) -> Self {
-        self.precedence = Some(precedence);
+        self.precedence = precedence;
         self
     }
 
@@ -1025,7 +1025,7 @@ impl ScannerBuilder<'_> {
                     match_action: config.match_action.clone(),
                     match_validation_type: config.get_third_party_active_checker().cloned(),
                     suppressions: compiled_suppressions,
-                    precedence: config.precedence.unwrap_or_default(),
+                    precedence: config.precedence,
                 })
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;
