@@ -79,6 +79,7 @@ where
 /// - Have the same mutation priority
 /// - Match at the same index
 /// - Match the same number of characters
+///
 /// Then the rule with the highest precedence will be used.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Copy)]
 pub enum Precedence {
