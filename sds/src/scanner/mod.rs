@@ -304,6 +304,9 @@ pub trait CompiledRule: Send + Sync {
     fn on_excluded_match_multipass_v0(&self) {
         // default is to do nothing
     }
+    fn allow_scanner_to_exclude_namespace(&self) -> bool {
+        true
+    }
 }
 
 impl<T> RuleConfig for Box<T>
@@ -1066,6 +1069,12 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
             }
             let rule = &self.scanner.rules[rule_index];
             {
+                if rule.inner.allow_scanner_to_exclude_namespace() {
+                    // check if the path is excluded
+                    if exclusion_check.is_excluded(rule_index) {
+                        return Ok(());
+                    }
+                }
                 // creating the emitter is basically free, it will get mostly optimized away
                 let mut emitter = |rule_match: StringMatch| {
                     // This should never happen, but to ensure no empty match is ever generated
