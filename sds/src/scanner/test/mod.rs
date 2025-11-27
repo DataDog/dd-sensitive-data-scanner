@@ -885,8 +885,8 @@ fn test_excluded_keyword_with_excluded_chars_in_content() {
 #[test]
 fn test_capture_group() {
     let suppression_test_rule = RootRuleConfig::new(
-        RegexRuleConfig::new(r"hello (?<capture_group>world)")
-            .with_pattern_capture_groups(vec!["capture_group".to_string()])
+        RegexRuleConfig::new(r"hello (?<sds_match>world)")
+            .with_pattern_capture_groups(vec!["sds_match".to_string()])
             .build(),
     )
     .match_action(MatchAction::Redact {
