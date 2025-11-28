@@ -28,6 +28,10 @@ pub struct RegexCompiledRule {
 }
 
 impl CompiledRule for RegexCompiledRule {
+    fn allow_scanner_to_exclude_namespace(&self) -> bool {
+        false
+    }
+
     fn get_string_matches(
         &self,
         content: &str,
