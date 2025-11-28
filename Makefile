@@ -9,6 +9,14 @@ help:     ## Show this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[0;33m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 	@echo ""
 
+
+##@ Build sds-go
+
+.PHONY: build-sds-go
+build-sds-go: ## Build the sds-go lib.
+	@echo "Building sds-go lib"
+	cargo build --manifest-path="sds-go/rust/Cargo.toml" --release
+
 ##@ Formatting
 
 .PHONY: format-go
@@ -23,19 +31,9 @@ format-rust: ## Format the rust lib.
 	cargo fmt --manifest-path="sds/Cargo.toml" --all
 	cargo fmt --manifest-path="sds-go/rust/Cargo.toml" --all
 
-##@ Checks
+.PHONY: format-all
+format-all: format-rust format-go ## Format the rust lib and golang libs.
 
-.PHONY: check-go
-check-go: ## Check the golang lib.
-	@echo "Checking golang lib"
-	make format-go
-	make test-go
-
-.PHONY: check-rust
-check-rust: ## Check the rust lib.
-	@echo "Checking rust lib"
-	bash ./scripts/rust_checks.sh
-	
 ##@ Testing
 
 .PHONY: test-go
@@ -55,12 +53,18 @@ test-all: test-rust test-go ## Test the rust lib and golang libs.
 .PHONY: test
 test: test-all ## Alias for test-all
 
-##@ Build sds-go
+##@ Checks (format + test)
 
-.PHONY: build-sds-go
-build-sds-go: ## Build the sds-go lib.
-	@echo "Building sds-go lib"
-	cargo build --manifest-path="sds-go/rust/Cargo.toml" --release
+.PHONY: check-go
+check-go: ## Check the golang lib.
+	@echo "Checking golang lib"
+	make format-go
+	make test-go
+
+.PHONY: check-rust
+check-rust: ## Check the rust lib.
+	@echo "Checking rust lib"
+	bash ./scripts/rust_checks.sh
 
 ##@ Licenses generation
 
