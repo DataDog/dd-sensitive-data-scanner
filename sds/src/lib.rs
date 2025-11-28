@@ -3,11 +3,11 @@
 #![deny(clippy::print_stdout)]
 #![allow(clippy::new_without_default)]
 
+mod ast_utils;
 mod encoding;
 mod event;
 mod match_action;
 
-mod ast_utils;
 #[cfg(any(test, feature = "testing", feature = "bench"))]
 mod event_json;
 mod match_validation;
@@ -42,6 +42,7 @@ pub use path::{Path, PathSegment};
 pub use rule_match::{ReplacementType, RuleMatch};
 pub use scanner::shared_pool::{SharedPool, SharedPoolGuard};
 
+pub use parser::explainer::{AstNode, explain_regex};
 pub use scanner::suppression::Suppressions;
 pub use scanner::{
     CompiledRule, MatchEmitter, RootCompiledRule, RootRuleConfig, RuleResult, RuleStatus,
