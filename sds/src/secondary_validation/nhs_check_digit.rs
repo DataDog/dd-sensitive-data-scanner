@@ -9,8 +9,8 @@ impl Validator for NhsCheckDigit {
         // https://www.datadictionary.nhs.uk/attributes/nhs_number.html
         // The NHS number is a 10-digit number in the format 123 456 7890.
         validate_mod11_weighted_checksum(regex_match, WEIGHTS, |remainder| match remainder {
-            0 => Some(0), // 11 - 0 = 11 → 0
-            1 => None,    // 11 - 1 = 10 → invalid
+            0 => Some(0), // 11 - 0 = 11 -> 0
+            1 => None,    // 11 - 1 = 10 -> invalid
             _ => Some(11 - remainder),
         })
     }
