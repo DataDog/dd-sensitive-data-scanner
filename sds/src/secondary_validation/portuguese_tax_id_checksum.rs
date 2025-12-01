@@ -1,38 +1,17 @@
-use crate::secondary_validation::{Validator, get_next_digit};
+use crate::secondary_validation::{Validator, validate_mod11_weighted_checksum};
 
 /// Validates the checksum of Portuguese Tax ID numbers (NIF).
 /// See: https://pt.wikipedia.org/wiki/Número_de_identificação_fiscal
 pub struct PortugueseTaxIdChecksum;
 
+const WEIGHTS: &[u32; 8] = &[9, 8, 7, 6, 5, 4, 3, 2];
+
 impl Validator for PortugueseTaxIdChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
-        let mut chars = regex_match.chars();
-        let mut sum = 0;
-
-        // multiply each digit by its weight (9 to 2)
-        for i in 0..8 {
-            let digit = match get_next_digit(&mut chars) {
-                Some(d) => d,
-                None => return false,
-            };
-            sum += digit * (9 - i);
-        }
-
-        let expected_check_digit = match 11 - (sum % 11) {
-            n if n > 9 => 0,
-            n => n,
-        };
-
-        let actual_check_digit = match get_next_digit(&mut chars) {
-            Some(d) => d,
-            None => return false,
-        };
-
-        if get_next_digit(&mut chars).is_some() {
-            return false; // too many digits
-        }
-
-        expected_check_digit == actual_check_digit
+        validate_mod11_weighted_checksum(regex_match, WEIGHTS, |remainder| match remainder {
+            0 | 1 => Some(0), // 11 - 0 = 11 (>9), 11 - 1 = 10 (>9), both become 0
+            _ => Some(11 - remainder),
+        })
     }
 }
 
