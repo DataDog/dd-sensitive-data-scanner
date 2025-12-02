@@ -172,6 +172,7 @@ impl SecondaryValidator {
             SecondaryValidator::LuxembourgIndividualNINChecksum => {
                 Arc::new(LuxembourgIndividualNINChecksum)
             }
+            SecondaryValidator::VerhoeffChecksum => Arc::new(VerhoeffChecksum),
             SecondaryValidator::Mod11_10checksum => Arc::new(Mod11_10checksum),
             SecondaryValidator::Mod11_2checksum => Arc::new(Mod11_2checksum),
             SecondaryValidator::Mod1271_36Checksum => Arc::new(Mod1271_36Checksum),

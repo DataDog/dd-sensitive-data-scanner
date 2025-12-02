@@ -220,6 +220,7 @@ pub enum SecondaryValidator {
     LithuanianPersonalIdentificationNumberChecksum,
     LuhnChecksum,
     LuxembourgIndividualNINChecksum,
+    VerhoeffChecksum,
     Mod11_10checksum,
     Mod11_2checksum,
     Mod1271_36Checksum,
