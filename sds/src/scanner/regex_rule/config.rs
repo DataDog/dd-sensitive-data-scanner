@@ -240,6 +240,8 @@ pub enum SecondaryValidator {
     SpanishDniChecksum,
     SpanishNussChecksum,
     SwedenPINChecksum,
+    UsDeaChecksum,
+    UsNpiChecksum,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

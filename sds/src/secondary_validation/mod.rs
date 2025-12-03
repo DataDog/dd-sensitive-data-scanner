@@ -40,6 +40,8 @@ mod slovenian_pin_checksum;
 mod spain_dni_checksum;
 mod spanish_nuss_checksum;
 mod sweden_pin_checksum;
+mod us_dea_checksum;
+mod us_npi_checksum;
 mod verhoeff_checksum;
 
 #[cfg(test)]
@@ -91,6 +93,8 @@ pub use crate::secondary_validation::slovenian_pin_checksum::SlovenianPINChecksu
 pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
 pub use crate::secondary_validation::spanish_nuss_checksum::SpanishNussChecksum;
 pub use crate::secondary_validation::sweden_pin_checksum::SwedenPINChecksum;
+pub use crate::secondary_validation::us_dea_checksum::UsDeaChecksum;
+pub use crate::secondary_validation::us_npi_checksum::UsNpiChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
 
 use std::str::Chars;
@@ -194,6 +198,8 @@ impl SecondaryValidator {
             SecondaryValidator::SpanishDniChecksum => Arc::new(SpanishDniChecksum),
             SecondaryValidator::SpanishNussChecksum => Arc::new(SpanishNussChecksum),
             SecondaryValidator::SwedenPINChecksum => Arc::new(SwedenPINChecksum),
+            SecondaryValidator::UsDeaChecksum => Arc::new(UsDeaChecksum),
+            SecondaryValidator::UsNpiChecksum => Arc::new(UsNpiChecksum),
         }
     }
 }
