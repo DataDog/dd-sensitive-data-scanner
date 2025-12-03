@@ -52,7 +52,7 @@ pub use scanner::{
         ClaimRequirement, JwtClaimsValidatorConfig, ProximityKeywordsConfig, RegexRuleConfig,
         SecondaryValidator,
     },
-    regex_rule::{RegexCacheKey, RegexCacheValue, RegexCaches, SharedRegex},
+    regex_rule::{RegexCacheKey, RegexCacheValue, RegexCaches, SharedRegex, get_memoized_regex},
     scope::Scope,
 };
 pub use scoped_ruleset::ExclusionCheck;
