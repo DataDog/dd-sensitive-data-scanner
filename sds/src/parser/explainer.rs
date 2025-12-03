@@ -181,7 +181,7 @@ fn ast_to_node_with_range(
     match ast {
         Ast::Empty => AstNode {
             node_type: "Empty".to_string(),
-            description: "Empty expression (matches nothing)".to_string(),
+            description: "matches an empty string".to_string(),
             start,
             end,
             children: None,
@@ -190,14 +190,23 @@ fn ast_to_node_with_range(
 
         Ast::Literal(lit) => {
             let char_display = if lit.c.is_control() || lit.c.is_whitespace() {
-                format!("'{}'", lit.c.escape_default())
+                lit.c.escape_default().to_string()
             } else {
-                format!("'{}'", lit.c)
+                lit.c.to_string()
+            };
+
+            let description = if lit.escaped {
+                format!(
+                    "\\{} matches the character {} literally",
+                    lit.c, char_display
+                )
+            } else {
+                format!("matches the character {} literally", char_display)
             };
 
             AstNode {
                 node_type: "Literal".to_string(),
-                description: format!("Literal character {}.", char_display),
+                description,
                 start,
                 end,
                 children: None,
@@ -265,10 +274,7 @@ fn ast_to_node_with_range(
 
             AstNode {
                 node_type: "Alternation".to_string(),
-                description: format!(
-                    "An alternation. Choose the first expression that matches from {} alternatives.",
-                    alts.len()
-                ),
+                description: "alternation - matches the expression before or after the |. Acts like a boolean OR".to_string(),
                 start,
                 end,
                 children: Some(children),
@@ -280,7 +286,7 @@ fn ast_to_node_with_range(
             let (node_type, description, inner, prefix_len) = match group.as_ref() {
                 Group::Capturing(g) => (
                     "Capturing Group",
-                    "A capture group.",
+                    "capturing group - groups multiple tokens together and creates a capture group for extracting a substring or using a backreference".to_string(),
                     &g.inner,
                     1, // "("
                 ),
@@ -288,14 +294,14 @@ fn ast_to_node_with_range(
                     let flags_str = format_flags(&g.flags);
                     (
                         "Non-Capturing Group",
-                        "A non-capturing group.",
+                        "non-capturing group - groups multiple tokens together without creating a capture group".to_string(),
                         &g.inner,
                         3 + flags_str.len(), // "(?flags:"
                     )
                 }
                 Group::NamedCapturing(g) => (
                     "Named Capturing Group",
-                    format!("A named capture group '{}'.", g.name).leak() as &str,
+                    format!("named capturing group '{}' - groups multiple tokens together and creates a capture group that can be referenced by name", g.name),
                     &g.inner,
                     4 + g.name.len(), // "(?<name>"
                 ),
@@ -319,7 +325,7 @@ fn ast_to_node_with_range(
 
             AstNode {
                 node_type: node_type.to_string(),
-                description: description.to_string(),
+                description,
                 start,
                 end: actual_end,
                 children: Some(vec![child]),
@@ -336,38 +342,55 @@ fn ast_to_node_with_range(
 
             let child = ast_to_node_with_range(&rep.inner, pattern, inner_start, inner_end, offset);
 
+            let greedy_suffix = if rep.quantifier.lazy {
+                ", as few times as possible, expanding as needed (lazy)"
+            } else {
+                ", as many times as possible, giving back as needed (greedy)"
+            };
+
             let (description, properties) = match &rep.quantifier.kind {
                 QuantifierKind::ZeroOrMore => (
-                    "Zero or more times (*)",
+                    format!(
+                        "matches the previous token between zero and unlimited times{}",
+                        greedy_suffix
+                    ),
                     serde_json::json!({"lazy": rep.quantifier.lazy}),
                 ),
                 QuantifierKind::OneOrMore => (
-                    "One or more times (+)",
+                    format!(
+                        "matches the previous token between one and unlimited times{}",
+                        greedy_suffix
+                    ),
                     serde_json::json!({"lazy": rep.quantifier.lazy}),
                 ),
                 QuantifierKind::ZeroOrOne => (
-                    "Zero or one time (?)",
+                    format!(
+                        "matches the previous token between zero and one times{}",
+                        greedy_suffix
+                    ),
                     serde_json::json!({"lazy": rep.quantifier.lazy}),
                 ),
                 QuantifierKind::RangeExact(n) => (
-                    format!("Exactly {} times", n).leak() as &str,
+                    format!("matches the previous token exactly {} times", n),
                     serde_json::json!({"min": n, "max": n, "lazy": rep.quantifier.lazy}),
                 ),
                 QuantifierKind::RangeMinMax(min, max) => (
-                    format!("Between {} and {} times", min, max).leak() as &str,
+                    format!(
+                        "matches the previous token between {} and {} times{}",
+                        min, max, greedy_suffix
+                    ),
                     serde_json::json!({"min": min, "max": max, "lazy": rep.quantifier.lazy}),
                 ),
                 QuantifierKind::RangeMin(min) => (
-                    format!("{} or more times", min).leak() as &str,
+                    format!(
+                        "matches the previous token between {} and unlimited times{}",
+                        min, greedy_suffix
+                    ),
                     serde_json::json!({"min": min, "max": null, "lazy": rep.quantifier.lazy}),
                 ),
             };
 
-            let full_desc = if rep.quantifier.lazy {
-                format!("{} (lazy)", description)
-            } else {
-                description.to_string()
-            };
+            let full_desc = description;
 
             AstNode {
                 node_type: "Repetition".to_string(),
@@ -382,42 +405,54 @@ fn ast_to_node_with_range(
         Ast::CharacterClass(class) => {
             let (description, node_type) = match class {
                 CharacterClass::Dot => (
-                    "Matches any character except \\n. Enable the s flag to match any character, including \\n.".to_string(),
-                    "Dot".to_string()
+                    "matches any character (except for line terminators)".to_string(),
+                    "Dot".to_string(),
                 ),
                 CharacterClass::Perl(perl) => {
                     let (name, desc) = describe_perl_character_class(perl);
-                    (format!("{} {}", name, desc), "Perl Character Class".to_string())
-                },
+                    (
+                        format!("{} {}", name, desc),
+                        "Perl Character Class".to_string(),
+                    )
+                }
                 CharacterClass::Bracket(bracket) => {
                     let desc = if bracket.negated {
-                        "Matches anything that is not listed inside the brackets."
+                        "match a single character not present in the list"
                     } else {
-                        "Matches any character listed inside the brackets."
+                        "match a single character present in the list"
                     };
                     (desc.to_string(), "Character Class".to_string())
-                },
+                }
                 CharacterClass::HorizontalWhitespace => (
-                    "\\h Matches a space or tab ([\\x{20}\\t]).".to_string(),
-                    "Horizontal Whitespace".to_string()
+                    "\\h matches any horizontal whitespace character (spaces and tabs)".to_string(),
+                    "Horizontal Whitespace".to_string(),
                 ),
                 CharacterClass::NotHorizontalWhitespace => (
-                    "\\H Matches anything that does not match with \\h.".to_string(),
-                    "Not Horizontal Whitespace".to_string()
+                    "\\H matches any character that's not a horizontal whitespace character"
+                        .to_string(),
+                    "Not Horizontal Whitespace".to_string(),
                 ),
                 CharacterClass::VerticalWhitespace => (
-                    "\\v Matches ASCII vertical space ([\\x{B}\\x{A}\\x{C}\\x{D}]).".to_string(),
-                    "Vertical Whitespace".to_string()
+                    "\\v matches any vertical whitespace character (newlines)".to_string(),
+                    "Vertical Whitespace".to_string(),
                 ),
                 CharacterClass::NotVerticalWhitespace => (
-                    "\\V Matches anything that does not match with \\v.".to_string(),
-                    "Not Vertical Whitespace".to_string()
+                    "\\V matches any character that's not a vertical whitespace character"
+                        .to_string(),
+                    "Not Vertical Whitespace".to_string(),
                 ),
                 CharacterClass::UnicodeProperty(prop) => {
-                    let prefix = if prop.negate { "\\P" } else { "\\p" };
-                    let desc = format!("{}{{{}}} Matches anything that matches the unicode property {}.", prefix, prop.name, prop.name);
+                    let (prefix, verb) = if prop.negate {
+                        ("\\P", "not in")
+                    } else {
+                        ("\\p", "in")
+                    };
+                    let desc = format!(
+                        "{}{{{}}} matches any character {} the unicode category '{}'",
+                        prefix, prop.name, verb, prop.name
+                    );
                     (desc, "Unicode Property".to_string())
-                },
+                }
             };
 
             // For bracket character classes, add child nodes for each item
@@ -440,15 +475,20 @@ fn ast_to_node_with_range(
 
         Ast::Assertion(assertion) => {
             let (symbol, desc) = match assertion {
-                AssertionType::WordBoundary => ("\\b", "A word boundary."),
-                AssertionType::NotWordBoundary => ("\\B", "Not a word boundary."),
-                AssertionType::StartLine => ("^", "Start of a line."),
-                AssertionType::EndLine => ("$", "End of a line."),
-                AssertionType::StartText => ("\\A", "Start of text."),
-                AssertionType::EndText => ("\\z", "End of text."),
+                AssertionType::WordBoundary => (
+                    "\\b",
+                    "asserts position at a word boundary: (^\\w|\\w$|\\W\\w|\\w\\W)",
+                ),
+                AssertionType::NotWordBoundary => {
+                    ("\\B", "asserts position at a non-word boundary")
+                }
+                AssertionType::StartLine => ("^", "asserts position at start of a line"),
+                AssertionType::EndLine => ("$", "asserts position at end of a line"),
+                AssertionType::StartText => ("\\A", "asserts position at start of the string"),
+                AssertionType::EndText => ("\\z", "asserts position at end of the string"),
                 AssertionType::EndTextOptionalNewline => (
                     "\\Z",
-                    "End of text (or before a \\n that is immediately before the end of the text).",
+                    "asserts position at the end of the string, or before the line terminator right at the end of the string (if any)",
                 ),
             };
 
@@ -470,9 +510,9 @@ fn ast_to_node_with_range(
             AstNode {
                 node_type: "Flags".to_string(),
                 description: if flag_descriptions.is_empty() {
-                    "Flags.".to_string()
+                    "match flags".to_string()
                 } else {
-                    format!("Flags: {}", flag_descriptions)
+                    flag_descriptions
                 },
                 start,
                 end,
@@ -487,43 +527,46 @@ fn ast_to_node_with_range(
 
 fn describe_perl_character_class(perl: &PerlCharacterClass) -> (&'static str, &'static str) {
     match perl {
-        PerlCharacterClass::Digit => ("\\d", "Matches any ASCII digit ([0-9])."),
+        PerlCharacterClass::Digit => ("\\d", "matches a digit (equivalent to [0-9])"),
         PerlCharacterClass::Space => (
             "\\s",
-            "Matches any ASCII whitespace ([\\r\\n\\t\\x{C}\\x{B}\\x{20}]).",
+            "matches any whitespace character (equivalent to [\\r\\n\\t\\f\\v ])",
         ),
-        PerlCharacterClass::Word => ("\\w", "Matches any ASCII word character ([a-zA-Z0-9_])."),
+        PerlCharacterClass::Word => (
+            "\\w",
+            "matches any word character (equivalent to [a-zA-Z0-9_])",
+        ),
         PerlCharacterClass::NonDigit => (
             "\\D",
-            "Matches anything that does not match any ASCII digit ([0-9]).",
+            "matches any character that's not a digit (equivalent to [^0-9])",
         ),
         PerlCharacterClass::NonSpace => (
             "\\S",
-            "Matches anything that does not match any ASCII whitespace ([\\r\\n\\t\\x{C}\\x{B}\\x{20}]).",
+            "matches any non-whitespace character (equivalent to [^\\r\\n\\t\\f\\v ])",
         ),
         PerlCharacterClass::NonWord => (
             "\\W",
-            "Matches anything that does not match any ASCII word character ([a-zA-Z0-9_]).",
+            "matches any non-word character (equivalent to [^a-zA-Z0-9_])",
         ),
     }
 }
 
 fn describe_ascii_class_kind(kind: &AsciiClassKind) -> &'static str {
     match kind {
-        AsciiClassKind::Alnum => "Alphanumeric",
-        AsciiClassKind::Alpha => "Alphabetic",
-        AsciiClassKind::Ascii => "Any ASCII character",
-        AsciiClassKind::Blank => "A space or tab",
-        AsciiClassKind::Cntrl => "A control character",
-        AsciiClassKind::Digit => "Any digit",
-        AsciiClassKind::Graph => "Any graphical or printing character (not a space)",
-        AsciiClassKind::Lower => "Any lowercase letter",
-        AsciiClassKind::Print => "Any printable character (including spaces)",
-        AsciiClassKind::Punct => "Any punctuation character",
-        AsciiClassKind::Space => "A whitespace",
-        AsciiClassKind::Upper => "Any uppercase letter",
-        AsciiClassKind::Word => "Any ASCII word character ([a-zA-Z0-9_])",
-        AsciiClassKind::Xdigit => "Any hexadecimal digit",
+        AsciiClassKind::Alnum => "matches any alphanumeric character [a-zA-Z0-9]",
+        AsciiClassKind::Alpha => "matches any alphabetic character [a-zA-Z]",
+        AsciiClassKind::Ascii => "matches any ASCII character [\\x00-\\x7F]",
+        AsciiClassKind::Blank => "matches a space or tab [ \\t]",
+        AsciiClassKind::Cntrl => "matches any control character [\\x00-\\x1F\\x7F]",
+        AsciiClassKind::Digit => "matches any digit [0-9]",
+        AsciiClassKind::Graph => "matches any visible character (not whitespace) [!-~]",
+        AsciiClassKind::Lower => "matches any lowercase letter [a-z]",
+        AsciiClassKind::Print => "matches any printable character [ -~]",
+        AsciiClassKind::Punct => "matches any punctuation character",
+        AsciiClassKind::Space => "matches any whitespace character [ \\t\\r\\n\\v\\f]",
+        AsciiClassKind::Upper => "matches any uppercase letter [A-Z]",
+        AsciiClassKind::Word => "matches any word character [a-zA-Z0-9_]",
+        AsciiClassKind::Xdigit => "matches any hexadecimal digit [0-9A-Fa-f]",
     }
 }
 
@@ -550,11 +593,27 @@ fn create_bracket_class_children(
 
         let (node_type, description) = match item {
             BracketCharacterClassItem::Literal(c) => {
-                ("Literal".to_string(), format!("Literal character '{}'.", c))
+                let char_display = if c.is_control() || c.is_whitespace() {
+                    c.escape_default().to_string()
+                } else {
+                    c.to_string()
+                };
+                (
+                    "Literal".to_string(),
+                    format!("matches the character {}", char_display),
+                )
             }
             BracketCharacterClassItem::Range(start_char, end_char) => (
                 "Character Range".to_string(),
-                format!("Range from '{}' to '{}'.", start_char, end_char),
+                format!(
+                    "{}-{} matches a single character in the range between {} (index {}) and {} (index {})",
+                    start_char,
+                    end_char,
+                    start_char,
+                    *start_char as u32,
+                    end_char,
+                    *end_char as u32
+                ),
             ),
             BracketCharacterClassItem::PerlCharacterClass(perl) => {
                 let (name, desc) = describe_perl_character_class(perl);
@@ -564,41 +623,51 @@ fn create_bracket_class_children(
                 )
             }
             BracketCharacterClassItem::UnicodeProperty(prop) => {
-                let prefix = if prop.negate { "\\P" } else { "\\p" };
+                let (prefix, verb) = if prop.negate {
+                    ("\\P", "not in")
+                } else {
+                    ("\\p", "in")
+                };
                 (
                     "Unicode Property".to_string(),
                     format!(
-                        "{}{{{}}} Matches anything that matches the unicode property {}.",
-                        prefix, prop.name, prop.name
+                        "{}{{{}}} matches any character {} the unicode category '{}'",
+                        prefix, prop.name, verb, prop.name
                     ),
                 )
             }
             BracketCharacterClassItem::AsciiClass(ascii) => {
                 let kind_name = describe_ascii_class_kind(&ascii.kind);
+                let kind_str = format_ascii_class_name(&ascii.kind);
                 (
                     "ASCII Class".to_string(),
                     if ascii.negated {
-                        format!("Inverted ASCII class. {}", kind_name)
+                        format!(
+                            "[:^{}:] {}",
+                            kind_str,
+                            kind_name.replace("matches", "matches any character not matching")
+                        )
                     } else {
-                        format!("ASCII class. {}", kind_name)
+                        format!("[:{}:] {}", kind_str, kind_name)
                     },
                 )
             }
             BracketCharacterClassItem::HorizontalWhitespace => (
                 "Horizontal Whitespace".to_string(),
-                "\\h Matches a space or tab ([\\x{20}\\t]).".to_string(),
+                "\\h matches any horizontal whitespace character (spaces and tabs)".to_string(),
             ),
             BracketCharacterClassItem::NotHorizontalWhitespace => (
                 "Not Horizontal Whitespace".to_string(),
-                "\\H Matches anything that does not match with \\h.".to_string(),
+                "\\H matches any character that's not a horizontal whitespace character"
+                    .to_string(),
             ),
             BracketCharacterClassItem::VerticalWhitespace => (
                 "Vertical Whitespace".to_string(),
-                "\\v Matches ASCII vertical space ([\\x{B}\\x{A}\\x{C}\\x{D}]).".to_string(),
+                "\\v matches any vertical whitespace character (newlines)".to_string(),
             ),
             BracketCharacterClassItem::NotVerticalWhitespace => (
                 "Not Vertical Whitespace".to_string(),
-                "\\V Matches anything that does not match with \\v.".to_string(),
+                "\\V matches any character that's not a vertical whitespace character".to_string(),
             ),
         };
 
@@ -670,8 +739,8 @@ fn format_unicode_property(prop: &UnicodePropertyClass) -> String {
     }
 }
 
-fn format_ascii_class(ascii: &AsciiClass) -> String {
-    let kind_str = match ascii.kind {
+fn format_ascii_class_name(kind: &AsciiClassKind) -> &'static str {
+    match kind {
         AsciiClassKind::Alnum => "alnum",
         AsciiClassKind::Alpha => "alpha",
         AsciiClassKind::Ascii => "ascii",
@@ -686,7 +755,11 @@ fn format_ascii_class(ascii: &AsciiClass) -> String {
         AsciiClassKind::Upper => "upper",
         AsciiClassKind::Word => "word",
         AsciiClassKind::Xdigit => "xdigit",
-    };
+    }
+}
+
+fn format_ascii_class(ascii: &AsciiClass) -> String {
+    let kind_str = format_ascii_class_name(&ascii.kind);
     if ascii.negated {
         format!("[:^{}:]", kind_str)
     } else {
@@ -722,19 +795,21 @@ fn describe_flags(flags: &Flags) -> String {
     let mut descriptions = Vec::new();
     for flag in &flags.add {
         descriptions.push(match flag {
-            Flag::CaseInsensitive => "i (Case insensitive: Letters match both upper and lower case)",
-            Flag::MultiLine => "m (Multi-line mode: ^ and $ match the beginning and end of line)",
-            Flag::DotMatchesNewLine => "s (Single line: Allows . to match any character, when it usually matches anything except \\n)",
-            Flag::IgnoreWhitespace => "x (Extended: Whitespace is ignored except in a custom character class)",
+            Flag::CaseInsensitive => {
+                "i modifier: case insensitive. Letters match both upper and lower case"
+            }
+            Flag::MultiLine => "m modifier: multi line. ^ and $ match start/end of line",
+            Flag::DotMatchesNewLine => "s modifier: single line. Dot matches newline characters",
+            Flag::IgnoreWhitespace => "x modifier: extended. Spaces and text after # are ignored",
         });
     }
     if !flags.remove.is_empty() {
         for flag in &flags.remove {
             descriptions.push(match flag {
-                Flag::CaseInsensitive => "Remove i (case insensitive)",
-                Flag::MultiLine => "Remove m (multi-line mode)",
-                Flag::DotMatchesNewLine => "Remove s (single line)",
-                Flag::IgnoreWhitespace => "Remove x (extended)",
+                Flag::CaseInsensitive => "disable i modifier (case insensitive)",
+                Flag::MultiLine => "disable m modifier (multi line)",
+                Flag::DotMatchesNewLine => "disable s modifier (single line)",
+                Flag::IgnoreWhitespace => "disable x modifier (extended)",
             });
         }
     }
@@ -1042,7 +1117,7 @@ mod tests {
         let children = tree.children.as_ref().unwrap();
 
         assert_eq!(children[0].node_type, "Flags");
-        assert!(children[0].description.contains("Case insensitive"));
+        assert!(children[0].description.contains("case insensitive"));
     }
 
     #[test]
