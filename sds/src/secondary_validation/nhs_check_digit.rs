@@ -1,55 +1,18 @@
-use crate::secondary_validation::{Validator, get_previous_digit};
+use crate::secondary_validation::{Validator, validate_mod11_weighted_checksum};
 
 pub struct NhsCheckDigit;
 
-fn nhs_multiplier_from_number_idx(index: usize) -> u32 {
-    11 - ((index + 1) as u32)
-}
+const WEIGHTS: &[u32; 9] = &[10, 9, 8, 7, 6, 5, 4, 3, 2];
 
 impl Validator for NhsCheckDigit {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         // https://www.datadictionary.nhs.uk/attributes/nhs_number.html
         // The NHS number is a 10-digit number in the format 123 456 7890.
-
-        let mut input_iter = regex_match.chars();
-        let mut total_sum = 0;
-        let mut nb_digit = 0;
-        let mut check_digit = 0;
-
-        while let Some(digit) = get_previous_digit(&mut input_iter) {
-            if nb_digit > 10 {
-                return false;
-            }
-            if nb_digit < 9 {
-                let multiplier = nhs_multiplier_from_number_idx(nb_digit);
-                total_sum += digit * multiplier;
-            } else {
-                check_digit = digit;
-            }
-            nb_digit += 1;
-        }
-
-        // Divide the total_sum by 11 and get the remainder
-        let remainder = total_sum % 11;
-
-        // Subtract the remainder from 11 to give us the total
-        let mut identifier = 11 - remainder;
-
-        // The identifier is used to compare against the check digit we extracted earlier
-        // If the total is 11, we set the identifier to 0
-        if identifier == 11 {
-            identifier = 0;
-        }
-
-        // Finally, we check the identifier against the check digit to see if the NHS number is valid
-        if identifier == 10 {
-            // If the identifier is 10, we know the NHS number is INVALID
-            return false;
-        } else if identifier == check_digit {
-            // If the identifier is equal to the check digit, we know the NHS number is VALID
-            return true;
-        }
-        false
+        validate_mod11_weighted_checksum(regex_match, WEIGHTS, |remainder| match remainder {
+            0 => Some(0), // 11 - 0 = 11 -> 0
+            1 => None,    // 11 - 1 = 10 -> invalid
+            _ => Some(11 - remainder),
+        })
     }
 }
 
