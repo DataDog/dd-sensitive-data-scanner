@@ -257,14 +257,17 @@ impl StringMatchesCtx<'_> {
         // The future is spawned onto the tokio runtime immediately so it starts running
         // in the background
         let fut = TOKIO_RUNTIME.spawn(async move {
+            let start = Instant::now();
             let mut ctx = AsyncStringMatchesCtx {
                 rule_matches: vec![],
             };
             (func)(&mut ctx).await?;
+            let io_duration = start.elapsed();
 
             Ok(AsyncRuleInfo {
                 rule_index,
                 rule_matches: ctx.rule_matches,
+                io_duration,
             })
         });
 
@@ -299,6 +302,20 @@ pub struct PendingRuleJob {
 pub struct AsyncRuleInfo {
     rule_index: usize,
     rule_matches: Vec<StringMatch>,
+    io_duration: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScanMetrics {
+    pub total_duration: Duration,
+    pub io_duration: Duration,
+    pub num_async_rules: usize,
+}
+
+#[derive(Debug)]
+pub struct ScanResult {
+    pub matches: Vec<RuleMatch>,
+    pub metrics: ScanMetrics,
 }
 
 /// A rule result that cannot be async
@@ -471,15 +488,16 @@ impl Scanner {
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
         block_on(self.internal_scan_with_metrics(event, options))
+            .map(|result| result.matches)
     }
 
     // This function scans the given event with the rules configured in the scanner.
     // The event parameter is a mutable reference to the event that should be scanned (implemented the Event trait).
-    // The return value is a list of RuleMatch objects, which contain information about the matches that were found.
+    // The return value is a ScanResult containing matches and timing metrics.
     pub async fn scan_async<E: Event>(
         &self,
         event: &mut E,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
+    ) -> Result<ScanResult, ScannerError> {
         self.scan_async_with_options(event, ScanOptions::default())
             .await
     }
@@ -488,7 +506,7 @@ impl Scanner {
         &self,
         event: &mut E,
         options: ScanOptions,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
+    ) -> Result<ScanResult, ScannerError> {
         let fut = self.internal_scan_with_metrics(event, options);
 
         // The sleep from the timeout requires being in a tokio context
@@ -520,18 +538,28 @@ impl Scanner {
         &self,
         event: &mut E,
         options: ScanOptions,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
+    ) -> Result<ScanResult, ScannerError> {
         let start = Instant::now();
         let result = self.internal_scan(event, options).await;
-        match &result {
-            Ok(rule_matches) => {
-                self.record_metrics(rule_matches, start);
+        match result {
+            Ok((rule_matches, io_duration, num_async_rules)) => {
+                self.record_metrics(&rule_matches, start);
+                let total_duration = start.elapsed();
+
+                Ok(ScanResult {
+                    matches: rule_matches,
+                    metrics: ScanMetrics {
+                        total_duration,
+                        io_duration,
+                        num_async_rules,
+                    },
+                })
             }
-            Err(_) => {
+            Err(e) => {
                 self.record_metrics(&[], start);
+                Err(e)
             }
         }
-        result
     }
 
     fn process_rule_matches<E: Event>(
@@ -611,7 +639,7 @@ impl Scanner {
         &self,
         event: &mut E,
         options: ScanOptions,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
+    ) -> Result<(Vec<RuleMatch>, Duration, usize), ScannerError> {
         // If validation is requested, we need to collect match content even if the scanner
         // wasn't originally configured to return matches
         let need_match_content = self.scanner_features.return_matches || options.validate_matches;
@@ -639,8 +667,12 @@ impl Scanner {
 
         // The async jobs were already spawned on the tokio runtime, so the
         // results just need to be collected
+        let num_async_jobs = async_jobs.len();
+        let mut total_io_duration = Duration::ZERO;
+
         for job in async_jobs {
             let rule_info = job.fut.await.unwrap()?;
+            total_io_duration += rule_info.io_duration;
             rule_matches.push_async_matches(
                 &job.path,
                 rule_info
@@ -664,7 +696,7 @@ impl Scanner {
             self.validate_matches(&mut output_rule_matches);
         }
 
-        Ok(output_rule_matches)
+        Ok((output_rule_matches, total_io_duration, num_async_jobs))
     }
 
     pub fn suppress_matches<E: Encoding>(
