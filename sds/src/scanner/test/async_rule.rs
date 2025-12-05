@@ -65,8 +65,8 @@ async fn run_async_rule() {
 
     // async scan
     let mut input = "this is a secret with random data".to_owned();
-    let matched_rules = scanner.scan_async(&mut input).await.unwrap();
-    assert_eq!(matched_rules.len(), 1);
+    let result = scanner.scan_async(&mut input).await.unwrap();
+    assert_eq!(result.matches.len(), 1);
     assert_eq!(input, "this is a [REDACTED] with random data");
 }
 
@@ -107,8 +107,8 @@ fn async_scan_outside_of_tokio() {
 
     let fut = async move {
         let mut input = "this is a secret with random data".to_owned();
-        let matched_rules = scanner.scan_async(&mut input).await.unwrap();
-        assert_eq!(matched_rules.len(), 1);
+        let result = scanner.scan_async(&mut input).await.unwrap();
+        assert_eq!(result.matches.len(), 1);
         assert_eq!(input, "this is a [REDACTED] with random data");
     };
 
