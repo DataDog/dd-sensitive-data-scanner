@@ -999,6 +999,7 @@ fn test_precedence_ordering_in_scanner_against_mutation() {
     assert_eq!(content, "[MUTATING]");
 }
 
+#[test]
 fn test_allow_scanner_to_exclude_namespace_custom_rule() {
     // This test proves that when a custom rule does NOT override allow_scanner_to_exclude_namespace
     // (so it returns true by default), the excluded namespace check is applied correctly.
