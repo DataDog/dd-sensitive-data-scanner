@@ -51,6 +51,40 @@ impl RuleConfig for DumbRuleConfig {
     }
 }
 
+pub struct CustomRuleConfig {}
+
+pub struct CustomCompiledRule {}
+
+impl CompiledRule for CustomCompiledRule {
+    fn get_string_matches(
+        &self,
+        content: &str,
+        _path: &Path,
+        ctx: &mut StringMatchesCtx,
+    ) -> RuleResult {
+        // Match the word "secret" in the content
+        if let Some(start) = content.find("secret") {
+            ctx.match_emitter.emit(StringMatch {
+                start,
+                end: start + 6,
+            });
+        }
+        Ok(RuleStatus::Done)
+    }
+
+    // Does not override allow_scanner_to_exclude_namespace, so it returns true by default
+}
+
+impl RuleConfig for CustomRuleConfig {
+    fn convert_to_compiled_rule(
+        &self,
+        _content: usize,
+        _: Labels,
+    ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
+        Ok(Box::new(CustomCompiledRule {}))
+    }
+}
+
 #[test]
 fn dumb_custom_rule() {
     let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
@@ -885,8 +919,8 @@ fn test_excluded_keyword_with_excluded_chars_in_content() {
 #[test]
 fn test_capture_group() {
     let suppression_test_rule = RootRuleConfig::new(
-        RegexRuleConfig::new(r"hello (?<capture_group>world)")
-            .with_pattern_capture_groups(vec!["capture_group".to_string()])
+        RegexRuleConfig::new(r"hello (?<sds_match>world)")
+            .with_pattern_capture_groups(vec!["sds_match".to_string()])
             .build(),
     )
     .match_action(MatchAction::Redact {
@@ -937,4 +971,52 @@ fn test_precedence_ordering_in_scanner() {
     let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "[SPECIFIC]");
+}
+
+fn test_allow_scanner_to_exclude_namespace_custom_rule() {
+    // This test proves that when a custom rule does NOT override allow_scanner_to_exclude_namespace
+    // (so it returns true by default), the excluded namespace check is applied correctly.
+    // The excluded_field should not be scanned.
+    let rule = RootRuleConfig::new(Arc::new(CustomRuleConfig {}) as Arc<dyn RuleConfig>)
+        .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
+            "excluded_field".into(),
+        )])]))
+        .match_action(MatchAction::Redact {
+            replacement: "[REDACTED]".to_string(),
+        });
+
+    let scanner = ScannerBuilder::new(&[rule])
+        .with_multipass_v0(false)
+        .build()
+        .unwrap();
+
+    let mut content = SimpleEvent::Map(BTreeMap::from([
+        (
+            "excluded_field".to_string(),
+            SimpleEvent::String("secret data".to_string()),
+        ),
+        (
+            "included_field".to_string(),
+            SimpleEvent::String("secret data".to_string()),
+        ),
+    ]));
+
+    let matches = scanner.scan(&mut content).unwrap();
+
+    // Only the included_field should have a match because excluded_field is excluded
+    // and allow_scanner_to_exclude_namespace returns true (default behavior)
+    assert_eq!(matches.len(), 1);
+    assert_eq!(
+        content,
+        SimpleEvent::Map(BTreeMap::from([
+            (
+                "excluded_field".to_string(),
+                SimpleEvent::String("secret data".to_string()),
+            ),
+            (
+                "included_field".to_string(),
+                SimpleEvent::String("[REDACTED] data".to_string()),
+            ),
+        ]))
+    );
 }
