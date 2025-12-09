@@ -487,17 +487,13 @@ impl Scanner {
         event: &mut E,
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
-        block_on(self.internal_scan_with_metrics(event, options))
-            .map(|result| result.matches)
+        block_on(self.internal_scan_with_metrics(event, options)).map(|result| result.matches)
     }
 
     // This function scans the given event with the rules configured in the scanner.
     // The event parameter is a mutable reference to the event that should be scanned (implemented the Event trait).
     // The return value is a ScanResult containing matches and timing metrics.
-    pub async fn scan_async<E: Event>(
-        &self,
-        event: &mut E,
-    ) -> Result<ScanResult, ScannerError> {
+    pub async fn scan_async<E: Event>(&self, event: &mut E) -> Result<ScanResult, ScannerError> {
         self.scan_async_with_options(event, ScanOptions::default())
             .await
     }
