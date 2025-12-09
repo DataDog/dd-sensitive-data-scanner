@@ -44,13 +44,8 @@ pub use scanner::shared_pool::{SharedPool, SharedPoolGuard};
 
 pub use scanner::suppression::Suppressions;
 pub use scanner::{
-<<<<<<< HEAD
-    CompiledRule, MatchEmitter, Precedence, RootCompiledRule, RootRuleConfig, RuleResult,
-    RuleStatus, ScanOptionBuilder, Scanner, ScannerBuilder, SharedData, StringMatch,
-=======
     CompiledRule, MatchEmitter, RootCompiledRule, RootRuleConfig, RuleResult, RuleStatus,
     ScanMetrics, ScanOptionBuilder, ScanResult, Scanner, ScannerBuilder, SharedData, StringMatch,
->>>>>>> 5123a22 (Adds io timings to scan_async return result)
     StringMatchesCtx,
     config::RuleConfig,
     error::{CreateScannerError, ScannerError},
