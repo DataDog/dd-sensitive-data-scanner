@@ -211,7 +211,10 @@ fn should_submit_cpu_duration_metric_non_async() {
     match &metric_value.2 {
         DebugValue::Histogram(values) => {
             assert!(!values.is_empty(), "Histogram should have values");
-            assert!(values[0].into_inner() > 0.0, "CPU duration should be greater than 0");
+            assert!(
+                values[0].into_inner() > 0.0,
+                "CPU duration should be greater than 0"
+            );
         }
         _ => panic!("Expected Histogram value"),
     }
