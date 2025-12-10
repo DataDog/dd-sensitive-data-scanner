@@ -507,7 +507,12 @@ impl Scanner {
         )))
     }
 
-    fn record_metrics(&self, output_rule_matches: &[RuleMatch], start: Instant) {
+    fn record_metrics(
+        &self,
+        output_rule_matches: &[RuleMatch],
+        start: Instant,
+        io_duration: Option<Duration>,
+    ) {
         // Record detection time
         self.metrics
             .duration_ns
@@ -518,6 +523,15 @@ impl Scanner {
         self.metrics
             .match_count
             .increment(output_rule_matches.len() as u64);
+
+        if let Some(io_duration) = io_duration {
+            let total_duration = start.elapsed();
+            let cpu_duration = total_duration.saturating_sub(io_duration);
+            // Record CPU duration counter in nanoseconds
+            self.metrics
+                .cpu_duration
+                .increment(cpu_duration.as_nanos() as u64);
+        }
     }
 
     async fn internal_scan_with_metrics<E: Event>(
@@ -529,21 +543,11 @@ impl Scanner {
         let result = self.internal_scan(event, options).await;
         match result {
             Ok((rule_matches, io_duration)) => {
-                self.record_metrics(&rule_matches, start);
-                let total_duration = start.elapsed();
-
-                // Calculate CPU duration by subtracting I/O wait time from total duration
-                let cpu_duration = total_duration.saturating_sub(io_duration);
-
-                // Record CPU duration counter in nanoseconds
-                self.metrics
-                    .cpu_duration
-                    .increment(cpu_duration.as_nanos() as u64);
-
+                self.record_metrics(&rule_matches, start, Some(io_duration));
                 Ok(rule_matches)
             }
             Err(e) => {
-                self.record_metrics(&[], start);
+                self.record_metrics(&[], start, None);
                 Err(e)
             }
         }
