@@ -460,6 +460,7 @@ pub struct Scanner {
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
     labels: Labels,
+    pub highcard_labels: Labels,
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
     per_scanner_data: SharedData,
     async_scan_timeout: Duration,
@@ -541,6 +542,12 @@ impl Scanner {
             Ok((rule_matches, io_duration, num_async_rules)) => {
                 self.record_metrics(&rule_matches, start);
                 let total_duration = start.elapsed();
+
+                // Calculate CPU duration by subtracting I/O wait time from total duration
+                let cpu_duration = total_duration.saturating_sub(io_duration);
+
+                // Record CPU duration histogram in nanoseconds
+                self.metrics.cpu_duration.record(cpu_duration.as_nanos() as f64);
 
                 Ok(ScanResult {
                     matches: rule_matches,
@@ -954,6 +961,7 @@ impl Drop for Scanner {
 pub struct ScannerBuilder<'a> {
     rules: &'a [RootRuleConfig<Arc<dyn RuleConfig>>],
     labels: Labels,
+    highcard_labels: Labels,
     scanner_features: ScannerFeatures,
     async_scan_timeout: Duration,
 }
@@ -963,6 +971,7 @@ impl ScannerBuilder<'_> {
         ScannerBuilder {
             rules,
             labels: Labels::empty(),
+            highcard_labels: Labels::empty(),
             scanner_features: ScannerFeatures::default(),
             async_scan_timeout: Duration::from_secs(60 * 5),
         }
@@ -970,6 +979,11 @@ impl ScannerBuilder<'_> {
 
     pub fn labels(mut self, labels: Labels) -> Self {
         self.labels = labels;
+        self
+    }
+
+    pub fn highcard_labels(mut self, labels: Labels) -> Self {
+        self.highcard_labels = labels;
         self
     }
 
@@ -1093,9 +1107,10 @@ impl ScannerBuilder<'_> {
             rules: compiled_rules,
             scoped_ruleset,
             scanner_features: self.scanner_features,
-            metrics: ScannerMetrics::new(&self.labels),
+            metrics: ScannerMetrics::new(&self.labels, &self.highcard_labels),
             match_validators_per_type,
             labels: self.labels,
+            highcard_labels: self.highcard_labels,
             per_scanner_data,
             async_scan_timeout: self.async_scan_timeout,
         })
