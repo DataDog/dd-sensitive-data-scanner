@@ -173,8 +173,6 @@ fn test_regex_match_and_included_keyword_same_index() {
 
 #[test]
 fn should_submit_cpu_duration_metric_non_async() {
-    use metrics_util::MetricKind::Histogram;
-
     let recorder = DebuggingRecorder::new();
     let snapshotter = recorder.snapshotter();
 
@@ -204,19 +202,15 @@ fn should_submit_cpu_duration_metric_non_async() {
 
     let metric_name = "scanning.cpu_duration";
     let metric_value = snapshot
-        .get(&CompositeKey::new(Histogram, Key::from_name(metric_name)))
+        .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
         .expect("cpu_duration metric not found");
 
     // For non-async rules, CPU duration should be > 0
     match &metric_value.2 {
-        DebugValue::Histogram(values) => {
-            assert!(!values.is_empty(), "Histogram should have values");
-            assert!(
-                values[0].into_inner() > 0.0,
-                "CPU duration should be greater than 0"
-            );
+        DebugValue::Counter(value) => {
+            assert!(*value > 0, "CPU duration should be greater than 0");
         }
-        _ => panic!("Expected Histogram value"),
+        _ => panic!("Expected Counter value"),
     }
 }
 
@@ -224,7 +218,6 @@ fn should_submit_cpu_duration_metric_non_async() {
 fn should_submit_cpu_duration_metric_with_async_rule() {
     use crate::scanner::config::RuleConfig;
     use crate::scanner::{CompiledRule, CreateScannerError, StringMatchesCtx};
-    use metrics_util::MetricKind::Histogram;
     use std::sync::Arc;
 
     // Create a custom async rule that sleeps for 100ms
@@ -280,21 +273,20 @@ fn should_submit_cpu_duration_metric_with_async_rule() {
 
     let metric_name = "scanning.cpu_duration";
     let metric_value = snapshot
-        .get(&CompositeKey::new(Histogram, Key::from_name(metric_name)))
+        .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
         .expect("cpu_duration metric not found");
 
     // CPU duration should be much less than 100ms since we slept during I/O
     match &metric_value.2 {
-        DebugValue::Histogram(values) => {
-            assert!(!values.is_empty(), "Histogram should have values");
+        DebugValue::Counter(value) => {
             // CPU duration should be < 10ms (10_000_000 nanoseconds)
             // Since we slept for 100ms, the actual CPU time should be minimal
             assert!(
-                values[0].into_inner() < 10_000_000.0,
+                *value < 10_000_000,
                 "CPU duration should be less than 10ms, got {} ns",
-                values[0].into_inner()
+                value
             );
         }
-        _ => panic!("Expected Histogram value"),
+        _ => panic!("Expected Counter value"),
     }
 }
