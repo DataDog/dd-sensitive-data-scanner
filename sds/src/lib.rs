@@ -44,15 +44,16 @@ pub use scanner::shared_pool::{SharedPool, SharedPoolGuard};
 
 pub use scanner::suppression::Suppressions;
 pub use scanner::{
-    CompiledRule, MatchEmitter, RootCompiledRule, RootRuleConfig, RuleResult, RuleStatus,
-    ScanOptionBuilder, Scanner, ScannerBuilder, SharedData, StringMatch, StringMatchesCtx,
+    CompiledRule, MatchEmitter, Precedence, RootCompiledRule, RootRuleConfig, RuleResult,
+    RuleStatus, ScanOptionBuilder, Scanner, ScannerBuilder, SharedData, StringMatch,
+    StringMatchesCtx,
     config::RuleConfig,
     error::{CreateScannerError, ScannerError},
-    regex_rule::RegexCaches,
     regex_rule::config::{
         ClaimRequirement, JwtClaimsValidatorConfig, ProximityKeywordsConfig, RegexRuleConfig,
         SecondaryValidator,
     },
+    regex_rule::{RegexCacheKey, RegexCacheValue, RegexCaches, SharedRegex, get_memoized_regex},
     scope::Scope,
 };
 pub use scoped_ruleset::ExclusionCheck;

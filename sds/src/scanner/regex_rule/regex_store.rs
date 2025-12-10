@@ -15,8 +15,8 @@ struct WeakSharedRegex {
 
 #[derive(Debug)]
 pub struct SharedRegex {
-    pub(super) regex: Arc<MetaRegex>,
-    pub(super) cache_key: RegexCacheKey,
+    pub regex: Arc<MetaRegex>,
+    pub cache_key: RegexCacheKey,
 }
 
 impl Deref for SharedRegex {
