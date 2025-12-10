@@ -257,14 +257,17 @@ impl StringMatchesCtx<'_> {
         // The future is spawned onto the tokio runtime immediately so it starts running
         // in the background
         let fut = TOKIO_RUNTIME.spawn(async move {
+            let start = Instant::now();
             let mut ctx = AsyncStringMatchesCtx {
                 rule_matches: vec![],
             };
             (func)(&mut ctx).await?;
+            let io_duration = start.elapsed();
 
             Ok(AsyncRuleInfo {
                 rule_index,
                 rule_matches: ctx.rule_matches,
+                io_duration,
             })
         });
 
@@ -299,6 +302,7 @@ pub struct PendingRuleJob {
 pub struct AsyncRuleInfo {
     rule_index: usize,
     rule_matches: Vec<StringMatch>,
+    io_duration: Duration,
 }
 
 /// A rule result that cannot be async
@@ -443,6 +447,7 @@ pub struct Scanner {
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
     labels: Labels,
+    pub highcard_labels: Labels,
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
     per_scanner_data: SharedData,
     async_scan_timeout: Duration,
@@ -523,15 +528,24 @@ impl Scanner {
     ) -> Result<Vec<RuleMatch>, ScannerError> {
         let start = Instant::now();
         let result = self.internal_scan(event, options).await;
-        match &result {
-            Ok(rule_matches) => {
-                self.record_metrics(rule_matches, start);
+        match result {
+            Ok((rule_matches, io_duration)) => {
+                self.record_metrics(&rule_matches, start);
+                let total_duration = start.elapsed();
+
+                // Calculate CPU duration by subtracting I/O wait time from total duration
+                let cpu_duration = total_duration.saturating_sub(io_duration);
+
+                // Record CPU duration histogram in nanoseconds
+                self.metrics.cpu_duration.record(cpu_duration.as_nanos() as f64);
+
+                Ok(rule_matches)
             }
-            Err(_) => {
+            Err(e) => {
                 self.record_metrics(&[], start);
+                Err(e)
             }
         }
-        result
     }
 
     fn process_rule_matches<E: Event>(
@@ -611,7 +625,7 @@ impl Scanner {
         &self,
         event: &mut E,
         options: ScanOptions,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
+    ) -> Result<(Vec<RuleMatch>, Duration), ScannerError> {
         // If validation is requested, we need to collect match content even if the scanner
         // wasn't originally configured to return matches
         let need_match_content = self.scanner_features.return_matches || options.validate_matches;
@@ -639,8 +653,10 @@ impl Scanner {
 
         // The async jobs were already spawned on the tokio runtime, so the
         // results just need to be collected
+        let mut total_io_duration = Duration::ZERO;
         for job in async_jobs {
             let rule_info = job.fut.await.unwrap()?;
+            total_io_duration += rule_info.io_duration;
             rule_matches.push_async_matches(
                 &job.path,
                 rule_info
@@ -664,7 +680,7 @@ impl Scanner {
             self.validate_matches(&mut output_rule_matches);
         }
 
-        Ok(output_rule_matches)
+        Ok((output_rule_matches, total_io_duration))
     }
 
     pub fn suppress_matches<E: Encoding>(
@@ -926,6 +942,7 @@ impl Drop for Scanner {
 pub struct ScannerBuilder<'a> {
     rules: &'a [RootRuleConfig<Arc<dyn RuleConfig>>],
     labels: Labels,
+    highcard_labels: Labels,
     scanner_features: ScannerFeatures,
     async_scan_timeout: Duration,
 }
@@ -935,6 +952,7 @@ impl ScannerBuilder<'_> {
         ScannerBuilder {
             rules,
             labels: Labels::empty(),
+            highcard_labels: Labels::empty(),
             scanner_features: ScannerFeatures::default(),
             async_scan_timeout: Duration::from_secs(60 * 5),
         }
@@ -942,6 +960,11 @@ impl ScannerBuilder<'_> {
 
     pub fn labels(mut self, labels: Labels) -> Self {
         self.labels = labels;
+        self
+    }
+
+    pub fn highcard_labels(mut self, labels: Labels) -> Self {
+        self.highcard_labels = labels;
         self
     }
 
@@ -1065,9 +1088,10 @@ impl ScannerBuilder<'_> {
             rules: compiled_rules,
             scoped_ruleset,
             scanner_features: self.scanner_features,
-            metrics: ScannerMetrics::new(&self.labels),
+            metrics: ScannerMetrics::new(&self.labels, &self.highcard_labels),
             match_validators_per_type,
             labels: self.labels,
+            highcard_labels: self.highcard_labels,
             per_scanner_data,
             async_scan_timeout: self.async_scan_timeout,
         })
