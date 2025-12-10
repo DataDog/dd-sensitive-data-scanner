@@ -17,6 +17,7 @@ use regex_automata::util::captures::Captures;
 use std::sync::Arc;
 
 /// This is the internal representation of a rule after it has been validated / compiled.
+#[derive(Clone)]
 pub struct RegexCompiledRule {
     pub rule_index: usize,
     pub regex: SharedRegex,
@@ -71,6 +72,14 @@ impl CompiledRule for RegexCompiledRule {
 
     fn on_excluded_match_multipass_v0(&self) {
         self.metrics.false_positive_excluded_attributes.increment(1);
+    }
+
+    fn as_regex_rule(&self) -> Option<&RegexCompiledRule> {
+        Some(self)
+    }
+
+    fn as_regex_rule_mut(&mut self) -> Option<&mut RegexCompiledRule> {
+        Some(self)
     }
 }
 

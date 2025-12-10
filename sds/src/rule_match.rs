@@ -1,10 +1,11 @@
 use crate::match_validation::match_status::MatchStatus;
 use crate::{StringMatch, encoding::Encoding, path::Path};
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::fmt::{Display, Formatter};
 
 /// Metadata about a rule match.
-#[derive(Debug, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize)]
 pub struct RuleMatch {
     /// The index of the rule that matched. This preserves the order
     /// of rules that were passed into the scanner.
@@ -70,7 +71,7 @@ impl<E: Encoding> InternalRuleMatch<E> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum ReplacementType {
     None,
     Placeholder,
