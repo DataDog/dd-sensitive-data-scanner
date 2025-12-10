@@ -45,8 +45,8 @@ pub use scanner::shared_pool::{SharedPool, SharedPoolGuard};
 pub use scanner::suppression::Suppressions;
 pub use scanner::{
     CompiledRule, MatchEmitter, Precedence, RootCompiledRule, RootRuleConfig, RuleResult,
-    RuleStatus, ScanOptionBuilder, Scanner, ScannerBuilder, SharedData, StringMatch,
-    StringMatchesCtx,
+    RuleStatus, ScanMetrics, ScanOptionBuilder, ScanResult, Scanner, ScannerBuilder, SharedData,
+    StringMatch, StringMatchesCtx,
     config::RuleConfig,
     error::{CreateScannerError, ScannerError},
     regex_rule::config::{
