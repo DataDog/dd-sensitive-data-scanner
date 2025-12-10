@@ -551,7 +551,9 @@ impl Scanner {
                 let cpu_duration = total_duration.saturating_sub(io_duration);
 
                 // Record CPU duration histogram in nanoseconds
-                self.metrics.cpu_duration.record(cpu_duration.as_nanos() as f64);
+                self.metrics
+                    .cpu_duration
+                    .record(cpu_duration.as_nanos() as f64);
 
                 Ok(ScanResult {
                     matches: rule_matches,
