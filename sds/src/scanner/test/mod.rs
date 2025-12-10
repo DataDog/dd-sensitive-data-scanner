@@ -940,6 +940,66 @@ fn test_capture_group() {
 }
 
 #[test]
+fn test_precedence_ordering() {
+    assert!(Precedence::Specific > Precedence::Generic);
+    assert!(Precedence::Generic > Precedence::Catchall);
+}
+
+#[test]
+fn test_precedence_ordering_in_scanner() {
+    let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("abc").build())
+        .precedence(Precedence::Specific)
+        .match_action(MatchAction::Redact {
+            replacement: "[SPECIFIC]".to_string(),
+        });
+    let rule_1 = RootRuleConfig::new(RegexRuleConfig::new("abc").build())
+        .precedence(Precedence::Generic)
+        .match_action(MatchAction::Redact {
+            replacement: "[GENERIC]".to_string(),
+        });
+    let rule_2 = RootRuleConfig::new(RegexRuleConfig::new("abc").build())
+        .precedence(Precedence::Catchall)
+        .match_action(MatchAction::Redact {
+            replacement: "[CATCHALL]".to_string(),
+        });
+
+    // We place the catchall rule first to show the specific rule takes precedence.
+    let scanner = ScannerBuilder::new(&[rule_2, rule_1, rule_0])
+        .build()
+        .unwrap();
+    let mut content = "abc".to_string();
+    let matches = scanner.scan(&mut content).unwrap();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(content, "[SPECIFIC]");
+}
+
+#[test]
+fn test_precedence_ordering_in_scanner_against_mutation() {
+    let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("abc").build())
+        .precedence(Precedence::Specific)
+        .match_action(MatchAction::None {});
+    let rule_1 = RootRuleConfig::new(RegexRuleConfig::new("abc").build())
+        .precedence(Precedence::Generic)
+        .match_action(MatchAction::None {});
+    let rule_mutating = RootRuleConfig::new(RegexRuleConfig::new("abc").build())
+        .precedence(Precedence::Generic)
+        .match_action(MatchAction::Redact {
+            replacement: "[MUTATING]".to_string(),
+        });
+
+    let scanner = ScannerBuilder::new(&[rule_0, rule_1, rule_mutating])
+        .build()
+        .unwrap();
+    let mut content = "abc".to_string();
+    let matches = scanner.scan(&mut content).unwrap();
+    assert_eq!(matches.len(), 1);
+    // Even though the rule_mutating rule is last in the group AND it has the lowest level of precedence,
+    // it should be the one that is applied because it is the only mutating rule.
+    // This test proves that mutation priority is higher than precedence.
+    assert_eq!(content, "[MUTATING]");
+}
+
+#[test]
 fn test_allow_scanner_to_exclude_namespace_custom_rule() {
     // This test proves that when a custom rule does NOT override allow_scanner_to_exclude_namespace
     // (so it returns true by default), the excluded namespace check is applied correctly.
