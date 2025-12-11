@@ -1,8 +1,9 @@
-use crate::proximity_keywords::next_char_index;
+use crate::proximity_keywords::{is_index_within_prefix, next_char_index};
 use crate::scanner::regex_rule::RegexCaches;
 use regex_automata::Input;
 use std::ops::Range;
 
+#[derive(Clone)]
 pub struct CompiledIncludedProximityKeywords {
     pub look_ahead_character_count: usize,
     pub keywords_pattern: super::ProximityKeywordsRegex,
@@ -16,6 +17,41 @@ impl CompiledIncludedProximityKeywords {
             start: 0,
         }
     }
+
+    pub fn find_keyword_before_match(
+        &self,
+        match_start: usize,
+        regex_caches: &mut RegexCaches,
+        content: &str,
+    ) -> Option<IncludedKeywordInfo> {
+        let mut keyword_search = self.keyword_matches(content);
+        while let Some(included_keyword_match) = keyword_search.next(regex_caches) {
+            if included_keyword_match.start >= match_start {
+                break;
+            }
+            if is_index_within_prefix(
+                content,
+                included_keyword_match.start,
+                match_start,
+                self.look_ahead_character_count,
+            ) {
+                return Some(IncludedKeywordInfo {
+                    keyword: content[included_keyword_match.start..included_keyword_match.end]
+                        .to_string(),
+                    keyword_start_index: included_keyword_match.start,
+                    keyword_end_index_exclusive: included_keyword_match.end,
+                });
+            }
+        }
+        None
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IncludedKeywordInfo {
+    pub keyword: String,
+    pub keyword_start_index: usize,
+    pub keyword_end_index_exclusive: usize,
 }
 
 pub struct IncludedKeywordSearch<'a> {

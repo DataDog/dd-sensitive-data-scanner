@@ -8,7 +8,6 @@ mod event;
 mod match_action;
 
 mod ast_utils;
-#[cfg(any(test, feature = "testing", feature = "bench"))]
 mod event_json;
 mod match_validation;
 mod normalization;
@@ -61,6 +60,8 @@ pub use tokio::TOKIO_RUNTIME;
 pub use validation::{
     RegexValidationError, get_regex_complexity_estimate_very_slow, validate_regex,
 };
+
+pub use scanner::debug_scan::debug_scan;
 
 #[cfg(any(feature = "testing", feature = "bench"))]
 pub use crate::{

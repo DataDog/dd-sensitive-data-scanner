@@ -39,6 +39,7 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
 pub mod config;
+pub mod debug_scan;
 pub mod error;
 pub mod metrics;
 pub mod regex_rule;
@@ -339,6 +340,15 @@ pub trait CompiledRule: Send + Sync {
     fn on_excluded_match_multipass_v0(&self) {
         // default is to do nothing
     }
+
+    fn as_regex_rule(&self) -> Option<&RegexCompiledRule> {
+        None
+    }
+
+    fn as_regex_rule_mut(&mut self) -> Option<&mut RegexCompiledRule> {
+        None
+    }
+
     fn allow_scanner_to_exclude_namespace(&self) -> bool {
         true
     }

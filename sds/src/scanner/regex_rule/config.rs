@@ -89,6 +89,20 @@ impl RegexRuleConfig {
         this
     }
 
+    pub fn with_excluded_keywords(
+        &self,
+        keywords: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> Self {
+        let mut this = self.clone();
+        let mut config = self.get_or_create_proximity_keywords_config();
+        config.excluded_keywords = keywords
+            .into_iter()
+            .map(|x| x.as_ref().to_string())
+            .collect::<Vec<_>>();
+        this.proximity_keywords = Some(config);
+        this
+    }
+
     pub fn with_validator(&self, validator: Option<SecondaryValidator>) -> Self {
         let mut this = self.clone();
         this.validator = validator;
@@ -170,6 +184,10 @@ impl RuleConfig for RegexRuleConfig {
             metrics: RuleMetrics::new(&rule_labels),
             pattern_capture_groups: self.pattern_capture_groups.clone(),
         }))
+    }
+
+    fn as_regex_rule(&self) -> Option<&RegexRuleConfig> {
+        Some(self)
     }
 }
 
