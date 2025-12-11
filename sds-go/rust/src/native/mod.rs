@@ -9,9 +9,9 @@ use std::sync::{Arc, Mutex};
 
 pub mod create_scanner;
 pub mod delete_scanner;
+pub mod regex;
 pub mod rule;
 pub mod scan;
-pub mod validation;
 
 pub const ERR_PANIC: i64 = -5;
 
