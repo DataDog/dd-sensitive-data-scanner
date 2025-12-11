@@ -172,7 +172,7 @@ fn test_regex_match_and_included_keyword_same_index() {
 }
 
 #[test]
-fn should_submit_cpu_duration_metric_non_async() {
+fn should_submit_cpu_duration_metric_non_async_rule() {
     let recorder = DebuggingRecorder::new();
     let snapshotter = recorder.snapshotter();
 
