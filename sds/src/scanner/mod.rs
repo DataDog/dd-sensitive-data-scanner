@@ -527,7 +527,6 @@ impl Scanner {
         if let Some(io_duration) = io_duration {
             let total_duration = start.elapsed();
             let cpu_duration = total_duration.saturating_sub(io_duration);
-            // Record CPU duration counter in nanoseconds
             self.metrics
                 .cpu_duration
                 .increment(cpu_duration.as_nanos() as u64);
