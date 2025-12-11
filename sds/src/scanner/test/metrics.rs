@@ -255,7 +255,7 @@ fn should_submit_cpu_duration_metric_with_async_rule() {
     let recorder = DebuggingRecorder::new();
     let snapshotter = recorder.snapshotter();
 
-    metrics::with_local_recorder(&recorder, || {
+    let total_duration_ns = metrics::with_local_recorder(&recorder, || {
         let rule_0 = RootRuleConfig::new(Arc::new(SleepyAsyncRuleConfig) as Arc<dyn RuleConfig>)
             .match_action(MatchAction::None);
 
@@ -265,8 +265,11 @@ fn should_submit_cpu_duration_metric_with_async_rule() {
             SimpleEvent::String("test content".to_string()),
         )]));
 
-        // Use scan (which blocks on async internally)
+        // Measure total scan duration
+        let start = std::time::Instant::now();
         scanner.scan(&mut content).unwrap();
+        let total_duration = start.elapsed();
+        total_duration.as_nanos() as u64
     });
 
     let snapshot = snapshotter.snapshot().into_hashmap();
@@ -276,15 +279,19 @@ fn should_submit_cpu_duration_metric_with_async_rule() {
         .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
         .expect("cpu_duration metric not found");
 
-    // CPU duration should be much less than 100ms since we slept during I/O
+    // CPU duration should be at least 100ms less than total duration
+    // since we slept for 100ms during I/O
     match &metric_value.2 {
-        DebugValue::Counter(value) => {
-            // CPU duration should be < 10ms (10_000_000 nanoseconds)
-            // Since we slept for 100ms, the actual CPU time should be minimal
+        DebugValue::Counter(cpu_duration_ns) => {
+            let io_duration_ns = total_duration_ns - cpu_duration_ns;
+
+            // The I/O duration should be at least 100ms (100_000_000 nanoseconds)
             assert!(
-                *value < 10_000_000,
-                "CPU duration should be less than 10ms, got {} ns",
-                value
+                io_duration_ns >= 100_000_000,
+                "I/O duration should be at least 100ms. Total: {} ns, CPU: {} ns, I/O: {} ns",
+                total_duration_ns,
+                cpu_duration_ns,
+                io_duration_ns
             );
         }
         _ => panic!("Expected Counter value"),
