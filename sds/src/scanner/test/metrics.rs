@@ -170,3 +170,130 @@ fn test_regex_match_and_included_keyword_same_index() {
         Some("=firstname.lastname@acme.com&page2".to_string())
     );
 }
+
+#[test]
+fn should_submit_cpu_duration_metric_non_async_rule() {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    let content_1 = "bcdef";
+    let content_2 = "no match";
+
+    metrics::with_local_recorder(&recorder, || {
+        let rule_0 = RootRuleConfig::new(RegexRuleConfig::new(content_1).build())
+            .match_action(MatchAction::None);
+
+        let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
+        let mut content = SimpleEvent::Map(BTreeMap::from([
+            (
+                "key1".to_string(),
+                SimpleEvent::String(content_1.to_string()),
+            ),
+            (
+                "key2".to_string(),
+                SimpleEvent::String(content_2.to_string()),
+            ),
+        ]));
+
+        scanner.scan(&mut content).unwrap();
+    });
+
+    let snapshot = snapshotter.snapshot().into_hashmap();
+
+    let metric_name = "scanning.cpu_duration";
+    let metric_value = snapshot
+        .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
+        .expect("cpu_duration metric not found");
+
+    // For non-async rules, CPU duration should be > 0
+    match &metric_value.2 {
+        DebugValue::Counter(value) => {
+            assert!(*value > 0, "CPU duration should be greater than 0");
+        }
+        _ => panic!("Expected Counter value"),
+    }
+}
+
+#[test]
+fn should_submit_cpu_duration_metric_with_async_rule() {
+    use crate::scanner::config::RuleConfig;
+    use crate::scanner::{CompiledRule, CreateScannerError, StringMatchesCtx};
+    use std::sync::Arc;
+
+    // Create a custom async rule that sleeps for 100ms
+    struct SleepyAsyncRuleConfig;
+
+    struct SleepyAsyncCompiledRule;
+
+    impl CompiledRule for SleepyAsyncCompiledRule {
+        fn get_string_matches(
+            &self,
+            _content: &str,
+            _path: &Path,
+            ctx: &mut StringMatchesCtx,
+        ) -> crate::scanner::RuleResult {
+            ctx.process_async(|_async_ctx| {
+                Box::pin(async move {
+                    // Sleep for 100ms to simulate I/O
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    Ok(())
+                })
+            })
+        }
+    }
+
+    impl RuleConfig for SleepyAsyncRuleConfig {
+        fn convert_to_compiled_rule(
+            &self,
+            _rule_index: usize,
+            _labels: crate::Labels,
+        ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
+            Ok(Box::new(SleepyAsyncCompiledRule))
+        }
+    }
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    let total_duration_ns = metrics::with_local_recorder(&recorder, || {
+        let rule_0 = RootRuleConfig::new(Arc::new(SleepyAsyncRuleConfig) as Arc<dyn RuleConfig>)
+            .match_action(MatchAction::None);
+
+        let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
+            "key1".to_string(),
+            SimpleEvent::String("test content".to_string()),
+        )]));
+
+        // Measure total scan duration
+        let start = std::time::Instant::now();
+        scanner.scan(&mut content).unwrap();
+        let total_duration = start.elapsed();
+        total_duration.as_nanos() as u64
+    });
+
+    let snapshot = snapshotter.snapshot().into_hashmap();
+
+    let metric_name = "scanning.cpu_duration";
+    let metric_value = snapshot
+        .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
+        .expect("cpu_duration metric not found");
+
+    // CPU duration should be at least 100ms less than total duration
+    // since we slept for 100ms during I/O
+    match &metric_value.2 {
+        DebugValue::Counter(cpu_duration_ns) => {
+            let io_duration_ns = total_duration_ns - cpu_duration_ns;
+
+            // The I/O duration should be at least 100ms (100_000_000 nanoseconds)
+            assert!(
+                io_duration_ns >= 100_000_000,
+                "I/O duration should be at least 100ms. Total: {} ns, CPU: {} ns, I/O: {} ns",
+                total_duration_ns,
+                cpu_duration_ns,
+                io_duration_ns
+            );
+        }
+        _ => panic!("Expected Counter value"),
+    }
+}

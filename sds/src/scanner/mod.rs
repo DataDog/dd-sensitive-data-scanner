@@ -39,6 +39,7 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
 pub mod config;
+pub mod debug_scan;
 pub mod error;
 pub mod metrics;
 pub mod regex_rule;
@@ -73,6 +74,27 @@ where
     }
 }
 
+/// The precedence of a rule. Catchall is the lowest precedence, Specific is the highest precedence.
+/// The default precedence is Specific.
+/// For rules that:
+/// - Have the same mutation priority
+/// - Match at the same index
+/// - Match the same number of characters
+///
+/// Then the rule with the highest precedence will be used.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Copy)]
+pub enum Precedence {
+    Catchall,
+    Generic,
+    Specific,
+}
+
+impl Default for Precedence {
+    fn default() -> Self {
+        Self::Specific
+    }
+}
+
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RootRuleConfig<T> {
@@ -83,6 +105,8 @@ pub struct RootRuleConfig<T> {
     match_validation_type: Option<MatchValidationType>,
     third_party_active_checker: Option<MatchValidationType>,
     suppressions: Option<Suppressions>,
+    #[serde(default)]
+    precedence: Precedence,
     #[serde(flatten)]
     pub inner: T,
 }
@@ -109,6 +133,7 @@ impl<T> RootRuleConfig<T> {
             match_validation_type: None,
             third_party_active_checker: None,
             suppressions: None,
+            precedence: Precedence::default(),
             inner,
         }
     }
@@ -121,12 +146,18 @@ impl<T> RootRuleConfig<T> {
             match_validation_type: self.match_validation_type,
             third_party_active_checker: self.third_party_active_checker,
             suppressions: self.suppressions,
+            precedence: self.precedence,
             inner: func(self.inner),
         }
     }
 
     pub fn match_action(mut self, action: MatchAction) -> Self {
         self.match_action = action;
+        self
+    }
+
+    pub fn precedence(mut self, precedence: Precedence) -> Self {
+        self.precedence = precedence;
         self
     }
 
@@ -169,6 +200,7 @@ pub struct RootCompiledRule {
     pub match_action: MatchAction,
     pub match_validation_type: Option<MatchValidationType>,
     pub suppressions: Option<CompiledSuppressions>,
+    pub precedence: Precedence,
 }
 
 impl RootCompiledRule {
@@ -226,14 +258,17 @@ impl StringMatchesCtx<'_> {
         // The future is spawned onto the tokio runtime immediately so it starts running
         // in the background
         let fut = TOKIO_RUNTIME.spawn(async move {
+            let start = Instant::now();
             let mut ctx = AsyncStringMatchesCtx {
                 rule_matches: vec![],
             };
             (func)(&mut ctx).await?;
+            let io_duration = start.elapsed();
 
             Ok(AsyncRuleInfo {
                 rule_index,
                 rule_matches: ctx.rule_matches,
+                io_duration,
             })
         });
 
@@ -268,6 +303,7 @@ pub struct PendingRuleJob {
 pub struct AsyncRuleInfo {
     rule_index: usize,
     rule_matches: Vec<StringMatch>,
+    io_duration: Duration,
 }
 
 /// A rule result that cannot be async
@@ -304,6 +340,15 @@ pub trait CompiledRule: Send + Sync {
     fn on_excluded_match_multipass_v0(&self) {
         // default is to do nothing
     }
+
+    fn as_regex_rule(&self) -> Option<&RegexCompiledRule> {
+        None
+    }
+
+    fn as_regex_rule_mut(&mut self) -> Option<&mut RegexCompiledRule> {
+        None
+    }
+
     fn allow_scanner_to_exclude_namespace(&self) -> bool {
         true
     }
@@ -472,7 +517,12 @@ impl Scanner {
         )))
     }
 
-    fn record_metrics(&self, output_rule_matches: &[RuleMatch], start: Instant) {
+    fn record_metrics(
+        &self,
+        output_rule_matches: &[RuleMatch],
+        start: Instant,
+        io_duration: Option<Duration>,
+    ) {
         // Record detection time
         self.metrics
             .duration_ns
@@ -483,6 +533,14 @@ impl Scanner {
         self.metrics
             .match_count
             .increment(output_rule_matches.len() as u64);
+
+        if let Some(io_duration) = io_duration {
+            let total_duration = start.elapsed();
+            let cpu_duration = total_duration.saturating_sub(io_duration);
+            self.metrics
+                .cpu_duration
+                .increment(cpu_duration.as_nanos() as u64);
+        }
     }
 
     async fn internal_scan_with_metrics<E: Event>(
@@ -492,15 +550,16 @@ impl Scanner {
     ) -> Result<Vec<RuleMatch>, ScannerError> {
         let start = Instant::now();
         let result = self.internal_scan(event, options).await;
-        match &result {
-            Ok(rule_matches) => {
-                self.record_metrics(rule_matches, start);
+        match result {
+            Ok((rule_matches, io_duration)) => {
+                self.record_metrics(&rule_matches, start, Some(io_duration));
+                Ok(rule_matches)
             }
-            Err(_) => {
-                self.record_metrics(&[], start);
+            Err(e) => {
+                self.record_metrics(&[], start, None);
+                Err(e)
             }
         }
-        result
     }
 
     fn process_rule_matches<E: Event>(
@@ -580,7 +639,7 @@ impl Scanner {
         &self,
         event: &mut E,
         options: ScanOptions,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
+    ) -> Result<(Vec<RuleMatch>, Duration), ScannerError> {
         // If validation is requested, we need to collect match content even if the scanner
         // wasn't originally configured to return matches
         let need_match_content = self.scanner_features.return_matches || options.validate_matches;
@@ -608,8 +667,10 @@ impl Scanner {
 
         // The async jobs were already spawned on the tokio runtime, so the
         // results just need to be collected
+        let mut total_io_duration = Duration::ZERO;
         for job in async_jobs {
             let rule_info = job.fut.await.unwrap()?;
+            total_io_duration += rule_info.io_duration;
             rule_matches.push_async_matches(
                 &job.path,
                 rule_info
@@ -633,7 +694,7 @@ impl Scanner {
             self.validate_matches(&mut output_rule_matches);
         }
 
-        Ok(output_rule_matches)
+        Ok((output_rule_matches, total_io_duration))
     }
 
     pub fn suppress_matches<E: Encoding>(
@@ -837,6 +898,14 @@ impl Scanner {
             // Longer matches
             let ord = ord.then(a.len().cmp(&b.len()).reverse());
 
+            // Matches with higher precedence come first
+            let ord = ord.then(
+                self.rules[a.rule_index]
+                    .precedence
+                    .cmp(&self.rules[b.rule_index].precedence)
+                    .reverse(),
+            );
+
             // Matches from earlier rules
             let ord = ord.then(a.rule_index.cmp(&b.rule_index));
 
@@ -997,6 +1066,7 @@ impl ScannerBuilder<'_> {
                     match_action: config.match_action.clone(),
                     match_validation_type: config.get_third_party_active_checker().cloned(),
                     suppressions: compiled_suppressions,
+                    precedence: config.precedence,
                 })
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;

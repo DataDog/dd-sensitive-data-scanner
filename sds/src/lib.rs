@@ -8,7 +8,6 @@ mod event;
 mod match_action;
 
 mod ast_utils;
-#[cfg(any(test, feature = "testing", feature = "bench"))]
 mod event_json;
 mod match_validation;
 mod normalization;
@@ -44,15 +43,16 @@ pub use scanner::shared_pool::{SharedPool, SharedPoolGuard};
 
 pub use scanner::suppression::Suppressions;
 pub use scanner::{
-    CompiledRule, MatchEmitter, RootCompiledRule, RootRuleConfig, RuleResult, RuleStatus,
-    ScanOptionBuilder, Scanner, ScannerBuilder, SharedData, StringMatch, StringMatchesCtx,
+    CompiledRule, MatchEmitter, Precedence, RootCompiledRule, RootRuleConfig, RuleResult,
+    RuleStatus, ScanOptionBuilder, Scanner, ScannerBuilder, SharedData, StringMatch,
+    StringMatchesCtx,
     config::RuleConfig,
     error::{CreateScannerError, ScannerError},
-    regex_rule::RegexCaches,
     regex_rule::config::{
         ClaimRequirement, JwtClaimsValidatorConfig, ProximityKeywordsConfig, RegexRuleConfig,
         SecondaryValidator,
     },
+    regex_rule::{RegexCacheKey, RegexCacheValue, RegexCaches, SharedRegex, get_memoized_regex},
     scope::Scope,
 };
 pub use scoped_ruleset::ExclusionCheck;
@@ -60,6 +60,8 @@ pub use tokio::TOKIO_RUNTIME;
 pub use validation::{
     RegexValidationError, get_regex_complexity_estimate_very_slow, validate_regex,
 };
+
+pub use scanner::debug_scan::debug_scan;
 
 #[cfg(any(feature = "testing", feature = "bench"))]
 pub use crate::{
