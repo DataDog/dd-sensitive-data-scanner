@@ -24,9 +24,7 @@ use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::stats::GLOBAL_STATS;
 use crate::tokio::TOKIO_RUNTIME;
-use crate::{
-    CreateScannerError, EncodeIndices, MatchAction, Path, RegexValidationError, ScannerError,
-};
+use crate::{CreateScannerError, EncodeIndices, MatchAction, Path, ScannerError};
 use ahash::{AHashMap, AHashSet};
 use futures::executor::block_on;
 use serde::{Deserialize, Serialize};
@@ -327,9 +325,6 @@ struct ScannerFeatures {
     pub add_implicit_index_wildcards: bool,
     pub multipass_v0_enabled: bool,
     pub return_matches: bool,
-    // This is a temporary flag to disable failed rules (instead of fail the entire scanner)
-    // for regex rules that match an empty string
-    pub skip_rules_with_regex_matching_empty_string: bool,
 }
 
 impl Default for ScannerFeatures {
@@ -338,7 +333,6 @@ impl Default for ScannerFeatures {
             add_implicit_index_wildcards: false,
             multipass_v0_enabled: true,
             return_matches: false,
-            skip_rules_with_regex_matching_empty_string: false,
         }
     }
 }
@@ -929,12 +923,6 @@ impl ScannerBuilder<'_> {
         self
     }
 
-    pub fn with_skip_rules_with_regex_matching_empty_string(mut self, value: bool) -> Self {
-        self.scanner_features
-            .skip_rules_with_regex_matching_empty_string = value;
-        self
-    }
-
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
         let mut match_validators_per_type = AHashMap::new();
 
@@ -960,39 +948,15 @@ impl ScannerBuilder<'_> {
             .rules
             .iter()
             .enumerate()
-            .filter_map(|(rule_index, config)| {
-                let inner = match config.convert_to_compiled_rule(rule_index, self.labels.clone()) {
-                    Ok(inner) => Ok(inner),
-                    Err(err) => {
-                        if self
-                            .scanner_features
-                            .skip_rules_with_regex_matching_empty_string
-                            && err
-                            == CreateScannerError::InvalidRegex(
-                            RegexValidationError::MatchesEmptyString,
-                        )
-                        {
-                            // this is a temporary feature to skip rules that should be considered invalid.
-                            #[allow(clippy::print_stdout)]
-                            {
-                                println!("skipping rule that matches empty string: rule_index={}, labels={:?}", rule_index, self.labels.clone());
-                            }
-                            return None;
-                        } else {
-                            Err(err)
-                        }
-                    }
-                };
-                Some((config, inner))
-            })
-            .map(|(config, inner)| {
+            .map(|(rule_index, config)| {
+                let inner = config.convert_to_compiled_rule(rule_index, self.labels.clone())?;
                 config.match_action.validate()?;
                 let compiled_suppressions = match &config.suppressions {
                     Some(s) => s.compile()?,
                     None => None,
                 };
                 Ok(RootCompiledRule {
-                    inner: inner?,
+                    inner,
                     scope: config.scope.clone(),
                     match_action: config.match_action.clone(),
                     match_validation_type: config.get_third_party_active_checker().cloned(),
