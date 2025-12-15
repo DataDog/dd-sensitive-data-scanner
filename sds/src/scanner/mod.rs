@@ -523,10 +523,6 @@ impl Scanner {
         start: Instant,
         io_duration: Option<Duration>,
     ) {
-        // Record detection time
-        self.metrics
-            .duration_ns
-            .increment(start.elapsed().as_nanos() as u64);
         // Add number of scanned events
         self.metrics.num_scanned_events.increment(1);
         // Add number of matches
