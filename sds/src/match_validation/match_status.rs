@@ -1,4 +1,6 @@
-#[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Clone)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Serialize, Deserialize)]
 pub enum MatchStatus {
     // The ordering here is important, values further down the list have a higher priority when merging.
     NotChecked,
