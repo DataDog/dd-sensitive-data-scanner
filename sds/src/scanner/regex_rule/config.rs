@@ -209,6 +209,7 @@ pub struct ProximityKeywordsConfig {
 #[serde(tag = "type")]
 pub enum SecondaryValidator {
     AbaRtnChecksum,
+    BelgiumNationalRegisterChecksum,
     BrazilianCnpjChecksum,
     BrazilianCpfChecksum,
     BtcChecksum,
@@ -220,6 +221,7 @@ pub enum SecondaryValidator {
     DutchBsnChecksum,
     DutchPassportChecksum,
     EntropyCheck,
+    EstoniaPersonalCodeChecksum,
     EthereumChecksum,
     FinnishHetuChecksum,
     FranceNifChecksum,
@@ -227,6 +229,7 @@ pub enum SecondaryValidator {
     GermanIdsChecksum,
     GermanSvnrChecksum,
     GithubTokenChecksum,
+    GreeceAmkaChecksum,
     GreekTinChecksum,
     HungarianTinChecksum,
     IbanChecker,
@@ -254,6 +257,7 @@ pub enum SecondaryValidator {
     PortugueseTaxIdChecksum,
     RodneCisloNumberChecksum,
     RomanianPersonalNumericCode,
+    SloveniaTinChecksum,
     SlovenianPINChecksum,
     SpanishDniChecksum,
     SpanishNussChecksum,
