@@ -262,6 +262,8 @@ pub enum SecondaryValidator {
     SpanishDniChecksum,
     SpanishNussChecksum,
     SwedenPINChecksum,
+    UsDeaChecksum,
+    UsNpiChecksum,
     VerhoeffChecksum,
 }
 
