@@ -246,6 +246,7 @@ impl SecondaryValidator {
             SecondaryValidator::SpanishDniChecksum => Arc::new(SpanishDniChecksum),
             SecondaryValidator::SpanishNussChecksum => Arc::new(SpanishNussChecksum),
             SecondaryValidator::SwedenPINChecksum => Arc::new(SwedenPINChecksum),
+            SecondaryValidator::VerhoeffChecksum => Arc::new(VerhoeffChecksum),
         }
     }
 }

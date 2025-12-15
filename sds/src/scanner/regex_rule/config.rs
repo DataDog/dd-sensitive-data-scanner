@@ -262,6 +262,7 @@ pub enum SecondaryValidator {
     SpanishDniChecksum,
     SpanishNussChecksum,
     SwedenPINChecksum,
+    VerhoeffChecksum,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
