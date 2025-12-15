@@ -51,7 +51,7 @@ fn should_submit_scanning_metrics() {
         .expect("metric not found");
     assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
 
-    let metric_name = "scanning.duration";
+    let metric_name = "scanning.cpu_duration";
     let metric_value = snapshot
         .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
         .expect("metric not found");
