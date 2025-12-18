@@ -1,4 +1,5 @@
 mod aba_rtn_checksum;
+mod belgium_national_register_checksum;
 mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
 mod btc_checksum;
@@ -9,6 +10,7 @@ mod czech_tin_checksum;
 mod dutch_bsn_checksum;
 mod dutch_passport_checksum;
 mod entropy;
+mod estonia_personal_code_checksum;
 mod ethereum_checksum;
 mod finnish_hetu_checksum;
 mod france_nif_checksum;
@@ -16,6 +18,7 @@ mod france_ssn_checksum;
 mod german_ids_checksum;
 mod german_svnr_checksum;
 mod github_token_checksum;
+mod greece_amka_checksum;
 mod greece_tin_checksum;
 mod hungarian_tin_checksum;
 mod iban_checker;
@@ -36,10 +39,13 @@ mod polish_nip_checksum;
 mod portuguese_tax_id_checksum;
 mod rodne_cislo_checksum;
 mod romanian_personal_numeric_code;
+mod slovenia_tin_checksum;
 mod slovenian_pin_checksum;
 mod spain_dni_checksum;
 mod spanish_nuss_checksum;
 mod sweden_pin_checksum;
+mod us_dea_checksum;
+mod us_npi_checksum;
 mod verhoeff_checksum;
 
 #[cfg(test)]
@@ -47,6 +53,7 @@ pub use jwt_expiration_checker::generate_jwt;
 
 use crate::scanner::regex_rule::config::SecondaryValidator;
 pub use crate::secondary_validation::aba_rtn_checksum::AbaRtnChecksum;
+pub use crate::secondary_validation::belgium_national_register_checksum::BelgiumNationalRegisterChecksum;
 pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjChecksum;
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
 pub use crate::secondary_validation::btc_checksum::BtcChecksum;
@@ -57,6 +64,7 @@ pub use crate::secondary_validation::czech_tin_checksum::CzechTaxIdentificationN
 pub use crate::secondary_validation::dutch_bsn_checksum::DutchBsnChecksum;
 pub use crate::secondary_validation::dutch_passport_checksum::DutchPassportChecksum;
 pub use crate::secondary_validation::entropy::EntropyCheck;
+pub use crate::secondary_validation::estonia_personal_code_checksum::EstoniaPersonalCodeChecksum;
 pub use crate::secondary_validation::ethereum_checksum::EthereumChecksum;
 pub use crate::secondary_validation::finnish_hetu_checksum::FinnishHetuChecksum;
 use crate::secondary_validation::france_nif_checksum::FranceNifChecksum;
@@ -64,6 +72,7 @@ pub use crate::secondary_validation::france_ssn_checksum::FranceSsnChecksum;
 pub use crate::secondary_validation::german_ids_checksum::GermanIdsChecksum;
 pub use crate::secondary_validation::german_svnr_checksum::GermanSvnrChecksum;
 pub use crate::secondary_validation::github_token_checksum::GithubTokenChecksum;
+pub use crate::secondary_validation::greece_amka_checksum::GreeceAmkaChecksum;
 pub use crate::secondary_validation::greece_tin_checksum::GreekTinChecksum;
 pub use crate::secondary_validation::hungarian_tin_checksum::HungarianTinChecksum;
 pub use crate::secondary_validation::iban_checker::IbanChecker;
@@ -87,10 +96,13 @@ pub use crate::secondary_validation::polish_nip_checksum::PolishNipChecksum;
 pub use crate::secondary_validation::portuguese_tax_id_checksum::PortugueseTaxIdChecksum;
 pub use crate::secondary_validation::rodne_cislo_checksum::RodneCisloNumberChecksum;
 pub use crate::secondary_validation::romanian_personal_numeric_code::RomanianPersonalNumericCode;
+pub use crate::secondary_validation::slovenia_tin_checksum::SloveniaTinChecksum;
 pub use crate::secondary_validation::slovenian_pin_checksum::SlovenianPINChecksum;
 pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
 pub use crate::secondary_validation::spanish_nuss_checksum::SpanishNussChecksum;
 pub use crate::secondary_validation::sweden_pin_checksum::SwedenPINChecksum;
+pub use crate::secondary_validation::us_dea_checksum::UsDeaChecksum;
+pub use crate::secondary_validation::us_npi_checksum::UsNpiChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
 
 use std::str::Chars;
@@ -129,10 +141,49 @@ fn sum_all_digits(digits: u32) -> u32 {
     sum
 }
 
+/// Validates a checksum using modulo 11 algorithm with configurable weights and edge case handling
+pub(crate) fn validate_mod11_weighted_checksum<F>(
+    regex_match: &str,
+    weights: &[u32],
+    edge_case_handler: F,
+) -> bool
+where
+    F: Fn(u32) -> Option<u32>,
+{
+    let mut chars = regex_match.chars();
+    let mut sum: u32 = 0;
+
+    for &weight in weights {
+        let digit = match get_next_digit(&mut chars) {
+            Some(d) => d,
+            None => return false,
+        };
+        sum += digit * weight;
+    }
+
+    let actual_checksum = match get_next_digit(&mut chars) {
+        Some(d) => d,
+        None => return false,
+    };
+
+    if get_next_digit(&mut chars).is_some() {
+        return false; // too many digits
+    }
+
+    let remainder = sum % 11;
+    match edge_case_handler(remainder) {
+        Some(expected_checksum) => expected_checksum == actual_checksum,
+        None => false,
+    }
+}
+
 impl SecondaryValidator {
     pub fn compile(&self) -> Arc<dyn Validator> {
         match self {
             SecondaryValidator::AbaRtnChecksum => Arc::new(AbaRtnChecksum),
+            SecondaryValidator::BelgiumNationalRegisterChecksum => {
+                Arc::new(BelgiumNationalRegisterChecksum)
+            }
             SecondaryValidator::BrazilianCnpjChecksum => Arc::new(BrazilianCnpjChecksum),
             SecondaryValidator::BrazilianCpfChecksum => Arc::new(BrazilianCpfChecksum),
             SecondaryValidator::BtcChecksum => Arc::new(BtcChecksum),
@@ -148,6 +199,9 @@ impl SecondaryValidator {
             SecondaryValidator::DutchBsnChecksum => Arc::new(DutchBsnChecksum),
             SecondaryValidator::DutchPassportChecksum => Arc::new(DutchPassportChecksum),
             SecondaryValidator::EntropyCheck => Arc::new(EntropyCheck),
+            SecondaryValidator::EstoniaPersonalCodeChecksum => {
+                Arc::new(EstoniaPersonalCodeChecksum)
+            }
             SecondaryValidator::EthereumChecksum => Arc::new(EthereumChecksum),
             SecondaryValidator::FinnishHetuChecksum => Arc::new(FinnishHetuChecksum),
             SecondaryValidator::FranceNifChecksum => Arc::new(FranceNifChecksum),
@@ -155,6 +209,7 @@ impl SecondaryValidator {
             SecondaryValidator::GermanIdsChecksum => Arc::new(GermanIdsChecksum),
             SecondaryValidator::GermanSvnrChecksum => Arc::new(GermanSvnrChecksum),
             SecondaryValidator::GithubTokenChecksum => Arc::new(GithubTokenChecksum),
+            SecondaryValidator::GreeceAmkaChecksum => Arc::new(GreeceAmkaChecksum),
             SecondaryValidator::GreekTinChecksum => Arc::new(GreekTinChecksum),
             SecondaryValidator::HungarianTinChecksum => Arc::new(HungarianTinChecksum),
             SecondaryValidator::IbanChecker => Arc::new(IbanChecker),
@@ -191,9 +246,13 @@ impl SecondaryValidator {
                 Arc::new(RomanianPersonalNumericCode)
             }
             SecondaryValidator::SlovenianPINChecksum => Arc::new(SlovenianPINChecksum),
+            SecondaryValidator::SloveniaTinChecksum => Arc::new(SloveniaTinChecksum),
             SecondaryValidator::SpanishDniChecksum => Arc::new(SpanishDniChecksum),
             SecondaryValidator::SpanishNussChecksum => Arc::new(SpanishNussChecksum),
             SecondaryValidator::SwedenPINChecksum => Arc::new(SwedenPINChecksum),
+            SecondaryValidator::UsDeaChecksum => Arc::new(UsDeaChecksum),
+            SecondaryValidator::UsNpiChecksum => Arc::new(UsNpiChecksum),
+            SecondaryValidator::VerhoeffChecksum => Arc::new(VerhoeffChecksum),
         }
     }
 }
