@@ -458,7 +458,7 @@ func TestSecondaryValidator(t *testing.T) {
 	scannerWithChecksum, err := CreateScanner([]RuleConfig{
 		NewRedactingRule("rule_card",
 			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
-			"[redacted]", ExtraConfig{SecondaryValidator: LuhnChecksum}),
+			"[redacted]", ExtraConfig{SecondaryValidator: NewSecondaryValidator("LuhnChecksum")}),
 	})
 	if err != nil {
 		t.Fatal("failed to create the scanner with checksum:", err.Error())

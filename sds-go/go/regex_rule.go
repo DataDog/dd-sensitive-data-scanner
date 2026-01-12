@@ -17,7 +17,7 @@ type RegexRuleConfig struct {
 	Pattern                 string                   `json:"pattern"`
 	MatchAction             MatchAction              `json:"match_action"`
 	ProximityKeywords       *ProximityKeywordsConfig `json:"proximity_keywords,omitempty"`
-	SecondaryValidator      SecondaryValidator       `json:"validator,omitempty"`
+	SecondaryValidator      *SecondaryValidator      `json:"validator,omitempty"`
 	ThirdPartyActiveChecker ThirdPartyActiveChecker  `json:"third_party_active_checker,omitempty"`
 	PatternCaptureGroups    []string                 `json:"pattern_capture_groups,omitempty"`
 }
@@ -87,12 +87,23 @@ const (
 	ReplacementTypePartialEnd   = ReplacementType("partial_end")
 )
 
-type SecondaryValidator string
+type SecondaryValidatorType string
 
 const (
-	LuhnChecksum      = SecondaryValidator("LuhnChecksum")
-	ChineseIdChecksum = SecondaryValidator("ChineseIdChecksum")
+	LuhnChecksum      = SecondaryValidatorType("LuhnChecksum")
+	ChineseIdChecksum = SecondaryValidatorType("ChineseIdChecksum")
 )
+
+// SecondaryValidator represents a secondary validator that can optionally have configuration
+type SecondaryValidator struct {
+	Type   SecondaryValidatorType `json:"type"`
+	Config interface{}            `json:"config,omitempty"`
+}
+
+// NewSecondaryValidator creates a simple validator without configuration
+func NewSecondaryValidator(validatorType string) *SecondaryValidator {
+	return &SecondaryValidator{Type: SecondaryValidatorType(validatorType)}
+}
 
 type PartialRedactionDirection string
 
@@ -104,7 +115,7 @@ const (
 // ExtraConfig is used to provide more configuration while creating the rules.
 type ExtraConfig struct {
 	ProximityKeywords       *ProximityKeywordsConfig
-	SecondaryValidator      SecondaryValidator
+	SecondaryValidator      *SecondaryValidator
 	ThirdPartyActiveChecker ThirdPartyActiveChecker
 	PatternCaptureGroups    []string
 }
@@ -242,13 +253,6 @@ func NewPartialRedactRule(id string, pattern string, characterCount uint32, dire
 		SecondaryValidator:      extraConfig.SecondaryValidator,
 		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
 	}
-}
-
-// MarshalJSON marshales the SecondaryValidator.
-func (s SecondaryValidator) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]string{
-		"type": string(s),
-	})
 }
 
 // MarshalJSON marshals the MatchAction in a format understood by the serde rust
