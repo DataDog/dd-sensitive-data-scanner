@@ -92,6 +92,7 @@ type SecondaryValidatorType string
 const (
 	LuhnChecksum      = SecondaryValidatorType("LuhnChecksum")
 	ChineseIdChecksum = SecondaryValidatorType("ChineseIdChecksum")
+	JwtValidatorType  = SecondaryValidatorType("JwtClaimsValidator")
 )
 
 // SecondaryValidator represents a secondary validator that can optionally have configuration
@@ -103,6 +104,14 @@ type SecondaryValidator struct {
 // NewSecondaryValidator creates a simple validator without configuration
 func NewSecondaryValidator(validatorType string) *SecondaryValidator {
 	return &SecondaryValidator{Type: SecondaryValidatorType(validatorType)}
+}
+
+// NewJwtClaimsValidator creates a JWT claims checker validator with configuration
+func NewJwtClaimsValidator(config JwtClaimsValidatorConfig) *SecondaryValidator {
+	return &SecondaryValidator{
+		Type:   JwtValidatorType,
+		Config: config,
+	}
 }
 
 type PartialRedactionDirection string
