@@ -3,8 +3,9 @@ use crate::proximity_keywords::{
 };
 use metrics::Counter;
 use nom::AsChar;
-use regex_automata::Input;
+use regex_automata::{Input, Match};
 
+#[derive(Clone)]
 pub struct CompiledExcludedProximityKeywords {
     pub look_ahead_character_count: usize,
     pub keywords_pattern: ProximityKeywordsRegex,
@@ -30,6 +31,15 @@ impl CompiledExcludedProximityKeywords {
             self.false_positive_counter.increment(1);
         }
         is_false_positive
+    }
+
+    pub fn get_false_positive_match(&self, content: &str, match_start: usize) -> Option<Match> {
+        get_excluded_keyword_match(
+            content,
+            match_start,
+            self.look_ahead_character_count,
+            &self.keywords_pattern,
+        )
     }
 }
 
@@ -100,6 +110,19 @@ pub fn contains_excluded_keyword_match(
         .earliest(true)
         .span(span_bounds.start..span_bounds.end);
     regex.content_regex.search_half(&input).is_some()
+}
+
+pub fn get_excluded_keyword_match(
+    content: &str,
+    match_start: usize,
+    look_ahead_char_count: usize,
+    regex: &ProximityKeywordsRegex,
+) -> Option<Match> {
+    let span_bounds = get_span_bounds_scan(content, match_start, look_ahead_char_count);
+    let input = Input::new(&span_bounds.stripped_prefix)
+        .earliest(true)
+        .span(span_bounds.start..span_bounds.end);
+    regex.content_regex.search(&input)
 }
 
 #[cfg(test)]

@@ -17,6 +17,7 @@ pub struct AwsConfig {
     #[serde(default = "default_aws_sts_endpoint")]
     pub aws_sts_endpoint: String,
     // Override default datetime for testing
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub forced_datetime_utc: Option<DateTime<Utc>>,
     #[serde(default = "default_timeout")]
     pub timeout: Duration,
@@ -291,4 +292,24 @@ impl MatchValidationType {
 pub enum InternalMatchValidationType {
     Aws,
     CustomHttp(Vec<String>),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_serialization_of_aws_config() {
+        let aws_config = AwsConfig {
+            aws_sts_endpoint: "https://sts.amazonaws.com".to_string(),
+            forced_datetime_utc: None,
+            timeout: Duration::from_secs(3),
+        };
+        let serialized = serde_json::to_string(&aws_config).unwrap();
+        // The forced_datetime_utc is not serialized because it is None
+        assert_eq!(
+            serialized,
+            "{\"aws_sts_endpoint\":\"https://sts.amazonaws.com\",\"timeout\":{\"secs\":3,\"nanos\":0}}"
+        );
+    }
 }

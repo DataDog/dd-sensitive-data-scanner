@@ -24,9 +24,7 @@ use crate::scoped_ruleset::{ContentVisitor, ExclusionCheck, ScopedRuleSet};
 pub use crate::secondary_validation::Validator;
 use crate::stats::GLOBAL_STATS;
 use crate::tokio::TOKIO_RUNTIME;
-use crate::{
-    CreateScannerError, EncodeIndices, MatchAction, Path, RegexValidationError, ScannerError,
-};
+use crate::{CreateScannerError, EncodeIndices, MatchAction, Path, ScannerError};
 use ahash::{AHashMap, AHashSet};
 use futures::executor::block_on;
 use serde::{Deserialize, Serialize};
@@ -39,6 +37,7 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
 pub mod config;
+pub mod debug_scan;
 pub mod error;
 pub mod metrics;
 pub mod regex_rule;
@@ -257,14 +256,17 @@ impl StringMatchesCtx<'_> {
         // The future is spawned onto the tokio runtime immediately so it starts running
         // in the background
         let fut = TOKIO_RUNTIME.spawn(async move {
+            let start = Instant::now();
             let mut ctx = AsyncStringMatchesCtx {
                 rule_matches: vec![],
             };
             (func)(&mut ctx).await?;
+            let io_duration = start.elapsed();
 
             Ok(AsyncRuleInfo {
                 rule_index,
                 rule_matches: ctx.rule_matches,
+                io_duration,
             })
         });
 
@@ -299,6 +301,7 @@ pub struct PendingRuleJob {
 pub struct AsyncRuleInfo {
     rule_index: usize,
     rule_matches: Vec<StringMatch>,
+    io_duration: Duration,
 }
 
 /// A rule result that cannot be async
@@ -335,6 +338,15 @@ pub trait CompiledRule: Send + Sync {
     fn on_excluded_match_multipass_v0(&self) {
         // default is to do nothing
     }
+
+    fn as_regex_rule(&self) -> Option<&RegexCompiledRule> {
+        None
+    }
+
+    fn as_regex_rule_mut(&mut self) -> Option<&mut RegexCompiledRule> {
+        None
+    }
+
     fn allow_scanner_to_exclude_namespace(&self) -> bool {
         true
     }
@@ -358,9 +370,6 @@ struct ScannerFeatures {
     pub add_implicit_index_wildcards: bool,
     pub multipass_v0_enabled: bool,
     pub return_matches: bool,
-    // This is a temporary flag to disable failed rules (instead of fail the entire scanner)
-    // for regex rules that match an empty string
-    pub skip_rules_with_regex_matching_empty_string: bool,
 }
 
 impl Default for ScannerFeatures {
@@ -369,7 +378,6 @@ impl Default for ScannerFeatures {
             add_implicit_index_wildcards: false,
             multipass_v0_enabled: true,
             return_matches: false,
-            skip_rules_with_regex_matching_empty_string: false,
         }
     }
 }
@@ -503,17 +511,26 @@ impl Scanner {
         )))
     }
 
-    fn record_metrics(&self, output_rule_matches: &[RuleMatch], start: Instant) {
-        // Record detection time
-        self.metrics
-            .duration_ns
-            .increment(start.elapsed().as_nanos() as u64);
+    fn record_metrics(
+        &self,
+        output_rule_matches: &[RuleMatch],
+        start: Instant,
+        io_duration: Option<Duration>,
+    ) {
         // Add number of scanned events
         self.metrics.num_scanned_events.increment(1);
         // Add number of matches
         self.metrics
             .match_count
             .increment(output_rule_matches.len() as u64);
+
+        if let Some(io_duration) = io_duration {
+            let total_duration = start.elapsed();
+            let cpu_duration = total_duration.saturating_sub(io_duration);
+            self.metrics
+                .cpu_duration
+                .increment(cpu_duration.as_nanos() as u64);
+        }
     }
 
     async fn internal_scan_with_metrics<E: Event>(
@@ -523,15 +540,16 @@ impl Scanner {
     ) -> Result<Vec<RuleMatch>, ScannerError> {
         let start = Instant::now();
         let result = self.internal_scan(event, options).await;
-        match &result {
-            Ok(rule_matches) => {
-                self.record_metrics(rule_matches, start);
+        match result {
+            Ok((rule_matches, io_duration)) => {
+                self.record_metrics(&rule_matches, start, Some(io_duration));
+                Ok(rule_matches)
             }
-            Err(_) => {
-                self.record_metrics(&[], start);
+            Err(e) => {
+                self.record_metrics(&[], start, None);
+                Err(e)
             }
         }
-        result
     }
 
     fn process_rule_matches<E: Event>(
@@ -611,7 +629,7 @@ impl Scanner {
         &self,
         event: &mut E,
         options: ScanOptions,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
+    ) -> Result<(Vec<RuleMatch>, Duration), ScannerError> {
         // If validation is requested, we need to collect match content even if the scanner
         // wasn't originally configured to return matches
         let need_match_content = self.scanner_features.return_matches || options.validate_matches;
@@ -639,8 +657,10 @@ impl Scanner {
 
         // The async jobs were already spawned on the tokio runtime, so the
         // results just need to be collected
+        let mut total_io_duration = Duration::ZERO;
         for job in async_jobs {
             let rule_info = job.fut.await.unwrap()?;
+            total_io_duration += rule_info.io_duration;
             rule_matches.push_async_matches(
                 &job.path,
                 rule_info
@@ -664,7 +684,7 @@ impl Scanner {
             self.validate_matches(&mut output_rule_matches);
         }
 
-        Ok(output_rule_matches)
+        Ok((output_rule_matches, total_io_duration))
     }
 
     pub fn suppress_matches<E: Encoding>(
@@ -968,12 +988,6 @@ impl ScannerBuilder<'_> {
         self
     }
 
-    pub fn with_skip_rules_with_regex_matching_empty_string(mut self, value: bool) -> Self {
-        self.scanner_features
-            .skip_rules_with_regex_matching_empty_string = value;
-        self
-    }
-
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
         let mut match_validators_per_type = AHashMap::new();
 
@@ -999,39 +1013,15 @@ impl ScannerBuilder<'_> {
             .rules
             .iter()
             .enumerate()
-            .filter_map(|(rule_index, config)| {
-                let inner = match config.convert_to_compiled_rule(rule_index, self.labels.clone()) {
-                    Ok(inner) => Ok(inner),
-                    Err(err) => {
-                        if self
-                            .scanner_features
-                            .skip_rules_with_regex_matching_empty_string
-                            && err
-                            == CreateScannerError::InvalidRegex(
-                            RegexValidationError::MatchesEmptyString,
-                        )
-                        {
-                            // this is a temporary feature to skip rules that should be considered invalid.
-                            #[allow(clippy::print_stdout)]
-                            {
-                                println!("skipping rule that matches empty string: rule_index={}, labels={:?}", rule_index, self.labels.clone());
-                            }
-                            return None;
-                        } else {
-                            Err(err)
-                        }
-                    }
-                };
-                Some((config, inner))
-            })
-            .map(|(config, inner)| {
+            .map(|(rule_index, config)| {
+                let inner = config.convert_to_compiled_rule(rule_index, self.labels.clone())?;
                 config.match_action.validate()?;
                 let compiled_suppressions = match &config.suppressions {
                     Some(s) => s.compile()?,
                     None => None,
                 };
                 Ok(RootCompiledRule {
-                    inner: inner?,
+                    inner,
                     scope: config.scope.clone(),
                     match_action: config.match_action.clone(),
                     match_validation_type: config.get_third_party_active_checker().cloned(),

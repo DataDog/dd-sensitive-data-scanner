@@ -1,26 +1,16 @@
-pub struct SlovenianPINChecksum;
-use crate::secondary_validation::Validator;
+use crate::secondary_validation::{Validator, validate_mod11_weighted_checksum};
 
-const WEIGHT_FACTORS: [u32; 12] = [7, 6, 5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+pub struct SlovenianPINChecksum;
+
+const WEIGHTS: &[u32; 12] = &[7, 6, 5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
 
 impl Validator for SlovenianPINChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         // https://en.wikipedia.org/wiki/Unique_Master_Citizen_Number
-        let mut digits = regex_match.chars().filter_map(|c| c.to_digit(10));
-
-        let mut sum = 0;
-        for (i, digit) in digits.by_ref().take(WEIGHT_FACTORS.len()).enumerate() {
-            sum += digit * WEIGHT_FACTORS[i];
-        }
-
-        if let Some(actual_checksum) = digits.next() {
-            let mut computed_checksum = 11 - (sum % 11);
-            if computed_checksum == 11 || computed_checksum == 10 {
-                computed_checksum = 0;
-            }
-            return computed_checksum == actual_checksum;
-        }
-        false
+        validate_mod11_weighted_checksum(regex_match, WEIGHTS, |remainder| match remainder {
+            0 | 1 => Some(0), // 11-0=11 and 11-1=10 both become 0
+            _ => Some(11 - remainder),
+        })
     }
 }
 
