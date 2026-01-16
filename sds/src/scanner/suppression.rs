@@ -11,7 +11,7 @@ use crate::{
     scanner::regex_rule::{SharedRegex, get_memoized_regex},
 };
 
-const MAX_SUPPRESSIONS_COUNT: usize = 30;
+const MAX_SUPPRESSIONS_COUNT: usize = 100;
 const MAX_SUPPRESSION_LENGTH: usize = 1000;
 
 #[serde_as]
