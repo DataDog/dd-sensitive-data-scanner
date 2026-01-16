@@ -2,7 +2,7 @@
 // The module level deprecation allow is needed to suppress warnings from `MatchAction::Utf16Hash`
 // that I couldn't find a specific line to suppress. It can be removed when the variant is removed.
 
-use std::borrow::Cow;
+use std::{borrow::Cow, cmp::min};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -171,11 +171,13 @@ impl MatchAction {
             matched_content.len()
         };
 
+        let replacement_length = min(*num_characters, match_len);
+
         Replacement {
             start: 0,
             end: last_replacement_byte,
             replacement: String::from(PARTIAL_REDACT_CHARACTER)
-                .repeat(*num_characters)
+                .repeat(replacement_length)
                 .into(),
         }
     }
@@ -193,11 +195,13 @@ impl MatchAction {
             0
         };
 
+        let replacement_length = min(*num_characters, match_len);
+
         Replacement {
             start: start_replacement_byte,
             end: match_result.len(),
             replacement: String::from(PARTIAL_REDACT_CHARACTER)
-                .repeat(*num_characters)
+                .repeat(replacement_length)
                 .into(),
         }
     }
@@ -315,7 +319,7 @@ mod test {
     }
 
     #[test]
-    fn match_with_partial_redaction_first_characters_should_always_redact_num_characters() {
+    fn match_with_partial_redaction_first_characters_should_always_redact_num_characters_max() {
         let match_action = MatchAction::PartialRedact {
             character_count: 5,
             direction: FirstCharacters,
@@ -335,7 +339,7 @@ mod test {
             Some(Replacement {
                 start: 0,
                 end: 4,
-                replacement: "*****".into()
+                replacement: "****".into()
             })
         );
 
@@ -350,7 +354,7 @@ mod test {
     }
 
     #[test]
-    fn match_with_partial_redaction_last_characters_should_always_redact_num_characters() {
+    fn match_with_partial_redaction_last_characters_should_always_redact_num_characters_max() {
         let match_action = MatchAction::PartialRedact {
             character_count: 5,
             direction: LastCharacters,
@@ -370,7 +374,7 @@ mod test {
             Some(Replacement {
                 start: 0,
                 end: 4,
-                replacement: "*****".into()
+                replacement: "****".into()
             })
         );
 
@@ -382,6 +386,32 @@ mod test {
                 replacement: "*****".into()
             })
         );
+    }
+
+    #[test]
+    fn match_with_partial_redaction_should_redact_match_length_maximum() {
+        let match_action = MatchAction::PartialRedact {
+            character_count: 350,
+            direction: FirstCharacters,
+        };
+
+        assert_eq!(
+            match_action.get_replacement("rene coty"),
+            Some(Replacement {
+                start: 0,
+                end: 9,
+                replacement: "*********".into()
+            })
+        );
+
+        assert_eq!(
+            match_action.get_replacement("👍 rene coty"),
+            Some(Replacement {
+                start: 0,
+                end: 14,
+                replacement: "***********".into()
+            })
+        )
     }
 
     #[test]
@@ -404,16 +434,16 @@ mod test {
     #[test]
     fn partially_redacts_last_emoji() {
         let match_action = MatchAction::PartialRedact {
-            character_count: 1,
+            character_count: 2,
             direction: LastCharacters,
         };
 
         assert_eq!(
-            match_action.get_replacement("😊🤞"),
+            match_action.get_replacement("😊🤞👋"),
             Some(Replacement {
                 start: 4,
-                end: 8,
-                replacement: "*".into()
+                end: 12,
+                replacement: "**".into()
             })
         );
     }
