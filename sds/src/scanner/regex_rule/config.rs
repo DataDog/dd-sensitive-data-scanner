@@ -209,6 +209,7 @@ pub struct ProximityKeywordsConfig {
 #[serde(tag = "type")]
 pub enum SecondaryValidator {
     AbaRtnChecksum,
+    AustrianSSNChecksum,
     BelgiumNationalRegisterChecksum,
     BrazilianCnpjChecksum,
     BrazilianCpfChecksum,

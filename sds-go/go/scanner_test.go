@@ -504,6 +504,67 @@ func TestSecondaryValidator(t *testing.T) {
 	runTest(t, scannerWithChecksum, testData, false)
 }
 
+func TestAustrianChecksumSecondaryValidator(t *testing.T) {
+	scannerWithoutChecksum, err := CreateScanner([]RuleConfig{
+		NewRedactingRule("austrian_ssn_rule",
+			`\b\d{4}-?(0[1-9]|[12][0-9]|3[01])(0[1-9]|1[0-2])\d{2}\b`,
+			"[redacted]", ExtraConfig{}),
+	})
+	if err != nil {
+		t.Fatal("failed to create the scanner wo checksum:", err.Error())
+	}
+	defer scannerWithoutChecksum.Delete()
+	scannerWithChecksum, err := CreateScanner([]RuleConfig{
+		NewRedactingRule("austrian_ssn_rule",
+			`\b\d{4}-?(0[1-9]|[12][0-9]|3[01])(0[1-9]|1[0-2])\d{2}\b`,
+			"[redacted]", ExtraConfig{SecondaryValidator: NewSecondaryValidator("AustrianSSNChecksum")}),
+	})
+	if err != nil {
+		t.Fatal("failed to create the scanner with checksum:", err.Error())
+	}
+	defer scannerWithChecksum.Delete()
+
+	testData := map[string]testResult{
+		"1237-010180 712612 1236010180": {
+			mutated: true,
+			str:     "[redacted] 712612 [redacted]",
+			rules: []RuleMatch{
+				{
+					RuleIdx:           0,
+					StartIndex:        0,
+					ReplacementType:   ReplacementTypePlaceholder,
+					EndIndexExclusive: 10,
+					ShiftOffset:       -1,
+				}, {
+					RuleIdx:           0,
+					StartIndex:        18,
+					ReplacementType:   ReplacementTypePlaceholder,
+					EndIndexExclusive: 28,
+					ShiftOffset:       -1,
+				},
+			},
+		},
+	}
+	runTest(t, scannerWithoutChecksum, testData, false)
+
+	testData = map[string]testResult{
+		"1237-010180 712612 1236010180": {
+			mutated: true,
+			str:     "[redacted] 712612 1236010180",
+			rules: []RuleMatch{
+				{
+					RuleIdx:           0,
+					StartIndex:        0,
+					ReplacementType:   ReplacementTypePlaceholder,
+					EndIndexExclusive: 10,
+					ShiftOffset:       -1,
+				},
+			},
+		},
+	}
+	runTest(t, scannerWithChecksum, testData, false)
+}
+
 func TestJWTSecondaryValidator(t *testing.T) {
 	scannerWithoutChecksum, err := CreateScanner([]RuleConfig{
 		NewRedactingRule("rule_oauth_test",
