@@ -32,6 +32,8 @@ pub struct ScannerMetrics {
     pub match_count: Counter,
     pub suppressed_match_count: Counter,
     pub cpu_duration: Counter,
+    pub third_party_validated_success_match_count: Counter,
+    pub third_party_validated_total_match_count: Counter,
 }
 
 impl ScannerMetrics {
@@ -41,6 +43,8 @@ impl ScannerMetrics {
             match_count: counter!("scanning.match_count", labels.clone()),
             suppressed_match_count: counter!("scanning.suppressed_match_count", labels.clone()),
             cpu_duration: counter!("scanning.cpu_duration", labels.clone()),
+            third_party_validated_success_match_count: counter!("scanning.third_party_validated_match.success.count", labels.clone()),
+            third_party_validated_total_match_count: counter!("scanning.third_party_validated_match.total.count", labels.clone()),
         }
     }
 }

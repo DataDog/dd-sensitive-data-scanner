@@ -732,6 +732,7 @@ impl Scanner {
                 |(match_validation_type, matches_per_type)| {
                     let match_validator = self.match_validators_per_type.get(match_validation_type);
                     if let Some(match_validator) = match_validator {
+                        self.metrics.third_party_validated_total_match_count.increment(1);
                         match_validator
                             .as_ref()
                             .validate(matches_per_type, &self.rules)
@@ -742,6 +743,7 @@ impl Scanner {
 
         // Refill the rule_matches with the validated matches
         for (_, mut matches) in match_validator_rule_match_per_type {
+            self.metrics.third_party_validated_success_match_count.increment(1);
             validated_rule_matches.append(&mut matches);
         }
 
