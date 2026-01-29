@@ -1104,7 +1104,10 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 let mut emitter = |rule_match: StringMatch| {
                     // This should never happen, but to ensure no empty match is ever generated
                     // (which may cause an infinite loop), this will panic instead.
-                    assert_ne!(rule_match.start, rule_match.end, "empty match detected");
+                    assert_ne!(
+                        rule_match.start, rule_match.end,
+                        "empty match detected on rule with index {rule_index}"
+                    );
                     path_rules_matches.push(InternalRuleMatch::new(rule_index, rule_match));
                 };
 
