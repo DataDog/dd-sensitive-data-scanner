@@ -458,7 +458,7 @@ func TestSecondaryValidator(t *testing.T) {
 	scannerWithChecksum, err := CreateScanner([]RuleConfig{
 		NewRedactingRule("rule_card",
 			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
-			"[redacted]", ExtraConfig{SecondaryValidator: LuhnChecksum}),
+			"[redacted]", ExtraConfig{SecondaryValidator: NewSecondaryValidator("LuhnChecksum")}),
 	})
 	if err != nil {
 		t.Fatal("failed to create the scanner with checksum:", err.Error())
@@ -499,6 +499,148 @@ func TestSecondaryValidator(t *testing.T) {
 				EndIndexExclusive: 27,
 				ShiftOffset:       -9,
 			}},
+		},
+	}
+	runTest(t, scannerWithChecksum, testData, false)
+}
+
+func TestAustrianChecksumSecondaryValidator(t *testing.T) {
+	scannerWithoutChecksum, err := CreateScanner([]RuleConfig{
+		NewRedactingRule("austrian_ssn_rule",
+			`\b\d{4}-?(0[1-9]|[12][0-9]|3[01])(0[1-9]|1[0-2])\d{2}\b`,
+			"[redacted]", ExtraConfig{}),
+	})
+	if err != nil {
+		t.Fatal("failed to create the scanner wo checksum:", err.Error())
+	}
+	defer scannerWithoutChecksum.Delete()
+	scannerWithChecksum, err := CreateScanner([]RuleConfig{
+		NewRedactingRule("austrian_ssn_rule",
+			`\b\d{4}-?(0[1-9]|[12][0-9]|3[01])(0[1-9]|1[0-2])\d{2}\b`,
+			"[redacted]", ExtraConfig{SecondaryValidator: NewSecondaryValidator("AustrianSSNChecksum")}),
+	})
+	if err != nil {
+		t.Fatal("failed to create the scanner with checksum:", err.Error())
+	}
+	defer scannerWithChecksum.Delete()
+
+	testData := map[string]testResult{
+		"1237-010180 712612 1236010180": {
+			mutated: true,
+			str:     "[redacted] 712612 [redacted]",
+			rules: []RuleMatch{
+				{
+					RuleIdx:           0,
+					StartIndex:        0,
+					ReplacementType:   ReplacementTypePlaceholder,
+					EndIndexExclusive: 10,
+					ShiftOffset:       -1,
+				}, {
+					RuleIdx:           0,
+					StartIndex:        18,
+					ReplacementType:   ReplacementTypePlaceholder,
+					EndIndexExclusive: 28,
+					ShiftOffset:       -1,
+				},
+			},
+		},
+	}
+	runTest(t, scannerWithoutChecksum, testData, false)
+
+	testData = map[string]testResult{
+		"1237-010180 712612 1236010180": {
+			mutated: true,
+			str:     "[redacted] 712612 1236010180",
+			rules: []RuleMatch{
+				{
+					RuleIdx:           0,
+					StartIndex:        0,
+					ReplacementType:   ReplacementTypePlaceholder,
+					EndIndexExclusive: 10,
+					ShiftOffset:       -1,
+				},
+			},
+		},
+	}
+	runTest(t, scannerWithChecksum, testData, false)
+}
+
+func TestJWTSecondaryValidator(t *testing.T) {
+	scannerWithoutChecksum, err := CreateScanner([]RuleConfig{
+		NewRedactingRule("rule_oauth_test",
+			`ey[\w=-]+\.ey[\w=-]+\.[\w-]+`,
+			"[redacted]", ExtraConfig{}),
+	})
+	if err != nil {
+		t.Fatal("failed to create the scanner wo checksum:", err.Error())
+	}
+	defer scannerWithoutChecksum.Delete()
+	scannerWithChecksum, err := CreateScanner([]RuleConfig{
+		NewRedactingRule("rule_oauth_test",
+			`ey[\w=-]+\.ey[\w=-]+\.[\w-]+`,
+			"[redacted]", ExtraConfig{
+				SecondaryValidator: NewJwtClaimsValidator(JwtClaimsValidatorConfig{
+					RequiredHeaders: map[string]ClaimRequirement{
+						"alg": ClaimRequirementExactValue{
+							Value: "HS256",
+						},
+						"typ": ClaimRequirementPresent{},
+					},
+					RequiredClaims: map[string]ClaimRequirement{
+						"app": ClaimRequirementRegexMatch{
+							Pattern: `test_\w`,
+						},
+						"version": ClaimRequirementExactValue{
+							Value: "2",
+						},
+						"scope": ClaimRequirementPresent{},
+					},
+				}),
+			},
+		),
+	})
+	if err != nil {
+		t.Fatal("failed to create the scanner with checksum:", err.Error())
+	}
+	defer scannerWithChecksum.Delete()
+
+	testData := map[string]testResult{
+		"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHAiOiJ0ZXN0X2FwcCIsInZlcnNpb24iOiIyIiwiaXNzIjoidGVzdCIsImV4cCI6MTUxNjIzOTAyMn0.2V6y840xin2_bPfoaUa1odbKJ1DoA6EerZIvAeK7AvI non_jwt_token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHAiOiJ0ZXN0X2FwcCIsInZlcnNpb24iOiIyIiwic2NvcGUiOiJwdWJsaWMiLCJpc3MiOiJ0ZXN0IiwiZXhwIjoxNTE2MjM5MDIyfQ.caby0bMSrvwzcQH_DVuPmDP2JTqgOdje7G9RPU_JToE": {
+			mutated: true,
+			str:     "[redacted] non_jwt_token [redacted]",
+			rules: []RuleMatch{
+				{
+					RuleIdx:           0,
+					StartIndex:        0,
+					ReplacementType:   ReplacementTypePlaceholder,
+					EndIndexExclusive: 10,
+					ShiftOffset:       -154,
+				},
+				{
+					RuleIdx:           0,
+					StartIndex:        25,
+					ReplacementType:   ReplacementTypePlaceholder,
+					EndIndexExclusive: 35,
+					ShiftOffset:       -331,
+				},
+			},
+		},
+	}
+	runTest(t, scannerWithoutChecksum, testData, false)
+
+	testData = map[string]testResult{
+		"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHAiOiJ0ZXN0X2FwcCIsInZlcnNpb24iOiIyIiwiaXNzIjoidGVzdCIsImV4cCI6MTUxNjIzOTAyMn0.2V6y840xin2_bPfoaUa1odbKJ1DoA6EerZIvAeK7AvI non_jwt_token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHAiOiJ0ZXN0X2FwcCIsInZlcnNpb24iOiIyIiwic2NvcGUiOiJwdWJsaWMiLCJpc3MiOiJ0ZXN0IiwiZXhwIjoxNTE2MjM5MDIyfQ.caby0bMSrvwzcQH_DVuPmDP2JTqgOdje7G9RPU_JToE": {
+			mutated: true,
+			str:     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHAiOiJ0ZXN0X2FwcCIsInZlcnNpb24iOiIyIiwiaXNzIjoidGVzdCIsImV4cCI6MTUxNjIzOTAyMn0.2V6y840xin2_bPfoaUa1odbKJ1DoA6EerZIvAeK7AvI non_jwt_token [redacted]",
+			rules: []RuleMatch{
+				{
+					RuleIdx:           0,
+					StartIndex:        179,
+					ReplacementType:   ReplacementTypePlaceholder,
+					EndIndexExclusive: 189,
+					ShiftOffset:       -177,
+				},
+			},
 		},
 	}
 	runTest(t, scannerWithChecksum, testData, false)
