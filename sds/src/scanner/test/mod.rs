@@ -940,6 +940,30 @@ fn test_capture_group() {
 }
 
 #[test]
+fn test_capture_group_empty_match_is_ignored() {
+    let rule = RootRuleConfig::new(
+        RegexRuleConfig::new(r"(?<sds_match>.*)hello")
+            .with_pattern_capture_groups(vec!["sds_match".to_string()])
+            .build(),
+    )
+    .match_action(MatchAction::Redact {
+        replacement: "[REDACTED]".to_string(),
+    });
+
+    let scanner = ScannerBuilder::new(&[rule]).build().unwrap();
+
+    let mut content = "hello".to_string();
+    let matches = scanner.scan(&mut content).unwrap();
+    assert_eq!(matches.len(), 0);
+    assert_eq!(content, "hello");
+
+    let mut content = "foohello".to_string();
+    let matches = scanner.scan(&mut content).unwrap();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(content, "[REDACTED]hello");
+}
+
+#[test]
 fn test_precedence_ordering() {
     assert!(Precedence::Specific > Precedence::Generic);
     assert!(Precedence::Generic > Precedence::Catchall);
