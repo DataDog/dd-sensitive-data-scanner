@@ -654,7 +654,10 @@ impl Scanner {
         // results just need to be collected
         let mut total_io_duration = Duration::ZERO;
         for job in async_jobs {
-            let rule_info = job.fut.await.unwrap()?;
+            let rule_info = job
+                .fut
+                .await
+                .map_err(|err| ScannerError::Transient(format!("Async rule join error: {err}")))??;
             total_io_duration += rule_info.io_duration;
             rule_matches.push_async_matches(
                 &job.path,

@@ -251,6 +251,15 @@ impl Iterator for TruePositiveSearch<'_> {
             self.rule.regex.search_half_with(self.cache, &input)?;
 
             let regex_match_range = self.perform_regex_scan(&input)?;
+            if regex_match_range.0 == regex_match_range.1 {
+                // Avoid zero-length matches (possible with capture groups) to prevent infinite loops.
+                if let Some(next) = get_next_regex_start(self.content, regex_match_range) {
+                    self.start = next;
+                    continue;
+                } else {
+                    return None;
+                }
+            }
             // this is only checking extra validators (e.g. checksums)
             let is_false_positive_match = is_false_positive_match(
                 regex_match_range,
