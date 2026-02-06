@@ -527,7 +527,7 @@ fn test_match_suppression_invalid() {
         starts_with: vec![],
     };
     let suppression_too_many = Suppressions {
-        ends_with: vec!["@datadoghq.com".to_string(); 31],
+        ends_with: vec!["@datadoghq.com".to_string(); 101],
         exact_match: vec![],
         starts_with: vec![],
     };

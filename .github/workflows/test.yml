@@ -32,6 +32,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: "Rust checks"
         run: bash ./scripts/rust_checks.sh
+      - name: "Rust tests"
+        run: make test-rust
   sds-go:
     runs-on: ubuntu-latest
     steps:
