@@ -405,7 +405,7 @@ mod tests {
                     hosts: vec![],
                     headers: [("Authorization".to_string(), "Bearer $MATCH".to_string())].into(),
                     request_body: Some("{\"test\": true}".to_string()),
-                    timeout_seconds: 5,
+                    timeout: Duration::from_secs(5),
                 },
                 response: HttpResponseConfig {
                     conditions: vec![
