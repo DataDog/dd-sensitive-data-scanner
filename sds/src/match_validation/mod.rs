@@ -1,5 +1,6 @@
 mod aws_validator;
 pub(crate) mod config;
+pub(crate) mod config_v2;
 pub(crate) mod helpers;
 pub(crate) mod http_validator;
 pub(crate) mod match_status;

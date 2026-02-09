@@ -5,6 +5,7 @@ use std::str::FromStr;
 use std::{hash::Hash, time::Duration};
 
 use super::aws_validator::AwsValidator;
+use super::config_v2::{CustomHttpConfigV2, PairedValidatorConfig};
 use super::http_validator::HttpValidator;
 use super::match_validator::MatchValidator;
 
@@ -252,6 +253,8 @@ pub struct HttpStatusCodeRange {
 pub enum MatchValidationType {
     Aws(AwsType),
     CustomHttp(CustomHttpConfig),
+    CustomHttpV2(CustomHttpConfigV2),
+    PairedValidator(PairedValidatorConfig),
 }
 
 impl MatchValidationType {
@@ -260,6 +263,8 @@ impl MatchValidationType {
         match self {
             MatchValidationType::Aws(aws_type) => matches!(aws_type, AwsType::AwsSecret(_)),
             MatchValidationType::CustomHttp(_) => true,
+            MatchValidationType::CustomHttpV2(_) => false, // TODO: implement v2 validator
+            MatchValidationType::PairedValidator(_) => false, // Paired validators don't create standalone validators
         }
     }
     pub fn get_internal_match_validation_type(&self) -> InternalMatchValidationType {
@@ -267,6 +272,13 @@ impl MatchValidationType {
             MatchValidationType::Aws(_) => InternalMatchValidationType::Aws,
             MatchValidationType::CustomHttp(http_config) => {
                 InternalMatchValidationType::CustomHttp(http_config.get_endpoints().unwrap())
+            }
+            MatchValidationType::CustomHttpV2(_) => {
+                // TODO: implement v2 internal type
+                InternalMatchValidationType::CustomHttpV2
+            }
+            MatchValidationType::PairedValidator(config) => {
+                InternalMatchValidationType::PairedValidator(config.kind.clone())
             }
         }
     }
@@ -281,6 +293,13 @@ impl MatchValidationType {
             MatchValidationType::CustomHttp(http_config) => Ok(Box::new(
                 HttpValidator::new_from_config(http_config.clone()),
             )),
+            MatchValidationType::CustomHttpV2(_) => {
+                // TODO: implement v2 validator
+                Err("CustomHttpV2 validator not yet implemented".to_string())
+            }
+            MatchValidationType::PairedValidator(_) => {
+                Err("PairedValidator cannot be used to create a standalone validator".to_string())
+            }
         }
     }
 }
@@ -292,6 +311,8 @@ impl MatchValidationType {
 pub enum InternalMatchValidationType {
     Aws,
     CustomHttp(Vec<String>),
+    CustomHttpV2,
+    PairedValidator(String), // Stores the vendor kind
 }
 
 #[cfg(test)]
