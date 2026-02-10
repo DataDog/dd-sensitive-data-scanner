@@ -50,7 +50,7 @@ pub enum AwsType {
     AwsSession,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum HttpMethod {
     Get,
