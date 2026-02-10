@@ -4,6 +4,8 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::{hash::Hash, time::Duration};
 
+use crate::match_validation::http_validator_v2::HttpValidatorV2;
+
 use super::aws_validator::AwsValidator;
 use super::config_v2::{CustomHttpConfigV2, PairedValidatorConfig};
 use super::http_validator::HttpValidator;
@@ -293,10 +295,9 @@ impl MatchValidationType {
             MatchValidationType::CustomHttp(http_config) => Ok(Box::new(
                 HttpValidator::new_from_config(http_config.clone()),
             )),
-            MatchValidationType::CustomHttpV2(_) => {
-                // TODO: implement v2 validator
-                Err("CustomHttpV2 validator not yet implemented".to_string())
-            }
+            MatchValidationType::CustomHttpV2(http_config_v2) => Ok(Box::new(
+                HttpValidatorV2::new_from_config(http_config_v2.clone()),
+            )),
             MatchValidationType::PairedValidator(_) => {
                 Err("PairedValidator cannot be used to create a standalone validator".to_string())
             }

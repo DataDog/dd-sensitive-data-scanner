@@ -20,7 +20,7 @@ pub struct HttpValidatorV2 {
 
 impl HttpValidatorV2 {
     pub fn new_from_config(config: CustomHttpConfigV2) -> Self {
-        HttpValidatorV2 { config: config }
+        HttpValidatorV2 { config }
     }
     fn handle_reqwest_response(
         &self,

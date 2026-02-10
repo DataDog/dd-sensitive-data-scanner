@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, time::Duration};
 use crate::{HttpMethod, RuleMatch};
 
 /// Configuration for Online Validation V2
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct CustomHttpConfigV2 {
     /// Optional match pairing configuration for validating using matches from multiple rules
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -12,15 +12,6 @@ pub struct CustomHttpConfigV2 {
 
     /// Array of HTTP calls to attempt. Only one needs to succeed for validation.
     pub calls: Vec<HttpCallConfig>,
-}
-
-impl Default for CustomHttpConfigV2 {
-    fn default() -> Self {
-        Self {
-            match_pairing: None,
-            calls: vec![],
-        }
-    }
 }
 
 impl CustomHttpConfigV2 {
@@ -116,15 +107,15 @@ pub struct ResponseCondition {
 
 impl ResponseCondition {
     pub fn matches(&self, status_code: u16, body: &str) -> ResponseConditionResult {
-        if let Some(status_code_matcher) = self.status_code.as_ref() {
-            if status_code_matcher.matches(status_code) {
-                return self.condition_type.clone().into();
-            }
+        if let Some(status_code_matcher) = self.status_code.as_ref()
+            && status_code_matcher.matches(status_code)
+        {
+            return self.condition_type.clone().into();
         }
-        if let Some(raw_body_matcher) = self.raw_body.as_ref() {
-            if raw_body_matcher.matches(body) {
-                return self.condition_type.clone().into();
-            }
+        if let Some(raw_body_matcher) = self.raw_body.as_ref()
+            && raw_body_matcher.matches(body)
+        {
+            return self.condition_type.clone().into();
         }
         ResponseConditionResult::NotChecked
     }
@@ -268,7 +259,6 @@ mod tests {
     #[test]
     fn test_body_matcher_present() {
         let matcher = BodyMatcher::Present;
-        assert!(matcher.matches(""));
         assert!(matcher.matches("test"));
         assert!(!matcher.matches(""));
     }
@@ -285,7 +275,7 @@ mod tests {
     fn test_body_matcher_regex() {
         let matcher = BodyMatcher::Regex("test".to_string());
         assert!(matcher.matches("test"));
-        assert!(!matcher.matches("test1"));
-        assert!(!matcher.matches(""));
+        assert!(matcher.matches("test1"));
+        assert!(!matcher.matches("different"));
     }
 }
