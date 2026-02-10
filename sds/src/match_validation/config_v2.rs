@@ -189,5 +189,4 @@ mod tests {
         assert!(!matcher.matches(300));
         assert!(!matcher.matches(404));
     }
-
 }
