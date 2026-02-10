@@ -129,6 +129,7 @@ pub enum ResponseConditionType {
     Invalid,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum ResponseConditionResult {
     Valid,
     Invalid,
