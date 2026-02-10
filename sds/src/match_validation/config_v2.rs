@@ -205,17 +205,11 @@ pub struct PairedValidatorConfig {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct TemplatedMatchString {
-    inner: String,
-}
+pub struct TemplatedMatchString(pub String);
 
 impl TemplatedMatchString {
-    pub fn new(inner: String) -> Self {
-        Self { inner }
-    }
-
     pub fn render(&self, rule_match: &RuleMatch) -> String {
-        self.inner
+        self.0
             .replace("$MATCH", rule_match.match_value.as_ref().unwrap())
     }
 }

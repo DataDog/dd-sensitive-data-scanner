@@ -235,7 +235,7 @@ mod tests {
     ) -> HttpCallConfig {
         HttpCallConfig {
             request: HttpRequestConfig {
-                endpoint: TemplatedMatchString::new(endpoint),
+                endpoint: TemplatedMatchString(endpoint),
                 hosts: vec![],
                 method,
                 headers,
@@ -396,11 +396,11 @@ mod tests {
         let mut headers = BTreeMap::new();
         headers.insert(
             "Authorization".to_string(),
-            TemplatedMatchString::new("Bearer $MATCH".to_string()),
+            TemplatedMatchString("Bearer $MATCH".to_string()),
         );
         headers.insert(
             "X-API-Key".to_string(),
-            TemplatedMatchString::new("custom_key".to_string()),
+            TemplatedMatchString("custom_key".to_string()),
         );
 
         let config = create_test_config_with_headers(
