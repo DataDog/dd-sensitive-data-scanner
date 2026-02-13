@@ -32,9 +32,21 @@ pub use event::{Event, EventVisitor, VisitStringResult};
 pub use match_action::{MatchAction, PartialRedactDirection};
 
 pub use match_validation::{
-    config::AwsConfig, config::AwsType, config::CustomHttpConfig, config::HttpMethod,
-    config::HttpStatusCodeRange, config::HttpValidatorOption, config::InternalMatchValidationType,
-    config::MatchValidationType, config::RequestHeader, match_status::MatchStatus,
+    config::AwsConfig,
+    config::AwsType,
+    config::CustomHttpConfig,
+    config::HttpMethod,
+    config::HttpStatusCodeRange,
+    config::HttpValidatorOption,
+    config::InternalMatchValidationType,
+    config::MatchValidationType,
+    config::RequestHeader,
+    config_v2::{
+        BodyMatcher, CustomHttpConfigV2, HttpCallConfig, HttpRequestConfig, HttpResponseConfig,
+        MatchPairingConfig, PairedValidatorConfig, ResponseCondition, ResponseConditionType,
+        StatusCodeMatcher,
+    },
+    match_status::MatchStatus,
 };
 pub use observability::labels::Labels;
 pub use path::{Path, PathSegment};
