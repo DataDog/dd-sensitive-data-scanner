@@ -265,7 +265,7 @@ impl MatchValidationType {
         match self {
             MatchValidationType::Aws(aws_type) => matches!(aws_type, AwsType::AwsSecret(_)),
             MatchValidationType::CustomHttp(_) => true,
-            MatchValidationType::CustomHttpV2(_) => false, // TODO: implement v2 validator
+            MatchValidationType::CustomHttpV2(_) => true,
             MatchValidationType::PairedValidator(_) => false, // Paired validators don't create standalone validators
         }
     }
@@ -275,10 +275,7 @@ impl MatchValidationType {
             MatchValidationType::CustomHttp(http_config) => {
                 InternalMatchValidationType::CustomHttp(http_config.get_endpoints().unwrap())
             }
-            MatchValidationType::CustomHttpV2(_) => {
-                // TODO: implement v2 internal type
-                InternalMatchValidationType::CustomHttpV2
-            }
+            MatchValidationType::CustomHttpV2(_) => InternalMatchValidationType::CustomHttpV2,
             MatchValidationType::PairedValidator(config) => {
                 InternalMatchValidationType::PairedValidator(config.kind.clone())
             }
