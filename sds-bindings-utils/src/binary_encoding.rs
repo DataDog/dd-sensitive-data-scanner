@@ -136,8 +136,7 @@ impl<E: Encoding> Event for BinaryEvent<E> {
 ///    - 2: pop segment
 ///    - 3: string content
 ///    - 4: mutation (path, tag 3 / string content)
-///    - 5: rule match (rule index, path, replacement type, start, end, shift offset)
-///    - 6: keyword (empty string = None), only sent if `return_keyword` is true, for backwards compatibility
+///    - 5: rule match (rule index, path, replacement type, start, end, shift offset, keyword (empty string = None))
 pub fn encode_response(
     storage: &BTreeMap<Path, (bool, String)>,
     status: Result<&[RuleMatch], &ScannerError>,
