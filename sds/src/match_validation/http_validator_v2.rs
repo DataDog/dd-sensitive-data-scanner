@@ -63,15 +63,27 @@ impl HttpValidatorV2 {
 
 impl MatchValidator for HttpValidatorV2 {
     fn validate(&self, matches: &mut Vec<RuleMatch>, _: &[RootCompiledRule]) {
-        // build a map of match status per endpoint and per match_idx
+        // build a map of match status per endpoint, per host, and per match_idx
         let mut match_status_per_endpoint_and_match: AHashMap<_, _> = matches
             .iter()
             .enumerate()
             .flat_map(|(idx, _)| {
-                self.config
-                    .calls
-                    .iter()
-                    .map(move |endpoint| ((idx, endpoint), MatchStatus::NotChecked))
+                self.config.calls.iter().flat_map(move |endpoint| {
+                    if endpoint.request.hosts.is_empty() {
+                        // No hosts specified, use endpoint as-is
+                        vec![((idx, endpoint, None), MatchStatus::NotChecked)]
+                    } else {
+                        // Generate one entry per host
+                        endpoint
+                            .request
+                            .hosts
+                            .iter()
+                            .map(|host| {
+                                ((idx, endpoint, Some(host.clone())), MatchStatus::NotChecked)
+                            })
+                            .collect::<Vec<_>>()
+                    }
+                })
             })
             .collect();
 
@@ -79,22 +91,29 @@ impl MatchValidator for HttpValidatorV2 {
             use rayon::prelude::*;
 
             match_status_per_endpoint_and_match.par_iter_mut().for_each(
-                |((match_idx, endpoint_config), match_status)| {
+                |((match_idx, endpoint_config, host_opt), match_status)| {
                     let rule_match = &matches[*match_idx];
-                    let endpoint = endpoint_config.request.endpoint.render(rule_match);
+                    let mut endpoint = endpoint_config.request.endpoint.with_rule_match(rule_match);
+                    if let Some(host) = host_opt {
+                        endpoint = endpoint.with_host(host);
+                    }
                     let mut request_builder = match endpoint_config.request.method {
-                        HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(endpoint),
-                        HttpMethod::Post => BLOCKING_HTTP_CLIENT.post(endpoint),
-                        HttpMethod::Put => BLOCKING_HTTP_CLIENT.put(endpoint),
-                        HttpMethod::Delete => BLOCKING_HTTP_CLIENT.delete(endpoint),
-                        HttpMethod::Patch => BLOCKING_HTTP_CLIENT.patch(endpoint),
+                        HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(endpoint.to_string()),
+                        HttpMethod::Post => BLOCKING_HTTP_CLIENT.post(endpoint.to_string()),
+                        HttpMethod::Put => BLOCKING_HTTP_CLIENT.put(endpoint.to_string()),
+                        HttpMethod::Delete => BLOCKING_HTTP_CLIENT.delete(endpoint.to_string()),
+                        HttpMethod::Patch => BLOCKING_HTTP_CLIENT.patch(endpoint.to_string()),
                     };
                     request_builder = request_builder.timeout(endpoint_config.request.timeout);
 
                     // Add headers
                     for (header_key, header_value) in &endpoint_config.request.headers {
+                        let mut header_val = header_value.with_rule_match(rule_match);
+                        if let Some(host) = host_opt {
+                            header_val = header_val.with_host(host);
+                        }
                         request_builder =
-                            request_builder.header(header_key, header_value.render(rule_match));
+                            request_builder.header(header_key, header_val.to_string());
                     }
                     let res = request_builder.send();
                     match res {
@@ -126,7 +145,7 @@ impl MatchValidator for HttpValidatorV2 {
         });
 
         // Update the match status with this highest priority returned
-        for ((match_idx, _), status) in match_status_per_endpoint_and_match {
+        for ((match_idx, _, _), status) in match_status_per_endpoint_and_match {
             matches[match_idx].match_status.merge(status.clone());
         }
     }
@@ -233,10 +252,21 @@ mod tests {
         conditions: Vec<ResponseCondition>,
         timeout: Duration,
     ) -> HttpCallConfig {
+        create_http_call_config_with_hosts(endpoint, method, vec![], headers, conditions, timeout)
+    }
+
+    fn create_http_call_config_with_hosts(
+        endpoint: String,
+        method: HttpMethod,
+        hosts: Vec<String>,
+        headers: BTreeMap<String, TemplatedMatchString>,
+        conditions: Vec<ResponseCondition>,
+        timeout: Duration,
+    ) -> HttpCallConfig {
         HttpCallConfig {
             request: HttpRequestConfig {
                 endpoint: TemplatedMatchString(endpoint),
-                hosts: vec![],
+                hosts,
                 method,
                 headers,
                 request_body: None,
@@ -255,8 +285,36 @@ mod tests {
         );
         let rule_match = create_test_match("test");
         assert_eq!(
-            config.calls[0].request.endpoint.render(&rule_match),
+            config.calls[0]
+                .request
+                .endpoint
+                .with_rule_match(&rule_match)
+                .to_string(),
             "http://localhost/test?secret=test".to_string()
+        );
+    }
+
+    #[test]
+    fn test_http_validator_config_with_hosts() {
+        let config = create_http_call_config_with_hosts(
+            "http://$HOST/test".to_string(),
+            HttpMethod::Get,
+            vec!["us".to_string(), "eu".to_string()],
+            BTreeMap::new(),
+            vec![],
+            Duration::from_secs(5),
+        );
+        let rule_match = create_test_match("test");
+
+        // Test that with_host substitutes the host correctly
+        let endpoint_with_match = config.request.endpoint.with_rule_match(&rule_match);
+        assert_eq!(
+            endpoint_with_match.with_host("us").to_string(),
+            "http://us/test"
+        );
+        assert_eq!(
+            endpoint_with_match.with_host("eu").to_string(),
+            "http://eu/test"
         );
     }
 
@@ -646,6 +704,66 @@ mod tests {
 
         mock1.assert();
         mock2.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+    }
+
+    #[test]
+    fn integration_test_multi_host_validation() {
+        let server_us = httpmock::MockServer::start();
+        let server_eu = httpmock::MockServer::start();
+
+        // US endpoint returns valid
+        let mock_us = server_us.mock(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/api/check")
+                .query_param("token", "test_token");
+            then.status(200).body("Valid");
+        });
+
+        // EU endpoint returns invalid
+        let mock_eu = server_eu.mock(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/api/check")
+                .query_param("token", "test_token");
+            then.status(401).body("Invalid");
+        });
+
+        // Create config with multiple hosts
+        let config = CustomHttpConfigV2::default().with_call(create_http_call_config_with_hosts(
+            "http://$HOST/api/check?token=$MATCH".to_string(),
+            HttpMethod::Get,
+            vec![
+                server_us.base_url().replace("http://", ""),
+                server_eu.base_url().replace("http://", ""),
+            ],
+            BTreeMap::new(),
+            vec![
+                ResponseCondition {
+                    condition_type: ResponseConditionType::Valid,
+                    status_code: Some(StatusCodeMatcher::Single(200)),
+                    raw_body: None,
+                    body: None,
+                },
+                ResponseCondition {
+                    condition_type: ResponseConditionType::Invalid,
+                    status_code: Some(StatusCodeMatcher::Single(401)),
+                    raw_body: None,
+                    body: None,
+                },
+            ],
+            Duration::from_secs(5),
+        ));
+
+        let validator = HttpValidatorV2::new_from_config(config);
+        let mut matches = vec![create_test_match("test_token")];
+
+        validator.validate(&mut matches, &[]);
+
+        // Both endpoints should have been called
+        mock_us.assert();
+        mock_eu.assert();
+
+        // The match should be valid because one of the hosts returned valid
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
     }
 

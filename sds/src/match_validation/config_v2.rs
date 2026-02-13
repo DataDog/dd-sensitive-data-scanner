@@ -209,9 +209,22 @@ pub struct PairedValidatorConfig {
 pub struct TemplatedMatchString(pub String);
 
 impl TemplatedMatchString {
-    pub fn render(&self, rule_match: &RuleMatch) -> String {
-        self.0
-            .replace("$MATCH", rule_match.match_value.as_ref().unwrap())
+    pub fn with_rule_match(&self, rule_match: &RuleMatch) -> Self {
+        self.render("$MATCH", rule_match.match_value.as_ref().unwrap())
+    }
+
+    pub fn with_host(&self, host: &str) -> Self {
+        self.render("$HOST", host)
+    }
+
+    fn render(&self, tag: &str, value: &str) -> Self {
+        TemplatedMatchString(self.0.replace(tag, value))
+    }
+}
+
+impl ToString for TemplatedMatchString {
+    fn to_string(&self) -> String {
+        self.0.clone()
     }
 }
 
