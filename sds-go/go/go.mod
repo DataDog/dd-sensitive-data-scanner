@@ -1,3 +1,3 @@
 module github.com/DataDog/dd-sensitive-data-scanner/sds-go/go
 
-go 1.19
+go 1.25.7
