@@ -175,6 +175,7 @@ mod tests {
             shift_offset: 0,
             match_value: Some(match_value.to_string()),
             match_status: MatchStatus::NotChecked,
+            keyword: None,
         }
     }
 
