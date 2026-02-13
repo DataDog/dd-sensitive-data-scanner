@@ -36,6 +36,9 @@ pub struct RuleMatch {
 
     // match status updated by the validate_matches scanner method
     pub match_status: MatchStatus,
+
+    /// The keyword that was found for this match. Only some rules might set this value.
+    pub keyword: Option<String>,
 }
 
 pub struct InternalRuleMatch<E: Encoding> {
@@ -53,6 +56,9 @@ pub struct InternalRuleMatch<E: Encoding> {
 
     /// The end index of the match, converted to a different encoding
     pub custom_end: <E as Encoding>::Index,
+
+    /// The keyword that was found for this match. Only some rules might set this value.
+    pub keyword: Option<String>,
 }
 
 impl<E: Encoding> InternalRuleMatch<E> {
@@ -63,6 +69,7 @@ impl<E: Encoding> InternalRuleMatch<E> {
             utf8_end: string_match.end,
             custom_start: E::zero_index(),
             custom_end: E::zero_index(),
+            keyword: string_match.keyword,
         }
     }
 

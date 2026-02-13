@@ -25,29 +25,33 @@ use std::collections::BTreeMap;
 use super::CompiledRule;
 use super::RuleConfig;
 
-pub struct DumbRuleConfig {}
+pub struct SimpleRuleConfig {}
 
-pub struct DumbCompiledRule {}
+pub struct SimpleCompiledRule {}
 
-impl CompiledRule for DumbCompiledRule {
+impl CompiledRule for SimpleCompiledRule {
     fn get_string_matches(
         &self,
         _content: &str,
         _path: &Path,
         ctx: &mut StringMatchesCtx,
     ) -> RuleResult {
-        ctx.match_emitter.emit(StringMatch { start: 10, end: 16 });
+        ctx.match_emitter.emit(StringMatch {
+            start: 10,
+            end: 16,
+            keyword: Some("keyword".to_string()),
+        });
         Ok(RuleStatus::Done)
     }
 }
 
-impl RuleConfig for DumbRuleConfig {
+impl RuleConfig for SimpleRuleConfig {
     fn convert_to_compiled_rule(
         &self,
         _content: usize,
         _: Labels,
     ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
-        Ok(Box::new(DumbCompiledRule {}))
+        Ok(Box::new(SimpleCompiledRule {}))
     }
 }
 
@@ -67,12 +71,11 @@ impl CompiledRule for CustomCompiledRule {
             ctx.match_emitter.emit(StringMatch {
                 start,
                 end: start + 6,
+                keyword: None,
             });
         }
         Ok(RuleStatus::Done)
     }
-
-    // Does not override allow_scanner_to_exclude_namespace, so it returns true by default
 }
 
 impl RuleConfig for CustomRuleConfig {
@@ -86,9 +89,9 @@ impl RuleConfig for CustomRuleConfig {
 }
 
 #[test]
-fn dumb_custom_rule() {
+fn simple_custom_rule() {
     let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
-        Arc::new(DumbRuleConfig {}) as Arc<dyn RuleConfig>
+        Arc::new(SimpleRuleConfig {}) as Arc<dyn RuleConfig>
     )
     .match_action(MatchAction::Redact {
         replacement: "[REDACTED]".to_string(),
@@ -105,9 +108,25 @@ fn dumb_custom_rule() {
 }
 
 #[test]
+fn test_rule_match_keyword() {
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
+        Arc::new(SimpleRuleConfig {}) as Arc<dyn RuleConfig>
+    )])
+    .build()
+    .unwrap();
+
+    let mut input = "this is a secret with random data".to_owned();
+
+    let matched_rules = scanner.scan(&mut input).unwrap();
+
+    assert_eq!(matched_rules.len(), 1);
+    assert_eq!(matched_rules[0].keyword, Some("keyword".to_string()));
+}
+
+#[test]
 fn test_mixed_rules() {
     let scanner = ScannerBuilder::new(&[
-        RootRuleConfig::new(Arc::new(DumbRuleConfig {}) as Arc<dyn RuleConfig>).match_action(
+        RootRuleConfig::new(Arc::new(SimpleRuleConfig {}) as Arc<dyn RuleConfig>).match_action(
             MatchAction::Redact {
                 replacement: "[REDACTED]".to_string(),
             },
@@ -598,10 +617,9 @@ fn test_multiple_partial_redactions() {
             start_index: 0,
             end_index_exclusive: 3,
             shift_offset: 0,
-
             match_value: None,
-
             match_status: MatchStatus::NotAvailable,
+            keyword: None,
         }
     );
 
@@ -614,10 +632,9 @@ fn test_multiple_partial_redactions() {
             start_index: 3,
             end_index_exclusive: 6,
             shift_offset: 0,
-
             match_value: None,
-
             match_status: MatchStatus::NotAvailable,
+            keyword: None,
         }
     );
 
@@ -630,10 +647,9 @@ fn test_multiple_partial_redactions() {
             start_index: 6,
             end_index_exclusive: 9,
             shift_offset: 0,
-
             match_value: None,
-
             match_status: MatchStatus::NotAvailable,
+            keyword: None,
         }
     );
 }
@@ -765,7 +781,7 @@ fn test_calculate_indices_is_called_with_sorted_start_index() {
             self.0.visit_event(visitor).map(|_| {})
         }
 
-        fn visit_string_mut(&mut self, path: &Path, visit: impl FnMut(&mut String) -> bool) {
+        fn visit_string_mut(&mut self, path: &Path, visit: impl FnOnce(&mut String) -> bool) {
             self.0.visit_string_mut(path, visit)
         }
     }
