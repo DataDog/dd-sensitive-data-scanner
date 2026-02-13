@@ -19,7 +19,7 @@ pub trait Event: Sized {
     /// Visit the string at the specified path. The path is guaranteed to be valid, it will be a path
     /// that was previously used in `visit_event'. This is used to replace redacted content.
     /// `visit` returns a bool indicating if the string was mutated.
-    fn visit_string_mut(&mut self, path: &Path, visit: impl FnMut(&mut String) -> bool);
+    fn visit_string_mut(&mut self, path: &Path, visit: impl FnOnce(&mut String) -> bool);
 
     fn get_id(&self) -> Option<&str> {
         None
@@ -52,7 +52,7 @@ impl Event for String {
         visitor.visit_string(self).map(|_| {})
     }
 
-    fn visit_string_mut(&mut self, _path: &Path, mut visit: impl FnMut(&mut String) -> bool) {
+    fn visit_string_mut(&mut self, _path: &Path, visit: impl FnOnce(&mut String) -> bool) {
         (visit)(self);
     }
 }
