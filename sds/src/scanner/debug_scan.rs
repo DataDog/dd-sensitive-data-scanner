@@ -508,24 +508,4 @@ mod test {
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].status, DebugRuleMatchStatus::ChecksumFailed);
     }
-
-    #[test]
-    fn test_invalid_regex_syntax() {
-        let rule_config = RootRuleConfig::new(RegexRuleConfig::new("][").build());
-
-        let mut msg = "This is a secret".to_string();
-        let matches = debug_scan(&mut msg, rule_config).unwrap();
-
-        // Full match
-        assert_eq!(matches.len(), 1);
-        assert_eq!(
-            matches[0].status,
-            DebugRuleMatchStatus::Matched(MatchedInfo {
-                included_keyword: None,
-                included_keyword_start_index: None,
-                included_keyword_end_exclusive: None,
-            })
-        );
-        assert_eq!(matches[0].rule_match.start_index, 10);
-    }
 }

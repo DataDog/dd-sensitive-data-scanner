@@ -108,6 +108,22 @@ fn simple_custom_rule() {
 }
 
 #[test]
+fn test_rule_match_keyword() {
+    let scanner = ScannerBuilder::new(&[RootRuleConfig::new(
+        Arc::new(SimpleRuleConfig {}) as Arc<dyn RuleConfig>
+    )])
+    .build()
+    .unwrap();
+
+    let mut input = "this is a secret with random data".to_owned();
+
+    let matched_rules = scanner.scan(&mut input).unwrap();
+
+    assert_eq!(matched_rules.len(), 1);
+    assert_eq!(matched_rules[0].keyword, Some("keyword".to_string()));
+}
+
+#[test]
 fn test_mixed_rules() {
     let scanner = ScannerBuilder::new(&[
         RootRuleConfig::new(Arc::new(SimpleRuleConfig {}) as Arc<dyn RuleConfig>).match_action(
@@ -152,7 +168,6 @@ fn simple_redaction() {
 
     assert_eq!(matched_rules.len(), 1);
     assert_eq!(input, "text with [REDACTED]");
-    assert_eq!(matched_rules[0].keyword, Some("keyword".to_string()))
 }
 
 #[test]
