@@ -112,7 +112,7 @@ impl<E: Encoding> Event for BinaryEvent<E> {
         Ok(())
     }
 
-    fn visit_string_mut(&mut self, path: &Path, mut visit: impl FnMut(&mut String) -> bool) {
+    fn visit_string_mut(&mut self, path: &Path, visit: impl FnOnce(&mut String) -> bool) {
         let content = self.storage.get_mut(&path.into_static()).unwrap();
         let was_mutated = visit(&mut content.1);
 

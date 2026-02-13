@@ -29,10 +29,9 @@ fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
             start_index: 0,
             end_index_exclusive: 3,
             shift_offset: 0,
-
             match_value: None,
-
             match_status: MatchStatus::NotAvailable,
+            keyword: None,
         }
     );
 
@@ -45,10 +44,9 @@ fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
             start_index: 3,
             end_index_exclusive: 6,
             shift_offset: 0,
-
             match_value: None,
-
             match_status: MatchStatus::NotAvailable,
+            keyword: None,
         }
     );
 
@@ -61,10 +59,9 @@ fn matches_should_take_precedence_over_non_mutating_overlapping_matches() {
             start_index: 6,
             end_index_exclusive: 9,
             shift_offset: 0,
-
             match_value: None,
-
             match_status: MatchStatus::NotAvailable,
+            keyword: None,
         }
     );
 }
@@ -99,10 +96,9 @@ fn test_overlapping_mutation_higher_priority() {
             start_index: 1,
             end_index_exclusive: 4,
             shift_offset: 0,
-
             match_value: None,
-
             match_status: MatchStatus::NotAvailable,
+            keyword: None,
         }
     );
 }
@@ -134,10 +130,9 @@ fn test_overlapping_start_offset() {
             start_index: 0,
             end_index_exclusive: 3,
             shift_offset: 0,
-
             match_value: None,
-
             match_status: MatchStatus::NotAvailable,
+            keyword: None,
         }
     );
 }
@@ -169,10 +164,9 @@ fn test_overlapping_length() {
             start_index: 0,
             end_index_exclusive: 4,
             shift_offset: 0,
-
             match_value: None,
-
             match_status: MatchStatus::NotAvailable,
+            keyword: None,
         }
     );
 }
@@ -204,10 +198,9 @@ fn test_overlapping_rule_order() {
             start_index: 0,
             end_index_exclusive: 3,
             shift_offset: 0,
-
             match_value: None,
-
             match_status: MatchStatus::NotAvailable,
+            keyword: None,
         }
     );
 }

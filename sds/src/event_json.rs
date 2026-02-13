@@ -39,7 +39,7 @@ impl Event for serde_json::Value {
         }
     }
 
-    fn visit_string_mut(&mut self, path: &Path, mut visit: impl FnMut(&mut String) -> bool) {
+    fn visit_string_mut(&mut self, path: &Path, visit: impl FnOnce(&mut String) -> bool) {
         let mut value = self;
         for segment in &path.segments {
             match segment {
@@ -79,13 +79,13 @@ impl Event for HashMap<String, serde_json::Value, RandomState> {
         Ok(())
     }
 
-    fn visit_string_mut(&mut self, path: &Path, mut visit: impl FnMut(&mut String) -> bool) {
+    fn visit_string_mut(&mut self, path: &Path, visit: impl FnOnce(&mut String) -> bool) {
         let first_segment = path.segments.first().unwrap();
         let mut remaining_segments = path.segments.clone();
         remaining_segments.remove(0);
         if let PathSegment::Field(field) = first_segment {
             let value = self.get_mut(&field.to_string()).unwrap();
-            value.visit_string_mut(&Path::from(remaining_segments), &mut visit);
+            value.visit_string_mut(&Path::from(remaining_segments), visit);
         }
     }
 }
