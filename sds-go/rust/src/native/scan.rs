@@ -37,7 +37,9 @@ pub unsafe extern "C" fn scan(
             .build();
         let matches = scanner.scan_with_options(&mut event, scan_options);
 
-        if let Some(encoded_response) = encode_response(&event.storage, matches.as_deref(), false, false) {
+        if let Some(encoded_response) =
+            encode_response(&event.storage, matches.as_deref(), false, false)
+        {
             let mut str = std::mem::ManuallyDrop::new(encoded_response);
             let len = str.len() as i64;
             let cap = str.capacity() as i64;
