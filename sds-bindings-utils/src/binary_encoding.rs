@@ -137,13 +137,15 @@ impl<E: Encoding> Event for BinaryEvent<E> {
 ///    - 3: string content
 ///    - 4: mutation (path, tag 3 / string content)
 ///    - 5: rule match (rule index, path, replacement type, start, end, shift offset)
+///    - 6: keyword (empty string = None), only sent if `return_keyword` is true, for backwards compatibility
 pub fn encode_response(
     storage: &BTreeMap<Path, (bool, String)>,
     status: Result<&[RuleMatch], &ScannerError>,
     return_matches: bool,
+    return_keyword: bool,
 ) -> Option<Vec<u8>> {
     let mut out = vec![];
-    encode_response_in_place(storage, status, return_matches, &mut out);
+    encode_response_in_place(storage, status, return_matches, return_keyword, &mut out);
     if out.is_empty() { None } else { Some(out) }
 }
 
@@ -151,6 +153,7 @@ pub fn encode_response_in_place(
     storage: &BTreeMap<Path, (bool, String)>,
     status: Result<&[RuleMatch], &ScannerError>,
     return_matches: bool,
+    return_keyword: bool,
     out: &mut Vec<u8>,
 ) {
     let matches = match status {
@@ -175,7 +178,7 @@ pub fn encode_response_in_place(
         }
     }
     for rule_match in matches {
-        encode_match(out, rule_match, return_matches);
+        encode_match(out, rule_match, return_matches, return_keyword);
     }
 }
 
@@ -197,7 +200,7 @@ fn encode_success(out: &mut Vec<u8>) {
     out.push(StatusCode::Success as u8);
 }
 
-fn encode_match(out: &mut Vec<u8>, rule_match: &RuleMatch, return_matches: bool) {
+fn encode_match(out: &mut Vec<u8>, rule_match: &RuleMatch, return_matches: bool, return_keyword: bool) {
     out.push(6);
     out.extend((rule_match.rule_index as u32).to_be_bytes());
 
@@ -225,6 +228,18 @@ fn encode_match(out: &mut Vec<u8>, rule_match: &RuleMatch, return_matches: bool)
             .unwrap_or(&[]);
         encode_bytes(out, match_value);
     }
+
+    // This is a breaking change, so it is opt-in for now until all bindings support it.
+    if return_keyword {
+        let keyword_value = rule_match
+            .keyword
+            .as_ref()
+            .map(|x| x.as_bytes())
+            .unwrap_or(&[]);
+        encode_bytes(out, keyword_value);
+    }
+
+
     out.extend((rule_match.rule_index as u32).to_be_bytes());
 }
 
