@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, time::Duration};
+use std::{
+    collections::BTreeMap,
+    fmt::{self, Display, Formatter},
+    time::Duration,
+};
 
 use crate::{HttpMethod, RuleMatch};
 
@@ -222,9 +226,9 @@ impl TemplatedMatchString {
     }
 }
 
-impl ToString for TemplatedMatchString {
-    fn to_string(&self) -> String {
-        self.0.clone()
+impl Display for TemplatedMatchString {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
