@@ -199,7 +199,12 @@ fn encode_success(out: &mut Vec<u8>) {
     out.push(StatusCode::Success as u8);
 }
 
-fn encode_match(out: &mut Vec<u8>, rule_match: &RuleMatch, return_matches: bool, return_keyword: bool) {
+fn encode_match(
+    out: &mut Vec<u8>,
+    rule_match: &RuleMatch,
+    return_matches: bool,
+    return_keyword: bool,
+) {
     out.push(6);
     out.extend((rule_match.rule_index as u32).to_be_bytes());
 
@@ -237,7 +242,6 @@ fn encode_match(out: &mut Vec<u8>, rule_match: &RuleMatch, return_matches: bool,
             .unwrap_or(&[]);
         encode_bytes(out, keyword_value);
     }
-
 
     out.extend((rule_match.rule_index as u32).to_be_bytes());
 }
