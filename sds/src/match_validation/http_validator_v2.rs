@@ -63,41 +63,52 @@ impl HttpValidatorV2 {
 fn get_providing_matches_by_name(
     matches: &[RuleMatch],
     rules: &[RootCompiledRule],
-) -> AHashMap<String, Vec<String>> {
+) -> AHashMap<String, Vec<(String, usize)>> {
     matches
         .iter()
-        .filter_map(|candidate_match| {
+        .enumerate()
+        .filter_map(|(match_idx, candidate_match)| {
             let rule = rules.get(candidate_match.rule_index)?;
             let match_validation_type = rule.match_validation_type.as_ref()?;
             match match_validation_type {
-                MatchValidationType::PairedValidator(paired_validator_config) => candidate_match
-                    .match_value
-                    .as_ref()
-                    .map(|match_value| (paired_validator_config.name.clone(), match_value.clone())),
+                MatchValidationType::PairedValidator(paired_validator_config) => {
+                    candidate_match.match_value.as_ref().map(|match_value| {
+                        (
+                            paired_validator_config.name.clone(),
+                            (match_value.clone(), match_idx),
+                        )
+                    })
+                }
                 _ => None,
             }
         })
-        .fold(AHashMap::new(), |mut map, (name, match_value)| {
-            map.entry(name).or_default().push(match_value);
+        .fold(AHashMap::new(), |mut map, (name, value_and_idx)| {
+            map.entry(name).or_default().push(value_and_idx);
             map
         })
 }
 
 fn get_match_pairing_template_variables(
     match_pairing_config: &MatchPairingConfig,
-    providing_matches_by_name: &AHashMap<String, Vec<String>>,
-) -> Vec<TemplateVariable> {
+    providing_matches_by_name: &AHashMap<String, Vec<(String, usize)>>,
+) -> Vec<(TemplateVariable, usize)> {
     // Iterate over the match pairing config and add the required matches to the iterator
+    // Returns (TemplateVariable, match_idx) pairs
     match_pairing_config
         .parameters
         .iter()
         .flat_map(|(name, template_name)| {
-            if let Some(match_values) = providing_matches_by_name.get(name) {
-                match_values
+            if let Some(match_values_with_idx) = providing_matches_by_name.get(name) {
+                match_values_with_idx
                     .iter()
-                    .map(|match_value| TemplateVariable {
-                        name: template_name.to_string(),
-                        value: match_value.to_string(),
+                    .map(|(match_value, match_idx)| {
+                        (
+                            TemplateVariable {
+                                name: template_name.to_string(),
+                                value: match_value.to_string(),
+                            },
+                            *match_idx,
+                        )
                     })
                     .collect::<Vec<_>>()
             } else {
@@ -107,7 +118,67 @@ fn get_match_pairing_template_variables(
         .collect::<Vec<_>>()
 }
 
-// TODO: Do we need an internal representation of the config?
+/// Generate all combinations (cartesian product) of template variables
+///
+/// Given template variables with match indices like:
+///   [(TemplateVariable{$CLIENT_SUBDOMAIN=acme_corp}, match_idx=0),
+///    (TemplateVariable{$CLIENT_SUBDOMAIN=other_corp}, match_idx=2),
+///    (TemplateVariable{$USER_ID=USjohn}, match_idx=1)]
+///
+/// Groups by parameter name:
+///   $CLIENT_SUBDOMAIN: [(acme_corp, 0), (other_corp, 2)]
+///   $USER_ID: [(USjohn, 1)]
+///
+/// Returns cartesian product with contributing match indices:
+///   [
+///     ([$CLIENT_SUBDOMAIN=acme_corp, $USER_ID=USjohn], [0, 1]),
+///     ([$CLIENT_SUBDOMAIN=other_corp, $USER_ID=USjohn], [2, 1])
+///   ]
+fn generate_template_variable_combinations(
+    template_variables_with_idx: &[(TemplateVariable, usize)],
+) -> Vec<(Vec<TemplateVariable>, Vec<usize>)> {
+    if template_variables_with_idx.is_empty() {
+        return vec![(vec![], vec![])];
+    }
+
+    // Group template variables by their name, tracking match indices
+    let mut grouped: AHashMap<String, Vec<(String, usize)>> = AHashMap::new();
+    let mut param_order: Vec<String> = Vec::new();
+
+    for (var, match_idx) in template_variables_with_idx {
+        grouped
+            .entry(var.name.clone())
+            .or_insert_with(|| {
+                param_order.push(var.name.clone());
+                Vec::new()
+            })
+            .push((var.value.clone(), *match_idx));
+    }
+
+    // Generate cartesian product with match indices
+    let mut result = vec![(vec![], vec![])];
+
+    for param_name in param_order {
+        if let Some(values_with_idx) = grouped.get(&param_name) {
+            let mut new_result = Vec::new();
+            for (combination, match_indices) in result {
+                for (value, match_idx) in values_with_idx {
+                    let mut new_combination = combination.clone();
+                    let mut new_match_indices = match_indices.clone();
+                    new_combination.push(TemplateVariable {
+                        name: param_name.clone(),
+                        value: value.clone(),
+                    });
+                    new_match_indices.push(*match_idx);
+                    new_result.push((new_combination, new_match_indices));
+                }
+            }
+            result = new_result;
+        }
+    }
+
+    result
+}
 
 impl MatchValidator for HttpValidatorV2 {
     fn validate(&self, matches: &mut Vec<RuleMatch>, rules: &[RootCompiledRule]) {
@@ -118,6 +189,14 @@ impl MatchValidator for HttpValidatorV2 {
         let mut match_status_per_endpoint_and_match: AHashMap<_, _> = matches
             .iter()
             .enumerate()
+            .filter(|(_, rule_match)| {
+                matches!(
+                    rules
+                        .get(rule_match.rule_index)
+                        .and_then(|rule| rule.match_validation_type.as_ref()),
+                    Some(MatchValidationType::CustomHttpV2(_))
+                )
+            })
             .map(|(idx, rule_match)| {
                 let template_variables = rules
                     .get(rule_match.rule_index)
@@ -142,12 +221,10 @@ impl MatchValidator for HttpValidatorV2 {
                 (idx, template_variables, rule_match)
             })
             .flat_map(move |(idx, template_variables, _rule_match)| {
-                let template_var_opts: Vec<Option<TemplateVariable>> =
-                    if template_variables.is_empty() {
-                        vec![None]
-                    } else {
-                        template_variables.into_iter().map(Some).collect()
-                    };
+                // Generate cartesian product of template variable values with contributing match indices
+                let template_var_combinations =
+                    generate_template_variable_combinations(&template_variables);
+
                 self.config.calls.iter().flat_map(move |endpoint| {
                     let endpoint_host_opts: Vec<Option<String>> =
                         if endpoint.request.hosts.is_empty() {
@@ -160,23 +237,25 @@ impl MatchValidator for HttpValidatorV2 {
                                 .map(|h| Some(h.clone()))
                                 .collect()
                         };
-                    let host_template_pairs: Vec<_> = endpoint_host_opts
-                        .into_iter()
-                        .flat_map(|host_opt| {
-                            template_var_opts
-                                .clone()
-                                .into_iter()
-                                .map(move |template_var_opt| (host_opt.clone(), template_var_opt))
-                        })
-                        .collect();
-                    host_template_pairs
-                        .into_iter()
-                        .map(move |(host_opt, template_var_opt)| {
-                            (
-                                (idx, endpoint, host_opt, template_var_opt),
-                                MatchStatus::NotChecked,
-                            )
-                        })
+
+                    let combinations = template_var_combinations.clone();
+                    endpoint_host_opts.into_iter().flat_map(move |host_opt| {
+                        let combos = combinations.clone();
+                        combos
+                            .into_iter()
+                            .map(move |(template_vars, contributing_matches)| {
+                                (
+                                    (
+                                        idx,
+                                        endpoint,
+                                        host_opt.clone(),
+                                        template_vars,
+                                        contributing_matches,
+                                    ),
+                                    MatchStatus::NotChecked,
+                                )
+                            })
+                    })
                 })
             })
             .collect();
@@ -185,13 +264,17 @@ impl MatchValidator for HttpValidatorV2 {
             use rayon::prelude::*;
 
             match_status_per_endpoint_and_match.par_iter_mut().for_each(
-                |((match_idx, endpoint_config, host_opt, template_var_opt), match_status)| {
+                |(
+                    (match_idx, endpoint_config, host_opt, template_vars, _contributing_matches),
+                    match_status,
+                )| {
                     let rule_match = &matches[*match_idx];
                     let mut endpoint = endpoint_config.request.endpoint.with_rule_match(rule_match);
                     if let Some(host) = host_opt {
                         endpoint = endpoint.with_host(host);
                     }
-                    if let Some(template_var) = template_var_opt {
+                    // Apply ALL template variables to the same endpoint
+                    for template_var in template_vars {
                         endpoint = endpoint.with_template_variable(template_var);
                     }
                     let mut request_builder = match endpoint_config.request.method {
@@ -209,7 +292,8 @@ impl MatchValidator for HttpValidatorV2 {
                         if let Some(host) = host_opt {
                             header_val = header_val.with_host(host);
                         }
-                        if let Some(template_var) = template_var_opt {
+                        // Apply ALL template variables to the same header
+                        for template_var in template_vars {
                             header_val = header_val.with_template_variable(template_var);
                         }
                         request_builder =
@@ -245,8 +329,14 @@ impl MatchValidator for HttpValidatorV2 {
         });
 
         // Update the match status with this highest priority returned
-        for ((match_idx, _, _, _), status) in match_status_per_endpoint_and_match {
+        for ((match_idx, _, _, _, contributing_matches), status) in
+            match_status_per_endpoint_and_match
+        {
             matches[match_idx].match_status.merge(status.clone());
+            // Also update all contributing matches with the same status
+            for contributing_idx in contributing_matches {
+                matches[contributing_idx].match_status.merge(status.clone());
+            }
         }
     }
 }
@@ -916,7 +1006,10 @@ mod tests {
     fn integration_test_match_pairing_validation() {
         use crate::{
             MatchAction, MatchPairingConfig, PairedValidatorConfig, Precedence,
-            scanner::{CompiledRule, RootCompiledRule, RuleResult, RuleStatus, StringMatchesCtx, scope::Scope},
+            scanner::{
+                CompiledRule, RootCompiledRule, RuleResult, RuleStatus, StringMatchesCtx,
+                scope::Scope,
+            },
         };
 
         // Simple mock compiled rule that doesn't actually scan
@@ -948,7 +1041,10 @@ mod tests {
 
         // Create a config with match pairing that uses $CLIENT_SUBDOMAIN
         let mut parameters = BTreeMap::new();
-        parameters.insert("client_subdomain".to_string(), "$CLIENT_SUBDOMAIN".to_string());
+        parameters.insert(
+            "client_subdomain".to_string(),
+            "$CLIENT_SUBDOMAIN".to_string(),
+        );
 
         let config = CustomHttpConfigV2 {
             match_pairing: Some(MatchPairingConfig {
@@ -956,7 +1052,10 @@ mod tests {
                 parameters,
             }),
             calls: vec![create_http_call_config(
-                format!("{}/api/$CLIENT_SUBDOMAIN/validate?secret=$MATCH", server.base_url()),
+                format!(
+                    "{}/api/$CLIENT_SUBDOMAIN/validate?secret=$MATCH",
+                    server.base_url()
+                ),
                 HttpMethod::Get,
                 BTreeMap::new(),
                 vec![ResponseCondition {
@@ -1032,10 +1131,9 @@ mod tests {
         // The main match (rule_index 0) should be validated successfully
         assert_eq!(all_matches[0].match_status, MatchStatus::Valid);
 
-        // The paired validator match (rule_index 1) will be validated by the current implementation
-        // even though it shouldn't be (since it's just a provider). This results in an error because
-        // the config endpoint isn't meant for validating paired validators.
-        // This is a known limitation that should be fixed by filtering matches before validation.
-        assert!(matches!(all_matches[1].match_status, MatchStatus::Error(_)));
+        // The paired validator match (rule_index 1) should also receive Valid status because
+        // it contributed to the successful validation of the main match. The status is
+        // propagated from the main match to all contributing matches.
+        assert_eq!(all_matches[1].match_status, MatchStatus::Valid);
     }
 }

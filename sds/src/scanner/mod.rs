@@ -714,10 +714,19 @@ impl Scanner {
         for mut rule_match in rule_matches.drain(..) {
             let rule = &self.rules[rule_match.rule_index];
             if let Some(match_validation_type) = rule.internal_match_validation_type() {
-                match_validator_rule_match_per_type
-                    .entry(match_validation_type)
-                    .or_insert_with(Vec::new)
-                    .push(rule_match)
+                match match_validation_type {
+                    // PairedValidator matches are placed with the CustomHttpV2 since we want them to be validated together
+                    InternalMatchValidationType::PairedValidator(_) => {
+                        match_validator_rule_match_per_type
+                            .entry(InternalMatchValidationType::CustomHttpV2)
+                            .or_insert_with(Vec::new)
+                            .push(rule_match);
+                    }
+                    _ => match_validator_rule_match_per_type
+                        .entry(match_validation_type)
+                        .or_insert_with(Vec::new)
+                        .push(rule_match),
+                }
             } else {
                 // There is no match validator for this rule, so mark it as not available.
                 rule_match.match_status.merge(MatchStatus::NotAvailable);
