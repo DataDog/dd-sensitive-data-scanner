@@ -44,7 +44,7 @@ pub use match_validation::{
     config_v2::{
         BodyMatcher, CustomHttpConfigV2, HttpCallConfig, HttpRequestConfig, HttpResponseConfig,
         MatchPairingConfig, PairedValidatorConfig, ResponseCondition, ResponseConditionResult,
-        ResponseConditionType, StatusCodeMatcher,
+        ResponseConditionType, StatusCodeMatcher, TemplatedMatchString,
     },
     match_status::MatchStatus,
 };
