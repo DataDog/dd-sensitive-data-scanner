@@ -221,6 +221,13 @@ impl TemplatedMatchString {
         self.render("$HOST", host)
     }
 
+    pub fn with_template_variable(&self, template_variable: &TemplateVariable) -> Self {
+        self.render(
+            template_variable.name.as_str(),
+            template_variable.value.as_str(),
+        )
+    }
+
     fn render(&self, tag: &str, value: &str) -> Self {
         TemplatedMatchString(self.0.replace(tag, value))
     }
@@ -230,6 +237,12 @@ impl Display for TemplatedMatchString {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TemplateVariable {
+    pub name: String,
+    pub value: String,
 }
 
 #[cfg(test)]
