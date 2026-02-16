@@ -279,7 +279,7 @@ impl MatchValidator for HttpValidatorV2 {
                             .match_pairing
                             .as_ref()
                             .unwrap()
-                            .is_fulfilled_by(&template_vars)
+                            .is_fulfilled_by(template_vars)
                     {
                         *match_status = MatchStatus::Partial;
                         return;
