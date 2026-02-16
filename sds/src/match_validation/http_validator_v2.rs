@@ -273,6 +273,17 @@ impl MatchValidator for HttpValidatorV2 {
                     if let Some(host) = host_opt {
                         endpoint = endpoint.with_host(host);
                     }
+                    if self.config.match_pairing.is_some()
+                        && !self
+                            .config
+                            .match_pairing
+                            .as_ref()
+                            .unwrap()
+                            .is_fulfilled_by(&template_vars)
+                    {
+                        *match_status = MatchStatus::Partial;
+                        return;
+                    }
                     // Apply ALL template variables to the same endpoint
                     for template_var in template_vars {
                         endpoint = endpoint.with_template_variable(template_var);

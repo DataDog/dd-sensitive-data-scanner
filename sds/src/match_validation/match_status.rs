@@ -5,6 +5,7 @@ pub enum MatchStatus {
     // The ordering here is important, values further down the list have a higher priority when merging.
     NotChecked,
     NotAvailable,
+    Partial, // Missing matches that are required for the match to be checked
     Invalid,
     Error(String),
     Valid,
@@ -16,6 +17,10 @@ impl std::fmt::Display for MatchStatus {
             MatchStatus::NotChecked => write!(f, "NotChecked"),
             MatchStatus::NotAvailable => write!(f, "NotAvailable"),
             MatchStatus::Invalid => write!(f, "Invalid"),
+            MatchStatus::Partial => write!(
+                f,
+                "Partial, missing matches are required for the match to be checked",
+            ),
             MatchStatus::Error(msg) => write!(f, "Error({})", msg),
             MatchStatus::Valid => write!(f, "Valid"),
         }

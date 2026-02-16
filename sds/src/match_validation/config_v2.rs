@@ -36,6 +36,14 @@ pub struct MatchPairingConfig {
     pub parameters: BTreeMap<String, String>,
 }
 
+impl MatchPairingConfig {
+    pub fn is_fulfilled_by(&self, template_variables: &[TemplateVariable]) -> bool {
+        self.parameters
+            .iter()
+            .all(|(name, _)| template_variables.iter().any(|v| v.name == *name))
+    }
+}
+
 /// A single HTTP call configuration with request and response validation
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct HttpCallConfig {
