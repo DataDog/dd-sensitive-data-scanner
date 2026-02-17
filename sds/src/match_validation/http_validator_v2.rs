@@ -357,7 +357,8 @@ mod tests {
     use std::{collections::BTreeMap, time::Duration};
 
     use crate::{
-        HttpCallConfig, HttpRequestConfig, HttpResponseConfig, Path, ReplacementType,
+        CompiledRule, HttpCallConfig, HttpRequestConfig, HttpResponseConfig, MatchAction, Path,
+        Precedence, ReplacementType, RootCompiledRule, Scope,
         match_validation::config_v2::{
             BodyMatcher, ResponseCondition, ResponseConditionType, StatusCodeMatcher,
             TemplatedMatchString,
@@ -365,6 +366,18 @@ mod tests {
     };
 
     use super::*;
+
+    struct MockCompiledRule;
+    impl CompiledRule for MockCompiledRule {
+        fn get_string_matches(
+            &self,
+            _content: &str,
+            _path: &Path,
+            _ctx: &mut crate::scanner::StringMatchesCtx,
+        ) -> Result<crate::scanner::RuleStatus, crate::scanner::error::ScannerError> {
+            Ok(crate::scanner::RuleStatus::Done)
+        }
+    }
 
     fn create_test_match(match_value: &str) -> RuleMatch {
         RuleMatch {
@@ -377,6 +390,17 @@ mod tests {
             match_value: Some(match_value.to_string()),
             match_status: MatchStatus::NotChecked,
             keyword: None,
+        }
+    }
+
+    fn create_test_rule(config: CustomHttpConfigV2) -> RootCompiledRule {
+        RootCompiledRule {
+            inner: Box::new(MockCompiledRule),
+            scope: Scope::all(),
+            match_action: MatchAction::None,
+            match_validation_type: Some(MatchValidationType::CustomHttpV2(config)),
+            suppressions: None,
+            precedence: Precedence::default(),
         }
     }
 
@@ -541,10 +565,11 @@ mod tests {
             }],
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2::new_from_config(config.clone());
         let mut matches = vec![create_test_match("valid_token_123")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -571,10 +596,11 @@ mod tests {
             }],
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2::new_from_config(config.clone());
         let mut matches = vec![create_test_match("invalid_token")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Invalid);
@@ -602,10 +628,11 @@ mod tests {
             }],
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2::new_from_config(config.clone());
         let mut matches = vec![create_test_match("test_secret")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Invalid);
@@ -632,10 +659,11 @@ mod tests {
             }],
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2::new_from_config(config.clone());
         let mut matches = vec![create_test_match("api_key_xyz")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -674,10 +702,11 @@ mod tests {
             }],
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2::new_from_config(config.clone());
         let mut matches = vec![create_test_match("secret_token_456")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -720,13 +749,14 @@ mod tests {
             ],
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2::new_from_config(config.clone());
         let mut matches = vec![
             create_test_match("token_xyz"),
             create_test_match("token_abc"),
         ];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock_invalid.assert();
         mock_valid.assert();
@@ -764,10 +794,11 @@ mod tests {
             ],
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2::new_from_config(config.clone());
         let mut matches = vec![create_test_match("test_token")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock.assert();
         match &matches[0].match_status {
@@ -802,10 +833,11 @@ mod tests {
             Duration::from_millis(100),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2::new_from_config(config.clone());
         let mut matches = vec![create_test_match("test_token")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         match &matches[0].match_status {
             MatchStatus::Error(msg) => {
@@ -854,13 +886,14 @@ mod tests {
             ],
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2::new_from_config(config.clone());
         let mut matches = vec![
             create_test_match("valid_123"),
             create_test_match("invalid_456"),
         ];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock_valid.assert();
         mock_invalid.assert();
@@ -899,10 +932,11 @@ mod tests {
                 Duration::from_secs(5),
             ));
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2::new_from_config(config.clone());
         let mut matches = vec![create_test_match("test_token")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock1.assert();
         mock2.assert();
@@ -956,10 +990,11 @@ mod tests {
             Duration::from_secs(5),
         ));
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2::new_from_config(config.clone());
         let mut matches = vec![create_test_match("test_token")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         // Both endpoints should have been called
         mock_us.assert();
@@ -1004,10 +1039,11 @@ mod tests {
                 }],
             );
 
-            let validator = HttpValidatorV2::new_from_config(config);
+            let validator = HttpValidatorV2::new_from_config(config.clone());
             let mut matches = vec![create_test_match("token")];
+            let rules = vec![create_test_rule(config)];
 
-            validator.validate(&mut matches, &[]);
+            validator.validate(&mut matches, &rules);
 
             mock.assert();
             assert_eq!(matches[0].match_status, MatchStatus::Valid);

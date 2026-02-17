@@ -40,7 +40,9 @@ impl MatchPairingConfig {
     pub fn is_fulfilled_by(&self, template_variables: &[TemplateVariable]) -> bool {
         self.parameters
             .iter()
-            .all(|(name, _)| template_variables.iter().any(|v| v.name == *name))
+            .all(|(_name, template_name)| {
+                template_variables.iter().any(|v| v.name == *template_name)
+            })
     }
 }
 
