@@ -1121,6 +1121,7 @@ mod tests {
                 shift_offset: 0,
                 match_value: Some("api_key_secret".to_string()),
                 match_status: MatchStatus::NotChecked,
+                keyword: None,
             },
             RuleMatch {
                 rule_index: 1,
@@ -1131,6 +1132,7 @@ mod tests {
                 shift_offset: 0,
                 match_value: Some("acme_corp".to_string()),
                 match_status: MatchStatus::NotChecked,
+                keyword: None,
             },
         ];
 
