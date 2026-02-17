@@ -50,10 +50,12 @@ mod internal_rule_match_set;
 #[cfg(test)]
 mod test;
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct StringMatch {
     pub start: usize,
     pub end: usize,
+    // The keyword that was used to match this rule. Optional, only some rules may set this value.
+    pub keyword: Option<String>,
 }
 
 pub trait MatchEmitter<T = ()> {
@@ -609,7 +611,7 @@ impl Scanner {
                     self.apply_match_actions(
                         content,
                         &path,
-                        &mut rule_matches,
+                        rule_matches,
                         output_rule_matches,
                         need_match_content,
                     );
@@ -765,7 +767,7 @@ impl Scanner {
         &self,
         content: &mut String,
         path: &Path<'static>,
-        rule_matches: &mut [InternalRuleMatch<E>],
+        rule_matches: Vec<InternalRuleMatch<E>>,
         output_rule_matches: &mut Vec<RuleMatch>,
         need_match_content: bool,
     ) {
@@ -789,7 +791,7 @@ impl Scanner {
         &self,
         content: &mut String,
         path: Path<'static>,
-        rule_match: &InternalRuleMatch<E>,
+        rule_match: InternalRuleMatch<E>,
         // The current difference in length between the original and mutated string
         utf8_byte_delta: &mut isize,
 
@@ -868,6 +870,7 @@ impl Scanner {
             shift_offset,
             match_value: matched_content_copy,
             match_status,
+            keyword: rule_match.keyword,
         }
     }
 

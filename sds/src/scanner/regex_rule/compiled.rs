@@ -280,6 +280,7 @@ impl Iterator for TruePositiveSearch<'_> {
                     return Some(StringMatch {
                         start: regex_match_range.0,
                         end: regex_match_range.1,
+                        keyword: None,
                     });
                 }
             }
