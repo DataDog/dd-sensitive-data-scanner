@@ -182,7 +182,6 @@ fn generate_template_variable_combinations(
 
 impl MatchValidator for HttpValidatorV2 {
     fn validate(&self, matches: &mut Vec<RuleMatch>, rules: &[RootCompiledRule]) {
-        println!("[HttpValidatorV2] Validating matches: {:?}", matches.len());
         // Build up matches (the values themselves) that provide a secret to other matches
         // let providing_matches_by_name: AHashMap<String, Vec<String>> =
         // build a map of match status per endpoint, per host, and per match_idx
@@ -271,7 +270,6 @@ impl MatchValidator for HttpValidatorV2 {
                 )| {
                     let rule_match = &matches[*match_idx];
                     let mut endpoint = endpoint_config.request.endpoint.with_rule_match(rule_match);
-                    println!("endpoint: {:?}", endpoint.to_string());
                     if let Some(host) = host_opt {
                         endpoint = endpoint.with_host(host);
                     }
@@ -332,7 +330,6 @@ impl MatchValidator for HttpValidatorV2 {
                         request_builder = request_builder.body("");
                     }
                     let res = request_builder.send();
-                    println!("res: {:?}", res);
                     match res {
                         Ok(val) => {
                             self.handle_reqwest_response(
@@ -792,9 +789,7 @@ mod tests {
                 hosts: vec![],
                 method: HttpMethod::Post,
                 headers,
-                request_body: Some(TemplatedMatchString(
-                    r#"{"token":"$MATCH"}"#.to_string(),
-                )),
+                request_body: Some(TemplatedMatchString(r#"{"token":"$MATCH"}"#.to_string())),
                 timeout: Duration::from_secs(5),
             },
             response: HttpResponseConfig {

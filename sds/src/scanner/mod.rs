@@ -736,11 +736,6 @@ impl Scanner {
             }
         }
 
-        println!(
-            "match_validator_rule_match_per_type count: {:?}",
-            match_validator_rule_match_per_type.len()
-        );
-
         RAYON_THREAD_POOL.install(|| {
             use rayon::prelude::*;
 
@@ -748,12 +743,9 @@ impl Scanner {
                 |(match_validation_type, matches_per_type)| {
                     let match_validator = self.match_validators_per_type.get(match_validation_type);
                     if let Some(match_validator) = match_validator {
-                        println!("Match validator for rule");
                         match_validator
                             .as_ref()
                             .validate(matches_per_type, &self.rules)
-                    } else {
-                        println!("No match validator for rule");
                     }
                 },
             );
