@@ -94,8 +94,12 @@ impl MatchValidator for HttpValidatorV2 {
                 |((match_idx, endpoint_config, host_opt), match_status)| {
                     let rule_match = &matches[*match_idx];
                     let mut endpoint = endpoint_config.request.endpoint.with_rule_match(rule_match);
-                    if let Some(host) = host_opt {
-                        endpoint = endpoint.with_host(host);
+                    let rendered_host = host_opt
+                        .as_ref()
+                        .map(|host| host.with_rule_match(rule_match).to_string());
+
+                    if let Some(ref host) = rendered_host {
+                        endpoint = endpoint.with_host(host.as_str());
                     }
                     let mut request_builder = match endpoint_config.request.method {
                         HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(endpoint.to_string()),
@@ -109,8 +113,8 @@ impl MatchValidator for HttpValidatorV2 {
                     // Add headers
                     for (header_key, header_value) in &endpoint_config.request.headers {
                         let mut header_val = header_value.with_rule_match(rule_match);
-                        if let Some(host) = host_opt {
-                            header_val = header_val.with_host(host);
+                        if let Some(ref host) = rendered_host {
+                            header_val = header_val.with_host(host.as_str());
                         }
                         request_builder =
                             request_builder.header(header_key, header_val.to_string());
@@ -259,7 +263,7 @@ mod tests {
     fn create_http_call_config_with_hosts(
         endpoint: String,
         method: HttpMethod,
-        hosts: Vec<String>,
+        hosts: Vec<TemplatedMatchString>,
         headers: BTreeMap<String, TemplatedMatchString>,
         conditions: Vec<ResponseCondition>,
         timeout: Duration,
@@ -300,7 +304,10 @@ mod tests {
         let config = create_http_call_config_with_hosts(
             "http://$HOST/test".to_string(),
             HttpMethod::Get,
-            vec!["us".to_string(), "eu".to_string()],
+            vec![
+                TemplatedMatchString("us".to_string()),
+                TemplatedMatchString("eu".to_string()),
+            ],
             BTreeMap::new(),
             vec![],
             Duration::from_secs(5),
@@ -734,8 +741,8 @@ mod tests {
             "http://$HOST/api/check?token=$MATCH".to_string(),
             HttpMethod::Get,
             vec![
-                server_us.base_url().replace("http://", ""),
-                server_eu.base_url().replace("http://", ""),
+                TemplatedMatchString(server_us.base_url().replace("http://", "")),
+                TemplatedMatchString(server_eu.base_url().replace("http://", "")),
             ],
             BTreeMap::new(),
             vec![
@@ -763,6 +770,54 @@ mod tests {
         // Both endpoints should have been called
         mock_us.assert();
         mock_eu.assert();
+
+        // The match should be valid because one of the hosts returned valid
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+    }
+
+    #[test]
+    fn integration_test_templated_host() {
+        let server = httpmock::MockServer::start();
+        let server_url = server.base_url().replace("http://", "");
+
+        // US endpoint returns valid
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/api/check")
+                .query_param("token", server_url.as_str());
+            then.status(200).body("Valid");
+        });
+
+        // Create config with multiple hosts
+        let config = CustomHttpConfigV2::default().with_call(create_http_call_config_with_hosts(
+            "http://$HOST/api/check?token=$MATCH".to_string(),
+            HttpMethod::Get,
+            vec![TemplatedMatchString("$MATCH".to_string())],
+            BTreeMap::new(),
+            vec![
+                ResponseCondition {
+                    condition_type: ResponseConditionType::Valid,
+                    status_code: Some(StatusCodeMatcher::Single(200)),
+                    raw_body: None,
+                    body: None,
+                },
+                ResponseCondition {
+                    condition_type: ResponseConditionType::Invalid,
+                    status_code: Some(StatusCodeMatcher::Single(401)),
+                    raw_body: None,
+                    body: None,
+                },
+            ],
+            Duration::from_secs(5),
+        ));
+
+        let validator = HttpValidatorV2::new_from_config(config);
+        let mut matches = vec![create_test_match(server_url.as_str())];
+
+        validator.validate(&mut matches, &[]);
+
+        // Both endpoints should have been called
+        mock.assert();
 
         // The match should be valid because one of the hosts returned valid
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -809,7 +864,7 @@ mod tests {
             "http://localhost/test1"
         );
         assert_eq!(config.calls[0].request.method, HttpMethod::Get);
-        assert_eq!(config.calls[0].request.hosts, Vec::<String>::new());
+        assert_eq!(config.calls[0].request.hosts, vec![]);
         assert_eq!(config.calls[0].request.timeout, Duration::from_secs(3));
         assert_eq!(config.calls[0].response.conditions.len(), 3);
         assert_eq!(
@@ -843,7 +898,13 @@ mod tests {
         }
         "#;
         let config: CustomHttpConfigV2 = serde_json::from_str(config_str).unwrap();
-        assert_eq!(config.calls[0].request.hosts, vec!["us", "eu"]);
+        assert_eq!(
+            config.calls[0].request.hosts,
+            vec![
+                TemplatedMatchString("us".to_string()),
+                TemplatedMatchString("eu".to_string())
+            ]
+        );
         let rule_match = create_test_match("test");
         let endpoint_with_match = config.calls[0]
             .request

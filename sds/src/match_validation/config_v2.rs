@@ -53,10 +53,10 @@ pub struct HttpRequestConfig {
     #[serde(default = "default_http_method")]
     pub method: HttpMethod,
 
-    /// Optional list of hosts for multi-datacenter support
+    /// Optional list of templated hosts for multi-datacenter support
     /// If specified, $HOST in endpoint will be replaced with each host
     #[serde(default)]
-    pub hosts: Vec<String>,
+    pub hosts: Vec<TemplatedMatchString>,
 
     /// Request headers with template variable support
     /// Example: {"Authorization": "Basic %base64($CLIENT_ID:$MATCH)"}
