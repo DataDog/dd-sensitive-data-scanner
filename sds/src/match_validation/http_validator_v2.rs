@@ -810,6 +810,7 @@ mod tests {
         );
         assert_eq!(config.calls[0].request.method, HttpMethod::Get);
         assert_eq!(config.calls[0].request.hosts, Vec::<String>::new());
+        assert_eq!(config.calls[0].request.timeout, Duration::from_secs(5));
         assert_eq!(config.calls[0].response.conditions.len(), 3);
         assert_eq!(
             config.calls[0].response.conditions[0].status_code,
