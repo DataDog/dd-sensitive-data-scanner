@@ -769,6 +769,96 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialization() {
+        let config_str = r#"
+        {
+            "calls": [
+                {
+                    "request": {
+                        "endpoint": "http://localhost/test1"
+                    },
+                    "response": {
+                        "conditions": [
+                            {
+                                "type": "valid",
+                                "status_code": 200
+                            },
+                            {
+                                "type": "invalid",
+                                "status_code": [400, 420]
+                            },
+                            {
+                                "type": "invalid",
+                                "body": {
+                                    "message.stack[2].success.status": {
+                                        "type": "ExactMatch",
+                                        "config": "success"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+        "#;
+        let config: CustomHttpConfigV2 = serde_json::from_str(config_str).unwrap();
+        assert_eq!(config.calls.len(), 1);
+        assert_eq!(
+            config.calls[0].request.endpoint.to_string(),
+            "http://localhost/test1"
+        );
+        assert_eq!(config.calls[0].request.method, HttpMethod::Get);
+        assert_eq!(config.calls[0].request.hosts, Vec::<String>::new());
+        assert_eq!(config.calls[0].response.conditions.len(), 3);
+        assert_eq!(
+            config.calls[0].response.conditions[0].status_code,
+            Some(StatusCodeMatcher::Single(200))
+        );
+        assert_eq!(
+            config.calls[0].response.conditions[1].status_code,
+            Some(StatusCodeMatcher::List(vec![400, 420])),
+        );
+        assert_eq!(
+            config.calls[0].response.conditions[2].body,
+            Some(BTreeMap::from([(
+                "message.stack[2].success.status".to_string(),
+                BodyMatcher::ExactMatch("success".to_string())
+            )])),
+        );
+        let config_str = r#"
+        {
+            "calls": [
+                {
+                    "request": {
+                        "endpoint": "http://$HOST/test1",
+                        "hosts": ["us", "eu"]
+                    },
+                    "response": {
+                        "conditions": []
+                    }
+                }
+            ]
+        }
+        "#;
+        let config: CustomHttpConfigV2 = serde_json::from_str(config_str).unwrap();
+        assert_eq!(config.calls[0].request.hosts, vec!["us", "eu"]);
+        let rule_match = create_test_match("test");
+        let endpoint_with_match = config.calls[0]
+            .request
+            .endpoint
+            .with_rule_match(&rule_match);
+        assert_eq!(
+            endpoint_with_match.with_host("us").to_string(),
+            "http://us/test1"
+        );
+        assert_eq!(
+            endpoint_with_match.with_host("eu").to_string(),
+            "http://eu/test1"
+        );
+    }
+
+    #[test]
     fn integration_test_different_http_methods() {
         let server = httpmock::MockServer::start();
 
