@@ -65,7 +65,7 @@ pub struct HttpRequestConfig {
 
     /// Optional request body with template variable support
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub request_body: Option<TemplatedMatchString>,
+    pub body: Option<TemplatedMatchString>,
 
     #[serde(default = "default_timeout")]
     pub timeout: Duration,

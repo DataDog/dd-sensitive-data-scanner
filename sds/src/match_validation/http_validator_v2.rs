@@ -270,7 +270,7 @@ mod tests {
                 hosts,
                 method,
                 headers,
-                request_body: None,
+                body: None,
                 timeout,
             },
             response: HttpResponseConfig { conditions },
