@@ -160,11 +160,8 @@ mod tests {
     use std::{collections::BTreeMap, time::Duration};
 
     use crate::{
-        HttpCallConfig, HttpRequestConfig, HttpResponseConfig, Path, ReplacementType,
-        match_validation::config_v2::{
-            BodyMatcher, ResponseCondition, ResponseConditionType, StatusCodeMatcher,
-            TemplatedMatchString,
-        },
+        Path, ReplacementType,
+        match_validation::config_v2::{BodyMatcher, StatusCodeMatcher, TemplatedMatchString},
     };
 
     use super::*;
@@ -183,110 +180,23 @@ mod tests {
         }
     }
 
-    fn create_test_config(
-        endpoint: String,
-        conditions: Vec<ResponseCondition>,
-    ) -> CustomHttpConfigV2 {
-        create_test_config_with_options(
-            endpoint,
-            HttpMethod::Get,
-            BTreeMap::new(),
-            conditions,
-            Duration::from_secs(5),
-        )
-    }
-
-    fn create_test_config_with_method(
-        endpoint: String,
-        method: HttpMethod,
-        conditions: Vec<ResponseCondition>,
-    ) -> CustomHttpConfigV2 {
-        create_test_config_with_options(
-            endpoint,
-            method,
-            BTreeMap::new(),
-            conditions,
-            Duration::from_secs(5),
-        )
-    }
-
-    fn create_test_config_with_headers(
-        endpoint: String,
-        headers: BTreeMap<String, TemplatedMatchString>,
-        conditions: Vec<ResponseCondition>,
-    ) -> CustomHttpConfigV2 {
-        create_test_config_with_options(
-            endpoint,
-            HttpMethod::Get,
-            headers,
-            conditions,
-            Duration::from_secs(5),
-        )
-    }
-
-    fn create_test_config_with_timeout(
-        endpoint: String,
-        conditions: Vec<ResponseCondition>,
-        timeout: Duration,
-    ) -> CustomHttpConfigV2 {
-        create_test_config_with_options(
-            endpoint,
-            HttpMethod::Get,
-            BTreeMap::new(),
-            conditions,
-            timeout,
-        )
-    }
-
-    fn create_test_config_with_options(
-        endpoint: String,
-        method: HttpMethod,
-        headers: BTreeMap<String, TemplatedMatchString>,
-        conditions: Vec<ResponseCondition>,
-        timeout: Duration,
-    ) -> CustomHttpConfigV2 {
-        CustomHttpConfigV2::default().with_call(create_http_call_config(
-            endpoint, method, headers, conditions, timeout,
-        ))
-    }
-
-    fn create_http_call_config(
-        endpoint: String,
-        method: HttpMethod,
-        headers: BTreeMap<String, TemplatedMatchString>,
-        conditions: Vec<ResponseCondition>,
-        timeout: Duration,
-    ) -> HttpCallConfig {
-        create_http_call_config_with_hosts(endpoint, method, vec![], headers, conditions, timeout)
-    }
-
-    fn create_http_call_config_with_hosts(
-        endpoint: String,
-        method: HttpMethod,
-        hosts: Vec<TemplatedMatchString>,
-        headers: BTreeMap<String, TemplatedMatchString>,
-        conditions: Vec<ResponseCondition>,
-        timeout: Duration,
-    ) -> HttpCallConfig {
-        HttpCallConfig {
-            request: HttpRequestConfig {
-                endpoint: TemplatedMatchString(endpoint),
-                hosts,
-                method,
-                headers,
-                body: None,
-                timeout,
-            },
-            response: HttpResponseConfig { conditions },
-        }
+    fn config_from_yaml(config_yaml: &str) -> CustomHttpConfigV2 {
+        serde_yaml::from_str(config_yaml).unwrap()
     }
 
     #[test]
     fn test_http_validator_config_with_match_template_in_endpoint() {
-        let config = create_test_config_with_timeout(
-            "http://localhost/test?secret=$MATCH".to_string(),
-            vec![],
-            Duration::from_secs(10),
+        let config = config_from_yaml(
+            r#"
+calls:
+  - request:
+      endpoint: "http://localhost/test?secret=$MATCH"
+      timeout:
+        secs: 10
+        nanos: 0
+    response:
+      conditions: []
+"#,
         );
         let rule_match = create_test_match("test");
         assert_eq!(
@@ -301,21 +211,23 @@ mod tests {
 
     #[test]
     fn test_http_validator_config_with_hosts() {
-        let config = create_http_call_config_with_hosts(
-            "http://$HOST/test".to_string(),
-            HttpMethod::Get,
-            vec![
-                TemplatedMatchString("us".to_string()),
-                TemplatedMatchString("eu".to_string()),
-            ],
-            BTreeMap::new(),
-            vec![],
-            Duration::from_secs(5),
+        let config = config_from_yaml(
+            r#"
+calls:
+  - request:
+      endpoint: "http://$HOST/test"
+      hosts: ["us", "eu"]
+    response:
+      conditions: []
+"#,
         );
         let rule_match = create_test_match("test");
 
         // Test that with_host substitutes the host correctly
-        let endpoint_with_match = config.request.endpoint.with_rule_match(&rule_match);
+        let endpoint_with_match = config.calls[0]
+            .request
+            .endpoint
+            .with_rule_match(&rule_match);
         assert_eq!(
             endpoint_with_match.with_host("us").to_string(),
             "http://us/test"
@@ -337,14 +249,20 @@ mod tests {
             then.status(200).body(r#"{"status": "valid"}"#);
         });
 
-        let config = create_test_config(
-            format!("{}/api/validate?secret=$MATCH", server.base_url()),
-            vec![ResponseCondition {
-                condition_type: ResponseConditionType::Valid,
-                status_code: Some(StatusCodeMatcher::Single(200)),
-                raw_body: None,
-                body: None,
-            }],
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/api/validate?secret=$MATCH"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+"#,
+                server.base_url()
+            )
+            .as_str(),
         );
 
         let validator = HttpValidatorV2::new_from_config(config);
@@ -367,14 +285,20 @@ mod tests {
             then.status(401).body(r#"{"error": "unauthorized"}"#);
         });
 
-        let config = create_test_config(
-            format!("{}/api/validate?secret=$MATCH", server.base_url()),
-            vec![ResponseCondition {
-                condition_type: ResponseConditionType::Invalid,
-                status_code: Some(StatusCodeMatcher::Single(401)),
-                raw_body: None,
-                body: None,
-            }],
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/api/validate?secret=$MATCH"
+    response:
+      conditions:
+        - type: invalid
+          status_code: 401
+"#,
+                server.base_url()
+            )
+            .as_str(),
         );
 
         let validator = HttpValidatorV2::new_from_config(config);
@@ -395,17 +319,22 @@ mod tests {
             then.status(403).body(r#"{"error": "forbidden"}"#);
         });
 
-        let config = create_test_config(
-            format!("{}/api/check", server.base_url()),
-            vec![ResponseCondition {
-                condition_type: ResponseConditionType::Invalid,
-                status_code: Some(StatusCodeMatcher::Range {
-                    start: 400,
-                    end: 500,
-                }),
-                raw_body: None,
-                body: None,
-            }],
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/api/check"
+    response:
+      conditions:
+        - type: invalid
+          status_code:
+            start: 400
+            end: 500
+"#,
+                server.base_url()
+            )
+            .as_str(),
         );
 
         let validator = HttpValidatorV2::new_from_config(config);
@@ -427,15 +356,24 @@ mod tests {
                 .body(r#"{"result": "success", "token_valid": true}"#);
         });
 
-        let config = create_test_config_with_method(
-            format!("{}/verify", server.base_url()),
-            HttpMethod::Post,
-            vec![ResponseCondition {
-                condition_type: ResponseConditionType::Valid,
-                status_code: Some(StatusCodeMatcher::Single(200)),
-                raw_body: Some(BodyMatcher::Regex(r#"token_valid.*true"#.to_string())),
-                body: None,
-            }],
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/verify"
+      method: POST
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+          raw_body:
+            type: Regex
+            config: "token_valid.*true"
+"#,
+                server.base_url()
+            )
+            .as_str(),
         );
 
         let validator = HttpValidatorV2::new_from_config(config);
@@ -459,25 +397,23 @@ mod tests {
             then.status(200).body("OK");
         });
 
-        let mut headers = BTreeMap::new();
-        headers.insert(
-            "Authorization".to_string(),
-            TemplatedMatchString("Bearer $MATCH".to_string()),
-        );
-        headers.insert(
-            "X-API-Key".to_string(),
-            TemplatedMatchString("custom_key".to_string()),
-        );
-
-        let config = create_test_config_with_headers(
-            format!("{}/secure", server.base_url()),
-            headers,
-            vec![ResponseCondition {
-                condition_type: ResponseConditionType::Valid,
-                status_code: Some(StatusCodeMatcher::Single(200)),
-                raw_body: None,
-                body: None,
-            }],
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/secure"
+      headers:
+        Authorization: "Bearer $MATCH"
+        X-API-Key: "custom_key"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+"#,
+                server.base_url()
+            )
+            .as_str(),
         );
 
         let validator = HttpValidatorV2::new_from_config(config);
@@ -506,24 +442,26 @@ mod tests {
             then.status(200).body(r#"{"status": "valid"}"#);
         });
 
-        let config = create_test_config(
-            format!("{}/check?token=$MATCH", server.base_url()),
-            vec![
-                ResponseCondition {
-                    condition_type: ResponseConditionType::Valid,
-                    status_code: None,
-                    raw_body: Some(BodyMatcher::ExactMatch(
-                        r#"{"status": "valid"}"#.to_string(),
-                    )),
-                    body: None,
-                },
-                ResponseCondition {
-                    condition_type: ResponseConditionType::Invalid,
-                    status_code: None,
-                    raw_body: Some(BodyMatcher::Regex(r#"status.*invalid"#.to_string())),
-                    body: None,
-                },
-            ],
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/check?token=$MATCH"
+    response:
+      conditions:
+        - type: valid
+          raw_body:
+            type: ExactMatch
+            config: '{{"status": "valid"}}'
+        - type: invalid
+          raw_body:
+            type: Regex
+            config: "status.*invalid"
+"#,
+                server.base_url()
+            )
+            .as_str(),
         );
 
         let validator = HttpValidatorV2::new_from_config(config);
@@ -549,25 +487,24 @@ mod tests {
             then.status(500).body("Internal Server Error");
         });
 
-        let config = create_test_config(
-            format!("{}/api", server.base_url()),
-            vec![
-                ResponseCondition {
-                    condition_type: ResponseConditionType::Valid,
-                    status_code: Some(StatusCodeMatcher::Single(200)),
-                    raw_body: None,
-                    body: None,
-                },
-                ResponseCondition {
-                    condition_type: ResponseConditionType::Invalid,
-                    status_code: Some(StatusCodeMatcher::Range {
-                        start: 400,
-                        end: 500,
-                    }),
-                    raw_body: None,
-                    body: None,
-                },
-            ],
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/api"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+        - type: invalid
+          status_code:
+            start: 400
+            end: 500
+"#,
+                server.base_url()
+            )
+            .as_str(),
         );
 
         let validator = HttpValidatorV2::new_from_config(config);
@@ -597,15 +534,23 @@ mod tests {
             then.status(200).delay(Duration::from_secs(10)).body("OK");
         });
 
-        let config = create_test_config_with_timeout(
-            format!("{}/slow", server.base_url()),
-            vec![ResponseCondition {
-                condition_type: ResponseConditionType::Valid,
-                status_code: Some(StatusCodeMatcher::Single(200)),
-                raw_body: None,
-                body: None,
-            }],
-            Duration::from_millis(100),
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/slow"
+      timeout:
+        secs: 0
+        nanos: 100000000
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+"#,
+                server.base_url()
+            )
+            .as_str(),
         );
 
         let validator = HttpValidatorV2::new_from_config(config);
@@ -642,22 +587,22 @@ mod tests {
             then.status(401).body("Invalid");
         });
 
-        let config = create_test_config(
-            format!("{}/check?token=$MATCH", server.base_url()),
-            vec![
-                ResponseCondition {
-                    condition_type: ResponseConditionType::Valid,
-                    status_code: Some(StatusCodeMatcher::Single(200)),
-                    raw_body: None,
-                    body: None,
-                },
-                ResponseCondition {
-                    condition_type: ResponseConditionType::Invalid,
-                    status_code: Some(StatusCodeMatcher::Single(401)),
-                    raw_body: None,
-                    body: None,
-                },
-            ],
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/check?token=$MATCH"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+        - type: invalid
+          status_code: 401
+"#,
+                server.base_url()
+            )
+            .as_str(),
         );
 
         let validator = HttpValidatorV2::new_from_config(config);
@@ -689,21 +634,28 @@ mod tests {
             then.status(200).body("Success");
         });
 
-        let conditions = vec![ResponseCondition {
-            condition_type: ResponseConditionType::Valid,
-            status_code: Some(StatusCodeMatcher::Single(200)),
-            raw_body: None,
-            body: None,
-        }];
-
-        let config = create_test_config(format!("{}/api1", server1.base_url()), conditions.clone())
-            .with_call(create_http_call_config(
-                format!("{}/api2", server2.base_url()),
-                HttpMethod::Get,
-                BTreeMap::new(),
-                conditions,
-                Duration::from_secs(5),
-            ));
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/api1"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+  - request:
+      endpoint: "{}/api2"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+"#,
+                server1.base_url(),
+                server2.base_url()
+            )
+            .as_str(),
+        );
 
         let validator = HttpValidatorV2::new_from_config(config);
         let mut matches = vec![create_test_match("test_token")];
@@ -736,31 +688,27 @@ mod tests {
             then.status(401).body("Invalid");
         });
 
-        // Create config with multiple hosts
-        let config = CustomHttpConfigV2::default().with_call(create_http_call_config_with_hosts(
-            "http://$HOST/api/check?token=$MATCH".to_string(),
-            HttpMethod::Get,
-            vec![
-                TemplatedMatchString(server_us.base_url().replace("http://", "")),
-                TemplatedMatchString(server_eu.base_url().replace("http://", "")),
-            ],
-            BTreeMap::new(),
-            vec![
-                ResponseCondition {
-                    condition_type: ResponseConditionType::Valid,
-                    status_code: Some(StatusCodeMatcher::Single(200)),
-                    raw_body: None,
-                    body: None,
-                },
-                ResponseCondition {
-                    condition_type: ResponseConditionType::Invalid,
-                    status_code: Some(StatusCodeMatcher::Single(401)),
-                    raw_body: None,
-                    body: None,
-                },
-            ],
-            Duration::from_secs(5),
-        ));
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "http://$HOST/api/check?token=$MATCH"
+      hosts:
+        - "{}"
+        - "{}"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+        - type: invalid
+          status_code: 401
+"#,
+                server_us.base_url().replace("http://", ""),
+                server_eu.base_url().replace("http://", "")
+            )
+            .as_str(),
+        );
 
         let validator = HttpValidatorV2::new_from_config(config);
         let mut matches = vec![create_test_match("test_token")];
@@ -788,28 +736,21 @@ mod tests {
             then.status(200).body("Valid");
         });
 
-        // Create config with multiple hosts
-        let config = CustomHttpConfigV2::default().with_call(create_http_call_config_with_hosts(
-            "http://$HOST/api/check?token=$MATCH".to_string(),
-            HttpMethod::Get,
-            vec![TemplatedMatchString("$MATCH".to_string())],
-            BTreeMap::new(),
-            vec![
-                ResponseCondition {
-                    condition_type: ResponseConditionType::Valid,
-                    status_code: Some(StatusCodeMatcher::Single(200)),
-                    raw_body: None,
-                    body: None,
-                },
-                ResponseCondition {
-                    condition_type: ResponseConditionType::Invalid,
-                    status_code: Some(StatusCodeMatcher::Single(401)),
-                    raw_body: None,
-                    body: None,
-                },
-            ],
-            Duration::from_secs(5),
-        ));
+        let config = config_from_yaml(
+            r#"
+calls:
+  - request:
+      endpoint: "http://$HOST/api/check?token=$MATCH"
+      hosts:
+        - "$MATCH"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+        - type: invalid
+          status_code: 401
+"#,
+        );
 
         let validator = HttpValidatorV2::new_from_config(config);
         let mut matches = vec![create_test_match(server_url.as_str())];
@@ -826,38 +767,22 @@ mod tests {
     #[test]
     fn test_deserialization() {
         let config_str = r#"
-        {
-            "calls": [
-                {
-                    "request": {
-                        "endpoint": "http://localhost/test1"
-                    },
-                    "response": {
-                        "conditions": [
-                            {
-                                "type": "valid",
-                                "status_code": 200
-                            },
-                            {
-                                "type": "invalid",
-                                "status_code": [400, 420]
-                            },
-                            {
-                                "type": "invalid",
-                                "body": {
-                                    "message.stack[2].success.status": {
-                                        "type": "ExactMatch",
-                                        "config": "success"
-                                    }
-                                }
-                            }
-                        ]
-                    }
-                }
-            ]
-        }
+calls:
+  - request:
+      endpoint: "http://localhost/test1"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+        - type: invalid
+          status_code: [400, 420]
+        - type: invalid
+          body:
+            message.stack[2].success.status:
+              type: ExactMatch
+              config: success
         "#;
-        let config: CustomHttpConfigV2 = serde_json::from_str(config_str).unwrap();
+        let config: CustomHttpConfigV2 = serde_yaml::from_str(config_str).unwrap();
         assert_eq!(config.calls.len(), 1);
         assert_eq!(
             config.calls[0].request.endpoint.to_string(),
@@ -883,21 +808,14 @@ mod tests {
             )])),
         );
         let config_str = r#"
-        {
-            "calls": [
-                {
-                    "request": {
-                        "endpoint": "http://$HOST/test1",
-                        "hosts": ["us", "eu"]
-                    },
-                    "response": {
-                        "conditions": []
-                    }
-                }
-            ]
-        }
+calls:
+  - request:
+      endpoint: "http://$HOST/test1"
+      hosts: ["us", "eu"]
+    response:
+      conditions: []
         "#;
-        let config: CustomHttpConfigV2 = serde_json::from_str(config_str).unwrap();
+        let config: CustomHttpConfigV2 = serde_yaml::from_str(config_str).unwrap();
         assert_eq!(
             config.calls[0].request.hosts,
             vec![
@@ -940,19 +858,27 @@ mod tests {
         });
 
         for (method, path, mock) in [
-            (HttpMethod::Post, "/validate", &mock_post),
-            (HttpMethod::Put, "/update", &mock_put),
-            (HttpMethod::Delete, "/revoke", &mock_delete),
+            ("POST", "/validate", &mock_post),
+            ("PUT", "/update", &mock_put),
+            ("DELETE", "/revoke", &mock_delete),
         ] {
-            let config = create_test_config_with_method(
-                format!("{}{}", server.base_url(), path),
-                method,
-                vec![ResponseCondition {
-                    condition_type: ResponseConditionType::Valid,
-                    status_code: Some(StatusCodeMatcher::Single(200)),
-                    raw_body: None,
-                    body: None,
-                }],
+            let config = config_from_yaml(
+                format!(
+                    r#"
+calls:
+  - request:
+      endpoint: "{}{}"
+      method: {}
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+"#,
+                    server.base_url(),
+                    path,
+                    method
+                )
+                .as_str(),
             );
 
             let validator = HttpValidatorV2::new_from_config(config);
