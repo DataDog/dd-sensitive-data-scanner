@@ -317,7 +317,7 @@ impl MatchValidator for HttpValidatorV2 {
                         endpoint_config.request.method,
                         HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch
                     );
-                    if let Some(ref body_tpl) = endpoint_config.request.request_body {
+                    if let Some(ref body_tpl) = endpoint_config.request.body {
                         let mut body_val = body_tpl.with_rule_match(rule_match);
                         if let Some(host) = host_opt {
                             body_val = body_val.with_host(host);
@@ -789,7 +789,7 @@ mod tests {
                 hosts: vec![],
                 method: HttpMethod::Post,
                 headers,
-                request_body: Some(TemplatedMatchString(r#"{"token":"$MATCH"}"#.to_string())),
+                body: Some(TemplatedMatchString(r#"{"token":"$MATCH"}"#.to_string())),
                 timeout: Duration::from_secs(5),
             },
             response: HttpResponseConfig {

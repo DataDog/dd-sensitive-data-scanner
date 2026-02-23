@@ -643,7 +643,7 @@ fn test_match_pairing_end_to_end() {
                 method: HttpMethod::Get,
                 hosts: vec![],
                 headers: BTreeMap::new(),
-                request_body: None,
+                body: None,
                 timeout: Duration::from_secs(5),
             },
             response: HttpResponseConfig {
@@ -788,7 +788,7 @@ fn test_match_pairing_incomplete_missing_paired_secret() {
                 method: HttpMethod::Get,
                 hosts: vec![],
                 headers: BTreeMap::new(),
-                request_body: None,
+                body: None,
                 timeout: Duration::from_secs(5),
             },
             response: HttpResponseConfig {
