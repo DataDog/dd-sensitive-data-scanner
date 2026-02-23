@@ -182,6 +182,7 @@ fn generate_template_variable_combinations(
 
 impl MatchValidator for HttpValidatorV2 {
     fn validate(&self, matches: &mut Vec<RuleMatch>, rules: &[RootCompiledRule]) {
+        println!("[HttpValidatorV2] Validating matches: {:?}", matches.len());
         // Build up matches (the values themselves) that provide a secret to other matches
         // let providing_matches_by_name: AHashMap<String, Vec<String>> =
         // build a map of match status per endpoint, per host, and per match_idx
@@ -270,6 +271,7 @@ impl MatchValidator for HttpValidatorV2 {
                 )| {
                     let rule_match = &matches[*match_idx];
                     let mut endpoint = endpoint_config.request.endpoint.with_rule_match(rule_match);
+                    println!("endpoint: {:?}", endpoint.to_string());
                     if let Some(host) = host_opt {
                         endpoint = endpoint.with_host(host);
                     }
@@ -310,7 +312,27 @@ impl MatchValidator for HttpValidatorV2 {
                         request_builder =
                             request_builder.header(header_key, header_val.to_string());
                     }
+                    // Add request body with template substitution. For methods that can carry
+                    // a body (POST/PUT/PATCH), always set one so reqwest emits Content-Length:
+                    // omitting it causes some servers to reject the request with HTTP 411.
+                    let body_requires_content_length = matches!(
+                        endpoint_config.request.method,
+                        HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch
+                    );
+                    if let Some(ref body_tpl) = endpoint_config.request.request_body {
+                        let mut body_val = body_tpl.with_rule_match(rule_match);
+                        if let Some(host) = host_opt {
+                            body_val = body_val.with_host(host);
+                        }
+                        for template_var in template_vars {
+                            body_val = body_val.with_template_variable(template_var);
+                        }
+                        request_builder = request_builder.body(body_val.to_string());
+                    } else if body_requires_content_length {
+                        request_builder = request_builder.body("");
+                    }
                     let res = request_builder.send();
+                    println!("res: {:?}", res);
                     match res {
                         Ok(val) => {
                             self.handle_reqwest_response(
@@ -704,6 +726,89 @@ mod tests {
 
         let validator = HttpValidatorV2::new_from_config(config.clone());
         let mut matches = vec![create_test_match("secret_token_456")];
+        let rules = vec![create_test_rule(config)];
+
+        validator.validate(&mut matches, &rules);
+
+        mock.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+    }
+
+    #[test]
+    fn integration_test_no_body_post_sends_content_length_zero() {
+        // Servers that require Content-Length on every POST return 411 if the header is absent.
+        // Verify that a bodyless POST still gets Content-Length: 0 from the validator.
+        let server = httpmock::MockServer::start();
+
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::POST)
+                .path("/api/check")
+                .header("content-length", "0");
+            then.status(200).body("OK");
+        });
+
+        let config = create_test_config_with_method(
+            format!("{}/api/check", server.base_url()),
+            HttpMethod::Post,
+            vec![ResponseCondition {
+                condition_type: ResponseConditionType::Valid,
+                status_code: Some(StatusCodeMatcher::Single(200)),
+                raw_body: None,
+                body: None,
+            }],
+        );
+
+        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let mut matches = vec![create_test_match("some_token")];
+        let rules = vec![create_test_rule(config)];
+
+        validator.validate(&mut matches, &rules);
+
+        mock.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+    }
+
+    #[test]
+    fn integration_test_request_body_templating() {
+        let server = httpmock::MockServer::start();
+
+        // The mock expects the $MATCH value to be substituted into the JSON body
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::POST)
+                .path("/api/validate")
+                .body(r#"{"token":"secret_api_key"}"#);
+            then.status(200).body(r#"{"status": "valid"}"#);
+        });
+
+        let mut headers = BTreeMap::new();
+        headers.insert(
+            "Content-Type".to_string(),
+            TemplatedMatchString("application/json".to_string()),
+        );
+
+        let config = CustomHttpConfigV2::default().with_call(HttpCallConfig {
+            request: HttpRequestConfig {
+                endpoint: TemplatedMatchString(format!("{}/api/validate", server.base_url())),
+                hosts: vec![],
+                method: HttpMethod::Post,
+                headers,
+                request_body: Some(TemplatedMatchString(
+                    r#"{"token":"$MATCH"}"#.to_string(),
+                )),
+                timeout: Duration::from_secs(5),
+            },
+            response: HttpResponseConfig {
+                conditions: vec![ResponseCondition {
+                    condition_type: ResponseConditionType::Valid,
+                    status_code: Some(StatusCodeMatcher::Single(200)),
+                    raw_body: None,
+                    body: None,
+                }],
+            },
+        });
+
+        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let mut matches = vec![create_test_match("secret_api_key")];
         let rules = vec![create_test_rule(config)];
 
         validator.validate(&mut matches, &rules);
