@@ -43,8 +43,8 @@ pub use match_validation::{
     config::RequestHeader,
     config_v2::{
         BodyMatcher, CustomHttpConfigV2, HttpCallConfig, HttpRequestConfig, HttpResponseConfig,
-        MatchPairingConfig, PairedValidatorConfig, ResponseCondition, ResponseConditionType,
-        StatusCodeMatcher,
+        MatchPairingConfig, PairedValidatorConfig, ResponseCondition, ResponseConditionResult,
+        ResponseConditionType, StatusCodeMatcher,
     },
     match_status::MatchStatus,
 };

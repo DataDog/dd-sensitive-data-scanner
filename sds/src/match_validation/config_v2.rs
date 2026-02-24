@@ -1,8 +1,14 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, time::Duration};
+use std::{
+    collections::BTreeMap,
+    fmt::{self, Display, Formatter},
+    time::Duration,
+};
+
+use crate::{HttpMethod, RuleMatch};
 
 /// Configuration for Online Validation V2
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct CustomHttpConfigV2 {
     /// Optional match pairing configuration for validating using matches from multiple rules
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -10,6 +16,13 @@ pub struct CustomHttpConfigV2 {
 
     /// Array of HTTP calls to attempt. Only one needs to succeed for validation.
     pub calls: Vec<HttpCallConfig>,
+}
+
+impl CustomHttpConfigV2 {
+    pub fn with_call(mut self, call: HttpCallConfig) -> Self {
+        self.calls.push(call);
+        self
+    }
 }
 
 /// Configuration for pairing matches from multiple rules together
@@ -24,50 +37,50 @@ pub struct MatchPairingConfig {
 }
 
 /// A single HTTP call configuration with request and response validation
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct HttpCallConfig {
     pub request: HttpRequestConfig,
     pub response: HttpResponseConfig,
 }
 
 /// HTTP request configuration with templating support
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct HttpRequestConfig {
     /// Endpoint URL with optional template variables
     /// Example: "https://$CLIENT_SUBDOMAIN.vendor.com/api/0/organizations/$MATCH"
-    pub endpoint: String,
+    pub endpoint: TemplatedMatchString,
 
     #[serde(default = "default_http_method")]
-    pub method: String,
+    pub method: HttpMethod,
 
-    /// Optional list of hosts for multi-datacenter support
+    /// Optional list of templated hosts for multi-datacenter support
     /// If specified, $HOST in endpoint will be replaced with each host
     #[serde(default)]
-    pub hosts: Vec<String>,
+    pub hosts: Vec<TemplatedMatchString>,
 
     /// Request headers with template variable support
     /// Example: {"Authorization": "Basic %base64($CLIENT_ID:$MATCH)"}
     #[serde(default)]
-    pub headers: BTreeMap<String, String>,
+    pub headers: BTreeMap<String, TemplatedMatchString>,
 
     /// Optional request body with template variable support
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub request_body: Option<String>,
+    pub body: Option<TemplatedMatchString>,
 
-    #[serde(default = "default_timeout_seconds")]
+    #[serde(default = "default_timeout")]
     pub timeout: Duration,
 }
 
-fn default_http_method() -> String {
-    "GET".to_string()
+fn default_http_method() -> HttpMethod {
+    HttpMethod::Get
 }
 
-fn default_timeout_seconds() -> Duration {
+fn default_timeout() -> Duration {
     Duration::from_secs(3)
 }
 
 /// Response validation configuration with multiple condition support
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct HttpResponseConfig {
     /// Array of response conditions to check
     /// Conditions are evaluated sequentially until one matches
@@ -75,7 +88,7 @@ pub struct HttpResponseConfig {
 }
 
 /// A response condition that determines if a secret is valid or invalid
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ResponseCondition {
     /// Whether this condition indicates a valid or invalid secret
     #[serde(rename = "type")]
@@ -96,16 +109,48 @@ pub struct ResponseCondition {
     pub body: Option<BTreeMap<String, BodyMatcher>>,
 }
 
+impl ResponseCondition {
+    pub fn matches(&self, status_code: u16, body: &str) -> ResponseConditionResult {
+        if let Some(status_code_matcher) = self.status_code.as_ref()
+            && status_code_matcher.matches(status_code)
+        {
+            return self.condition_type.clone().into();
+        }
+        if let Some(raw_body_matcher) = self.raw_body.as_ref()
+            && raw_body_matcher.matches(body)
+        {
+            return self.condition_type.clone().into();
+        }
+        ResponseConditionResult::NotChecked
+    }
+}
+
 /// Type of response condition
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum ResponseConditionType {
     Valid,
     Invalid,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum ResponseConditionResult {
+    Valid,
+    Invalid,
+    NotChecked,
+}
+
+impl From<ResponseConditionType> for ResponseConditionResult {
+    fn from(condition_type: ResponseConditionType) -> Self {
+        match condition_type {
+            ResponseConditionType::Valid => ResponseConditionResult::Valid,
+            ResponseConditionType::Invalid => ResponseConditionResult::Invalid,
+        }
+    }
+}
+
 /// Status code matcher supporting single, list, or range
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[serde(untagged)]
 pub enum StatusCodeMatcher {
     /// Single status code: 200
@@ -130,7 +175,7 @@ impl StatusCodeMatcher {
 }
 
 /// Body content matcher
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[serde(tag = "type", content = "config")]
 pub enum BodyMatcher {
     /// Check that the body/field is present (not null/undefined)
@@ -143,8 +188,18 @@ pub enum BodyMatcher {
     Regex(String),
 }
 
+impl BodyMatcher {
+    pub fn matches(&self, body: &str) -> bool {
+        match self {
+            BodyMatcher::Present => !body.is_empty(),
+            BodyMatcher::ExactMatch(value) => body == *value,
+            BodyMatcher::Regex(pattern) => regex::Regex::new(pattern).unwrap().is_match(body),
+        }
+    }
+}
+
 /// Secondary validator type for rules that forward their match to a paired validator
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PairedValidatorConfig {
     /// Vendor identifier to match the main validator
     pub kind: String,
@@ -152,6 +207,29 @@ pub struct PairedValidatorConfig {
     /// Name of the parameter this rule provides
     /// Example: "client_id", "client_subdomain"
     pub name: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TemplatedMatchString(pub String);
+
+impl TemplatedMatchString {
+    pub fn with_rule_match(&self, rule_match: &RuleMatch) -> Self {
+        self.render("$MATCH", rule_match.match_value.as_ref().unwrap())
+    }
+
+    pub fn with_host(&self, host: &str) -> Self {
+        self.render("$HOST", host)
+    }
+
+    fn render(&self, tag: &str, value: &str) -> Self {
+        TemplatedMatchString(self.0.replace(tag, value))
+    }
+}
+
+impl Display for TemplatedMatchString {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 #[cfg(test)]
@@ -188,5 +266,28 @@ mod tests {
         assert!(!matcher.matches(199));
         assert!(!matcher.matches(300));
         assert!(!matcher.matches(404));
+    }
+
+    #[test]
+    fn test_body_matcher_present() {
+        let matcher = BodyMatcher::Present;
+        assert!(matcher.matches("test"));
+        assert!(!matcher.matches(""));
+    }
+
+    #[test]
+    fn test_body_matcher_exact_match() {
+        let matcher = BodyMatcher::ExactMatch("test".to_string());
+        assert!(matcher.matches("test"));
+        assert!(!matcher.matches("test1"));
+        assert!(!matcher.matches(""));
+    }
+
+    #[test]
+    fn test_body_matcher_regex() {
+        let matcher = BodyMatcher::Regex("test".to_string());
+        assert!(matcher.matches("test"));
+        assert!(matcher.matches("test1"));
+        assert!(!matcher.matches("different"));
     }
 }
