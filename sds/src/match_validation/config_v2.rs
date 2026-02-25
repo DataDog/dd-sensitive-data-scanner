@@ -58,7 +58,6 @@ pub struct HttpRequestConfig {
     /// Example: "https://$CLIENT_SUBDOMAIN.vendor.com/api/0/organizations/$MATCH"
     pub endpoint: TemplatedMatchString,
 
-    #[serde(default = "default_http_method")]
     pub method: HttpMethod,
 
     /// Optional list of templated hosts for multi-datacenter support
@@ -77,10 +76,6 @@ pub struct HttpRequestConfig {
 
     #[serde(default = "default_timeout")]
     pub timeout: Duration,
-}
-
-fn default_http_method() -> HttpMethod {
-    HttpMethod::Get
 }
 
 fn default_timeout() -> Duration {

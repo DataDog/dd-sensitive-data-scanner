@@ -436,6 +436,7 @@ mod tests {
 calls:
   - request:
       endpoint: "http://localhost/test?secret=$MATCH"
+      method: GET
       timeout:
         secs: 10
         nanos: 0
@@ -461,6 +462,7 @@ calls:
 calls:
   - request:
       endpoint: "http://$HOST/test"
+      method: GET
       hosts: ["us", "eu"]
     response:
       conditions: []
@@ -500,6 +502,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/api/validate?secret=$MATCH"
+      method: GET
     response:
       conditions:
         - type: valid
@@ -537,6 +540,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/api/validate?secret=$MATCH"
+      method: GET
     response:
       conditions:
         - type: invalid
@@ -572,6 +576,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/api/check"
+      method: GET
     response:
       conditions:
         - type: invalid
@@ -652,6 +657,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/secure"
+      method: GET
       headers:
         Authorization: "Bearer $MATCH"
         X-API-Key: "custom_key"
@@ -698,6 +704,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/check?token=$MATCH"
+      method: GET
     response:
       conditions:
         - type: valid
@@ -744,6 +751,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/api"
+      method: GET
     response:
       conditions:
         - type: valid
@@ -792,6 +800,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/slow"
+      method: GET
       timeout:
         secs: 0
         nanos: 100000000
@@ -846,6 +855,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/check?token=$MATCH"
+      method: GET
     response:
       conditions:
         - type: valid
@@ -894,12 +904,14 @@ calls:
 calls:
   - request:
       endpoint: "{}/api1"
+      method: GET
     response:
       conditions:
         - type: valid
           status_code: 200
   - request:
       endpoint: "{}/api2"
+      method: GET
     response:
       conditions:
         - type: valid
@@ -949,6 +961,7 @@ calls:
 calls:
   - request:
       endpoint: "http://$HOST/api/check?token=$MATCH"
+      method: GET
       hosts:
         - "{}"
         - "{}"
@@ -997,6 +1010,7 @@ calls:
 calls:
   - request:
       endpoint: "http://$HOST/api/check?token=$MATCH"
+      method: GET
       hosts:
         - "$MATCH"
     response:
@@ -1027,6 +1041,7 @@ calls:
 calls:
   - request:
       endpoint: "http://localhost/test1"
+      method: GET
     response:
       conditions:
         - type: valid
@@ -1068,6 +1083,7 @@ calls:
 calls:
   - request:
       endpoint: "http://$HOST/test1"
+      method: GET
       hosts: ["us", "eu"]
     response:
       conditions: []
