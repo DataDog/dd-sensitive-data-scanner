@@ -36,22 +36,28 @@ impl HttpValidatorV2 {
         // * Neither list -> Error match
         let status = val.status().as_u16();
         let body = val.text().unwrap_or_default();
+        println!("status: {}, body: {}", status, body);
         for response_condition in response_config.conditions.iter() {
+            println!("response_condition: {:?}", response_condition);
             let result = response_condition.matches(status, &body);
             match result {
                 ResponseConditionResult::Valid => {
+                    println!("Valid match");
                     *match_status = MatchStatus::Valid;
                     return;
                 }
                 ResponseConditionResult::Invalid => {
+                    println!("Invalid match");
                     *match_status = MatchStatus::Invalid;
                     return;
                 }
                 ResponseConditionResult::NotChecked => {
+                    println!("Not checked");
                     continue;
                 }
             }
         }
+        println!("Error match");
         *match_status = MatchStatus::Error(format!(
             "No response condition matched for status code {} and body of length {}",
             status,
