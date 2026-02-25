@@ -168,24 +168,19 @@ impl ResponseCondition {
         &self,
         matches_results: Vec<ResponseConditionResult>,
     ) -> ResponseConditionResult {
-        if matches_results.is_empty() {
-            ResponseConditionResult::NotChecked
-        } else {
-            if matches_results
+        if matches_results.is_empty()
+            || matches_results
                 .iter()
                 .any(|result| result == &ResponseConditionResult::NotChecked)
-            {
-                ResponseConditionResult::NotChecked
-            } else {
-                if matches_results
-                    .iter()
-                    .any(|result| result == &ResponseConditionResult::Valid)
-                {
-                    ResponseConditionResult::Valid
-                } else {
-                    ResponseConditionResult::Invalid
-                }
-            }
+        {
+            ResponseConditionResult::NotChecked
+        } else if matches_results
+            .iter()
+            .any(|result| result == &ResponseConditionResult::Valid)
+        {
+            ResponseConditionResult::Valid
+        } else {
+            ResponseConditionResult::Invalid
         }
     }
 }
