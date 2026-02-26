@@ -21,6 +21,7 @@ pub struct CustomHttpConfigV2 {
     pub provides: Option<Vec<PairedValidatorConfig>>,
 
     /// Array of HTTP calls to attempt. Only one needs to succeed for validation.
+    #[serde(default)]
     pub calls: Vec<HttpCallConfig>,
 }
 
