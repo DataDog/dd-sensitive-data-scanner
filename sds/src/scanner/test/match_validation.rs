@@ -604,22 +604,26 @@ fn test_match_pairing_end_to_end() {
     let rule_client_subdomain =
         RootRuleConfig::new(RegexRuleConfig::new("\\b[a-z_]+_corp\\b").build())
             .match_action(MatchAction::None)
-            .third_party_active_checker(MatchValidationType::PairedValidator(
-                PairedValidatorConfig {
+            .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+                provides: Some(vec![PairedValidatorConfig {
                     kind: "vendor_xyz".to_string(),
                     name: "client_subdomain".to_string(),
-                },
-            ));
+                }]),
+                calls: vec![],
+                match_pairing: None,
+            }));
 
     // Create a rule that provides the user_id parameter
     let rule_user_id = RootRuleConfig::new(RegexRuleConfig::new("\\bUS[a-z0-9]+\\b").build())
         .match_action(MatchAction::None)
-        .third_party_active_checker(MatchValidationType::PairedValidator(
-            PairedValidatorConfig {
+        .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+            provides: Some(vec![PairedValidatorConfig {
                 kind: "vendor_xyz".to_string(),
                 name: "user_id".to_string(),
-            },
-        ));
+            }]),
+            calls: vec![],
+            match_pairing: None,
+        }));
 
     // Create the main validation rule with match pairing
     let mut parameters = BTreeMap::new();
@@ -634,6 +638,7 @@ fn test_match_pairing_end_to_end() {
             kind: "vendor_xyz".to_string(),
             parameters,
         }),
+        provides: None,
         calls: vec![HttpCallConfig {
             request: HttpRequestConfig {
                 endpoint: TemplatedMatchString(format!(
@@ -760,12 +765,14 @@ fn test_match_pairing_incomplete_missing_paired_secret() {
     let rule_client_subdomain =
         RootRuleConfig::new(RegexRuleConfig::new("\\b[a-z_]+_corp\\b").build())
             .match_action(MatchAction::None)
-            .third_party_active_checker(MatchValidationType::PairedValidator(
-                PairedValidatorConfig {
+            .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+                provides: Some(vec![crate::PairedValidatorConfig {
                     kind: "vendor_xyz".to_string(),
                     name: "client_subdomain".to_string(),
-                },
-            ));
+                }]),
+                calls: vec![],
+                match_pairing: None,
+            }));
 
     // Main validation rule with match pairing
     let mut parameters = BTreeMap::new();
@@ -779,6 +786,7 @@ fn test_match_pairing_incomplete_missing_paired_secret() {
             kind: "vendor_xyz".to_string(),
             parameters,
         }),
+        provides: None,
         calls: vec![HttpCallConfig {
             request: HttpRequestConfig {
                 endpoint: TemplatedMatchString(format!(

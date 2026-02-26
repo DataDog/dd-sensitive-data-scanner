@@ -14,6 +14,12 @@ pub struct CustomHttpConfigV2 {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub match_pairing: Option<MatchPairingConfig>,
 
+    /// Optional list of values this rule provides to other paired validators.
+    /// Allows a rule to both self-validate with CustomHttpV2 and contribute its
+    /// match value as named template variables to other CustomHttpV2 rules.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provides: Option<Vec<PairedValidatorConfig>>,
+
     /// Array of HTTP calls to attempt. Only one needs to succeed for validation.
     pub calls: Vec<HttpCallConfig>,
 }
@@ -530,5 +536,28 @@ mod tests {
             cond.matches(401, r#"{"status":"active"}"#),
             ResponseConditionResult::NotChecked
         );
+    }
+
+    #[test]
+    fn test_custom_http_v2_config_with_provides() {
+        let config: CustomHttpConfigV2 = serde_yaml::from_str(
+            r#"
+provides:
+  - kind: "vendor_xyz"
+    name: "client_subdomain"
+calls:
+  - request:
+      endpoint: "https://example.com/validate?secret=$MATCH"
+      method: GET
+    response:
+      conditions: []
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.provides.as_ref().map(Vec::len), Some(1));
+        let provided = &config.provides.as_ref().unwrap()[0];
+        assert_eq!(provided.kind, "vendor_xyz");
+        assert_eq!(provided.name, "client_subdomain");
     }
 }

@@ -60,37 +60,56 @@ impl HttpValidatorV2 {
     }
 }
 
-fn get_providing_matches_by_name(
+fn get_providing_matches_by_kind_and_name(
     matches: &[RuleMatch],
     rules: &[RootCompiledRule],
-) -> AHashMap<String, Vec<(String, usize)>> {
+) -> AHashMap<(String, String), Vec<(String, usize)>> {
     matches
         .iter()
         .enumerate()
-        .filter_map(|(match_idx, candidate_match)| {
-            let rule = rules.get(candidate_match.rule_index)?;
-            let match_validation_type = rule.match_validation_type.as_ref()?;
+        .flat_map(|(match_idx, candidate_match)| {
+            let Some(rule) = rules.get(candidate_match.rule_index) else {
+                return Vec::new();
+            };
+            let Some(match_validation_type) = rule.match_validation_type.as_ref() else {
+                return Vec::new();
+            };
             match match_validation_type {
-                MatchValidationType::PairedValidator(paired_validator_config) => {
-                    candidate_match.match_value.as_ref().map(|match_value| {
-                        (
-                            paired_validator_config.name.clone(),
-                            (match_value.clone(), match_idx),
-                        )
-                    })
+                MatchValidationType::CustomHttpV2(custom_http_config) => {
+                    let Some(match_value) = candidate_match.match_value.as_ref() else {
+                        return Vec::new();
+                    };
+                    custom_http_config
+                        .provides
+                        .as_ref()
+                        .map(|provided_values| {
+                            provided_values
+                                .iter()
+                                .map(|provided_value| {
+                                    (
+                                        (provided_value.kind.clone(), provided_value.name.clone()),
+                                        (match_value.clone(), match_idx),
+                                    )
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default()
                 }
-                _ => None,
+                _ => Vec::new(),
             }
         })
-        .fold(AHashMap::new(), |mut map, (name, value_and_idx)| {
-            map.entry(name).or_default().push(value_and_idx);
-            map
-        })
+        .fold(
+            AHashMap::new(),
+            |mut map, (kind_and_name, value_and_idx)| {
+                map.entry(kind_and_name).or_default().push(value_and_idx);
+                map
+            },
+        )
 }
 
 fn get_match_pairing_template_variables(
     match_pairing_config: &MatchPairingConfig,
-    providing_matches_by_name: &AHashMap<String, Vec<(String, usize)>>,
+    providing_matches_by_kind_and_name: &AHashMap<(String, String), Vec<(String, usize)>>,
 ) -> Vec<(TemplateVariable, usize)> {
     // Iterate over the match pairing config and add the required matches to the iterator
     // Returns (TemplateVariable, match_idx) pairs
@@ -98,7 +117,9 @@ fn get_match_pairing_template_variables(
         .parameters
         .iter()
         .flat_map(|(name, template_name)| {
-            if let Some(match_values_with_idx) = providing_matches_by_name.get(name) {
+            if let Some(match_values_with_idx) = providing_matches_by_kind_and_name
+                .get(&(match_pairing_config.kind.clone(), name.clone()))
+            {
                 match_values_with_idx
                     .iter()
                     .map(|(match_value, match_idx)| {
@@ -183,9 +204,9 @@ fn generate_template_variable_combinations(
 impl MatchValidator for HttpValidatorV2 {
     fn validate(&self, matches: &mut Vec<RuleMatch>, rules: &[RootCompiledRule]) {
         // Build up matches (the values themselves) that provide a secret to other matches
-        // let providing_matches_by_name: AHashMap<String, Vec<String>> =
         // build a map of match status per endpoint, per host, and per match_idx
-        let providing_matches_by_name = get_providing_matches_by_name(matches, rules);
+        let providing_matches_by_kind_and_name =
+            get_providing_matches_by_kind_and_name(matches, rules);
         let mut match_status_per_endpoint_and_match: AHashMap<_, _> = matches
             .iter()
             .enumerate()
@@ -194,7 +215,8 @@ impl MatchValidator for HttpValidatorV2 {
                     rules
                         .get(rule_match.rule_index)
                         .and_then(|rule| rule.match_validation_type.as_ref()),
-                    Some(MatchValidationType::CustomHttpV2(_))
+                    Some(MatchValidationType::CustomHttpV2(custom_http_config))
+                        if !custom_http_config.calls.is_empty()
                 )
             })
             .map(|(idx, rule_match)| {
@@ -210,7 +232,7 @@ impl MatchValidator for HttpValidatorV2 {
                                 .map(|match_pairing_config| {
                                     get_match_pairing_template_variables(
                                         match_pairing_config,
-                                        &providing_matches_by_name,
+                                        &providing_matches_by_kind_and_name,
                                     )
                                 })
                         } else {
@@ -1166,6 +1188,87 @@ calls:
     }
 
     #[test]
+    fn test_get_providing_matches_includes_custom_http_v2_providers() {
+        let provider_config = config_from_yaml(
+            r#"
+provides:
+  - kind: "vendor_xyz"
+    name: "client_subdomain"
+calls:
+  - request:
+      endpoint: "http://localhost/validate?secret=$MATCH"
+      method: GET
+    response:
+      conditions: []
+"#,
+        );
+
+        let rules = vec![
+            RootCompiledRule {
+                inner: Box::new(MockCompiledRule),
+                scope: Scope::all(),
+                match_action: MatchAction::None,
+                match_validation_type: Some(MatchValidationType::CustomHttpV2(provider_config)),
+                suppressions: None,
+                precedence: Precedence::default(),
+            },
+            RootCompiledRule {
+                inner: Box::new(MockCompiledRule),
+                scope: Scope::all(),
+                match_action: MatchAction::None,
+                match_validation_type: Some(MatchValidationType::CustomHttpV2(
+                    CustomHttpConfigV2 {
+                        provides: Some(vec![crate::PairedValidatorConfig {
+                            kind: "vendor_xyz".to_string(),
+                            name: "region".to_string(),
+                        }]),
+                        calls: vec![],
+                        match_pairing: None,
+                    },
+                )),
+                suppressions: None,
+                precedence: Precedence::default(),
+            },
+        ];
+
+        let matches = vec![
+            RuleMatch {
+                rule_index: 0,
+                path: Path::root(),
+                replacement_type: ReplacementType::None,
+                start_index: 0,
+                end_index_exclusive: 9,
+                shift_offset: 0,
+                match_value: Some("acme_corp".to_string()),
+                match_status: MatchStatus::NotChecked,
+                keyword: None,
+            },
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: ReplacementType::None,
+                start_index: 10,
+                end_index_exclusive: 17,
+                shift_offset: 0,
+                match_value: Some("us_east".to_string()),
+                match_status: MatchStatus::NotChecked,
+                keyword: None,
+            },
+        ];
+
+        let providing_matches = get_providing_matches_by_kind_and_name(&matches, &rules);
+
+        assert_eq!(
+            providing_matches.get(&("vendor_xyz".to_string(), "client_subdomain".to_string())),
+            Some(&vec![("acme_corp".to_string(), 0)])
+        );
+        assert_eq!(
+            providing_matches.get(&("vendor_xyz".to_string(), "region".to_string())),
+            Some(&vec![("us_east".to_string(), 1)])
+        );
+    }
+
+    #[test]
     fn integration_test_match_pairing_validation() {
         use crate::{
             MatchAction, PairedValidatorConfig, Precedence,
@@ -1238,10 +1341,14 @@ match_pairing:
                 inner: Box::new(MockCompiledRule),
                 scope: Scope::all(),
                 match_action: MatchAction::None,
-                match_validation_type: Some(MatchValidationType::PairedValidator(
-                    PairedValidatorConfig {
-                        kind: "vendor_xyz".to_string(),
-                        name: "client_subdomain".to_string(),
+                match_validation_type: Some(MatchValidationType::CustomHttpV2(
+                    CustomHttpConfigV2 {
+                        provides: Some(vec![PairedValidatorConfig {
+                            kind: "vendor_xyz".to_string(),
+                            name: "client_subdomain".to_string(),
+                        }]),
+                        calls: vec![],
+                        match_pairing: None,
                     },
                 )),
                 suppressions: None,

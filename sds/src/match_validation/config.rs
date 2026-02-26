@@ -7,7 +7,7 @@ use std::{hash::Hash, time::Duration};
 use crate::match_validation::http_validator_v2::HttpValidatorV2;
 
 use super::aws_validator::AwsValidator;
-use super::config_v2::{CustomHttpConfigV2, PairedValidatorConfig};
+use super::config_v2::CustomHttpConfigV2;
 use super::http_validator::HttpValidator;
 use super::match_validator::MatchValidator;
 
@@ -256,7 +256,6 @@ pub enum MatchValidationType {
     Aws(AwsType),
     CustomHttp(CustomHttpConfig),
     CustomHttpV2(CustomHttpConfigV2),
-    PairedValidator(PairedValidatorConfig),
 }
 
 impl MatchValidationType {
@@ -265,8 +264,7 @@ impl MatchValidationType {
         match self {
             MatchValidationType::Aws(aws_type) => matches!(aws_type, AwsType::AwsSecret(_)),
             MatchValidationType::CustomHttp(_) => true,
-            MatchValidationType::CustomHttpV2(_) => true,
-            MatchValidationType::PairedValidator(_) => false, // Paired validators don't create standalone validators
+            MatchValidationType::CustomHttpV2(http_config_v2) => !http_config_v2.calls.is_empty(),
         }
     }
     pub fn get_internal_match_validation_type(&self) -> InternalMatchValidationType {
@@ -276,9 +274,6 @@ impl MatchValidationType {
                 InternalMatchValidationType::CustomHttp(http_config.get_endpoints().unwrap())
             }
             MatchValidationType::CustomHttpV2(_) => InternalMatchValidationType::CustomHttpV2,
-            MatchValidationType::PairedValidator(config) => {
-                InternalMatchValidationType::PairedValidator(config.kind.clone())
-            }
         }
     }
     pub fn into_match_validator(&self) -> Result<Box<dyn MatchValidator>, String> {
@@ -295,9 +290,6 @@ impl MatchValidationType {
             MatchValidationType::CustomHttpV2(http_config_v2) => Ok(Box::new(
                 HttpValidatorV2::new_from_config(http_config_v2.clone()),
             )),
-            MatchValidationType::PairedValidator(_) => {
-                Err("PairedValidator cannot be used to create a standalone validator".to_string())
-            }
         }
     }
 }
