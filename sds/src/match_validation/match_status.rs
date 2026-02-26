@@ -17,10 +17,7 @@ impl std::fmt::Display for MatchStatus {
             MatchStatus::NotChecked => write!(f, "NotChecked"),
             MatchStatus::NotAvailable => write!(f, "NotAvailable"),
             MatchStatus::Invalid => write!(f, "Invalid"),
-            MatchStatus::Partial => write!(
-                f,
-                "Partial, missing matches are required for the match to be checked",
-            ),
+            MatchStatus::Partial => write!(f, "Partial",),
             MatchStatus::Error(msg) => write!(f, "Error({})", msg),
             MatchStatus::Valid => write!(f, "Valid"),
         }
