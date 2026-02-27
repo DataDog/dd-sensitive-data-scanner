@@ -53,6 +53,30 @@ impl HttpValidatorV2 {
     }
 }
 
+/// Generate a mapping from kind and name to a vector of (match_value, match_idx) pairs
+///
+/// Consider the following example:
+/// ```
+/// matches = [
+///     RuleMatch { rule_index: 0, match_value: Some("acme_corp") },
+///     RuleMatch { rule_index: 1, match_value: Some("us_east") },
+/// ]
+/// rules = [
+///     provides: Some(vec![
+///         PairedValidatorConfig { kind: "datadog", name: "api_key" },
+///     ]),
+///     provides: Some(vec![
+///         PairedValidatorConfig { kind: "datadog", name: "app_key" },
+///     ]),
+/// ]
+/// ```
+/// The produced map would look like:
+/// ```
+/// {
+///     ("datadog", "api_key"): [(Some("acme_corp"), 0)],
+///     ("datadog", "app_key"): [(Some("us_east"), 1)],
+/// }
+/// ```
 fn get_providing_matches_by_kind_and_name(
     matches: &[RuleMatch],
     rules: &[RootCompiledRule],
@@ -100,6 +124,10 @@ fn get_providing_matches_by_kind_and_name(
         )
 }
 
+/// Generate the template variables for a given match pairing config
+/// Returns a vector of (TemplateVariable, match_idx) pairs
+///
+/// This effectively returns all the found matches for the required matches defined in the match pairing config.
 fn get_match_pairing_template_variables(
     match_pairing_config: &MatchPairingConfig,
     providing_matches_by_kind_and_name: &AHashMap<(String, String), Vec<(String, usize)>>,
@@ -233,6 +261,12 @@ fn get_template_variables_with_idx(
         .unwrap_or_default()
 }
 
+/// Get the calls for a given rule match
+/// Returns a vector of HttpCallConfig
+///
+/// This is where HttpValidatorV2 differs from HttpValidator.
+/// In the original HttpValidator, the config is stored inside HttpValidator (as an InternalHttpValidatorConfig).
+/// In HttpValidatorV2, the config must be retrieved from the rule.
 fn get_calls_for_rule_match(
     rule_match: &RuleMatch,
     rules: &[RootCompiledRule],
