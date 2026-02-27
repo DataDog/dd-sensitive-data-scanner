@@ -56,7 +56,7 @@ impl HttpValidatorV2 {
 /// Generate a mapping from kind and name to a vector of (match_value, match_idx) pairs
 ///
 /// Consider the following example:
-/// ```
+///
 /// matches = [
 ///     RuleMatch { rule_index: 0, match_value: Some("acme_corp") },
 ///     RuleMatch { rule_index: 1, match_value: Some("us_east") },
@@ -69,14 +69,14 @@ impl HttpValidatorV2 {
 ///         PairedValidatorConfig { kind: "datadog", name: "app_key" },
 ///     ]),
 /// ]
-/// ```
+///
 /// The produced map would look like:
-/// ```
+///
 /// {
 ///     ("datadog", "api_key"): [(Some("acme_corp"), 0)],
 ///     ("datadog", "app_key"): [(Some("us_east"), 1)],
 /// }
-/// ```
+///
 fn get_providing_matches_by_kind_and_name(
     matches: &[RuleMatch],
     rules: &[RootCompiledRule],
@@ -1500,5 +1500,115 @@ match_pairing:
         // it contributed to the successful validation of the main match. The status is
         // propagated from the main match to all contributing matches.
         assert_eq!(all_matches[1].match_status, MatchStatus::Valid);
+    }
+
+    #[test]
+    fn test_match_pairing_multiple_combinations_error_messages_are_concatenated() {
+        use crate::PairedValidatorConfig;
+
+        let config = config_from_yaml(
+            r#"
+calls:
+  - request:
+      endpoint: "http://$TARGET/api/validate?secret=$MATCH"
+      method: GET
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+match_pairing:
+  kind: "vendor_xyz"
+  target: "$TARGET"
+"#,
+        );
+
+        let rules = vec![
+            RootCompiledRule {
+                inner: Box::new(MockCompiledRule),
+                scope: Scope::all(),
+                match_action: MatchAction::None,
+                match_validation_type: Some(MatchValidationType::CustomHttpV2(config.clone())),
+                suppressions: None,
+                precedence: Precedence::default(),
+            },
+            RootCompiledRule {
+                inner: Box::new(MockCompiledRule),
+                scope: Scope::all(),
+                match_action: MatchAction::None,
+                match_validation_type: Some(MatchValidationType::CustomHttpV2(
+                    CustomHttpConfigV2 {
+                        provides: Some(vec![PairedValidatorConfig {
+                            kind: "vendor_xyz".to_string(),
+                            name: "target".to_string(),
+                        }]),
+                        calls: vec![],
+                        match_pairing: None,
+                    },
+                )),
+                suppressions: None,
+                precedence: Precedence::default(),
+            },
+        ];
+
+        let mut all_matches = vec![
+            RuleMatch {
+                rule_index: 0,
+                path: Path::root(),
+                replacement_type: ReplacementType::None,
+                start_index: 0,
+                end_index_exclusive: 6,
+                shift_offset: 0,
+                match_value: Some("secret".to_string()),
+                match_status: MatchStatus::NotChecked,
+                keyword: None,
+            },
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: ReplacementType::None,
+                start_index: 10,
+                end_index_exclusive: 19,
+                shift_offset: 0,
+                match_value: Some("127.0.0.1:1".to_string()),
+                match_status: MatchStatus::NotChecked,
+                keyword: None,
+            },
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: ReplacementType::None,
+                start_index: 20,
+                end_index_exclusive: 29,
+                shift_offset: 0,
+                match_value: Some("127.0.0.1:2".to_string()),
+                match_status: MatchStatus::NotChecked,
+                keyword: None,
+            },
+        ];
+
+        let validator = HttpValidatorV2;
+        validator.validate(&mut all_matches, &rules);
+
+        match &all_matches[0].match_status {
+            MatchStatus::Error(msg) => {
+                let parts: Vec<&str> = msg.split(", ").collect();
+                assert_eq!(
+                    parts.len(),
+                    2,
+                    "expected 2 comma-separated error messages, got: {msg}"
+                );
+                assert!(
+                    parts
+                        .iter()
+                        .all(|part| part.starts_with("Error making HTTP request:")),
+                    "expected all parts to be HTTP request errors, got: {msg}"
+                );
+                assert!(
+                    msg.contains("127.0.0.1:1") && msg.contains("127.0.0.1:2"),
+                    "expected concatenated message to include both endpoints, got: {msg}"
+                );
+            }
+            other => panic!("expected Error status, got {other:?}"),
+        }
     }
 }

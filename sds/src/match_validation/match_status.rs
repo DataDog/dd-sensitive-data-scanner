@@ -28,6 +28,15 @@ impl MatchStatus {
     // Order matters as we want to update the match_status only if the new match_status has higher priority.
     // (in case of split key where we try different combinations of id and secret (aws use-case))
     pub fn merge(&mut self, new_status: MatchStatus) {
+        match (&self, &new_status) {
+            (MatchStatus::Error(old_error), MatchStatus::Error(new_error)) => {
+                if old_error != new_error {
+                    *self = MatchStatus::Error(format!("{}, {}", old_error, new_error));
+                    return;
+                }
+            }
+            _ => {}
+        }
         if new_status > *self {
             *self = new_status;
         }
