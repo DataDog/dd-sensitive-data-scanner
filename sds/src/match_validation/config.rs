@@ -287,9 +287,7 @@ impl MatchValidationType {
             MatchValidationType::CustomHttp(http_config) => Ok(Box::new(
                 HttpValidator::new_from_config(http_config.clone()),
             )),
-            MatchValidationType::CustomHttpV2(http_config_v2) => Ok(Box::new(
-                HttpValidatorV2::new_from_config(http_config_v2.clone()),
-            )),
+            MatchValidationType::CustomHttpV2(_) => Ok(Box::new(HttpValidatorV2)),
         }
     }
 }

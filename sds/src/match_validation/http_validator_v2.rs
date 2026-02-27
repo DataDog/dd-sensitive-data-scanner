@@ -1,9 +1,7 @@
 use super::match_validator::MatchValidator;
 use crate::match_validation::config_v2::{ResponseConditionResult, TemplateVariable};
 use crate::scanner::RootCompiledRule;
-use crate::{
-    CustomHttpConfigV2, HttpResponseConfig, match_validation::match_validator::RAYON_THREAD_POOL,
-};
+use crate::{HttpResponseConfig, match_validation::match_validator::RAYON_THREAD_POOL};
 use crate::{MatchPairingConfig, MatchValidationType, TemplatedMatchString};
 use crate::{MatchStatus, RuleMatch, match_validation::config::HttpMethod};
 use ahash::AHashMap;
@@ -15,12 +13,9 @@ lazy_static! {
     static ref BLOCKING_HTTP_CLIENT: reqwest::blocking::Client = reqwest::blocking::Client::new();
 }
 
-pub struct HttpValidatorV2 {}
+pub struct HttpValidatorV2;
 
 impl HttpValidatorV2 {
-    pub fn new_from_config(_config: CustomHttpConfigV2) -> Self {
-        HttpValidatorV2 {}
-    }
     fn handle_reqwest_response(
         &self,
         response_config: &HttpResponseConfig,
@@ -417,7 +412,9 @@ mod tests {
 
     use crate::{
         CompiledRule, MatchAction, Path, Precedence, ReplacementType, RootCompiledRule, Scope,
-        match_validation::config_v2::{BodyMatcher, StatusCodeMatcher, TemplatedMatchString},
+        match_validation::config_v2::{
+            BodyMatcher, CustomHttpConfigV2, StatusCodeMatcher, TemplatedMatchString,
+        },
     };
 
     use super::*;
@@ -547,7 +544,7 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("valid_token_123")];
         let rules = vec![create_test_rule(config)];
 
@@ -585,7 +582,7 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("invalid_token")];
         let rules = vec![create_test_rule(config)];
 
@@ -623,7 +620,7 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("test_secret")];
         let rules = vec![create_test_rule(config)];
 
@@ -663,7 +660,7 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("api_key_xyz")];
         let rules = vec![create_test_rule(config)];
 
@@ -705,7 +702,7 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("secret_token_456")];
         let rules = vec![create_test_rule(config)];
 
@@ -755,7 +752,7 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let validator = HttpValidatorV2;
         let mut matches = vec![
             create_test_match("token_xyz"),
             create_test_match("token_abc"),
@@ -800,7 +797,7 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("test_token")];
         let rules = vec![create_test_rule(config)];
 
@@ -848,7 +845,7 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("test_token")];
         let rules = vec![create_test_rule(config)];
 
@@ -902,7 +899,7 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let validator = HttpValidatorV2;
         let mut matches = vec![
             create_test_match("valid_123"),
             create_test_match("invalid_456"),
@@ -957,7 +954,7 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("test_token")];
         let rules = vec![create_test_rule(config)];
 
@@ -1012,7 +1009,7 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("test_token")];
         let rules = vec![create_test_rule(config)];
 
@@ -1056,7 +1053,7 @@ calls:
 "#,
         );
 
-        let validator = HttpValidatorV2::new_from_config(config.clone());
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match(server_url.as_str())];
         let rules = vec![create_test_rule(config)];
 
@@ -1188,7 +1185,7 @@ calls:
                 .as_str(),
             );
 
-            let validator = HttpValidatorV2::new_from_config(config.clone());
+            let validator = HttpValidatorV2;
             let mut matches = vec![create_test_match("token")];
             let rules = vec![create_test_rule(config)];
 
@@ -1397,7 +1394,7 @@ match_pairing:
             },
         ];
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2;
         validator.validate(&mut all_matches, &rules);
 
         // Verify the HTTP request was made with template variable substituted
