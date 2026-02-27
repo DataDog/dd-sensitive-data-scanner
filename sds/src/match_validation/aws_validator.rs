@@ -133,8 +133,10 @@ impl MatchValidator for AwsValidator {
                     let match_id = &matches[*id_index].match_value;
                     let match_secret = &matches[*secret_index].match_value;
                     if match_secret.is_none() {
-                        *match_status =
-                            MatchStatus::Error(None, "Missing match value for aws_secret".to_string());
+                        *match_status = MatchStatus::Error(
+                            None,
+                            "Missing match value for aws_secret".to_string(),
+                        );
                         return;
                     }
                     if match_id.is_none() {
