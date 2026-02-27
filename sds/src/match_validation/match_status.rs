@@ -7,7 +7,7 @@ pub enum MatchStatus {
     NotAvailable,
     Partial, // Missing matches that are required for the match to be checked
     Invalid,
-    Error(String),
+    Error(Option<u16>, String),
     Valid,
 }
 
@@ -18,7 +18,10 @@ impl std::fmt::Display for MatchStatus {
             MatchStatus::NotAvailable => write!(f, "NotAvailable"),
             MatchStatus::Invalid => write!(f, "Invalid"),
             MatchStatus::Partial => write!(f, "Partial",),
-            MatchStatus::Error(msg) => write!(f, "Error({})", msg),
+            MatchStatus::Error(code, msg) => match code {
+                Some(c) => write!(f, "Error({}: {})", c, msg),
+                None => write!(f, "Error({})", msg),
+            },
             MatchStatus::Valid => write!(f, "Valid"),
         }
     }
@@ -47,8 +50,8 @@ mod tests {
         status.merge(MatchStatus::Invalid);
         assert_eq!(status, MatchStatus::Invalid);
 
-        status.merge(MatchStatus::Error("error".to_string()));
-        assert_eq!(status, MatchStatus::Error("error".to_string()));
+        status.merge(MatchStatus::Error(None, "error".to_string()));
+        assert_eq!(status, MatchStatus::Error(None, "error".to_string()));
 
         status.merge(MatchStatus::Valid);
         assert_eq!(status, MatchStatus::Valid);
@@ -65,19 +68,19 @@ mod tests {
         status.merge(MatchStatus::Invalid);
         assert_eq!(status, MatchStatus::Valid);
 
-        status.merge(MatchStatus::Error("error".to_string()));
+        status.merge(MatchStatus::Error(None, "error".to_string()));
         assert_eq!(status, MatchStatus::Valid);
 
-        status = MatchStatus::Error("error".to_string());
+        status = MatchStatus::Error(None, "error".to_string());
         status.merge(MatchStatus::NotChecked);
 
-        assert_eq!(status, MatchStatus::Error("error".to_string()));
+        assert_eq!(status, MatchStatus::Error(None, "error".to_string()));
 
         status.merge(MatchStatus::NotAvailable);
-        assert_eq!(status, MatchStatus::Error("error".to_string()));
+        assert_eq!(status, MatchStatus::Error(None, "error".to_string()));
 
         status.merge(MatchStatus::Invalid);
-        assert_eq!(status, MatchStatus::Error("error".to_string()));
+        assert_eq!(status, MatchStatus::Error(None, "error".to_string()));
 
         status = MatchStatus::Invalid;
         status.merge(MatchStatus::NotChecked);
