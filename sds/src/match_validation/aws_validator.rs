@@ -109,10 +109,11 @@ fn handle_reqwest_response(match_status: &mut MatchStatus, val: &reqwest::blocki
     // There might be an issue with the request. We will mark the match_status as error
     // unless it is already valid
     if val.status().is_server_error() {
-        *match_status = MatchStatus::Error(fmt::format(format_args!(
-            "Unexpected HTTP status code {}",
-            val.status().as_u16()
-        )));
+        let code = val.status().as_u16();
+        *match_status = MatchStatus::Error(
+            Some(code),
+            fmt::format(format_args!("Unexpected HTTP status code {}", code)),
+        );
     }
 }
 
@@ -133,12 +134,12 @@ impl MatchValidator for AwsValidator {
                     let match_secret = &matches[*secret_index].match_value;
                     if match_secret.is_none() {
                         *match_status =
-                            MatchStatus::Error("Missing match value for aws_secret".to_string());
+                            MatchStatus::Error(None, "Missing match value for aws_secret".to_string());
                         return;
                     }
                     if match_id.is_none() {
                         *match_status =
-                            MatchStatus::Error("Missing match value for aws_id".to_string());
+                            MatchStatus::Error(None, "Missing match value for aws_id".to_string());
                         return;
                     }
                     let match_secret =
@@ -177,7 +178,8 @@ impl MatchValidator for AwsValidator {
                             if let Some(source) = StdError::source(&err) {
                                 msg.push_str(format!(": {}", source).as_str());
                             }
-                            *match_status = MatchStatus::Error(msg);
+                            let code = err.status().map(|s| s.as_u16());
+                            *match_status = MatchStatus::Error(code, msg);
                         }
                     };
                 });

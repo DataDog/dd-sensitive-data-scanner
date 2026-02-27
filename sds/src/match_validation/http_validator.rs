@@ -41,10 +41,11 @@ impl HttpValidator {
             }
         }
         // If it's not in either, then it's not available
-        *match_status = MatchStatus::Error(fmt::format(format_args!(
-            "Unexpected HTTP status code {}",
-            val.status().as_u16()
-        )));
+        let code = val.status().as_u16();
+        *match_status = MatchStatus::Error(
+            Some(code),
+            fmt::format(format_args!("Unexpected HTTP status code {}", code)),
+        );
     }
 }
 
@@ -148,7 +149,8 @@ impl MatchValidator for HttpValidator {
                             if let Some(source) = StdError::source(&err) {
                                 msg.push_str(format!(": {}", source).as_str());
                             }
-                            *match_status = MatchStatus::Error(msg);
+                            let code = err.status().map(|s| s.as_u16());
+                            *match_status = MatchStatus::Error(code, msg);
                         }
                     }
                 },

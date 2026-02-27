@@ -52,11 +52,14 @@ impl HttpValidatorV2 {
                 }
             }
         }
-        *match_status = MatchStatus::Error(format!(
-            "No response condition matched for status code {} and body of length {}",
-            status,
-            body.len()
-        ));
+        *match_status = MatchStatus::Error(
+            Some(status),
+            format!(
+                "No response condition matched for status code {} and body of length {}",
+                status,
+                body.len()
+            ),
+        );
     }
 }
 
@@ -379,7 +382,8 @@ impl MatchValidator for HttpValidatorV2 {
                             if let Some(source) = StdError::source(&err) {
                                 msg.push_str(format!(": {}", source).as_str());
                             }
-                            *match_status = MatchStatus::Error(msg);
+                            let code = err.status().map(|s| s.as_u16());
+                            *match_status = MatchStatus::Error(code, msg);
                         }
                     }
                 },
@@ -796,7 +800,8 @@ calls:
 
         mock.assert();
         match &matches[0].match_status {
-            MatchStatus::Error(msg) => {
+            MatchStatus::Error(code, msg) => {
+                assert_eq!(*code, Some(500));
                 assert!(msg.contains("No response condition matched"));
                 assert!(msg.contains("500"));
             }
@@ -843,7 +848,7 @@ calls:
         validator.validate(&mut matches, &rules);
 
         match &matches[0].match_status {
-            MatchStatus::Error(msg) => {
+            MatchStatus::Error(_code, msg) => {
                 assert!(msg.contains("timeout"));
             }
             _ => panic!(
