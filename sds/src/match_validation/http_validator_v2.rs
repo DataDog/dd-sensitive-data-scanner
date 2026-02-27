@@ -350,7 +350,7 @@ fn generate_match_status_per_endpoint_combination(
             let template_variables = get_template_variables_with_idx(
                 rule_match,
                 rules,
-                &providing_matches_by_kind_and_name,
+                providing_matches_by_kind_and_name,
             );
             let calls = get_calls_for_rule_match(rule_match, rules);
             (rule_match_index, template_variables, calls)
@@ -409,9 +409,9 @@ impl MatchValidator for HttpValidatorV2 {
                     }
                     // Apply ALL template variables to the same endpoint
                     for template_var in &endpoint_combination.template_vars {
-                        endpoint = endpoint.with_template_variable(&template_var);
+                        endpoint = endpoint.with_template_variable(template_var);
                         templated_host =
-                            templated_host.map(|host| host.with_template_variable(&template_var));
+                            templated_host.map(|host| host.with_template_variable(template_var));
                     }
                     let rendered_host = templated_host.map(|host| host.to_string());
                     if let Some(ref host) = rendered_host {
@@ -434,7 +434,7 @@ impl MatchValidator for HttpValidatorV2 {
                         }
                         // Apply ALL template variables to the same header
                         for template_var in &endpoint_combination.template_vars {
-                            header_val = header_val.with_template_variable(&template_var);
+                            header_val = header_val.with_template_variable(template_var);
                         }
                         request_builder =
                             request_builder.header(header_key, header_val.to_string());
@@ -447,12 +447,12 @@ impl MatchValidator for HttpValidatorV2 {
                         HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch
                     );
                     if let Some(ref body_tpl) = endpoint_config.request.body {
-                        let mut body_val = body_tpl.with_rule_match(&rule_match);
+                        let mut body_val = body_tpl.with_rule_match(rule_match);
                         if let Some(ref host) = rendered_host {
                             body_val = body_val.with_host(host.as_str());
                         }
                         for template_var in &endpoint_combination.template_vars {
-                            body_val = body_val.with_template_variable(&template_var);
+                            body_val = body_val.with_template_variable(template_var);
                         }
                         request_builder = request_builder.body(body_val.to_string());
                     } else if body_requires_content_length {
