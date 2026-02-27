@@ -863,3 +863,183 @@ fn test_match_pairing_incomplete_missing_paired_secret() {
         _mock.assert_hits(0);
     }
 }
+
+#[test]
+fn test_match_pairing_rule_can_consume_and_provide() {
+    let server = MockServer::start();
+
+    let mock_api_key_valid = server.mock(|when, then| {
+        when.method(GET)
+            .path("/api/v1/validate")
+            .query_param("site", "ddsite_us")
+            .header("DD-API-KEY", "ddapikey_valid123");
+        then.status(200);
+    });
+    let mock_app_key_valid = server.mock(|when, then| {
+        when.method(GET)
+            .path("/api/v1/validate")
+            .header("DD-API-KEY", "ddapikey_valid123")
+            .header("DD-APPLICATION-KEY", "ddappkey_validxyz");
+        then.status(200);
+    });
+
+    let rule_dd_site = RootRuleConfig::new(RegexRuleConfig::new("\\bddsite_[a-z]+\\b").build())
+        .match_action(MatchAction::None)
+        .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+            provides: Some(vec![PairedValidatorConfig {
+                kind: "datadog".to_string(),
+                name: "dd_site".to_string(),
+            }]),
+            calls: vec![],
+            match_pairing: None,
+        }));
+
+    let mut dd_site_parameters = BTreeMap::new();
+    dd_site_parameters.insert("dd_site".to_string(), "$DD_SITE".to_string());
+
+    let rule_dd_api_key =
+        RootRuleConfig::new(RegexRuleConfig::new("\\bddapikey_[A-Za-z0-9]+\\b").build())
+            .match_action(MatchAction::None)
+            .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+                match_pairing: Some(MatchPairingConfig {
+                    kind: "datadog".to_string(),
+                    parameters: dd_site_parameters,
+                }),
+                provides: Some(vec![PairedValidatorConfig {
+                    kind: "datadog".to_string(),
+                    name: "api_key".to_string(),
+                }]),
+                calls: vec![HttpCallConfig {
+                    request: HttpRequestConfig {
+                        endpoint: TemplatedMatchString(format!(
+                            "{}/api/v1/validate?site=$DD_SITE",
+                            server.base_url()
+                        )),
+                        method: HttpMethod::Get,
+                        hosts: vec![],
+                        headers: BTreeMap::from([(
+                            "DD-API-KEY".to_string(),
+                            TemplatedMatchString("$MATCH".to_string()),
+                        )]),
+                        body: None,
+                        timeout: Duration::from_secs(5),
+                    },
+                    response: HttpResponseConfig {
+                        conditions: vec![
+                            ResponseCondition {
+                                condition_type: ResponseConditionType::Valid,
+                                status_code: Some(StatusCodeMatcher::Single(200)),
+                                raw_body: None,
+                                body: None,
+                            },
+                            ResponseCondition {
+                                condition_type: ResponseConditionType::Invalid,
+                                status_code: Some(StatusCodeMatcher::Single(403)),
+                                raw_body: None,
+                                body: None,
+                            },
+                        ],
+                    },
+                }],
+            }));
+
+    let mut dd_api_key_parameters = BTreeMap::new();
+    dd_api_key_parameters.insert("api_key".to_string(), "$DD_API_KEY".to_string());
+
+    let rule_dd_app_key =
+        RootRuleConfig::new(RegexRuleConfig::new("\\bddappkey_[A-Za-z0-9]+\\b").build())
+            .match_action(MatchAction::None)
+            .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+                match_pairing: Some(MatchPairingConfig {
+                    kind: "datadog".to_string(),
+                    parameters: dd_api_key_parameters,
+                }),
+                provides: None,
+                calls: vec![HttpCallConfig {
+                    request: HttpRequestConfig {
+                        endpoint: TemplatedMatchString(format!(
+                            "{}/api/v1/validate",
+                            server.base_url()
+                        )),
+                        method: HttpMethod::Get,
+                        hosts: vec![],
+                        headers: BTreeMap::from([
+                            (
+                                "DD-API-KEY".to_string(),
+                                TemplatedMatchString("$DD_API_KEY".to_string()),
+                            ),
+                            (
+                                "DD-APPLICATION-KEY".to_string(),
+                                TemplatedMatchString("$MATCH".to_string()),
+                            ),
+                        ]),
+                        body: None,
+                        timeout: Duration::from_secs(5),
+                    },
+                    response: HttpResponseConfig {
+                        conditions: vec![
+                            ResponseCondition {
+                                condition_type: ResponseConditionType::Valid,
+                                status_code: Some(StatusCodeMatcher::Single(200)),
+                                raw_body: None,
+                                body: None,
+                            },
+                            ResponseCondition {
+                                condition_type: ResponseConditionType::Invalid,
+                                status_code: Some(StatusCodeMatcher::Single(403)),
+                                raw_body: None,
+                                body: None,
+                            },
+                        ],
+                    },
+                }],
+            }));
+
+    let scanner = ScannerBuilder::new(&[rule_dd_site, rule_dd_app_key, rule_dd_api_key])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
+
+    fn get_status_by_rule_idx(matches: &[RuleMatch], rule_idx: usize) -> MatchStatus {
+        matches
+            .iter()
+            .find(|m| m.rule_index == rule_idx)
+            .unwrap_or_else(|| panic!("missing match for rule index {rule_idx}"))
+            .match_status
+            .clone()
+    }
+
+    fn scan_and_validate(scanner: &Scanner, content: &str) -> Vec<RuleMatch> {
+        let mut matches = scanner.scan(&mut content.to_string()).unwrap();
+        scanner.validate_matches(&mut matches);
+        matches
+    }
+
+    {
+        let matches = scan_and_validate(
+            &scanner,
+            "site=ddsite_us api_key=ddapikey_valid123 app_key=ddappkey_validxyz",
+        );
+
+        assert_eq!(get_status_by_rule_idx(&matches, 1), MatchStatus::Valid);
+        assert_eq!(get_status_by_rule_idx(&matches, 2), MatchStatus::Valid);
+        mock_api_key_valid.assert_hits(1);
+        mock_app_key_valid.assert_hits(1);
+    }
+
+    {
+        let matches = scan_and_validate(&scanner, "site=ddsite_us app_key=ddappkey_validxyz");
+
+        assert_eq!(get_status_by_rule_idx(&matches, 1), MatchStatus::Partial);
+        mock_api_key_valid.assert_hits(1);
+        mock_app_key_valid.assert_hits(1);
+    }
+
+    {
+        let matches = scan_and_validate(&scanner, "api_key=ddapikey_valid123");
+
+        assert_eq!(get_status_by_rule_idx(&matches, 2), MatchStatus::Partial);
+        mock_api_key_valid.assert_hits(1);
+        mock_app_key_valid.assert_hits(1);
+    }
+}

@@ -15,13 +15,11 @@ lazy_static! {
     static ref BLOCKING_HTTP_CLIENT: reqwest::blocking::Client = reqwest::blocking::Client::new();
 }
 
-pub struct HttpValidatorV2 {
-    config: CustomHttpConfigV2,
-}
+pub struct HttpValidatorV2 {}
 
 impl HttpValidatorV2 {
-    pub fn new_from_config(config: CustomHttpConfigV2) -> Self {
-        HttpValidatorV2 { config }
+    pub fn new_from_config(_config: CustomHttpConfigV2) -> Self {
+        HttpValidatorV2 {}
     }
     fn handle_reqwest_response(
         &self,
@@ -240,14 +238,23 @@ impl MatchValidator for HttpValidatorV2 {
                         }
                     })
                     .unwrap_or_default();
-                (idx, template_variables, rule_match)
+                let calls = rules
+                    .get(rule_match.rule_index)
+                    .and_then(|rule| match &rule.match_validation_type {
+                        Some(MatchValidationType::CustomHttpV2(custom_http_config)) => {
+                            Some(custom_http_config.calls.clone())
+                        }
+                        _ => None,
+                    })
+                    .unwrap_or_default();
+                (idx, template_variables, calls)
             })
-            .flat_map(move |(idx, template_variables, _rule_match)| {
+            .flat_map(move |(idx, template_variables, calls)| {
                 // Generate cartesian product of template variable values with contributing match indices
                 let template_var_combinations =
                     generate_template_variable_combinations(&template_variables);
 
-                self.config.calls.iter().flat_map(move |endpoint| {
+                calls.into_iter().flat_map(move |endpoint| {
                     let endpoint_host_opts: Vec<Option<TemplatedMatchString>> =
                         if endpoint.request.hosts.is_empty() {
                             vec![None]
@@ -263,13 +270,14 @@ impl MatchValidator for HttpValidatorV2 {
                     let combinations = template_var_combinations.clone();
                     endpoint_host_opts.into_iter().flat_map(move |host_opt| {
                         let combos = combinations.clone();
+                        let endpoint_config = endpoint.clone();
                         combos
                             .into_iter()
                             .map(move |(template_vars, contributing_matches)| {
                                 (
                                     (
                                         idx,
-                                        endpoint,
+                                        endpoint_config.clone(),
                                         host_opt.clone(),
                                         template_vars,
                                         contributing_matches,
@@ -295,13 +303,17 @@ impl MatchValidator for HttpValidatorV2 {
                     let mut templated_host = host_opt
                         .as_ref()
                         .map(|host| host.with_rule_match(rule_match));
-                    if self.config.match_pairing.is_some()
-                        && !self
-                            .config
-                            .match_pairing
-                            .as_ref()
-                            .unwrap()
-                            .is_fulfilled_by(template_vars)
+                    if rules
+                        .get(rule_match.rule_index)
+                        .and_then(|rule| match &rule.match_validation_type {
+                            Some(MatchValidationType::CustomHttpV2(custom_http_config)) => {
+                                custom_http_config.match_pairing.as_ref()
+                            }
+                            _ => None,
+                        })
+                        .is_some_and(|match_pairing_config| {
+                            !match_pairing_config.is_fulfilled_by(template_vars)
+                        })
                     {
                         *match_status = MatchStatus::Partial;
                         return;
