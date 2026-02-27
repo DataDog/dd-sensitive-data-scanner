@@ -1,8 +1,8 @@
 use super::match_validator::MatchValidator;
 use crate::match_validation::config_v2::{ResponseConditionResult, TemplateVariable};
 use crate::scanner::RootCompiledRule;
+use crate::{HttpCallConfig, MatchPairingConfig, MatchValidationType, TemplatedMatchString};
 use crate::{HttpResponseConfig, match_validation::match_validator::RAYON_THREAD_POOL};
-use crate::{MatchPairingConfig, MatchValidationType, TemplatedMatchString};
 use crate::{MatchStatus, RuleMatch, match_validation::config::HttpMethod};
 use ahash::AHashMap;
 use lazy_static::lazy_static;
@@ -194,108 +194,167 @@ fn generate_template_variable_combinations(
     result
 }
 
+fn matching_rule_has_calls(rule_match: &RuleMatch, rules: &[RootCompiledRule]) -> bool {
+    matches!(
+        rules
+            .get(rule_match.rule_index)
+            .and_then(|rule| rule.match_validation_type.as_ref()),
+        Some(MatchValidationType::CustomHttpV2(custom_http_config))
+            if !custom_http_config.calls.is_empty()
+    )
+}
+
+/// Get the template variables with their match indices for a given rule match
+/// Returns a vector of (TemplateVariable, match_idx) pairs
+fn get_template_variables_with_idx(
+    rule_match: &RuleMatch,
+    rules: &[RootCompiledRule],
+    providing_matches_by_kind_and_name: &AHashMap<(String, String), Vec<(String, usize)>>,
+) -> Vec<(TemplateVariable, usize)> {
+    rules
+        .get(rule_match.rule_index)
+        .and_then(|rule| {
+            if let Some(MatchValidationType::CustomHttpV2(custom_http_config)) =
+                &rule.match_validation_type
+            {
+                custom_http_config
+                    .match_pairing
+                    .as_ref()
+                    .map(|match_pairing_config| {
+                        get_match_pairing_template_variables(
+                            match_pairing_config,
+                            providing_matches_by_kind_and_name,
+                        )
+                    })
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default()
+}
+
+fn get_calls_for_rule_match(
+    rule_match: &RuleMatch,
+    rules: &[RootCompiledRule],
+) -> Vec<HttpCallConfig> {
+    rules
+        .get(rule_match.rule_index)
+        .and_then(|rule| match &rule.match_validation_type {
+            Some(MatchValidationType::CustomHttpV2(custom_http_config)) => {
+                Some(custom_http_config.calls.clone())
+            }
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+#[derive(Eq, PartialEq, Hash)]
+struct EndpointCombination {
+    rule_match_index: usize,
+    endpoint_config: HttpCallConfig,
+    host_opt: Option<TemplatedMatchString>,
+    template_vars: Vec<TemplateVariable>,
+    contributing_matches: Vec<usize>,
+}
+
+/// Explode the endpoint combinations into a vector of EndpointCombination and MatchStatus pairs
+/// This is used to generate all possible combinations of template variables and contributing matches
+/// for a given rule match.
+/// Conceptually, this is a cartesian product of the template variables and contributing matches.
+fn explode_endpoint_combinations(
+    rule_match_index: usize,
+    calls: Vec<HttpCallConfig>,
+    template_var_combinations: Vec<(Vec<TemplateVariable>, Vec<usize>)>,
+) -> Vec<(EndpointCombination, MatchStatus)> {
+    calls
+        .iter()
+        .flat_map(move |endpoint| {
+            let endpoint_host_opts: Vec<Option<TemplatedMatchString>> =
+                if endpoint.request.hosts.is_empty() {
+                    vec![None]
+                } else {
+                    endpoint
+                        .request
+                        .hosts
+                        .iter()
+                        .map(|h| Some(h.clone()))
+                        .collect()
+                };
+
+            let combinations = template_var_combinations.clone();
+            endpoint_host_opts.into_iter().flat_map(move |host_opt| {
+                let combos = combinations.clone();
+                combos
+                    .into_iter()
+                    .map(move |(template_vars, contributing_matches)| {
+                        (
+                            EndpointCombination {
+                                rule_match_index,
+                                endpoint_config: endpoint.clone(),
+                                host_opt: host_opt.clone(),
+                                template_vars,
+                                contributing_matches,
+                            },
+                            MatchStatus::NotChecked,
+                        )
+                    })
+            })
+        })
+        .collect()
+}
+
+fn generate_match_status_per_endpoint_combination(
+    matches: &[RuleMatch],
+    rules: &[RootCompiledRule],
+    providing_matches_by_kind_and_name: &AHashMap<(String, String), Vec<(String, usize)>>,
+) -> AHashMap<EndpointCombination, MatchStatus> {
+    matches
+        .iter()
+        .enumerate()
+        .filter(|(_, rule_match)| matching_rule_has_calls(rule_match, rules))
+        .map(|(rule_match_index, rule_match)| {
+            let template_variables = get_template_variables_with_idx(
+                rule_match,
+                rules,
+                &providing_matches_by_kind_and_name,
+            );
+            let calls = get_calls_for_rule_match(rule_match, rules);
+            (rule_match_index, template_variables, calls)
+        })
+        .flat_map(move |(rule_match_index, template_variables, calls)| {
+            // Generate cartesian product of template variable values with contributing match indices
+            let template_var_combinations =
+                generate_template_variable_combinations(&template_variables);
+
+            explode_endpoint_combinations(rule_match_index, calls, template_var_combinations)
+        })
+        .collect()
+}
+
 impl MatchValidator for HttpValidatorV2 {
     fn validate(&self, matches: &mut Vec<RuleMatch>, rules: &[RootCompiledRule]) {
         // Build up matches (the values themselves) that provide a secret to other matches
         // build a map of match status per endpoint, per host, and per match_idx
         let providing_matches_by_kind_and_name =
             get_providing_matches_by_kind_and_name(matches, rules);
-        let mut match_status_per_endpoint_and_match: AHashMap<_, _> = matches
-            .iter()
-            .enumerate()
-            .filter(|(_, rule_match)| {
-                matches!(
-                    rules
-                        .get(rule_match.rule_index)
-                        .and_then(|rule| rule.match_validation_type.as_ref()),
-                    Some(MatchValidationType::CustomHttpV2(custom_http_config))
-                        if !custom_http_config.calls.is_empty()
-                )
-            })
-            .map(|(idx, rule_match)| {
-                let template_variables = rules
-                    .get(rule_match.rule_index)
-                    .and_then(|rule| {
-                        if let Some(MatchValidationType::CustomHttpV2(custom_http_config)) =
-                            &rule.match_validation_type
-                        {
-                            custom_http_config
-                                .match_pairing
-                                .as_ref()
-                                .map(|match_pairing_config| {
-                                    get_match_pairing_template_variables(
-                                        match_pairing_config,
-                                        &providing_matches_by_kind_and_name,
-                                    )
-                                })
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or_default();
-                let calls = rules
-                    .get(rule_match.rule_index)
-                    .and_then(|rule| match &rule.match_validation_type {
-                        Some(MatchValidationType::CustomHttpV2(custom_http_config)) => {
-                            Some(custom_http_config.calls.clone())
-                        }
-                        _ => None,
-                    })
-                    .unwrap_or_default();
-                (idx, template_variables, calls)
-            })
-            .flat_map(move |(idx, template_variables, calls)| {
-                // Generate cartesian product of template variable values with contributing match indices
-                let template_var_combinations =
-                    generate_template_variable_combinations(&template_variables);
-
-                calls.into_iter().flat_map(move |endpoint| {
-                    let endpoint_host_opts: Vec<Option<TemplatedMatchString>> =
-                        if endpoint.request.hosts.is_empty() {
-                            vec![None]
-                        } else {
-                            endpoint
-                                .request
-                                .hosts
-                                .iter()
-                                .map(|h| Some(h.clone()))
-                                .collect()
-                        };
-
-                    let combinations = template_var_combinations.clone();
-                    endpoint_host_opts.into_iter().flat_map(move |host_opt| {
-                        let combos = combinations.clone();
-                        let endpoint_config = endpoint.clone();
-                        combos
-                            .into_iter()
-                            .map(move |(template_vars, contributing_matches)| {
-                                (
-                                    (
-                                        idx,
-                                        endpoint_config.clone(),
-                                        host_opt.clone(),
-                                        template_vars,
-                                        contributing_matches,
-                                    ),
-                                    MatchStatus::NotChecked,
-                                )
-                            })
-                    })
-                })
-            })
-            .collect();
+        let mut match_status_per_endpoint_combination: AHashMap<EndpointCombination, MatchStatus> =
+            generate_match_status_per_endpoint_combination(
+                matches,
+                rules,
+                &providing_matches_by_kind_and_name,
+            );
 
         RAYON_THREAD_POOL.install(|| {
             use rayon::prelude::*;
 
-            match_status_per_endpoint_and_match.par_iter_mut().for_each(
-                |(
-                    (match_idx, endpoint_config, host_opt, template_vars, _contributing_matches),
-                    match_status,
-                )| {
-                    let rule_match = &matches[*match_idx];
+            match_status_per_endpoint_combination
+                .par_iter_mut()
+                .for_each(|(endpoint_combination, match_status)| {
+                    let rule_match = &matches[endpoint_combination.rule_match_index];
+                    let endpoint_config = &endpoint_combination.endpoint_config;
                     let mut endpoint = endpoint_config.request.endpoint.with_rule_match(rule_match);
-                    let mut templated_host = host_opt
+                    let mut templated_host = endpoint_combination
+                        .host_opt
                         .as_ref()
                         .map(|host| host.with_rule_match(rule_match));
                     if rules
@@ -307,17 +366,18 @@ impl MatchValidator for HttpValidatorV2 {
                             _ => None,
                         })
                         .is_some_and(|match_pairing_config| {
-                            !match_pairing_config.is_fulfilled_by(template_vars)
+                            !match_pairing_config
+                                .is_fulfilled_by(&endpoint_combination.template_vars)
                         })
                     {
                         *match_status = MatchStatus::Partial;
                         return;
                     }
                     // Apply ALL template variables to the same endpoint
-                    for template_var in template_vars {
-                        endpoint = endpoint.with_template_variable(template_var);
+                    for template_var in &endpoint_combination.template_vars {
+                        endpoint = endpoint.with_template_variable(&template_var);
                         templated_host =
-                            templated_host.map(|host| host.with_template_variable(template_var));
+                            templated_host.map(|host| host.with_template_variable(&template_var));
                     }
                     let rendered_host = templated_host.map(|host| host.to_string());
                     if let Some(ref host) = rendered_host {
@@ -339,8 +399,8 @@ impl MatchValidator for HttpValidatorV2 {
                             header_val = header_val.with_host(host.as_str());
                         }
                         // Apply ALL template variables to the same header
-                        for template_var in template_vars {
-                            header_val = header_val.with_template_variable(template_var);
+                        for template_var in &endpoint_combination.template_vars {
+                            header_val = header_val.with_template_variable(&template_var);
                         }
                         request_builder =
                             request_builder.header(header_key, header_val.to_string());
@@ -353,12 +413,12 @@ impl MatchValidator for HttpValidatorV2 {
                         HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch
                     );
                     if let Some(ref body_tpl) = endpoint_config.request.body {
-                        let mut body_val = body_tpl.with_rule_match(rule_match);
+                        let mut body_val = body_tpl.with_rule_match(&rule_match);
                         if let Some(ref host) = rendered_host {
                             body_val = body_val.with_host(host.as_str());
                         }
-                        for template_var in template_vars {
-                            body_val = body_val.with_template_variable(template_var);
+                        for template_var in &endpoint_combination.template_vars {
+                            body_val = body_val.with_template_variable(&template_var);
                         }
                         request_builder = request_builder.body(body_val.to_string());
                     } else if body_requires_content_length {
@@ -368,7 +428,7 @@ impl MatchValidator for HttpValidatorV2 {
                     match res {
                         Ok(val) => {
                             self.handle_reqwest_response(
-                                &endpoint_config.response,
+                                &endpoint_combination.endpoint_config.response,
                                 match_status,
                                 val,
                             );
@@ -389,17 +449,16 @@ impl MatchValidator for HttpValidatorV2 {
                             *match_status = MatchStatus::Error(msg);
                         }
                     }
-                },
-            );
+                });
         });
 
         // Update the match status with this highest priority returned
-        for ((match_idx, _, _, _, contributing_matches), status) in
-            match_status_per_endpoint_and_match
-        {
-            matches[match_idx].match_status.merge(status.clone());
+        for (endpoint_combination, status) in match_status_per_endpoint_combination {
+            matches[endpoint_combination.rule_match_index]
+                .match_status
+                .merge(status.clone());
             // Also update all contributing matches with the same status
-            for contributing_idx in contributing_matches {
+            for contributing_idx in endpoint_combination.contributing_matches {
                 matches[contributing_idx].match_status.merge(status.clone());
             }
         }
