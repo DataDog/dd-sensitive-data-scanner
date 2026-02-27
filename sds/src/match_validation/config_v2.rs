@@ -135,54 +135,20 @@ impl ResponseCondition {
     /// * Matched and Valid -> Valid
     /// * Not matched -> NotChecked
     pub fn matches(&self, status_code: u16, body: &str) -> ResponseConditionResult {
-        let mut matches_results: Vec<ResponseConditionResult> = vec![];
-        if let Some(status_code_matcher) = self.status_code.as_ref() {
-            if status_code_matcher.matches(status_code) {
-                matches_results.push(self.condition_type.clone().into());
-            } else {
-                matches_results.push(ResponseConditionResult::NotChecked);
-            }
-        }
-        if let Some(raw_body_matcher) = self.raw_body.as_ref() {
-            if raw_body_matcher.matches(body) {
-                matches_results.push(self.condition_type.clone().into());
-            } else {
-                matches_results.push(ResponseConditionResult::NotChecked);
-            }
-        }
-        if let Some(body_matcher) = self.body.as_ref() {
-            if matches_body(body_matcher, body) {
-                matches_results.push(self.condition_type.clone().into());
-            } else {
-                matches_results.push(ResponseConditionResult::NotChecked);
-            }
-        }
-        self.aggregate_matches_results(matches_results)
-    }
-
-    /// Aggregates the results of the matches produced by the matches function.
-    /// If any of the results are NotChecked, the result is NotChecked.
-    /// If any of the results are Valid, the result is Valid.
-    /// Otherwise, the result is Invalid.
-    ///
-    /// Having mixed Valid / Invalid cannot happen as each condition shares the same ResponseConditionType.
-    fn aggregate_matches_results(
-        &self,
-        matches_results: Vec<ResponseConditionResult>,
-    ) -> ResponseConditionResult {
-        if matches_results.is_empty()
-            || matches_results
-                .iter()
-                .any(|result| result == &ResponseConditionResult::NotChecked)
+        if let Some(status_code_matcher) = self.status_code.as_ref()
+            && !status_code_matcher.matches(status_code)
         {
             ResponseConditionResult::NotChecked
-        } else if matches_results
-            .iter()
-            .any(|result| result == &ResponseConditionResult::Valid)
+        } else if let Some(raw_body_matcher) = self.raw_body.as_ref()
+            && !raw_body_matcher.matches(body)
         {
-            ResponseConditionResult::Valid
+            ResponseConditionResult::NotChecked
+        } else if let Some(body_matcher) = self.body.as_ref()
+            && !matches_body(body_matcher, body)
+        {
+            ResponseConditionResult::NotChecked
         } else {
-            ResponseConditionResult::Invalid
+            self.condition_type.clone().into()
         }
     }
 }
