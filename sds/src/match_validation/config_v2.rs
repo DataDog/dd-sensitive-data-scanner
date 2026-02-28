@@ -159,7 +159,7 @@ fn matches_body(body_matcher: &BTreeMap<String, BodyMatcher>, body: &str) -> boo
         Err(_) => return false,
     };
     for (path, matcher) in body_matcher.iter() {
-        let parts = path.split('.').collect::<Vec<&str>>();
+        let parts = path.split('.');
         let mut value = &parsed_body;
         for part in parts {
             value = match value.get(part) {

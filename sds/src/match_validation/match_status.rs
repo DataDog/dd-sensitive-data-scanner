@@ -5,7 +5,8 @@ pub enum MatchStatus {
     // The ordering here is important, values further down the list have a higher priority when merging.
     NotChecked,
     NotAvailable,
-    Partial, // Missing matches that are required for the match to be checked
+    /// Missing matches that are required for the match to be checked
+    Partial,
     Invalid,
     Error(String),
     Valid,
