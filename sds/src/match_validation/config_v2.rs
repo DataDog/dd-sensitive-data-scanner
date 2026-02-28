@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use crate::{HttpMethod, RuleMatch};
+use crate::HttpMethod;
 
 /// Configuration for Online Validation V2
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
@@ -266,13 +266,13 @@ pub struct PairedValidatorConfig {
 pub struct TemplatedMatchString(pub String);
 
 impl TemplatedMatchString {
-    pub fn with_rule_match(&self, rule_match: &RuleMatch) -> Self {
-        self.render("$MATCH", rule_match.match_value.as_ref().unwrap())
-    }
+    // pub fn with_rule_match(&self, rule_match: &RuleMatch) -> Self {
+    //     self.render("$MATCH", rule_match.match_value.as_ref().unwrap())
+    // }
 
-    pub fn with_host(&self, host: &str) -> Self {
-        self.render("$HOST", host)
-    }
+    // pub fn with_host(&self, host: &str) -> Self {
+    //     self.render("$HOST", host)
+    // }
 
     pub fn with_template_variable(&self, template_variable: &TemplateVariable) -> Self {
         self.render(

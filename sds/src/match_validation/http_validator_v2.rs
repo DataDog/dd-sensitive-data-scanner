@@ -6,6 +6,7 @@ use crate::{HttpResponseConfig, match_validation::match_validator::RAYON_THREAD_
 use crate::{MatchStatus, RuleMatch, match_validation::config::HttpMethod};
 use ahash::AHashMap;
 use lazy_static::lazy_static;
+use reqwest::blocking::RequestBuilder;
 use reqwest::blocking::Response;
 use std::error::Error as StdError;
 
@@ -286,7 +287,6 @@ fn get_calls_for_rule_match(
 struct EndpointCombination {
     rule_match_index: usize,
     endpoint_config: HttpCallConfig,
-    host_opt: Option<TemplatedMatchString>,
     template_vars: Vec<TemplateVariable>,
     contributing_matches: Vec<usize>,
 }
@@ -297,6 +297,7 @@ struct EndpointCombination {
 /// Conceptually, this is a cartesian product of the template variables and contributing matches.
 fn explode_endpoint_combinations(
     rule_match_index: usize,
+    match_value: &str,
     calls: Vec<HttpCallConfig>,
     template_var_combinations: Vec<(Vec<TemplateVariable>, Vec<usize>)>,
 ) -> Vec<(EndpointCombination, MatchStatus)> {
@@ -320,12 +321,26 @@ fn explode_endpoint_combinations(
                 let combos = combinations.clone();
                 combos
                     .into_iter()
-                    .map(move |(template_vars, contributing_matches)| {
+                    .map(move |(mut template_vars, contributing_matches)| {
+                        template_vars.push(TemplateVariable {
+                            name: "$MATCH".to_string(),
+                            value: match_value.to_string(),
+                        });
+                        if let Some(ref host) = host_opt {
+                            // Render the host before we push it as a template variable
+                            let mut host_var = host.clone();
+                            for template_var in &template_vars {
+                                host_var = host_var.with_template_variable(template_var);
+                            }
+                            template_vars.push(TemplateVariable {
+                                name: "$HOST".to_string(),
+                                value: host_var.to_string(),
+                            });
+                        }
                         (
                             EndpointCombination {
                                 rule_match_index,
                                 endpoint_config: endpoint.clone(),
-                                host_opt: host_opt.clone(),
                                 template_vars,
                                 contributing_matches,
                             },
@@ -360,9 +375,61 @@ fn generate_match_status_per_endpoint_combination(
             let template_var_combinations =
                 generate_template_variable_combinations(&template_variables);
 
-            explode_endpoint_combinations(rule_match_index, calls, template_var_combinations)
+            explode_endpoint_combinations(
+                rule_match_index,
+                matches[rule_match_index]
+                    .match_value
+                    .as_ref()
+                    .unwrap()
+                    .as_str(),
+                calls,
+                template_var_combinations,
+            )
         })
         .collect()
+}
+
+fn prepare_request(endpoint_combination: &EndpointCombination) -> RequestBuilder {
+    let endpoint_config = &endpoint_combination.endpoint_config;
+    let mut endpoint = endpoint_config.request.endpoint.clone();
+    // Apply ALL template variables to the same endpoint
+    for template_var in &endpoint_combination.template_vars {
+        endpoint = endpoint.with_template_variable(template_var);
+    }
+    let mut request_builder = match endpoint_config.request.method {
+        HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(endpoint.to_string()),
+        HttpMethod::Post => BLOCKING_HTTP_CLIENT.post(endpoint.to_string()),
+        HttpMethod::Put => BLOCKING_HTTP_CLIENT.put(endpoint.to_string()),
+        HttpMethod::Delete => BLOCKING_HTTP_CLIENT.delete(endpoint.to_string()),
+        HttpMethod::Patch => BLOCKING_HTTP_CLIENT.patch(endpoint.to_string()),
+    };
+    request_builder = request_builder.timeout(endpoint_config.request.timeout);
+
+    // Add headers
+    for (header_key, header_value) in &endpoint_config.request.headers {
+        let mut header_val = header_value.clone();
+        for template_var in &endpoint_combination.template_vars {
+            header_val = header_val.with_template_variable(template_var);
+        }
+        request_builder = request_builder.header(header_key, header_val.to_string());
+    }
+    // Add request body with template substitution. For methods that can carry
+    // a body (POST/PUT/PATCH), always set one so reqwest emits Content-Length:
+    // omitting it causes some servers to reject the request with HTTP 411.
+    let body_requires_content_length = matches!(
+        endpoint_config.request.method,
+        HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch
+    );
+    if let Some(ref body_tpl) = endpoint_config.request.body {
+        let mut body_val = body_tpl.clone();
+        for template_var in &endpoint_combination.template_vars {
+            body_val = body_val.with_template_variable(template_var);
+        }
+        request_builder = request_builder.body(body_val.to_string());
+    } else if body_requires_content_length {
+        request_builder = request_builder.body("");
+    }
+    request_builder
 }
 
 impl MatchValidator for HttpValidatorV2 {
@@ -385,12 +452,6 @@ impl MatchValidator for HttpValidatorV2 {
                 .par_iter_mut()
                 .for_each(|(endpoint_combination, match_status)| {
                     let rule_match = &matches[endpoint_combination.rule_match_index];
-                    let endpoint_config = &endpoint_combination.endpoint_config;
-                    let mut endpoint = endpoint_config.request.endpoint.with_rule_match(rule_match);
-                    let mut templated_host = endpoint_combination
-                        .host_opt
-                        .as_ref()
-                        .map(|host| host.with_rule_match(rule_match));
                     if rules
                         .get(rule_match.rule_index)
                         .and_then(|rule| match &rule.match_validation_type {
@@ -407,57 +468,7 @@ impl MatchValidator for HttpValidatorV2 {
                         *match_status = MatchStatus::Partial;
                         return;
                     }
-                    // Apply ALL template variables to the same endpoint
-                    for template_var in &endpoint_combination.template_vars {
-                        endpoint = endpoint.with_template_variable(template_var);
-                        templated_host =
-                            templated_host.map(|host| host.with_template_variable(template_var));
-                    }
-                    let rendered_host = templated_host.map(|host| host.to_string());
-                    if let Some(ref host) = rendered_host {
-                        endpoint = endpoint.with_host(host.as_str());
-                    }
-                    let mut request_builder = match endpoint_config.request.method {
-                        HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(endpoint.to_string()),
-                        HttpMethod::Post => BLOCKING_HTTP_CLIENT.post(endpoint.to_string()),
-                        HttpMethod::Put => BLOCKING_HTTP_CLIENT.put(endpoint.to_string()),
-                        HttpMethod::Delete => BLOCKING_HTTP_CLIENT.delete(endpoint.to_string()),
-                        HttpMethod::Patch => BLOCKING_HTTP_CLIENT.patch(endpoint.to_string()),
-                    };
-                    request_builder = request_builder.timeout(endpoint_config.request.timeout);
-
-                    // Add headers
-                    for (header_key, header_value) in &endpoint_config.request.headers {
-                        let mut header_val = header_value.with_rule_match(rule_match);
-                        if let Some(ref host) = rendered_host {
-                            header_val = header_val.with_host(host.as_str());
-                        }
-                        // Apply ALL template variables to the same header
-                        for template_var in &endpoint_combination.template_vars {
-                            header_val = header_val.with_template_variable(template_var);
-                        }
-                        request_builder =
-                            request_builder.header(header_key, header_val.to_string());
-                    }
-                    // Add request body with template substitution. For methods that can carry
-                    // a body (POST/PUT/PATCH), always set one so reqwest emits Content-Length:
-                    // omitting it causes some servers to reject the request with HTTP 411.
-                    let body_requires_content_length = matches!(
-                        endpoint_config.request.method,
-                        HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch
-                    );
-                    if let Some(ref body_tpl) = endpoint_config.request.body {
-                        let mut body_val = body_tpl.with_rule_match(rule_match);
-                        if let Some(ref host) = rendered_host {
-                            body_val = body_val.with_host(host.as_str());
-                        }
-                        for template_var in &endpoint_combination.template_vars {
-                            body_val = body_val.with_template_variable(template_var);
-                        }
-                        request_builder = request_builder.body(body_val.to_string());
-                    } else if body_requires_content_length {
-                        request_builder = request_builder.body("");
-                    }
+                    let request_builder = prepare_request(endpoint_combination);
                     let res = request_builder.send();
                     match res {
                         Ok(val) => {
@@ -573,7 +584,10 @@ calls:
             config.calls[0]
                 .request
                 .endpoint
-                .with_rule_match(&rule_match)
+                .with_template_variable(&TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: rule_match.match_value.as_ref().unwrap().clone(),
+                })
                 .to_string(),
             "http://localhost/test?secret=test".to_string()
         );
@@ -595,16 +609,30 @@ calls:
         let rule_match = create_test_match("test");
 
         // Test that with_host substitutes the host correctly
-        let endpoint_with_match = config.calls[0]
-            .request
-            .endpoint
-            .with_rule_match(&rule_match);
+        let endpoint_with_match =
+            config.calls[0]
+                .request
+                .endpoint
+                .with_template_variable(&TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: rule_match.match_value.as_ref().unwrap().clone(),
+                });
         assert_eq!(
-            endpoint_with_match.with_host("us").to_string(),
+            endpoint_with_match
+                .with_template_variable(&TemplateVariable {
+                    name: "$HOST".to_string(),
+                    value: "us".to_string(),
+                })
+                .to_string(),
             "http://us/test"
         );
         assert_eq!(
-            endpoint_with_match.with_host("eu").to_string(),
+            endpoint_with_match
+                .with_template_variable(&TemplateVariable {
+                    name: "$HOST".to_string(),
+                    value: "eu".to_string(),
+                })
+                .to_string(),
             "http://eu/test"
         );
     }
@@ -1221,16 +1249,30 @@ calls:
             ]
         );
         let rule_match = create_test_match("test");
-        let endpoint_with_match = config.calls[0]
-            .request
-            .endpoint
-            .with_rule_match(&rule_match);
+        let endpoint_with_match =
+            config.calls[0]
+                .request
+                .endpoint
+                .with_template_variable(&TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: rule_match.match_value.as_ref().unwrap().clone(),
+                });
         assert_eq!(
-            endpoint_with_match.with_host("us").to_string(),
+            endpoint_with_match
+                .with_template_variable(&TemplateVariable {
+                    name: "$HOST".to_string(),
+                    value: "us".to_string(),
+                })
+                .to_string(),
             "http://us/test1"
         );
         assert_eq!(
-            endpoint_with_match.with_host("eu").to_string(),
+            endpoint_with_match
+                .with_template_variable(&TemplateVariable {
+                    name: "$HOST".to_string(),
+                    value: "eu".to_string(),
+                })
+                .to_string(),
             "http://eu/test1"
         );
     }
