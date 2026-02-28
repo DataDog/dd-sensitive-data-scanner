@@ -148,7 +148,7 @@ impl ResponseCondition {
         {
             ResponseConditionResult::NotChecked
         } else {
-            self.condition_type.clone().into()
+            self.condition_type.into()
         }
     }
 }
@@ -179,7 +179,7 @@ fn matches_body(body_matcher: &BTreeMap<String, BodyMatcher>, body: &str) -> boo
 }
 
 /// Type of response condition
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum ResponseConditionType {
     Valid,
