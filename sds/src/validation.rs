@@ -5,7 +5,7 @@ use crate::parser::error::ParseError;
 use moka::sync::Cache;
 use once_cell::sync::Lazy;
 use regex_automata::meta::{self};
-use regex_syntax::ast::Ast;
+use regex_syntax::ast::{Ast, GroupKind};
 use regex_syntax::hir::translate::Translator;
 use thiserror::Error;
 
@@ -40,6 +40,9 @@ pub enum RegexPatternCaptureGroupsValidationError {
 
     #[error("The targeted capture group must be 'sds_match'")]
     TargetedCaptureGroupMustBeSdsMatch,
+
+    #[error("The capture group 'sds_match' cannot match an empty string")]
+    CaptureGroupMatchesEmptyString,
 
     #[error("The regex is invalid")]
     InvalidSyntax,
@@ -123,6 +126,70 @@ fn check_minimum_match_length(ast: &Ast, ast_str: &str) -> Result<(), RegexValid
     }
 }
 
+pub fn validate_named_capture_group_minimum_length(
+    pattern: &str,
+    group_name: &str,
+) -> Result<(), RegexPatternCaptureGroupsValidationError> {
+    let ast = convert_to_rust_regex_ast(pattern)
+        .map_err(|_| RegexPatternCaptureGroupsValidationError::InvalidSyntax)?;
+    let matching_groups = collect_named_capture_group_asts(&ast, group_name);
+
+    for group_ast in matching_groups {
+        let group_pattern = group_ast.to_string();
+        let hir = Translator::new()
+            .translate(&group_pattern, group_ast)
+            .map_err(|_| RegexPatternCaptureGroupsValidationError::InvalidSyntax)?;
+        match hir.properties().minimum_len() {
+            None => return Err(RegexPatternCaptureGroupsValidationError::InvalidSyntax),
+            Some(0) => {
+                return Err(
+                    RegexPatternCaptureGroupsValidationError::CaptureGroupMatchesEmptyString,
+                );
+            }
+            Some(_) => {}
+        }
+    }
+
+    Ok(())
+}
+
+fn collect_named_capture_group_asts<'a>(ast: &'a Ast, group_name: &str) -> Vec<&'a Ast> {
+    let mut matching_groups = Vec::new();
+
+    match ast {
+        Ast::Concat(concat) => {
+            for sub_ast in &concat.asts {
+                matching_groups.extend(collect_named_capture_group_asts(sub_ast, group_name));
+            }
+        }
+        Ast::Group(group) => {
+            if let GroupKind::CaptureName { name, .. } = &group.kind
+                && name.name == group_name
+            {
+                matching_groups.push(group.ast.as_ref());
+            }
+            matching_groups.extend(collect_named_capture_group_asts(
+                group.ast.as_ref(),
+                group_name,
+            ));
+        }
+        Ast::Alternation(alternation) => {
+            for sub_ast in &alternation.asts {
+                matching_groups.extend(collect_named_capture_group_asts(sub_ast, group_name));
+            }
+        }
+        Ast::Repetition(repetition) => {
+            matching_groups.extend(collect_named_capture_group_asts(
+                repetition.ast.as_ref(),
+                group_name,
+            ));
+        }
+        _ => {}
+    }
+
+    matching_groups
+}
+
 fn is_regex_within_complexity_limit(
     converted_pattern: &str,
     complexity_limit: usize,
@@ -166,8 +233,9 @@ fn build_regex(
 #[cfg(test)]
 mod test {
     use crate::validation::{
-        RegexValidationError, get_regex_complexity_estimate_very_slow, validate_and_create_regex,
-        validate_regex,
+        RegexPatternCaptureGroupsValidationError, RegexValidationError,
+        get_regex_complexity_estimate_very_slow, validate_and_create_regex,
+        validate_named_capture_group_minimum_length, validate_regex,
     };
 
     #[test]
@@ -241,6 +309,22 @@ mod test {
         assert_eq!(
             validate_regex("\\bx{0,2}\\b"),
             Err(RegexValidationError::MatchesEmptyString)
+        );
+    }
+
+    #[test]
+    fn capture_group_minimum_length_rejects_empty() {
+        assert_eq!(
+            validate_named_capture_group_minimum_length("hello (?<sds_match>d*)", "sds_match"),
+            Err(RegexPatternCaptureGroupsValidationError::CaptureGroupMatchesEmptyString),
+        );
+    }
+
+    #[test]
+    fn capture_group_minimum_length_accepts_non_empty() {
+        assert!(
+            validate_named_capture_group_minimum_length("hello (?<sds_match>world)", "sds_match")
+                .is_ok()
         );
     }
 }

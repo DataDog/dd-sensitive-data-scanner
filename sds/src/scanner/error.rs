@@ -58,6 +58,7 @@ pub enum ScannerError {
 mod test {
     use crate::match_action::MatchActionValidationError;
     use crate::proximity_keywords::ProximityKeywordsValidationError;
+    use crate::validation::RegexPatternCaptureGroupsValidationError;
     use crate::{CreateScannerError, RegexValidationError};
 
     fn test_error(error: CreateScannerError, expected_display: &str) {
@@ -118,6 +119,16 @@ mod test {
                 MatchActionValidationError::PartialRedactionNumCharsZero,
             ),
             "Partial redaction chars must be non-zero",
+        );
+    }
+
+    #[test]
+    fn test_invalid_pattern_capture_groups() {
+        test_error(
+            CreateScannerError::InvalidPatternCaptureGroups(
+                RegexPatternCaptureGroupsValidationError::CaptureGroupMatchesEmptyString,
+            ),
+            "The capture group 'sds_match' cannot match an empty string",
         );
     }
 }

@@ -1023,3 +1023,20 @@ func TestScanStringWithCaptureGroup(t *testing.T) {
 		t.Fatalf("Scanner did not mutate the event as expected. Expected: '%s', Received: '%s'", expected, string(result.Event))
 	}
 }
+
+func TestCreateScannerFailsOnEmptySdsMatchCaptureGroup(t *testing.T) {
+	var extraConfig ExtraConfig
+	extraConfig.PatternCaptureGroups = []string{"sds_match"}
+
+	rules := []RuleConfig{
+		NewMatchingRule("rule_secret", "hello (?<sds_match>d*)", extraConfig),
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err == nil {
+		t.Fatal("creating scanner should fail when sds_match can match an empty string")
+	}
+	if scanner != nil {
+		t.Fatal("on failed creation, the returned scanner should be nil")
+	}
+}
