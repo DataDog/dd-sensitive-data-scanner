@@ -1,12 +1,16 @@
 use crate::match_validation::config::HttpStatusCodeRange;
+use crate::match_validation::config_v2::TemplatedMatchString;
 use crate::match_validation::validator_utils::generate_aws_headers_and_body;
 use crate::scanner::RootRuleConfig;
 use crate::{
-    AwsConfig, AwsType, CustomHttpConfig, InternalMatchValidationType, MatchAction, MatchStatus,
-    MatchValidationType, ProximityKeywordsConfig, RegexRuleConfig, ScannerBuilder,
+    AwsConfig, AwsType, CustomHttpConfig, CustomHttpConfigV2, HttpCallConfig, HttpMethod,
+    HttpRequestConfig, HttpResponseConfig, InternalMatchValidationType, MatchAction,
+    MatchPairingConfig, MatchStatus, MatchValidationType, PairedValidatorConfig,
+    ProximityKeywordsConfig, RegexRuleConfig, ResponseCondition, ResponseConditionType, RuleMatch,
+    Scanner, ScannerBuilder, StatusCodeMatcher,
 };
 use httpmock::Method::{GET, POST};
-use httpmock::MockServer;
+use httpmock::{MockServer, Regex};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::time::Duration;
@@ -575,4 +579,467 @@ fn test_mock_aws_validator() {
         matches[4].match_status,
         MatchStatus::Error("Unexpected HTTP status code 500".to_string())
     );
+}
+
+#[test]
+fn test_match_pairing_end_to_end() {
+    let server = MockServer::start();
+
+    // Mock endpoint expects both the API key ($MATCH from main rule), client_subdomain,
+    // and user_id from the paired validators in the URL path
+    let mock_valid = server.mock(|when, then| {
+        when.method(GET)
+            .path("/api/acme_corp/USjohn/validate")
+            .query_param("secret", "api_key_abc123");
+        then.status(200).body(r#"{"status": "valid"}"#);
+    });
+    let mock_invalid = server.mock(|when, then| {
+        when.method(GET)
+            .path("/api/other_corp/USjohn/validate")
+            .query_param("secret", "api_key_abc123");
+        then.status(403);
+    });
+
+    // Create a rule that provides the client_subdomain parameter
+    let rule_client_subdomain =
+        RootRuleConfig::new(RegexRuleConfig::new("\\b[a-z_]+_corp\\b").build())
+            .match_action(MatchAction::None)
+            .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+                provides: Some(vec![PairedValidatorConfig {
+                    kind: "vendor_xyz".to_string(),
+                    name: "client_subdomain".to_string(),
+                }]),
+                calls: vec![],
+                match_pairing: None,
+            }));
+
+    // Create a rule that provides the user_id parameter
+    let rule_user_id = RootRuleConfig::new(RegexRuleConfig::new("\\bUS[a-z0-9]+\\b").build())
+        .match_action(MatchAction::None)
+        .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+            provides: Some(vec![PairedValidatorConfig {
+                kind: "vendor_xyz".to_string(),
+                name: "user_id".to_string(),
+            }]),
+            calls: vec![],
+            match_pairing: None,
+        }));
+
+    // Create the main validation rule with match pairing
+    let mut parameters = BTreeMap::new();
+    parameters.insert(
+        "client_subdomain".to_string(),
+        "$CLIENT_SUBDOMAIN".to_string(),
+    );
+    parameters.insert("user_id".to_string(), "$USER_ID".to_string());
+
+    let http_config_v2 = CustomHttpConfigV2 {
+        match_pairing: Some(MatchPairingConfig {
+            kind: "vendor_xyz".to_string(),
+            parameters,
+        }),
+        provides: None,
+        calls: vec![HttpCallConfig {
+            request: HttpRequestConfig {
+                endpoint: TemplatedMatchString(format!(
+                    "{}/api/$CLIENT_SUBDOMAIN/$USER_ID/validate?secret=$MATCH",
+                    server.base_url()
+                )),
+                method: HttpMethod::Get,
+                hosts: vec![],
+                headers: BTreeMap::new(),
+                body: None,
+                timeout: Duration::from_secs(5),
+            },
+            response: HttpResponseConfig {
+                conditions: vec![
+                    ResponseCondition {
+                        condition_type: ResponseConditionType::Valid,
+                        status_code: Some(StatusCodeMatcher::Single(200)),
+                        raw_body: None,
+                        body: None,
+                    },
+                    ResponseCondition {
+                        condition_type: ResponseConditionType::Invalid,
+                        status_code: Some(StatusCodeMatcher::Single(403)),
+                        raw_body: None,
+                        body: None,
+                    },
+                ],
+            },
+        }],
+    };
+
+    let rule_api_key = RootRuleConfig::new(RegexRuleConfig::new("\\bapi_key_[a-z0-9]+\\b").build())
+        .match_action(MatchAction::Redact {
+            replacement: "[API_KEY]".to_string(),
+        })
+        .third_party_active_checker(MatchValidationType::CustomHttpV2(http_config_v2));
+
+    let scanner = ScannerBuilder::new(&[rule_client_subdomain, rule_user_id, rule_api_key])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
+
+    let mut content =
+        "Client: acme_corp, API Key: api_key_abc123, another company: other_corp for user USjohn"
+            .to_string();
+    let mut matches = scanner.scan(&mut content).unwrap();
+
+    // We expect 4 matches:
+    // - acme_corp (client_subdomain provider)
+    // - api_key_abc123 (main match to validate)
+    // - USjohn (user_id provider)
+    // - other_corp (another client_subdomain, but same rule)
+    assert_eq!(matches.len(), 4);
+    assert_eq!(
+        content,
+        "Client: acme_corp, API Key: [API_KEY], another company: other_corp for user USjohn"
+    );
+
+    scanner.validate_matches(&mut matches);
+
+    let api_key_match = matches
+        .iter()
+        .find(|m| {
+            m.match_value
+                .as_ref()
+                .map_or(false, |v| v.starts_with("api_key"))
+        })
+        .expect("Should find api_key match");
+    let user_id_match = matches
+        .iter()
+        .find(|m| {
+            m.match_value
+                .as_ref()
+                .map_or(false, |v| v.starts_with("US"))
+        })
+        .expect("Should find user_id match");
+    let acme_client_subdomain_match = matches
+        .iter()
+        .find(|m| {
+            m.match_value
+                .as_ref()
+                .map_or(false, |v| v.ends_with("acme_corp"))
+        })
+        .expect("Should find client_subdomain match");
+    let other_client_subdomain_match = matches
+        .iter()
+        .find(|m| {
+            m.match_value
+                .as_ref()
+                .map_or(false, |v| v.ends_with("other_corp"))
+        })
+        .expect("Should find client_subdomain match");
+
+    // Both mocks should have been called
+    mock_valid.assert();
+    mock_invalid.assert();
+
+    // The first pairing of the three secrets should have matched
+    assert_eq!(api_key_match.match_status, MatchStatus::Valid);
+    assert_eq!(user_id_match.match_status, MatchStatus::Valid);
+    assert_eq!(acme_client_subdomain_match.match_status, MatchStatus::Valid);
+
+    // The pairing with the other_corp should have been rejected, thus invalid
+    assert_eq!(
+        other_client_subdomain_match.match_status,
+        MatchStatus::Invalid
+    );
+}
+
+#[test]
+fn test_match_pairing_incomplete_missing_paired_secret() {
+    let server = MockServer::start();
+
+    // Set up a mock that only matches when the subdomain is properly substituted
+    // (not the literal "$CLIENT_SUBDOMAIN" string)
+    let _mock = server.mock(|when, then| {
+        when.method(GET)
+            .path_matches(Regex::new(r"^/api/[a-z_]+_corp/validate$").unwrap())
+            .query_param("secret", "api_key_abc123");
+        then.status(200).body(r#"{"status": "valid"}"#);
+    });
+
+    // Rule provides client_subdomain
+    let rule_client_subdomain =
+        RootRuleConfig::new(RegexRuleConfig::new("\\b[a-z_]+_corp\\b").build())
+            .match_action(MatchAction::None)
+            .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+                provides: Some(vec![crate::PairedValidatorConfig {
+                    kind: "vendor_xyz".to_string(),
+                    name: "client_subdomain".to_string(),
+                }]),
+                calls: vec![],
+                match_pairing: None,
+            }));
+
+    // Main validation rule with match pairing
+    let mut parameters = BTreeMap::new();
+    parameters.insert(
+        "client_subdomain".to_string(),
+        "$CLIENT_SUBDOMAIN".to_string(),
+    );
+
+    let http_config_v2 = CustomHttpConfigV2 {
+        match_pairing: Some(MatchPairingConfig {
+            kind: "vendor_xyz".to_string(),
+            parameters,
+        }),
+        provides: None,
+        calls: vec![HttpCallConfig {
+            request: HttpRequestConfig {
+                endpoint: TemplatedMatchString(format!(
+                    "{}/api/$CLIENT_SUBDOMAIN/validate?secret=$MATCH",
+                    server.base_url()
+                )),
+                method: HttpMethod::Get,
+                hosts: vec![],
+                headers: BTreeMap::new(),
+                body: None,
+                timeout: Duration::from_secs(5),
+            },
+            response: HttpResponseConfig {
+                conditions: vec![ResponseCondition {
+                    condition_type: ResponseConditionType::Valid,
+                    status_code: Some(StatusCodeMatcher::Single(200)),
+                    raw_body: None,
+                    body: None,
+                }],
+            },
+        }],
+    };
+
+    let rule_main_validator =
+        RootRuleConfig::new(RegexRuleConfig::new("\\bapi_key_[a-z0-9]+\\b").build())
+            .match_action(MatchAction::Redact {
+                replacement: "[API_KEY]".to_string(),
+            })
+            .third_party_active_checker(MatchValidationType::CustomHttpV2(http_config_v2));
+
+    let scanner = ScannerBuilder::new(&[rule_client_subdomain, rule_main_validator])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
+
+    fn get_matches_with_content(scanner: &Scanner, content: &str) -> Vec<RuleMatch> {
+        let mut matches = scanner.scan(&mut content.to_string()).unwrap();
+        scanner.validate_matches(&mut matches);
+        matches
+    }
+
+    {
+        // Content contains only the main secret, missing the paired secret
+        let mut matches = get_matches_with_content(
+            &scanner,
+            "The secret is api_key_abc123 but no client subdomain",
+        );
+
+        // Should have exactly one match (the main secret)
+        assert_eq!(matches.len(), 1);
+
+        scanner.validate_matches(&mut matches);
+
+        let main_match = matches.first().expect("Should find main match");
+        assert!(matches!(main_match.match_status, MatchStatus::Partial));
+
+        // The mock should NOT have been called (since the path didn't match the pattern)
+        _mock.assert_hits(0);
+    }
+    {
+        // Content contains only the paired secret, missing the main secret
+        let mut matches =
+            get_matches_with_content(&scanner, "The client subdomain is acme_corp but no secret");
+
+        // Should have exactly one match (the main secret)
+        assert_eq!(matches.len(), 1);
+
+        scanner.validate_matches(&mut matches);
+
+        let main_match = matches.first().expect("Should find main match");
+        assert!(matches!(main_match.match_status, MatchStatus::NotChecked));
+
+        // The mock should NOT have been called (since the path didn't match the pattern)
+        _mock.assert_hits(0);
+    }
+}
+
+#[test]
+fn test_match_pairing_rule_can_consume_and_provide() {
+    let server = MockServer::start();
+
+    let mock_api_key_valid = server.mock(|when, then| {
+        when.method(GET)
+            .path("/api/v1/validate")
+            .query_param("site", "ddsite_us")
+            .header("DD-API-KEY", "ddapikey_valid123");
+        then.status(200);
+    });
+    let mock_app_key_valid = server.mock(|when, then| {
+        when.method(GET)
+            .path("/api/v1/validate")
+            .header("DD-API-KEY", "ddapikey_valid123")
+            .header("DD-APPLICATION-KEY", "ddappkey_validxyz");
+        then.status(200);
+    });
+
+    let rule_dd_site = RootRuleConfig::new(RegexRuleConfig::new("\\bddsite_[a-z]+\\b").build())
+        .match_action(MatchAction::None)
+        .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+            provides: Some(vec![PairedValidatorConfig {
+                kind: "datadog".to_string(),
+                name: "dd_site".to_string(),
+            }]),
+            calls: vec![],
+            match_pairing: None,
+        }));
+
+    let mut dd_site_parameters = BTreeMap::new();
+    dd_site_parameters.insert("dd_site".to_string(), "$DD_SITE".to_string());
+
+    let rule_dd_api_key =
+        RootRuleConfig::new(RegexRuleConfig::new("\\bddapikey_[A-Za-z0-9]+\\b").build())
+            .match_action(MatchAction::None)
+            .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+                match_pairing: Some(MatchPairingConfig {
+                    kind: "datadog".to_string(),
+                    parameters: dd_site_parameters,
+                }),
+                provides: Some(vec![PairedValidatorConfig {
+                    kind: "datadog".to_string(),
+                    name: "api_key".to_string(),
+                }]),
+                calls: vec![HttpCallConfig {
+                    request: HttpRequestConfig {
+                        endpoint: TemplatedMatchString(format!(
+                            "{}/api/v1/validate?site=$DD_SITE",
+                            server.base_url()
+                        )),
+                        method: HttpMethod::Get,
+                        hosts: vec![],
+                        headers: BTreeMap::from([(
+                            "DD-API-KEY".to_string(),
+                            TemplatedMatchString("$MATCH".to_string()),
+                        )]),
+                        body: None,
+                        timeout: Duration::from_secs(5),
+                    },
+                    response: HttpResponseConfig {
+                        conditions: vec![
+                            ResponseCondition {
+                                condition_type: ResponseConditionType::Valid,
+                                status_code: Some(StatusCodeMatcher::Single(200)),
+                                raw_body: None,
+                                body: None,
+                            },
+                            ResponseCondition {
+                                condition_type: ResponseConditionType::Invalid,
+                                status_code: Some(StatusCodeMatcher::Single(403)),
+                                raw_body: None,
+                                body: None,
+                            },
+                        ],
+                    },
+                }],
+            }));
+
+    let mut dd_api_key_parameters = BTreeMap::new();
+    dd_api_key_parameters.insert("api_key".to_string(), "$DD_API_KEY".to_string());
+
+    let rule_dd_app_key =
+        RootRuleConfig::new(RegexRuleConfig::new("\\bddappkey_[A-Za-z0-9]+\\b").build())
+            .match_action(MatchAction::None)
+            .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+                match_pairing: Some(MatchPairingConfig {
+                    kind: "datadog".to_string(),
+                    parameters: dd_api_key_parameters,
+                }),
+                provides: None,
+                calls: vec![HttpCallConfig {
+                    request: HttpRequestConfig {
+                        endpoint: TemplatedMatchString(format!(
+                            "{}/api/v1/validate",
+                            server.base_url()
+                        )),
+                        method: HttpMethod::Get,
+                        hosts: vec![],
+                        headers: BTreeMap::from([
+                            (
+                                "DD-API-KEY".to_string(),
+                                TemplatedMatchString("$DD_API_KEY".to_string()),
+                            ),
+                            (
+                                "DD-APPLICATION-KEY".to_string(),
+                                TemplatedMatchString("$MATCH".to_string()),
+                            ),
+                        ]),
+                        body: None,
+                        timeout: Duration::from_secs(5),
+                    },
+                    response: HttpResponseConfig {
+                        conditions: vec![
+                            ResponseCondition {
+                                condition_type: ResponseConditionType::Valid,
+                                status_code: Some(StatusCodeMatcher::Single(200)),
+                                raw_body: None,
+                                body: None,
+                            },
+                            ResponseCondition {
+                                condition_type: ResponseConditionType::Invalid,
+                                status_code: Some(StatusCodeMatcher::Single(403)),
+                                raw_body: None,
+                                body: None,
+                            },
+                        ],
+                    },
+                }],
+            }));
+
+    let scanner = ScannerBuilder::new(&[rule_dd_site, rule_dd_app_key, rule_dd_api_key])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
+
+    fn get_status_by_rule_idx(matches: &[RuleMatch], rule_idx: usize) -> MatchStatus {
+        matches
+            .iter()
+            .find(|m| m.rule_index == rule_idx)
+            .unwrap_or_else(|| panic!("missing match for rule index {rule_idx}"))
+            .match_status
+            .clone()
+    }
+
+    fn scan_and_validate(scanner: &Scanner, content: &str) -> Vec<RuleMatch> {
+        let mut matches = scanner.scan(&mut content.to_string()).unwrap();
+        scanner.validate_matches(&mut matches);
+        matches
+    }
+
+    {
+        let matches = scan_and_validate(
+            &scanner,
+            "site=ddsite_us api_key=ddapikey_valid123 app_key=ddappkey_validxyz",
+        );
+
+        assert_eq!(get_status_by_rule_idx(&matches, 1), MatchStatus::Valid);
+        assert_eq!(get_status_by_rule_idx(&matches, 2), MatchStatus::Valid);
+        mock_api_key_valid.assert_hits(1);
+        mock_app_key_valid.assert_hits(1);
+    }
+
+    {
+        let matches = scan_and_validate(&scanner, "site=ddsite_us app_key=ddappkey_validxyz");
+
+        assert_eq!(get_status_by_rule_idx(&matches, 1), MatchStatus::Partial);
+        mock_api_key_valid.assert_hits(1);
+        mock_app_key_valid.assert_hits(1);
+    }
+
+    {
+        let matches = scan_and_validate(&scanner, "api_key=ddapikey_valid123");
+
+        assert_eq!(get_status_by_rule_idx(&matches, 2), MatchStatus::Partial);
+        mock_api_key_valid.assert_hits(1);
+        mock_app_key_valid.assert_hits(1);
+    }
 }

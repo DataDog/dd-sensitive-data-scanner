@@ -1,12 +1,12 @@
 use super::match_validator::MatchValidator;
-use crate::match_validation::config_v2::ResponseConditionResult;
+use crate::match_validation::config_v2::{ResponseConditionResult, TemplateVariable};
 use crate::scanner::RootCompiledRule;
-use crate::{
-    CustomHttpConfigV2, HttpResponseConfig, match_validation::match_validator::RAYON_THREAD_POOL,
-};
+use crate::{HttpCallConfig, MatchPairingConfig, MatchValidationType, TemplatedMatchString};
+use crate::{HttpResponseConfig, match_validation::match_validator::RAYON_THREAD_POOL};
 use crate::{MatchStatus, RuleMatch, match_validation::config::HttpMethod};
 use ahash::AHashMap;
 use lazy_static::lazy_static;
+use reqwest::blocking::RequestBuilder;
 use reqwest::blocking::Response;
 use std::error::Error as StdError;
 
@@ -14,14 +14,9 @@ lazy_static! {
     static ref BLOCKING_HTTP_CLIENT: reqwest::blocking::Client = reqwest::blocking::Client::new();
 }
 
-pub struct HttpValidatorV2 {
-    config: CustomHttpConfigV2,
-}
+pub struct HttpValidatorV2;
 
 impl HttpValidatorV2 {
-    pub fn new_from_config(config: CustomHttpConfigV2) -> Self {
-        HttpValidatorV2 { config }
-    }
     fn handle_reqwest_response(
         &self,
         response_config: &HttpResponseConfig,
@@ -59,71 +54,426 @@ impl HttpValidatorV2 {
     }
 }
 
-// TODO: Do we need an internal representation of the config?
+/// Generate a mapping from kind and name to a vector of (match_value, match_idx) pairs
+///
+/// Consider the following example:
+///
+/// matches = [
+///     RuleMatch { rule_index: 0, match_value: Some("acme_corp") },
+///     RuleMatch { rule_index: 1, match_value: Some("us_east") },
+/// ]
+/// rules = [
+///     provides: Some(vec![
+///         PairedValidatorConfig { kind: "datadog", name: "api_key" },
+///     ]),
+///     provides: Some(vec![
+///         PairedValidatorConfig { kind: "datadog", name: "app_key" },
+///     ]),
+/// ]
+///
+/// The produced map would look like:
+///
+/// {
+///     ("datadog", "api_key"): [(Some("acme_corp"), 0)],
+///     ("datadog", "app_key"): [(Some("us_east"), 1)],
+/// }
+///
+fn get_providing_matches_by_kind_and_name(
+    matches: &[RuleMatch],
+    rules: &[RootCompiledRule],
+) -> AHashMap<(String, String), Vec<(String, usize)>> {
+    matches
+        .iter()
+        .enumerate()
+        .flat_map(|(match_idx, candidate_match)| {
+            let Some(rule) = rules.get(candidate_match.rule_index) else {
+                return Vec::new();
+            };
+            let Some(match_validation_type) = rule.match_validation_type.as_ref() else {
+                return Vec::new();
+            };
+            match match_validation_type {
+                MatchValidationType::CustomHttpV2(custom_http_config) => {
+                    let Some(match_value) = candidate_match.match_value.as_ref() else {
+                        return Vec::new();
+                    };
+                    custom_http_config
+                        .provides
+                        .as_ref()
+                        .map(|provided_values| {
+                            provided_values
+                                .iter()
+                                .map(|provided_value| {
+                                    (
+                                        (provided_value.kind.clone(), provided_value.name.clone()),
+                                        (match_value.clone(), match_idx),
+                                    )
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default()
+                }
+                _ => Vec::new(),
+            }
+        })
+        .fold(
+            AHashMap::new(),
+            |mut map, (kind_and_name, value_and_idx)| {
+                map.entry(kind_and_name).or_default().push(value_and_idx);
+                map
+            },
+        )
+}
+
+/// Generate the template variables for a given match pairing config
+/// Returns a vector of (TemplateVariable, match_idx) pairs
+///
+/// This effectively returns all the found matches for the required matches defined in the match pairing config.
+fn get_match_pairing_template_variables(
+    match_pairing_config: &MatchPairingConfig,
+    providing_matches_by_kind_and_name: &AHashMap<(String, String), Vec<(String, usize)>>,
+) -> Vec<(TemplateVariable, usize)> {
+    // Iterate over the match pairing config and add the required matches to the iterator
+    // Returns (TemplateVariable, match_idx) pairs
+    match_pairing_config
+        .parameters
+        .iter()
+        .flat_map(|(name, template_name)| {
+            if let Some(match_values_with_idx) = providing_matches_by_kind_and_name
+                .get(&(match_pairing_config.kind.clone(), name.clone()))
+            {
+                match_values_with_idx
+                    .iter()
+                    .map(|(match_value, match_idx)| {
+                        (
+                            TemplateVariable {
+                                name: template_name.to_string(),
+                                value: match_value.to_string(),
+                            },
+                            *match_idx,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                vec![]
+            }
+        })
+        .collect::<Vec<_>>()
+}
+
+/// Generate all combinations (cartesian product) of template variables
+///
+/// Given template variables with match indices like:
+///   [(TemplateVariable{$CLIENT_SUBDOMAIN=acme_corp}, match_idx=0),
+///    (TemplateVariable{$CLIENT_SUBDOMAIN=other_corp}, match_idx=2),
+///    (TemplateVariable{$USER_ID=USjohn}, match_idx=1)]
+///
+/// Groups by parameter name:
+///   $CLIENT_SUBDOMAIN: [(acme_corp, 0), (other_corp, 2)]
+///   $USER_ID: [(USjohn, 1)]
+///
+/// Returns cartesian product with contributing match indices:
+///   [
+///     ([$CLIENT_SUBDOMAIN=acme_corp, $USER_ID=USjohn], [0, 1]),
+///     ([$CLIENT_SUBDOMAIN=other_corp, $USER_ID=USjohn], [2, 1])
+///   ]
+fn generate_template_variable_combinations(
+    template_variables_with_idx: &[(TemplateVariable, usize)],
+) -> Vec<(Vec<TemplateVariable>, Vec<usize>)> {
+    if template_variables_with_idx.is_empty() {
+        return vec![(vec![], vec![])];
+    }
+
+    // Group template variables by their name, tracking match indices
+    let mut grouped: AHashMap<String, Vec<(String, usize)>> = AHashMap::new();
+    let mut param_order: Vec<String> = Vec::new();
+
+    for (var, match_idx) in template_variables_with_idx {
+        grouped
+            .entry(var.name.clone())
+            .or_insert_with(|| {
+                param_order.push(var.name.clone());
+                Vec::new()
+            })
+            .push((var.value.clone(), *match_idx));
+    }
+
+    // Generate cartesian product with match indices
+    let mut result = vec![(vec![], vec![])];
+
+    for param_name in param_order {
+        if let Some(values_with_idx) = grouped.get(&param_name) {
+            let mut new_result = Vec::new();
+            for (combination, match_indices) in result {
+                for (value, match_idx) in values_with_idx {
+                    let mut new_combination = combination.clone();
+                    let mut new_match_indices = match_indices.clone();
+                    new_combination.push(TemplateVariable {
+                        name: param_name.clone(),
+                        value: value.clone(),
+                    });
+                    new_match_indices.push(*match_idx);
+                    new_result.push((new_combination, new_match_indices));
+                }
+            }
+            result = new_result;
+        }
+    }
+
+    result
+}
+
+fn matching_rule_has_calls(rule_match: &RuleMatch, rules: &[RootCompiledRule]) -> bool {
+    matches!(
+        rules
+            .get(rule_match.rule_index)
+            .and_then(|rule| rule.match_validation_type.as_ref()),
+        Some(MatchValidationType::CustomHttpV2(custom_http_config))
+            if !custom_http_config.calls.is_empty()
+    )
+}
+
+/// Get the template variables with their match indices for a given rule match
+/// Returns a vector of (TemplateVariable, match_idx) pairs
+fn get_template_variables_with_idx(
+    rule_match: &RuleMatch,
+    rules: &[RootCompiledRule],
+    providing_matches_by_kind_and_name: &AHashMap<(String, String), Vec<(String, usize)>>,
+) -> Vec<(TemplateVariable, usize)> {
+    rules
+        .get(rule_match.rule_index)
+        .and_then(|rule| {
+            if let Some(MatchValidationType::CustomHttpV2(custom_http_config)) =
+                &rule.match_validation_type
+            {
+                custom_http_config
+                    .match_pairing
+                    .as_ref()
+                    .map(|match_pairing_config| {
+                        get_match_pairing_template_variables(
+                            match_pairing_config,
+                            providing_matches_by_kind_and_name,
+                        )
+                    })
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default()
+}
+
+/// Get the calls for a given rule match
+/// Returns a vector of HttpCallConfig
+///
+/// This is where HttpValidatorV2 differs from HttpValidator.
+/// In the original HttpValidator, the config is stored inside HttpValidator (as an InternalHttpValidatorConfig).
+/// In HttpValidatorV2, the config must be retrieved from the rule.
+fn get_calls_for_rule_match(
+    rule_match: &RuleMatch,
+    rules: &[RootCompiledRule],
+) -> Vec<HttpCallConfig> {
+    rules
+        .get(rule_match.rule_index)
+        .and_then(|rule| match &rule.match_validation_type {
+            Some(MatchValidationType::CustomHttpV2(custom_http_config)) => {
+                Some(custom_http_config.calls.clone())
+            }
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+#[derive(Eq, PartialEq, Hash)]
+struct EndpointCombination {
+    rule_match_index: usize,
+    endpoint_config: HttpCallConfig,
+    template_vars: Vec<TemplateVariable>,
+    contributing_matches: Vec<usize>,
+}
+
+/// Explode the endpoint combinations into a vector of EndpointCombination and MatchStatus pairs
+/// This is used to generate all possible combinations of template variables and contributing matches
+/// for a given rule match.
+/// Conceptually, this is a cartesian product of the template variables and contributing matches.
+fn explode_endpoint_combinations(
+    rule_match_index: usize,
+    match_value: &str,
+    calls: Vec<HttpCallConfig>,
+    template_var_combinations: Vec<(Vec<TemplateVariable>, Vec<usize>)>,
+) -> Vec<(EndpointCombination, MatchStatus)> {
+    calls
+        .iter()
+        .flat_map(move |endpoint| {
+            let endpoint_host_opts: Vec<Option<TemplatedMatchString>> =
+                if endpoint.request.hosts.is_empty() {
+                    vec![None]
+                } else {
+                    endpoint
+                        .request
+                        .hosts
+                        .iter()
+                        .map(|h| Some(h.clone()))
+                        .collect()
+                };
+
+            let combinations = template_var_combinations.clone();
+            endpoint_host_opts.into_iter().flat_map(move |host_opt| {
+                let combos = combinations.clone();
+                combos
+                    .into_iter()
+                    .map(move |(mut template_vars, contributing_matches)| {
+                        template_vars.push(TemplateVariable {
+                            name: "$MATCH".to_string(),
+                            value: match_value.to_string(),
+                        });
+                        if let Some(ref host) = host_opt {
+                            // Render the host before we push it as a template variable
+                            let mut host_var = host.clone();
+                            for template_var in &template_vars {
+                                host_var = host_var.with_template_variable(template_var);
+                            }
+                            template_vars.push(TemplateVariable {
+                                name: "$HOST".to_string(),
+                                value: host_var.to_string(),
+                            });
+                        }
+                        (
+                            EndpointCombination {
+                                rule_match_index,
+                                endpoint_config: endpoint.clone(),
+                                template_vars,
+                                contributing_matches,
+                            },
+                            MatchStatus::NotChecked,
+                        )
+                    })
+            })
+        })
+        .collect()
+}
+
+fn generate_match_status_per_endpoint_combination(
+    matches: &[RuleMatch],
+    rules: &[RootCompiledRule],
+    providing_matches_by_kind_and_name: &AHashMap<(String, String), Vec<(String, usize)>>,
+) -> AHashMap<EndpointCombination, MatchStatus> {
+    matches
+        .iter()
+        .enumerate()
+        .filter(|(_, rule_match)| matching_rule_has_calls(rule_match, rules))
+        .map(|(rule_match_index, rule_match)| {
+            let template_variables = get_template_variables_with_idx(
+                rule_match,
+                rules,
+                providing_matches_by_kind_and_name,
+            );
+            let calls = get_calls_for_rule_match(rule_match, rules);
+            (rule_match_index, template_variables, calls)
+        })
+        .flat_map(move |(rule_match_index, template_variables, calls)| {
+            // Generate cartesian product of template variable values with contributing match indices
+            let template_var_combinations =
+                generate_template_variable_combinations(&template_variables);
+
+            explode_endpoint_combinations(
+                rule_match_index,
+                matches[rule_match_index]
+                    .match_value
+                    .as_ref()
+                    .unwrap()
+                    .as_str(),
+                calls,
+                template_var_combinations,
+            )
+        })
+        .collect()
+}
+
+fn prepare_request(endpoint_combination: &EndpointCombination) -> RequestBuilder {
+    let endpoint_config = &endpoint_combination.endpoint_config;
+    let mut endpoint = endpoint_config.request.endpoint.clone();
+    // Apply ALL template variables to the same endpoint
+    for template_var in &endpoint_combination.template_vars {
+        endpoint = endpoint.with_template_variable(template_var);
+    }
+    let mut request_builder = match endpoint_config.request.method {
+        HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(endpoint.to_string()),
+        HttpMethod::Post => BLOCKING_HTTP_CLIENT.post(endpoint.to_string()),
+        HttpMethod::Put => BLOCKING_HTTP_CLIENT.put(endpoint.to_string()),
+        HttpMethod::Delete => BLOCKING_HTTP_CLIENT.delete(endpoint.to_string()),
+        HttpMethod::Patch => BLOCKING_HTTP_CLIENT.patch(endpoint.to_string()),
+    };
+    request_builder = request_builder.timeout(endpoint_config.request.timeout);
+
+    // Add headers
+    for (header_key, header_value) in &endpoint_config.request.headers {
+        let mut header_val = header_value.clone();
+        for template_var in &endpoint_combination.template_vars {
+            header_val = header_val.with_template_variable(template_var);
+        }
+        request_builder = request_builder.header(header_key, header_val.to_string());
+    }
+    // Add request body with template substitution. For methods that can carry
+    // a body (POST/PUT/PATCH), always set one so reqwest emits Content-Length:
+    // omitting it causes some servers to reject the request with HTTP 411.
+    let body_requires_content_length = matches!(
+        endpoint_config.request.method,
+        HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch
+    );
+    if let Some(ref body_tpl) = endpoint_config.request.body {
+        let mut body_val = body_tpl.clone();
+        for template_var in &endpoint_combination.template_vars {
+            body_val = body_val.with_template_variable(template_var);
+        }
+        request_builder = request_builder.body(body_val.to_string());
+    } else if body_requires_content_length {
+        request_builder = request_builder.body("");
+    }
+    request_builder
+}
 
 impl MatchValidator for HttpValidatorV2 {
-    fn validate(&self, matches: &mut Vec<RuleMatch>, _: &[RootCompiledRule]) {
+    fn validate(&self, matches: &mut Vec<RuleMatch>, rules: &[RootCompiledRule]) {
+        // Build up matches (the values themselves) that provide a secret to other matches
         // build a map of match status per endpoint, per host, and per match_idx
-        let mut match_status_per_endpoint_and_match: AHashMap<_, _> = matches
-            .iter()
-            .enumerate()
-            .flat_map(|(idx, _)| {
-                self.config.calls.iter().flat_map(move |endpoint| {
-                    if endpoint.request.hosts.is_empty() {
-                        // No hosts specified, use endpoint as-is
-                        vec![((idx, endpoint, None), MatchStatus::NotChecked)]
-                    } else {
-                        // Generate one entry per host
-                        endpoint
-                            .request
-                            .hosts
-                            .iter()
-                            .map(|host| {
-                                ((idx, endpoint, Some(host.clone())), MatchStatus::NotChecked)
-                            })
-                            .collect::<Vec<_>>()
-                    }
-                })
-            })
-            .collect();
+        let providing_matches_by_kind_and_name =
+            get_providing_matches_by_kind_and_name(matches, rules);
+        let mut match_status_per_endpoint_combination: AHashMap<EndpointCombination, MatchStatus> =
+            generate_match_status_per_endpoint_combination(
+                matches,
+                rules,
+                &providing_matches_by_kind_and_name,
+            );
 
         RAYON_THREAD_POOL.install(|| {
             use rayon::prelude::*;
 
-            match_status_per_endpoint_and_match.par_iter_mut().for_each(
-                |((match_idx, endpoint_config, host_opt), match_status)| {
-                    let rule_match = &matches[*match_idx];
-                    let mut endpoint = endpoint_config.request.endpoint.with_rule_match(rule_match);
-                    let rendered_host = host_opt
-                        .as_ref()
-                        .map(|host| host.with_rule_match(rule_match).to_string());
-
-                    if let Some(ref host) = rendered_host {
-                        endpoint = endpoint.with_host(host.as_str());
+            match_status_per_endpoint_combination
+                .par_iter_mut()
+                .for_each(|(endpoint_combination, match_status)| {
+                    let rule_match = &matches[endpoint_combination.rule_match_index];
+                    if rules
+                        .get(rule_match.rule_index)
+                        .and_then(|rule| match &rule.match_validation_type {
+                            Some(MatchValidationType::CustomHttpV2(custom_http_config)) => {
+                                custom_http_config.match_pairing.as_ref()
+                            }
+                            _ => None,
+                        })
+                        .is_some_and(|match_pairing_config| {
+                            !match_pairing_config
+                                .is_fulfilled_by(&endpoint_combination.template_vars)
+                        })
+                    {
+                        *match_status = MatchStatus::Partial;
+                        return;
                     }
-                    let mut request_builder = match endpoint_config.request.method {
-                        HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(endpoint.to_string()),
-                        HttpMethod::Post => BLOCKING_HTTP_CLIENT.post(endpoint.to_string()),
-                        HttpMethod::Put => BLOCKING_HTTP_CLIENT.put(endpoint.to_string()),
-                        HttpMethod::Delete => BLOCKING_HTTP_CLIENT.delete(endpoint.to_string()),
-                        HttpMethod::Patch => BLOCKING_HTTP_CLIENT.patch(endpoint.to_string()),
-                    };
-                    request_builder = request_builder.timeout(endpoint_config.request.timeout);
-
-                    // Add headers
-                    for (header_key, header_value) in &endpoint_config.request.headers {
-                        let mut header_val = header_value.with_rule_match(rule_match);
-                        if let Some(ref host) = rendered_host {
-                            header_val = header_val.with_host(host.as_str());
-                        }
-                        request_builder =
-                            request_builder.header(header_key, header_val.to_string());
-                    }
+                    let request_builder = prepare_request(endpoint_combination);
                     let res = request_builder.send();
                     match res {
                         Ok(val) => {
                             self.handle_reqwest_response(
-                                &endpoint_config.response,
+                                &endpoint_combination.endpoint_config.response,
                                 match_status,
                                 val,
                             );
@@ -144,13 +494,18 @@ impl MatchValidator for HttpValidatorV2 {
                             *match_status = MatchStatus::Error(msg);
                         }
                     }
-                },
-            );
+                });
         });
 
         // Update the match status with this highest priority returned
-        for ((match_idx, _, _), status) in match_status_per_endpoint_and_match {
-            matches[match_idx].match_status.merge(status.clone());
+        for (endpoint_combination, status) in match_status_per_endpoint_combination {
+            matches[endpoint_combination.rule_match_index]
+                .match_status
+                .merge(status.clone());
+            // Also update all contributing matches with the same status
+            for contributing_idx in endpoint_combination.contributing_matches {
+                matches[contributing_idx].match_status.merge(status.clone());
+            }
         }
     }
 }
@@ -160,11 +515,25 @@ mod tests {
     use std::{collections::BTreeMap, time::Duration};
 
     use crate::{
-        Path, ReplacementType,
-        match_validation::config_v2::{BodyMatcher, StatusCodeMatcher, TemplatedMatchString},
+        CompiledRule, MatchAction, Path, Precedence, ReplacementType, RootCompiledRule, Scope,
+        match_validation::config_v2::{
+            BodyMatcher, CustomHttpConfigV2, StatusCodeMatcher, TemplatedMatchString,
+        },
     };
 
     use super::*;
+
+    struct MockCompiledRule;
+    impl CompiledRule for MockCompiledRule {
+        fn get_string_matches(
+            &self,
+            _content: &str,
+            _path: &Path,
+            _ctx: &mut crate::scanner::StringMatchesCtx,
+        ) -> Result<crate::scanner::RuleStatus, crate::scanner::error::ScannerError> {
+            Ok(crate::scanner::RuleStatus::Done)
+        }
+    }
 
     fn create_test_match(match_value: &str) -> RuleMatch {
         RuleMatch {
@@ -180,6 +549,17 @@ mod tests {
         }
     }
 
+    fn create_test_rule(config: CustomHttpConfigV2) -> RootCompiledRule {
+        RootCompiledRule {
+            inner: Box::new(MockCompiledRule),
+            scope: Scope::all(),
+            match_action: MatchAction::None,
+            match_validation_type: Some(MatchValidationType::CustomHttpV2(config)),
+            suppressions: None,
+            precedence: Precedence::default(),
+        }
+    }
+
     fn config_from_yaml(config_yaml: &str) -> CustomHttpConfigV2 {
         serde_yaml::from_str(config_yaml).unwrap()
     }
@@ -191,6 +571,7 @@ mod tests {
 calls:
   - request:
       endpoint: "http://localhost/test?secret=$MATCH"
+      method: GET
       timeout:
         secs: 10
         nanos: 0
@@ -203,7 +584,10 @@ calls:
             config.calls[0]
                 .request
                 .endpoint
-                .with_rule_match(&rule_match)
+                .with_template_variable(&TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: rule_match.match_value.as_ref().unwrap().clone(),
+                })
                 .to_string(),
             "http://localhost/test?secret=test".to_string()
         );
@@ -216,6 +600,7 @@ calls:
 calls:
   - request:
       endpoint: "http://$HOST/test"
+      method: GET
       hosts: ["us", "eu"]
     response:
       conditions: []
@@ -224,16 +609,30 @@ calls:
         let rule_match = create_test_match("test");
 
         // Test that with_host substitutes the host correctly
-        let endpoint_with_match = config.calls[0]
-            .request
-            .endpoint
-            .with_rule_match(&rule_match);
+        let endpoint_with_match =
+            config.calls[0]
+                .request
+                .endpoint
+                .with_template_variable(&TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: rule_match.match_value.as_ref().unwrap().clone(),
+                });
         assert_eq!(
-            endpoint_with_match.with_host("us").to_string(),
+            endpoint_with_match
+                .with_template_variable(&TemplateVariable {
+                    name: "$HOST".to_string(),
+                    value: "us".to_string(),
+                })
+                .to_string(),
             "http://us/test"
         );
         assert_eq!(
-            endpoint_with_match.with_host("eu").to_string(),
+            endpoint_with_match
+                .with_template_variable(&TemplateVariable {
+                    name: "$HOST".to_string(),
+                    value: "eu".to_string(),
+                })
+                .to_string(),
             "http://eu/test"
         );
     }
@@ -255,6 +654,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/api/validate?secret=$MATCH"
+      method: GET
     response:
       conditions:
         - type: valid
@@ -265,10 +665,11 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("valid_token_123")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -291,6 +692,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/api/validate?secret=$MATCH"
+      method: GET
     response:
       conditions:
         - type: invalid
@@ -301,10 +703,11 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("invalid_token")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Invalid);
@@ -325,6 +728,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/api/check"
+      method: GET
     response:
       conditions:
         - type: invalid
@@ -337,10 +741,11 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("test_secret")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Invalid);
@@ -376,10 +781,11 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("api_key_xyz")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -403,6 +809,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/secure"
+      method: GET
       headers:
         Authorization: "Bearer $MATCH"
         X-API-Key: "custom_key"
@@ -416,10 +823,11 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("secret_token_456")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock.assert();
         assert_eq!(matches[0].match_status, MatchStatus::Valid);
@@ -448,6 +856,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/check?token=$MATCH"
+      method: GET
     response:
       conditions:
         - type: valid
@@ -464,13 +873,14 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2;
         let mut matches = vec![
             create_test_match("token_xyz"),
             create_test_match("token_abc"),
         ];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock_invalid.assert();
         mock_valid.assert();
@@ -493,6 +903,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/api"
+      method: GET
     response:
       conditions:
         - type: valid
@@ -507,10 +918,11 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("test_token")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock.assert();
         match &matches[0].match_status {
@@ -540,6 +952,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/slow"
+      method: GET
       timeout:
         secs: 0
         nanos: 100000000
@@ -553,10 +966,11 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("test_token")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         match &matches[0].match_status {
             MatchStatus::Error(msg) => {
@@ -593,6 +1007,7 @@ calls:
 calls:
   - request:
       endpoint: "{}/check?token=$MATCH"
+      method: GET
     response:
       conditions:
         - type: valid
@@ -605,13 +1020,14 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2;
         let mut matches = vec![
             create_test_match("valid_123"),
             create_test_match("invalid_456"),
         ];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock_valid.assert();
         mock_invalid.assert();
@@ -640,12 +1056,14 @@ calls:
 calls:
   - request:
       endpoint: "{}/api1"
+      method: GET
     response:
       conditions:
         - type: valid
           status_code: 200
   - request:
       endpoint: "{}/api2"
+      method: GET
     response:
       conditions:
         - type: valid
@@ -657,10 +1075,11 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("test_token")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         mock1.assert();
         mock2.assert();
@@ -694,6 +1113,7 @@ calls:
 calls:
   - request:
       endpoint: "http://$HOST/api/check?token=$MATCH"
+      method: GET
       hosts:
         - "{}"
         - "{}"
@@ -710,10 +1130,11 @@ calls:
             .as_str(),
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match("test_token")];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         // Both endpoints should have been called
         mock_us.assert();
@@ -741,6 +1162,7 @@ calls:
 calls:
   - request:
       endpoint: "http://$HOST/api/check?token=$MATCH"
+      method: GET
       hosts:
         - "$MATCH"
     response:
@@ -752,10 +1174,11 @@ calls:
 "#,
         );
 
-        let validator = HttpValidatorV2::new_from_config(config);
+        let validator = HttpValidatorV2;
         let mut matches = vec![create_test_match(server_url.as_str())];
+        let rules = vec![create_test_rule(config)];
 
-        validator.validate(&mut matches, &[]);
+        validator.validate(&mut matches, &rules);
 
         // Both endpoints should have been called
         mock.assert();
@@ -770,6 +1193,7 @@ calls:
 calls:
   - request:
       endpoint: "http://localhost/test1"
+      method: GET
     response:
       conditions:
         - type: valid
@@ -811,6 +1235,7 @@ calls:
 calls:
   - request:
       endpoint: "http://$HOST/test1"
+      method: GET
       hosts: ["us", "eu"]
     response:
       conditions: []
@@ -824,16 +1249,30 @@ calls:
             ]
         );
         let rule_match = create_test_match("test");
-        let endpoint_with_match = config.calls[0]
-            .request
-            .endpoint
-            .with_rule_match(&rule_match);
+        let endpoint_with_match =
+            config.calls[0]
+                .request
+                .endpoint
+                .with_template_variable(&TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: rule_match.match_value.as_ref().unwrap().clone(),
+                });
         assert_eq!(
-            endpoint_with_match.with_host("us").to_string(),
+            endpoint_with_match
+                .with_template_variable(&TemplateVariable {
+                    name: "$HOST".to_string(),
+                    value: "us".to_string(),
+                })
+                .to_string(),
             "http://us/test1"
         );
         assert_eq!(
-            endpoint_with_match.with_host("eu").to_string(),
+            endpoint_with_match
+                .with_template_variable(&TemplateVariable {
+                    name: "$HOST".to_string(),
+                    value: "eu".to_string(),
+                })
+                .to_string(),
             "http://eu/test1"
         );
     }
@@ -881,13 +1320,337 @@ calls:
                 .as_str(),
             );
 
-            let validator = HttpValidatorV2::new_from_config(config);
+            let validator = HttpValidatorV2;
             let mut matches = vec![create_test_match("token")];
+            let rules = vec![create_test_rule(config)];
 
-            validator.validate(&mut matches, &[]);
+            validator.validate(&mut matches, &rules);
 
             mock.assert();
             assert_eq!(matches[0].match_status, MatchStatus::Valid);
+        }
+    }
+
+    #[test]
+    fn test_get_providing_matches_includes_custom_http_v2_providers() {
+        let provider_config = config_from_yaml(
+            r#"
+provides:
+  - kind: "vendor_xyz"
+    name: "client_subdomain"
+calls:
+  - request:
+      endpoint: "http://localhost/validate?secret=$MATCH"
+      method: GET
+    response:
+      conditions: []
+"#,
+        );
+
+        let rules = vec![
+            RootCompiledRule {
+                inner: Box::new(MockCompiledRule),
+                scope: Scope::all(),
+                match_action: MatchAction::None,
+                match_validation_type: Some(MatchValidationType::CustomHttpV2(provider_config)),
+                suppressions: None,
+                precedence: Precedence::default(),
+            },
+            RootCompiledRule {
+                inner: Box::new(MockCompiledRule),
+                scope: Scope::all(),
+                match_action: MatchAction::None,
+                match_validation_type: Some(MatchValidationType::CustomHttpV2(
+                    CustomHttpConfigV2 {
+                        provides: Some(vec![crate::PairedValidatorConfig {
+                            kind: "vendor_xyz".to_string(),
+                            name: "region".to_string(),
+                        }]),
+                        calls: vec![],
+                        match_pairing: None,
+                    },
+                )),
+                suppressions: None,
+                precedence: Precedence::default(),
+            },
+        ];
+
+        let matches = vec![
+            RuleMatch {
+                rule_index: 0,
+                path: Path::root(),
+                replacement_type: ReplacementType::None,
+                start_index: 0,
+                end_index_exclusive: 9,
+                shift_offset: 0,
+                match_value: Some("acme_corp".to_string()),
+                match_status: MatchStatus::NotChecked,
+                keyword: None,
+            },
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: ReplacementType::None,
+                start_index: 10,
+                end_index_exclusive: 17,
+                shift_offset: 0,
+                match_value: Some("us_east".to_string()),
+                match_status: MatchStatus::NotChecked,
+                keyword: None,
+            },
+        ];
+
+        let providing_matches = get_providing_matches_by_kind_and_name(&matches, &rules);
+
+        assert_eq!(
+            providing_matches.get(&("vendor_xyz".to_string(), "client_subdomain".to_string())),
+            Some(&vec![("acme_corp".to_string(), 0)])
+        );
+        assert_eq!(
+            providing_matches.get(&("vendor_xyz".to_string(), "region".to_string())),
+            Some(&vec![("us_east".to_string(), 1)])
+        );
+    }
+
+    #[test]
+    fn integration_test_match_pairing_validation() {
+        use crate::{
+            MatchAction, PairedValidatorConfig, Precedence,
+            scanner::{
+                CompiledRule, RootCompiledRule, RuleResult, RuleStatus, StringMatchesCtx,
+                scope::Scope,
+            },
+        };
+
+        // Simple mock compiled rule that doesn't actually scan
+        struct MockCompiledRule;
+        impl CompiledRule for MockCompiledRule {
+            fn get_string_matches(
+                &self,
+                _content: &str,
+                _path: &Path,
+                _ctx: &mut StringMatchesCtx,
+            ) -> RuleResult {
+                Ok(RuleStatus::Done)
+            }
+        }
+
+        let server = httpmock::MockServer::start();
+
+        // Note: Current implementation creates separate HTTP requests for each template variable
+        // rather than combining them into a single request. This test validates the current behavior.
+        // TODO: Update when match pairing is fully implemented to handle multiple parameters in one request.
+
+        // Mock endpoint expects client_subdomain in the path
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/api/acme_corp/validate")
+                .query_param("secret", "api_key_secret");
+            then.status(200).body(r#"{"status": "valid"}"#);
+        });
+
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+- request:
+    endpoint: "{}/api/$CLIENT_SUBDOMAIN/validate?secret=$MATCH"
+    method: GET
+  response:
+    conditions:
+      - type: valid
+        status_code: 200
+match_pairing:
+  kind: "vendor_xyz"
+  client_subdomain: "$CLIENT_SUBDOMAIN"
+"#,
+                server.base_url(),
+            )
+            .as_str(),
+        );
+
+        // Create scanner rules:
+        // Rule 0: Main validator with CustomHttpV2 and match pairing
+        // Rule 1: Paired validator providing "client_subdomain"
+        let rules = vec![
+            RootCompiledRule {
+                inner: Box::new(MockCompiledRule),
+                scope: Scope::all(),
+                match_action: MatchAction::None,
+                match_validation_type: Some(MatchValidationType::CustomHttpV2(config.clone())),
+                suppressions: None,
+                precedence: Precedence::default(),
+            },
+            RootCompiledRule {
+                inner: Box::new(MockCompiledRule),
+                scope: Scope::all(),
+                match_action: MatchAction::None,
+                match_validation_type: Some(MatchValidationType::CustomHttpV2(
+                    CustomHttpConfigV2 {
+                        provides: Some(vec![PairedValidatorConfig {
+                            kind: "vendor_xyz".to_string(),
+                            name: "client_subdomain".to_string(),
+                        }]),
+                        calls: vec![],
+                        match_pairing: None,
+                    },
+                )),
+                suppressions: None,
+                precedence: Precedence::default(),
+            },
+        ];
+
+        // Create all matches (both the main match and the providing match)
+        // Note: In the real scanner integration, there's a design limitation where PairedValidator
+        // matches are grouped separately and not passed to HttpValidatorV2. This test validates
+        // the validator logic in isolation by passing all matches directly.
+        let mut all_matches = vec![
+            RuleMatch {
+                rule_index: 0,
+                path: Path::root(),
+                replacement_type: ReplacementType::None,
+                start_index: 0,
+                end_index_exclusive: 14,
+                shift_offset: 0,
+                match_value: Some("api_key_secret".to_string()),
+                match_status: MatchStatus::NotChecked,
+                keyword: None,
+            },
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: ReplacementType::None,
+                start_index: 20,
+                end_index_exclusive: 29,
+                shift_offset: 0,
+                match_value: Some("acme_corp".to_string()),
+                match_status: MatchStatus::NotChecked,
+                keyword: None,
+            },
+        ];
+
+        let validator = HttpValidatorV2;
+        validator.validate(&mut all_matches, &rules);
+
+        // Verify the HTTP request was made with template variable substituted
+        mock.assert();
+
+        // The main match (rule_index 0) should be validated successfully
+        assert_eq!(all_matches[0].match_status, MatchStatus::Valid);
+
+        // The paired validator match (rule_index 1) should also receive Valid status because
+        // it contributed to the successful validation of the main match. The status is
+        // propagated from the main match to all contributing matches.
+        assert_eq!(all_matches[1].match_status, MatchStatus::Valid);
+    }
+
+    #[test]
+    fn test_match_pairing_multiple_combinations_error_messages_are_concatenated() {
+        use crate::PairedValidatorConfig;
+
+        let config = config_from_yaml(
+            r#"
+calls:
+  - request:
+      endpoint: "http://$TARGET/api/validate?secret=$MATCH"
+      method: GET
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+match_pairing:
+  kind: "vendor_xyz"
+  target: "$TARGET"
+"#,
+        );
+
+        let rules = vec![
+            RootCompiledRule {
+                inner: Box::new(MockCompiledRule),
+                scope: Scope::all(),
+                match_action: MatchAction::None,
+                match_validation_type: Some(MatchValidationType::CustomHttpV2(config.clone())),
+                suppressions: None,
+                precedence: Precedence::default(),
+            },
+            RootCompiledRule {
+                inner: Box::new(MockCompiledRule),
+                scope: Scope::all(),
+                match_action: MatchAction::None,
+                match_validation_type: Some(MatchValidationType::CustomHttpV2(
+                    CustomHttpConfigV2 {
+                        provides: Some(vec![PairedValidatorConfig {
+                            kind: "vendor_xyz".to_string(),
+                            name: "target".to_string(),
+                        }]),
+                        calls: vec![],
+                        match_pairing: None,
+                    },
+                )),
+                suppressions: None,
+                precedence: Precedence::default(),
+            },
+        ];
+
+        let mut all_matches = vec![
+            RuleMatch {
+                rule_index: 0,
+                path: Path::root(),
+                replacement_type: ReplacementType::None,
+                start_index: 0,
+                end_index_exclusive: 6,
+                shift_offset: 0,
+                match_value: Some("secret".to_string()),
+                match_status: MatchStatus::NotChecked,
+                keyword: None,
+            },
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: ReplacementType::None,
+                start_index: 10,
+                end_index_exclusive: 19,
+                shift_offset: 0,
+                match_value: Some("127.0.0.1:1".to_string()),
+                match_status: MatchStatus::NotChecked,
+                keyword: None,
+            },
+            RuleMatch {
+                rule_index: 1,
+                path: Path::root(),
+                replacement_type: ReplacementType::None,
+                start_index: 20,
+                end_index_exclusive: 29,
+                shift_offset: 0,
+                match_value: Some("127.0.0.1:2".to_string()),
+                match_status: MatchStatus::NotChecked,
+                keyword: None,
+            },
+        ];
+
+        let validator = HttpValidatorV2;
+        validator.validate(&mut all_matches, &rules);
+
+        match &all_matches[0].match_status {
+            MatchStatus::Error(msg) => {
+                let parts: Vec<&str> = msg.split(", ").collect();
+                assert_eq!(
+                    parts.len(),
+                    2,
+                    "expected 2 comma-separated error messages, got: {msg}"
+                );
+                assert!(
+                    parts
+                        .iter()
+                        .all(|part| part.starts_with("Error making HTTP request:")),
+                    "expected all parts to be HTTP request errors, got: {msg}"
+                );
+                assert!(
+                    msg.contains("127.0.0.1:1") && msg.contains("127.0.0.1:2"),
+                    "expected concatenated message to include both endpoints, got: {msg}"
+                );
+            }
+            other => panic!("expected Error status, got {other:?}"),
         }
     }
 }

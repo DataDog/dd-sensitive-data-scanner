@@ -5,6 +5,8 @@ pub enum MatchStatus {
     // The ordering here is important, values further down the list have a higher priority when merging.
     NotChecked,
     NotAvailable,
+    /// Missing matches that are required for the match to be checked
+    Partial,
     Invalid,
     Error(String),
     Valid,
@@ -16,6 +18,7 @@ impl std::fmt::Display for MatchStatus {
             MatchStatus::NotChecked => write!(f, "NotChecked"),
             MatchStatus::NotAvailable => write!(f, "NotAvailable"),
             MatchStatus::Invalid => write!(f, "Invalid"),
+            MatchStatus::Partial => write!(f, "Partial",),
             MatchStatus::Error(msg) => write!(f, "Error({})", msg),
             MatchStatus::Valid => write!(f, "Valid"),
         }
@@ -26,6 +29,12 @@ impl MatchStatus {
     // Order matters as we want to update the match_status only if the new match_status has higher priority.
     // (in case of split key where we try different combinations of id and secret (aws use-case))
     pub fn merge(&mut self, new_status: MatchStatus) {
+        if let (MatchStatus::Error(old_error), MatchStatus::Error(new_error)) = (&self, &new_status)
+            && old_error != new_error
+        {
+            *self = MatchStatus::Error(format!("{}, {}", old_error, new_error));
+            return;
+        }
         if new_status > *self {
             *self = new_status;
         }
