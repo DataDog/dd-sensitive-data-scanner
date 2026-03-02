@@ -52,14 +52,14 @@ impl HttpValidatorV2 {
                 }
             }
         }
-        *match_status = MatchStatus::Error(
-            Some(status),
-            format!(
+        *match_status = MatchStatus::Error {
+            code: Some(status),
+            message: format!(
                 "No response condition matched for status code {} and body of length {}",
                 status,
                 body.len()
             ),
-        );
+        };
     }
 }
 
@@ -383,7 +383,7 @@ impl MatchValidator for HttpValidatorV2 {
                                 msg.push_str(format!(": {}", source).as_str());
                             }
                             let code = err.status().map(|s| s.as_u16());
-                            *match_status = MatchStatus::Error(code, msg);
+                            *match_status = MatchStatus::Error { code, message: msg };
                         }
                     }
                 },
@@ -800,10 +800,10 @@ calls:
 
         mock.assert();
         match &matches[0].match_status {
-            MatchStatus::Error(code, msg) => {
+            MatchStatus::Error { code, message } => {
                 assert_eq!(*code, Some(500));
-                assert!(msg.contains("No response condition matched"));
-                assert!(msg.contains("500"));
+                assert!(message.contains("No response condition matched"));
+                assert!(message.contains("500"));
             }
             _ => panic!(
                 "Expected MatchStatus::Error but got {:?}",
@@ -848,8 +848,8 @@ calls:
         validator.validate(&mut matches, &rules);
 
         match &matches[0].match_status {
-            MatchStatus::Error(_code, msg) => {
-                assert!(msg.contains("timeout"));
+            MatchStatus::Error { message, .. } => {
+                assert!(message.contains("timeout"));
             }
             _ => panic!(
                 "Expected MatchStatus::Error with timeout but got {:?}",

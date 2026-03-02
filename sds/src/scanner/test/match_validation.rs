@@ -236,7 +236,10 @@ fn test_mock_same_http_validator_several_matches() {
     assert_eq!(matches[1].match_status, MatchStatus::Invalid);
     assert_eq!(
         matches[2].match_status,
-        MatchStatus::Error(Some(500), "Unexpected HTTP status code 500".to_string())
+        MatchStatus::Error {
+            code: Some(500),
+            message: "Unexpected HTTP status code 500".to_string(),
+        }
     );
 }
 
@@ -326,7 +329,7 @@ fn test_mock_http_timeout() {
     scanner.validate_matches(&mut matches);
     // This will be in the form "Error making HTTP request: "
     match &matches[0].match_status {
-        MatchStatus::Error(_code, val) => {
+        MatchStatus::Error { message: val, .. } => {
             assert!(val.starts_with("Error making HTTP request:"));
         }
         _ => assert!(false),
@@ -571,13 +574,19 @@ fn test_mock_aws_validator() {
     assert_eq!(matches[1].match_status, MatchStatus::Invalid);
     assert_eq!(
         matches[2].match_status,
-        MatchStatus::Error(Some(500), "Unexpected HTTP status code 500".to_string())
+        MatchStatus::Error {
+            code: Some(500),
+            message: "Unexpected HTTP status code 500".to_string(),
+        }
     );
     assert_eq!(matches[3].match_status, MatchStatus::Valid);
     // ID1 + SECRET2 should be in error so it should contain error and not invalid
     assert_eq!(
         matches[4].match_status,
-        MatchStatus::Error(Some(500), "Unexpected HTTP status code 500".to_string())
+        MatchStatus::Error {
+            code: Some(500),
+            message: "Unexpected HTTP status code 500".to_string(),
+        }
     );
 }
 

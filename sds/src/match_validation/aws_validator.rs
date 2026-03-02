@@ -110,10 +110,10 @@ fn handle_reqwest_response(match_status: &mut MatchStatus, val: &reqwest::blocki
     // unless it is already valid
     if val.status().is_server_error() {
         let code = val.status().as_u16();
-        *match_status = MatchStatus::Error(
-            Some(code),
-            fmt::format(format_args!("Unexpected HTTP status code {}", code)),
-        );
+        *match_status = MatchStatus::Error {
+            code: Some(code),
+            message: fmt::format(format_args!("Unexpected HTTP status code {}", code)),
+        };
     }
 }
 
@@ -133,15 +133,17 @@ impl MatchValidator for AwsValidator {
                     let match_id = &matches[*id_index].match_value;
                     let match_secret = &matches[*secret_index].match_value;
                     if match_secret.is_none() {
-                        *match_status = MatchStatus::Error(
-                            None,
-                            "Missing match value for aws_secret".to_string(),
-                        );
+                        *match_status = MatchStatus::Error {
+                            code: None,
+                            message: "Missing match value for aws_secret".to_string(),
+                        };
                         return;
                     }
                     if match_id.is_none() {
-                        *match_status =
-                            MatchStatus::Error(None, "Missing match value for aws_id".to_string());
+                        *match_status = MatchStatus::Error {
+                            code: None,
+                            message: "Missing match value for aws_id".to_string(),
+                        };
                         return;
                     }
                     let match_secret =
@@ -181,7 +183,7 @@ impl MatchValidator for AwsValidator {
                                 msg.push_str(format!(": {}", source).as_str());
                             }
                             let code = err.status().map(|s| s.as_u16());
-                            *match_status = MatchStatus::Error(code, msg);
+                            *match_status = MatchStatus::Error { code, message: msg };
                         }
                     };
                 });
