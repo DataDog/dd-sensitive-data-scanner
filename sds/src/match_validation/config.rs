@@ -300,7 +300,6 @@ pub enum InternalMatchValidationType {
     Aws,
     CustomHttp(Vec<String>),
     CustomHttpV2,
-    PairedValidator(String), // Stores the vendor kind
 }
 
 #[cfg(test)]
