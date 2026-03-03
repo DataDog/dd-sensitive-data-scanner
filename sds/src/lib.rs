@@ -46,7 +46,7 @@ pub use match_validation::{
         MatchPairingConfig, PairedValidatorConfig, ResponseCondition, ResponseConditionResult,
         ResponseConditionType, StatusCodeMatcher, TemplateVariable, TemplatedMatchString,
     },
-    match_status::MatchStatus,
+    match_status::{HttpErrorInfo, MatchStatus, UnknownResponseTypeInfo, ValidationError},
 };
 pub use observability::labels::Labels;
 pub use path::{Path, PathSegment};

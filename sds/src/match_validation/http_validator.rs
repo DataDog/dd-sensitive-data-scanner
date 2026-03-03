@@ -2,14 +2,17 @@ use super::{
     config::{CustomHttpConfig, RequestHeader},
     match_validator::MatchValidator,
 };
-use crate::match_validation::match_validator::RAYON_THREAD_POOL;
+use crate::{
+    HttpErrorInfo, UnknownResponseTypeInfo, ValidationError,
+    match_validation::match_validator::RAYON_THREAD_POOL,
+};
 use crate::{HttpValidatorOption, scanner::RootCompiledRule};
 use crate::{MatchStatus, RuleMatch, match_validation::config::HttpMethod};
 use ahash::AHashMap;
 use lazy_static::lazy_static;
 use reqwest::blocking::Response;
 use std::error::Error as StdError;
-use std::{fmt, ops::Range, time::Duration};
+use std::{ops::Range, time::Duration};
 
 lazy_static! {
     static ref BLOCKING_HTTP_CLIENT: reqwest::blocking::Client = reqwest::blocking::Client::new();
@@ -25,7 +28,7 @@ impl HttpValidator {
             config: InternalHttpValidatorConfig::from_custom_http_type(&config),
         }
     }
-    fn handle_reqwest_response(&self, match_status: &mut MatchStatus, val: &Response) {
+    fn handle_reqwest_response(&self, match_status: &mut MatchStatus, val: Response) {
         // First check if this is in the valid status ranges
         for valid_range in &self.config.valid_http_status_code {
             if valid_range.contains(&val.status().as_u16()) {
@@ -41,10 +44,9 @@ impl HttpValidator {
             }
         }
         // If it's not in either, then it's not available
-        *match_status = MatchStatus::Error(fmt::format(format_args!(
-            "Unexpected HTTP status code {}",
-            val.status().as_u16()
-        )));
+        *match_status = MatchStatus::ValidationError(ValidationError::UnknownResponseType(
+            UnknownResponseTypeInfo::from(val),
+        ));
     }
 }
 
@@ -133,22 +135,28 @@ impl MatchValidator for HttpValidator {
                     let res = request_builder.send();
                     match res {
                         Ok(val) => {
-                            self.handle_reqwest_response(match_status, &val);
+                            self.handle_reqwest_response(match_status, val);
                         }
                         Err(err) => {
                             let mut msg = format!("Error making HTTP request: {err}");
+                            let mut status_code = 0;
                             if err.is_timeout() {
                                 msg.push_str(": timeout");
                             } else if err.is_connect() {
                                 msg.push_str(": connect error");
                             }
                             if let Some(status) = err.status() {
-                                msg.push_str(format!(": status {}", status.as_u16()).as_str());
+                                status_code = status.as_u16();
                             }
                             if let Some(source) = StdError::source(&err) {
                                 msg.push_str(format!(": {}", source).as_str());
                             }
-                            *match_status = MatchStatus::Error(msg);
+                            *match_status = MatchStatus::ValidationError(
+                                ValidationError::HttpError(HttpErrorInfo {
+                                    status_code,
+                                    message: msg,
+                                }),
+                            );
                         }
                     }
                 },

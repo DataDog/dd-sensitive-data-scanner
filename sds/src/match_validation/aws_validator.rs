@@ -1,13 +1,12 @@
 use std::error::Error as StdError;
-use std::fmt;
 
 use super::{
     config::{AwsConfig, AwsType, MatchValidationType},
     match_validator::MatchValidator,
     validator_utils::generate_aws_headers_and_body,
 };
-use crate::match_validation::match_validator::RAYON_THREAD_POOL;
 use crate::scanner::RootCompiledRule;
+use crate::{HttpErrorInfo, ValidationError, match_validation::match_validator::RAYON_THREAD_POOL};
 use crate::{MatchStatus, RuleMatch};
 use ahash::AHashMap;
 use lazy_static::lazy_static;
@@ -109,10 +108,10 @@ fn handle_reqwest_response(match_status: &mut MatchStatus, val: &reqwest::blocki
     // There might be an issue with the request. We will mark the match_status as error
     // unless it is already valid
     if val.status().is_server_error() {
-        *match_status = MatchStatus::Error(fmt::format(format_args!(
-            "Unexpected HTTP status code {}",
-            val.status().as_u16()
-        )));
+        *match_status = MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+            status_code: val.status().as_u16(),
+            message: "Unexpected HTTP status code".to_string(),
+        }));
     }
 }
 
@@ -132,13 +131,11 @@ impl MatchValidator for AwsValidator {
                     let match_id = &matches[*id_index].match_value;
                     let match_secret = &matches[*secret_index].match_value;
                     if match_secret.is_none() {
-                        *match_status =
-                            MatchStatus::Error("Missing match value for aws_secret".to_string());
+                        *match_status = MatchStatus::MissingDependentMatch;
                         return;
                     }
                     if match_id.is_none() {
-                        *match_status =
-                            MatchStatus::Error("Missing match value for aws_id".to_string());
+                        *match_status = MatchStatus::MissingDependentMatch;
                         return;
                     }
                     let match_secret =
@@ -166,18 +163,24 @@ impl MatchValidator for AwsValidator {
                         Ok(val) => handle_reqwest_response(match_status, &val),
                         Err(err) => {
                             let mut msg = format!("Error making HTTP request: {err}");
+                            let mut status_code = 0;
                             if err.is_timeout() {
                                 msg.push_str(": timeout");
                             } else if err.is_connect() {
                                 msg.push_str(": connect error");
                             }
                             if let Some(status) = err.status() {
-                                msg.push_str(format!(": status {}", status.as_u16()).as_str());
+                                status_code = status.as_u16();
                             }
                             if let Some(source) = StdError::source(&err) {
                                 msg.push_str(format!(": {}", source).as_str());
                             }
-                            *match_status = MatchStatus::Error(msg);
+                            *match_status = MatchStatus::ValidationError(
+                                ValidationError::HttpError(HttpErrorInfo {
+                                    status_code,
+                                    message: msg,
+                                }),
+                            );
                         }
                     };
                 });

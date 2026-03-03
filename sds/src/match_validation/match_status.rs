@@ -1,4 +1,7 @@
+use reqwest::blocking::Response;
 use serde::{Deserialize, Serialize};
+
+const BODY_PREFIX_LENGTH: usize = 30;
 
 #[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Serialize, Deserialize)]
 pub enum MatchStatus {
@@ -14,7 +17,7 @@ pub enum MatchStatus {
 
 #[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Serialize, Deserialize)]
 pub enum ValidationError {
-    LackingConditionsCoverage(LackingConditionsInfo),
+    UnknownResponseType(UnknownResponseTypeInfo),
     HttpError(HttpErrorInfo),
 }
 
@@ -25,9 +28,33 @@ pub struct HttpErrorInfo {
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Serialize, Deserialize)]
-pub struct LackingConditionsInfo {
+pub struct UnknownResponseTypeInfo {
     pub status_code: u16,
     pub body_length: usize,
+    // Prefix of the response body
+    pub body_prefix: Option<String>,
+}
+
+impl UnknownResponseTypeInfo {
+    pub fn from_status_and_body(status_code: u16, body: &str) -> Self {
+        let prefix = match body.len() {
+            0 => None,
+            _ => Some(body.chars().take(BODY_PREFIX_LENGTH).collect::<String>()),
+        };
+        Self {
+            status_code,
+            body_length: body.len(),
+            body_prefix: prefix,
+        }
+    }
+}
+
+impl From<Response> for UnknownResponseTypeInfo {
+    fn from(response: Response) -> Self {
+        let status_code = response.status().as_u16();
+        let body = response.text().unwrap_or_default();
+        UnknownResponseTypeInfo::from_status_and_body(status_code, &body)
+    }
 }
 
 impl std::fmt::Display for MatchStatus {
@@ -55,7 +82,7 @@ impl std::fmt::Display for HttpErrorInfo {
     }
 }
 
-impl std::fmt::Display for LackingConditionsInfo {
+impl std::fmt::Display for UnknownResponseTypeInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -68,7 +95,7 @@ impl std::fmt::Display for LackingConditionsInfo {
 impl std::fmt::Display for ValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ValidationError::LackingConditionsCoverage(inner) => inner.fmt(f),
+            ValidationError::UnknownResponseType(inner) => inner.fmt(f),
             ValidationError::HttpError(inner) => inner.fmt(f),
         }
     }
@@ -116,8 +143,19 @@ mod tests {
         status.merge(MatchStatus::Invalid);
         assert_eq!(status, MatchStatus::Invalid);
 
-        status.merge(MatchStatus::Error("error".to_string()));
-        assert_eq!(status, MatchStatus::Error("error".to_string()));
+        status.merge(MatchStatus::ValidationError(ValidationError::HttpError(
+            HttpErrorInfo {
+                status_code: 500,
+                message: "error".to_string(),
+            },
+        )));
+        assert_eq!(
+            status,
+            MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+                status_code: 500,
+                message: "error".to_string(),
+            }))
+        );
 
         status.merge(MatchStatus::Valid);
         assert_eq!(status, MatchStatus::Valid);
@@ -134,19 +172,45 @@ mod tests {
         status.merge(MatchStatus::Invalid);
         assert_eq!(status, MatchStatus::Valid);
 
-        status.merge(MatchStatus::Error("error".to_string()));
+        status.merge(MatchStatus::ValidationError(ValidationError::HttpError(
+            HttpErrorInfo {
+                status_code: 500,
+                message: "error".to_string(),
+            },
+        )));
         assert_eq!(status, MatchStatus::Valid);
 
-        status = MatchStatus::Error("error".to_string());
+        status = MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+            status_code: 500,
+            message: "error".to_string(),
+        }));
         status.merge(MatchStatus::NotChecked);
 
-        assert_eq!(status, MatchStatus::Error("error".to_string()));
+        assert_eq!(
+            status,
+            MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+                status_code: 500,
+                message: "error".to_string(),
+            }))
+        );
 
         status.merge(MatchStatus::NotAvailable);
-        assert_eq!(status, MatchStatus::Error("error".to_string()));
+        assert_eq!(
+            status,
+            MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+                status_code: 500,
+                message: "error".to_string(),
+            }))
+        );
 
         status.merge(MatchStatus::Invalid);
-        assert_eq!(status, MatchStatus::Error("error".to_string()));
+        assert_eq!(
+            status,
+            MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+                status_code: 500,
+                message: "error".to_string(),
+            }))
+        );
 
         status = MatchStatus::Invalid;
         status.merge(MatchStatus::NotChecked);
