@@ -8,8 +8,26 @@ pub enum MatchStatus {
     /// Missing matches that are required for the match to be checked
     MissingDependentMatch,
     Invalid,
-    Error(String),
+    ValidationError(ValidationError),
     Valid,
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Serialize, Deserialize)]
+pub enum ValidationError {
+    LackingConditionsCoverage(LackingConditionsInfo),
+    HttpError(HttpErrorInfo),
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Serialize, Deserialize)]
+pub struct HttpErrorInfo {
+    pub status_code: u16,
+    pub message: String,
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Clone, Serialize, Deserialize)]
+pub struct LackingConditionsInfo {
+    pub status_code: u16,
+    pub body_length: usize,
 }
 
 impl std::fmt::Display for MatchStatus {
@@ -19,8 +37,39 @@ impl std::fmt::Display for MatchStatus {
             MatchStatus::NotAvailable => write!(f, "NotAvailable"),
             MatchStatus::Invalid => write!(f, "Invalid"),
             MatchStatus::MissingDependentMatch => write!(f, "MissingDependentMatch",),
-            MatchStatus::Error(msg) => write!(f, "Error({})", msg),
+            MatchStatus::ValidationError(validation_error) => {
+                write!(f, "Error({})", validation_error)
+            }
             MatchStatus::Valid => write!(f, "Valid"),
+        }
+    }
+}
+
+impl std::fmt::Display for HttpErrorInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Http error: status_code: {}, message: {}",
+            self.status_code, self.message
+        )
+    }
+}
+
+impl std::fmt::Display for LackingConditionsInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "No condition matched response with status_code: {} and body_length: {}",
+            self.status_code, self.body_length
+        )
+    }
+}
+
+impl std::fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValidationError::LackingConditionsCoverage(inner) => inner.fmt(f),
+            ValidationError::HttpError(inner) => inner.fmt(f),
         }
     }
 }
@@ -29,10 +78,23 @@ impl MatchStatus {
     // Order matters as we want to update the match_status only if the new match_status has higher priority.
     // (in case of split key where we try different combinations of id and secret (aws use-case))
     pub fn merge(&mut self, new_status: MatchStatus) {
-        if let (MatchStatus::Error(old_error), MatchStatus::Error(new_error)) = (&self, &new_status)
-            && old_error != new_error
+        // If the new and old status are both HttpError with differing messages, we concatenate the message part.
+        if let (
+            MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+                status_code: old_status_code,
+                message: old_message,
+            })),
+            MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+                status_code: _new_status_code,
+                message: new_message,
+            })),
+        ) = (&self, &new_status)
+            && old_message != new_message
         {
-            *self = MatchStatus::Error(format!("{}, {}", old_error, new_error));
+            *self = MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+                status_code: *old_status_code,
+                message: format!("{}, {}", old_message, new_message),
+            }));
             return;
         }
         if new_status > *self {
