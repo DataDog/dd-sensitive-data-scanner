@@ -465,7 +465,7 @@ impl MatchValidator for HttpValidatorV2 {
                                 .is_fulfilled_by(&endpoint_combination.template_vars)
                         })
                     {
-                        *match_status = MatchStatus::Partial;
+                        *match_status = MatchStatus::MissingDependentMatch;
                         return;
                     }
                     let request_builder = prepare_request(endpoint_combination);

@@ -6,7 +6,7 @@ pub enum MatchStatus {
     NotChecked,
     NotAvailable,
     /// Missing matches that are required for the match to be checked
-    Partial,
+    MissingDependentMatch,
     Invalid,
     Error(String),
     Valid,
@@ -18,7 +18,7 @@ impl std::fmt::Display for MatchStatus {
             MatchStatus::NotChecked => write!(f, "NotChecked"),
             MatchStatus::NotAvailable => write!(f, "NotAvailable"),
             MatchStatus::Invalid => write!(f, "Invalid"),
-            MatchStatus::Partial => write!(f, "Partial",),
+            MatchStatus::MissingDependentMatch => write!(f, "MissingDependentMatch",),
             MatchStatus::Error(msg) => write!(f, "Error({})", msg),
             MatchStatus::Valid => write!(f, "Valid"),
         }

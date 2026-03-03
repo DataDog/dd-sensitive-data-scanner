@@ -841,7 +841,10 @@ fn test_match_pairing_incomplete_missing_paired_secret() {
         scanner.validate_matches(&mut matches);
 
         let main_match = matches.first().expect("Should find main match");
-        assert!(matches!(main_match.match_status, MatchStatus::Partial));
+        assert!(matches!(
+            main_match.match_status,
+            MatchStatus::MissingDependentMatch
+        ));
 
         // The mock should NOT have been called (since the path didn't match the pattern)
         _mock.assert_hits(0);
@@ -1030,7 +1033,10 @@ fn test_match_pairing_rule_can_consume_and_provide() {
     {
         let matches = scan_and_validate(&scanner, "site=ddsite_us app_key=ddappkey_validxyz");
 
-        assert_eq!(get_status_by_rule_idx(&matches, 1), MatchStatus::Partial);
+        assert_eq!(
+            get_status_by_rule_idx(&matches, 1),
+            MatchStatus::MissingDependentMatch
+        );
         mock_api_key_valid.assert_hits(1);
         mock_app_key_valid.assert_hits(1);
     }
@@ -1038,7 +1044,10 @@ fn test_match_pairing_rule_can_consume_and_provide() {
     {
         let matches = scan_and_validate(&scanner, "api_key=ddapikey_valid123");
 
-        assert_eq!(get_status_by_rule_idx(&matches, 2), MatchStatus::Partial);
+        assert_eq!(
+            get_status_by_rule_idx(&matches, 2),
+            MatchStatus::MissingDependentMatch
+        );
         mock_api_key_valid.assert_hits(1);
         mock_app_key_valid.assert_hits(1);
     }
