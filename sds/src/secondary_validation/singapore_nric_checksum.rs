@@ -7,13 +7,12 @@ pub struct SingaporeNricChecksum;
 // 1. The first character is the prefix (S, T, F, G, M)
 // 2. The next 7 characters are the digits
 // 3. The last character is the checksum
-// 4. The checksum is calculated using the weights and the offset
-// 5. The offset is 0 for S and T, 4 for F and G, and 3 for M
-// 6. The checksum is calculated using the weights and the offset
-// 7. If the prefix is M, we should subtract the remainder from 10 to get the checksum character
+// 4. The offset is 0 for S and T, 4 for F and G, and 3 for M
+// 5. The checksum is calculated using the weights and the offset
+// 6. If the prefix is M, we should subtract the remainder from 10 to get the checksum character
 
 // /!!\ IMPORTANT /!!\
-// The rule 7 is difficult to find on the internet, so it might be wrong.
+// The rule 6 is difficult to find on the internet, so it might be wrong.
 // Following top generators of NRIC numbers, the rule seems correct.
 // https://nricgenerator.com/
 // https://samliew.com/nric-generator
