@@ -25,7 +25,7 @@ fn get_checksum_character(c: char, remainder: usize) -> char {
         'S' | 'T' => vec!['J', 'Z', 'I', 'H', 'G', 'F', 'E', 'D', 'C', 'B', 'A'],
         'F' | 'G' => vec!['X', 'W', 'U', 'T', 'R', 'Q', 'P', 'N', 'M', 'L', 'K'],
         'M' => vec!['K', 'L', 'J', 'N', 'P', 'Q', 'R', 'T', 'U', 'W', 'X'],
-        _ => vec![]
+        _ => vec![],
     };
 
     *remainder_vector.get(remainder).unwrap()
@@ -49,7 +49,7 @@ impl Validator for SingaporeNricChecksum {
             _ => return false,
         };
 
-        let mut sum : u32 = 0;
+        let mut sum: u32 = 0;
         for &weight in WEIGHTS {
             let digit = match chars.next().and_then(|c| c.to_digit(10)) {
                 Some(d) => d,
@@ -63,9 +63,7 @@ impl Validator for SingaporeNricChecksum {
         }
 
         let expected_checksum = get_checksum_character(prefix, remainder);
-        let actual_checksum = chars
-            .next()
-            .map(|c| c.to_uppercase().next().unwrap_or(c));
+        let actual_checksum = chars.next().map(|c| c.to_uppercase().next().unwrap_or(c));
 
         actual_checksum == Some(expected_checksum)
     }
@@ -85,7 +83,7 @@ mod test {
             "F5221211K",
             "G8169811U",
             "g3970684p",
-            "M2200054X"
+            "M2200054X",
         ];
 
         for number in valid_numbers {
@@ -103,7 +101,7 @@ mod test {
             "I6859080I",
             "M9612050Q",
             "A1234567A",
-            "g3970683p"
+            "g3970683p",
         ];
         for number in invalid_numbers {
             assert!(!validator.is_valid_match(number));
