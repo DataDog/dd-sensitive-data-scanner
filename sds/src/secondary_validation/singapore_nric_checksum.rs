@@ -18,6 +18,7 @@ pub struct SingaporeNricChecksum;
 // https://samliew.com/nric-generator
 
 const WEIGHTS: &[u32; 7] = &[2, 7, 6, 5, 4, 3, 2];
+const EXPECTED_CHAR_COUNT: usize = 9;
 
 fn get_checksum_character(c: char, remainder: usize) -> char {
     let remainder_vector = match c {
@@ -32,7 +33,7 @@ fn get_checksum_character(c: char, remainder: usize) -> char {
 
 impl Validator for SingaporeNricChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
-        if regex_match.chars().count() != 9 {
+        if regex_match.chars().count() != EXPECTED_CHAR_COUNT {
             return false;
         }
 
