@@ -696,7 +696,7 @@ func TestThirdPartyActiveChecker(t *testing.T) {
 				ReplacementType:   ReplacementTypeNone,
 				EndIndexExclusive: 51,
 				ShiftOffset:       0,
-				MatchStatus:       MatchStatus("Error(Error making HTTP request: error sending request for url (https://api.example.com/validate): connect error: client error (Connect))"), // Full error message from HTTP validation
+				MatchStatus:       MatchStatus("Error(Http error: status_code: 0, message: Error making HTTP request: error sending request for url (https://api.example.com/validate): connect error: client error (Connect))"), // Full error message from HTTP validation
 			}},
 		},
 	}

@@ -3,11 +3,11 @@ use crate::match_validation::config_v2::TemplatedMatchString;
 use crate::match_validation::validator_utils::generate_aws_headers_and_body;
 use crate::scanner::RootRuleConfig;
 use crate::{
-    AwsConfig, AwsType, CustomHttpConfig, CustomHttpConfigV2, HttpCallConfig, HttpMethod,
-    HttpRequestConfig, HttpResponseConfig, InternalMatchValidationType, MatchAction,
+    AwsConfig, AwsType, CustomHttpConfig, CustomHttpConfigV2, HttpCallConfig, HttpErrorInfo,
+    HttpMethod, HttpRequestConfig, HttpResponseConfig, InternalMatchValidationType, MatchAction,
     MatchPairingConfig, MatchStatus, MatchValidationType, PairedValidatorConfig,
     ProximityKeywordsConfig, RegexRuleConfig, ResponseCondition, ResponseConditionType, RuleMatch,
-    Scanner, ScannerBuilder, StatusCodeMatcher,
+    Scanner, ScannerBuilder, StatusCodeMatcher, UnknownResponseTypeInfo, ValidationError,
 };
 use httpmock::Method::{GET, POST};
 use httpmock::{MockServer, Regex};
@@ -236,7 +236,13 @@ fn test_mock_same_http_validator_several_matches() {
     assert_eq!(matches[1].match_status, MatchStatus::Invalid);
     assert_eq!(
         matches[2].match_status,
-        MatchStatus::Error("Unexpected HTTP status code 500".to_string())
+        MatchStatus::ValidationError(vec![ValidationError::UnknownResponseType(
+            UnknownResponseTypeInfo {
+                status_code: 500,
+                body_length: 0,
+                body_prefix: None,
+            }
+        )])
     );
 }
 
@@ -326,8 +332,18 @@ fn test_mock_http_timeout() {
     scanner.validate_matches(&mut matches);
     // This will be in the form "Error making HTTP request: "
     match &matches[0].match_status {
-        MatchStatus::Error(val) => {
-            assert!(val.starts_with("Error making HTTP request:"));
+        MatchStatus::ValidationError(errors)
+            if matches!(errors.as_slice(), [ValidationError::HttpError(_)]) =>
+        {
+            let ValidationError::HttpError(HttpErrorInfo {
+                status_code,
+                message,
+            }) = &errors[0]
+            else {
+                panic!("expected single HttpError");
+            };
+            assert!(message.starts_with("Error making HTTP request:"));
+            assert_eq!(*status_code, 0u16);
         }
         _ => assert!(false),
     }
@@ -569,16 +585,36 @@ fn test_mock_aws_validator() {
     mock_service_error_2.assert();
     assert_eq!(matches[0].match_status, MatchStatus::Valid);
     assert_eq!(matches[1].match_status, MatchStatus::Invalid);
-    assert_eq!(
-        matches[2].match_status,
-        MatchStatus::Error("Unexpected HTTP status code 500".to_string())
-    );
+    match &matches[2].match_status {
+        MatchStatus::ValidationError(errors) => {
+            assert!(!errors.is_empty(), "expected at least one validation error");
+            assert!(
+                errors.iter().all(|error| matches!(
+                    error,
+                    ValidationError::HttpError(HttpErrorInfo { status_code: 500, message })
+                    if message == "Unexpected HTTP status code"
+                )),
+                "expected all errors to be HTTP 500 unexpected status errors, got: {errors:?}"
+            );
+        }
+        other => panic!("expected ValidationError, got {other:?}"),
+    }
     assert_eq!(matches[3].match_status, MatchStatus::Valid);
     // ID1 + SECRET2 should be in error so it should contain error and not invalid
-    assert_eq!(
-        matches[4].match_status,
-        MatchStatus::Error("Unexpected HTTP status code 500".to_string())
-    );
+    match &matches[4].match_status {
+        MatchStatus::ValidationError(errors) => {
+            assert!(!errors.is_empty(), "expected at least one validation error");
+            assert!(
+                errors.iter().all(|error| matches!(
+                    error,
+                    ValidationError::HttpError(HttpErrorInfo { status_code: 500, message })
+                    if message == "Unexpected HTTP status code"
+                )),
+                "expected all errors to be HTTP 500 unexpected status errors, got: {errors:?}"
+            );
+        }
+        other => panic!("expected ValidationError, got {other:?}"),
+    }
 }
 
 #[test]
