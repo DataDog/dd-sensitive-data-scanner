@@ -34,6 +34,8 @@ mod test {
     #[test]
     fn test_valid_checksum() {
         let validator = AustralianMedicareChecksum;
+        // Usage of an online generator to generate valid Medicare numbers, see below.
+        // https://testerwidgets.com/widgets/9/australian-medicare-number-generator
         let valid = [
             "48867988020",
             "6216795759",
