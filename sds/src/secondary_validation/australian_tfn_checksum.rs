@@ -26,7 +26,7 @@ impl Validator for AustralianTfnChecksum {
             }
         }
 
-        sum % 11 == 0
+        sum.is_multiple_of(11)
     }
 }
 
