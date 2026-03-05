@@ -1,4 +1,5 @@
 mod aba_rtn_checksum;
+mod australian_tfn_checksum;
 mod austrian_ssn_checksum;
 mod belgium_national_register_checksum;
 mod brazilian_cnpj_checksum;
@@ -55,6 +56,7 @@ pub use jwt_expiration_checker::generate_jwt;
 
 use crate::scanner::regex_rule::config::SecondaryValidator;
 pub use crate::secondary_validation::aba_rtn_checksum::AbaRtnChecksum;
+pub use crate::secondary_validation::australian_tfn_checksum::AustralianTfnChecksum;
 pub use crate::secondary_validation::austrian_ssn_checksum::AustrianSSNChecksum;
 pub use crate::secondary_validation::belgium_national_register_checksum::BelgiumNationalRegisterChecksum;
 pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjChecksum;
@@ -185,6 +187,7 @@ impl SecondaryValidator {
     pub fn compile(&self) -> Arc<dyn Validator> {
         match self {
             SecondaryValidator::AbaRtnChecksum => Arc::new(AbaRtnChecksum),
+            SecondaryValidator::AustralianTfnChecksum => Arc::new(AustralianTfnChecksum),
             SecondaryValidator::AustrianSSNChecksum => Arc::new(AustrianSSNChecksum),
             SecondaryValidator::BelgiumNationalRegisterChecksum => {
                 Arc::new(BelgiumNationalRegisterChecksum)
