@@ -4,8 +4,8 @@ pub struct AustralianTfnChecksum;
 
 // https://en.wikipedia.org/wiki/Tax_file_number#Check_digit
 // https://github.com/sidorares/tfn/issues/1
-const WEIGHTS_9: &[u32; 9] = &[1, 4, 3, 7, 5, 8, 6, 9, 10];
-const WEIGHTS_8: &[u32; 8] = &[10, 7, 8, 4, 6, 3, 5, 1];
+const WEIGHTS_9: &[u32; 9] = &[1, 4, 3, 7, 5, 8, 6, 9, 10]; // 9 digits weights for new TFNs
+const WEIGHTS_8: &[u32; 8] = &[10, 7, 8, 4, 6, 3, 5, 1]; // 8 digits weights for old TFNs
 
 impl Validator for AustralianTfnChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
