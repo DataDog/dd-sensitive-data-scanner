@@ -1,4 +1,4 @@
-use crate::secondary_validation::Validator;
+use crate::secondary_validation::{Validator, get_next_digit};
 
 pub struct SingaporeNricChecksum;
 
@@ -51,10 +51,11 @@ impl Validator for SingaporeNricChecksum {
 
         let mut sum: u32 = 0;
         for &weight in WEIGHTS {
-            let digit = match chars.next().and_then(|c| c.to_digit(10)) {
+            let digit = match get_next_digit(&mut chars) {
                 Some(d) => d,
                 None => return false,
             };
+
             sum += digit * weight;
         }
         let mut remainder = ((sum + offset) % 11) as usize;
