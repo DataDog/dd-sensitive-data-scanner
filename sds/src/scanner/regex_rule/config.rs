@@ -258,6 +258,7 @@ pub enum SecondaryValidator {
     PortugueseTaxIdChecksum,
     RodneCisloNumberChecksum,
     RomanianPersonalNumericCode,
+    SingaporeNricChecksum,
     SloveniaTinChecksum,
     SlovenianPINChecksum,
     SpanishDniChecksum,
