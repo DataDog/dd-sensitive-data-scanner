@@ -236,13 +236,13 @@ fn test_mock_same_http_validator_several_matches() {
     assert_eq!(matches[1].match_status, MatchStatus::Invalid);
     assert_eq!(
         matches[2].match_status,
-        MatchStatus::ValidationError(ValidationError::UnknownResponseType(
+        MatchStatus::ValidationError(vec![ValidationError::UnknownResponseType(
             UnknownResponseTypeInfo {
                 status_code: 500,
                 body_length: 0,
                 body_prefix: None,
             }
-        ))
+        )])
     );
 }
 
@@ -332,10 +332,16 @@ fn test_mock_http_timeout() {
     scanner.validate_matches(&mut matches);
     // This will be in the form "Error making HTTP request: "
     match &matches[0].match_status {
-        MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
-            status_code,
-            message,
-        })) => {
+        MatchStatus::ValidationError(errors)
+            if matches!(errors.as_slice(), [ValidationError::HttpError(_)]) =>
+        {
+            let ValidationError::HttpError(HttpErrorInfo {
+                status_code,
+                message,
+            }) = &errors[0]
+            else {
+                panic!("expected single HttpError");
+            };
             assert!(message.starts_with("Error making HTTP request:"));
             assert_eq!(*status_code, 0u16);
         }
@@ -579,22 +585,36 @@ fn test_mock_aws_validator() {
     mock_service_error_2.assert();
     assert_eq!(matches[0].match_status, MatchStatus::Valid);
     assert_eq!(matches[1].match_status, MatchStatus::Invalid);
-    assert_eq!(
-        matches[2].match_status,
-        MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
-            status_code: 500,
-            message: "Unexpected HTTP status code".to_string(),
-        }))
-    );
+    match &matches[2].match_status {
+        MatchStatus::ValidationError(errors) => {
+            assert!(!errors.is_empty(), "expected at least one validation error");
+            assert!(
+                errors.iter().all(|error| matches!(
+                    error,
+                    ValidationError::HttpError(HttpErrorInfo { status_code: 500, message })
+                    if message == "Unexpected HTTP status code"
+                )),
+                "expected all errors to be HTTP 500 unexpected status errors, got: {errors:?}"
+            );
+        }
+        other => panic!("expected ValidationError, got {other:?}"),
+    }
     assert_eq!(matches[3].match_status, MatchStatus::Valid);
     // ID1 + SECRET2 should be in error so it should contain error and not invalid
-    assert_eq!(
-        matches[4].match_status,
-        MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
-            status_code: 500,
-            message: "Unexpected HTTP status code".to_string(),
-        }))
-    );
+    match &matches[4].match_status {
+        MatchStatus::ValidationError(errors) => {
+            assert!(!errors.is_empty(), "expected at least one validation error");
+            assert!(
+                errors.iter().all(|error| matches!(
+                    error,
+                    ValidationError::HttpError(HttpErrorInfo { status_code: 500, message })
+                    if message == "Unexpected HTTP status code"
+                )),
+                "expected all errors to be HTTP 500 unexpected status errors, got: {errors:?}"
+            );
+        }
+        other => panic!("expected ValidationError, got {other:?}"),
+    }
 }
 
 #[test]

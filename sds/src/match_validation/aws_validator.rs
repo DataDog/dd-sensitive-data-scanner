@@ -108,10 +108,11 @@ fn handle_reqwest_response(match_status: &mut MatchStatus, val: &reqwest::blocki
     // There might be an issue with the request. We will mark the match_status as error
     // unless it is already valid
     if val.status().is_server_error() {
-        *match_status = MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
-            status_code: val.status().as_u16(),
-            message: "Unexpected HTTP status code".to_string(),
-        }));
+        *match_status =
+            MatchStatus::ValidationError(vec![ValidationError::HttpError(HttpErrorInfo {
+                status_code: val.status().as_u16(),
+                message: "Unexpected HTTP status code".to_string(),
+            })]);
     }
 }
 
@@ -175,12 +176,13 @@ impl MatchValidator for AwsValidator {
                             if let Some(source) = StdError::source(&err) {
                                 msg.push_str(format!(": {}", source).as_str());
                             }
-                            *match_status = MatchStatus::ValidationError(
-                                ValidationError::HttpError(HttpErrorInfo {
-                                    status_code,
-                                    message: msg,
-                                }),
-                            );
+                            *match_status =
+                                MatchStatus::ValidationError(vec![ValidationError::HttpError(
+                                    HttpErrorInfo {
+                                        status_code,
+                                        message: msg,
+                                    },
+                                )]);
                         }
                     };
                 });

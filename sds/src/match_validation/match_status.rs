@@ -11,7 +11,7 @@ pub enum MatchStatus {
     /// Missing matches that are required for the match to be checked
     MissingDependentMatch,
     Invalid,
-    ValidationError(ValidationError),
+    ValidationError(Vec<ValidationError>),
     Valid,
 }
 
@@ -64,8 +64,16 @@ impl std::fmt::Display for MatchStatus {
             MatchStatus::NotAvailable => write!(f, "NotAvailable"),
             MatchStatus::Invalid => write!(f, "Invalid"),
             MatchStatus::MissingDependentMatch => write!(f, "MissingDependentMatch",),
-            MatchStatus::ValidationError(validation_error) => {
-                write!(f, "Error({})", validation_error)
+            MatchStatus::ValidationError(validation_errors) => {
+                write!(
+                    f,
+                    "Error({})",
+                    validation_errors
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                )
             }
             MatchStatus::Valid => write!(f, "Valid"),
         }
@@ -105,27 +113,15 @@ impl MatchStatus {
     // Order matters as we want to update the match_status only if the new match_status has higher priority.
     // (in case of split key where we try different combinations of id and secret (aws use-case))
     pub fn merge(&mut self, new_status: MatchStatus) {
-        // If the new and old status are both HttpError with differing messages, we concatenate the message part.
-        if let (
-            MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
-                status_code: old_status_code,
-                message: old_message,
-            })),
-            MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
-                status_code: _new_status_code,
-                message: new_message,
-            })),
-        ) = (&self, &new_status)
-            && old_message != new_message
-        {
-            *self = MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
-                status_code: *old_status_code,
-                message: format!("{}, {}", old_message, new_message),
-            }));
-            return;
-        }
-        if new_status > *self {
-            *self = new_status;
+        match (self, new_status) {
+            (
+                MatchStatus::ValidationError(existing_errors),
+                MatchStatus::ValidationError(mut new_errors),
+            ) => existing_errors.append(&mut new_errors),
+            (existing_status, new_status) if new_status > *existing_status => {
+                *existing_status = new_status;
+            }
+            _ => {}
         }
     }
 }
@@ -143,18 +139,18 @@ mod tests {
         status.merge(MatchStatus::Invalid);
         assert_eq!(status, MatchStatus::Invalid);
 
-        status.merge(MatchStatus::ValidationError(ValidationError::HttpError(
-            HttpErrorInfo {
+        status.merge(MatchStatus::ValidationError(vec![
+            ValidationError::HttpError(HttpErrorInfo {
                 status_code: 500,
                 message: "error".to_string(),
-            },
-        )));
+            }),
+        ]));
         assert_eq!(
             status,
-            MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+            MatchStatus::ValidationError(vec![ValidationError::HttpError(HttpErrorInfo {
                 status_code: 500,
                 message: "error".to_string(),
-            }))
+            })])
         );
 
         status.merge(MatchStatus::Valid);
@@ -172,44 +168,44 @@ mod tests {
         status.merge(MatchStatus::Invalid);
         assert_eq!(status, MatchStatus::Valid);
 
-        status.merge(MatchStatus::ValidationError(ValidationError::HttpError(
-            HttpErrorInfo {
+        status.merge(MatchStatus::ValidationError(vec![
+            ValidationError::HttpError(HttpErrorInfo {
                 status_code: 500,
                 message: "error".to_string(),
-            },
-        )));
+            }),
+        ]));
         assert_eq!(status, MatchStatus::Valid);
 
-        status = MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+        status = MatchStatus::ValidationError(vec![ValidationError::HttpError(HttpErrorInfo {
             status_code: 500,
             message: "error".to_string(),
-        }));
+        })]);
         status.merge(MatchStatus::NotChecked);
 
         assert_eq!(
             status,
-            MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+            MatchStatus::ValidationError(vec![ValidationError::HttpError(HttpErrorInfo {
                 status_code: 500,
                 message: "error".to_string(),
-            }))
+            })])
         );
 
         status.merge(MatchStatus::NotAvailable);
         assert_eq!(
             status,
-            MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+            MatchStatus::ValidationError(vec![ValidationError::HttpError(HttpErrorInfo {
                 status_code: 500,
                 message: "error".to_string(),
-            }))
+            })])
         );
 
         status.merge(MatchStatus::Invalid);
         assert_eq!(
             status,
-            MatchStatus::ValidationError(ValidationError::HttpError(HttpErrorInfo {
+            MatchStatus::ValidationError(vec![ValidationError::HttpError(HttpErrorInfo {
                 status_code: 500,
                 message: "error".to_string(),
-            }))
+            })])
         );
 
         status = MatchStatus::Invalid;

@@ -49,9 +49,9 @@ impl HttpValidatorV2 {
                 }
             }
         }
-        *match_status = MatchStatus::ValidationError(ValidationError::UnknownResponseType(
+        *match_status = MatchStatus::ValidationError(vec![ValidationError::UnknownResponseType(
             UnknownResponseTypeInfo::from_status_and_body(status, &body),
-        ));
+        )]);
     }
 }
 
@@ -493,12 +493,13 @@ impl MatchValidator for HttpValidatorV2 {
                             if let Some(source) = StdError::source(&err) {
                                 msg.push_str(format!(": {}", source).as_str());
                             }
-                            *match_status = MatchStatus::ValidationError(
-                                ValidationError::HttpError(HttpErrorInfo {
-                                    status_code,
-                                    message: msg,
-                                }),
-                            );
+                            *match_status =
+                                MatchStatus::ValidationError(vec![ValidationError::HttpError(
+                                    HttpErrorInfo {
+                                        status_code,
+                                        message: msg,
+                                    },
+                                )]);
                         }
                     }
                 });
@@ -933,10 +934,18 @@ calls:
 
         mock.assert();
         match &matches[0].match_status {
-            MatchStatus::ValidationError(ValidationError::UnknownResponseType(msg)) => {
-                assert_eq!(msg.body_prefix, Some("Internal Server Error".to_string()));
-                assert_eq!(msg.body_length, 21);
-                assert_eq!(msg.status_code, 500);
+            MatchStatus::ValidationError(errors) => {
+                assert_eq!(errors.len(), 1);
+                if let ValidationError::UnknownResponseType(msg) = &errors[0] {
+                    assert_eq!(msg.body_prefix, Some("Internal Server Error".to_string()));
+                    assert_eq!(msg.body_length, 21);
+                    assert_eq!(msg.status_code, 500);
+                } else {
+                    panic!(
+                        "Expected ValidationError::UnknownResponseType but got {:?}",
+                        errors[0]
+                    );
+                }
             }
             _ => panic!(
                 "Expected MatchStatus::Error but got {:?}",
@@ -981,8 +990,9 @@ calls:
         validator.validate(&mut matches, &rules);
 
         match &matches[0].match_status {
-            MatchStatus::ValidationError(ValidationError::HttpError(msg)) => {
-                assert!(msg.message.contains("timeout"));
+            MatchStatus::ValidationError(errors) => {
+                assert_eq!(errors.len(), 1);
+                assert!(errors[0].to_string().contains("timeout"));
             }
             _ => panic!(
                 "Expected MatchStatus::Error with timeout but got {:?}",
@@ -1640,23 +1650,37 @@ match_pairing:
         validator.validate(&mut all_matches, &rules);
 
         match &all_matches[0].match_status {
-            MatchStatus::ValidationError(ValidationError::HttpError(error_info)) => {
-                let msg = error_info.message.clone();
-                let parts: Vec<&str> = msg.split(", ").collect();
-                assert_eq!(
-                    parts.len(),
-                    2,
-                    "expected 2 comma-separated error messages, got: {msg}"
-                );
+            MatchStatus::ValidationError(errors) => {
+                assert_eq!(errors.len(), 2, "expected one error per failed pairing");
+
+                let messages: Vec<&str> = errors
+                    .iter()
+                    .map(|error| match error {
+                        ValidationError::HttpError(HttpErrorInfo {
+                            status_code,
+                            message,
+                        }) => {
+                            assert_eq!(*status_code, 0);
+                            message.as_str()
+                        }
+                        other => panic!("expected HttpError, got {other:?}"),
+                    })
+                    .collect();
+
                 assert!(
-                    parts
+                    messages
                         .iter()
-                        .all(|part| part.starts_with("Error making HTTP request:")),
-                    "expected all parts to be HTTP request errors, got: {msg}"
+                        .all(|message| message.starts_with("Error making HTTP request:")),
+                    "expected all messages to be HTTP request errors, got: {messages:?}"
                 );
                 assert!(
-                    msg.contains("127.0.0.1:1") && msg.contains("127.0.0.1:2"),
-                    "expected concatenated message to include both endpoints, got: {msg}"
+                    messages
+                        .iter()
+                        .any(|message| message.contains("127.0.0.1:1"))
+                        && messages
+                            .iter()
+                            .any(|message| message.contains("127.0.0.1:2")),
+                    "expected errors to include both endpoints, got: {messages:?}"
                 );
             }
             other => panic!("expected Error status, got {other:?}"),

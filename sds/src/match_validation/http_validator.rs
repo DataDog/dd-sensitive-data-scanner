@@ -44,9 +44,9 @@ impl HttpValidator {
             }
         }
         // If it's not in either, then it's not available
-        *match_status = MatchStatus::ValidationError(ValidationError::UnknownResponseType(
+        *match_status = MatchStatus::ValidationError(vec![ValidationError::UnknownResponseType(
             UnknownResponseTypeInfo::from(val),
-        ));
+        )]);
     }
 }
 
@@ -151,12 +151,13 @@ impl MatchValidator for HttpValidator {
                             if let Some(source) = StdError::source(&err) {
                                 msg.push_str(format!(": {}", source).as_str());
                             }
-                            *match_status = MatchStatus::ValidationError(
-                                ValidationError::HttpError(HttpErrorInfo {
-                                    status_code,
-                                    message: msg,
-                                }),
-                            );
+                            *match_status =
+                                MatchStatus::ValidationError(vec![ValidationError::HttpError(
+                                    HttpErrorInfo {
+                                        status_code,
+                                        message: msg,
+                                    },
+                                )]);
                         }
                     }
                 },
