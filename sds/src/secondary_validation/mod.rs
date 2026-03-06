@@ -1,4 +1,6 @@
 mod aba_rtn_checksum;
+mod australian_medicare_checksum;
+mod australian_tfn_checksum;
 mod austrian_ssn_checksum;
 mod belgium_national_register_checksum;
 mod brazilian_cnpj_checksum;
@@ -40,6 +42,7 @@ mod polish_nip_checksum;
 mod portuguese_tax_id_checksum;
 mod rodne_cislo_checksum;
 mod romanian_personal_numeric_code;
+mod singapore_nric_checksum;
 mod slovenia_tin_checksum;
 mod slovenian_pin_checksum;
 mod spain_dni_checksum;
@@ -54,6 +57,8 @@ pub use jwt_expiration_checker::generate_jwt;
 
 use crate::scanner::regex_rule::config::SecondaryValidator;
 pub use crate::secondary_validation::aba_rtn_checksum::AbaRtnChecksum;
+pub use crate::secondary_validation::australian_medicare_checksum::AustralianMedicareChecksum;
+pub use crate::secondary_validation::australian_tfn_checksum::AustralianTfnChecksum;
 pub use crate::secondary_validation::austrian_ssn_checksum::AustrianSSNChecksum;
 pub use crate::secondary_validation::belgium_national_register_checksum::BelgiumNationalRegisterChecksum;
 pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjChecksum;
@@ -98,6 +103,7 @@ pub use crate::secondary_validation::polish_nip_checksum::PolishNipChecksum;
 pub use crate::secondary_validation::portuguese_tax_id_checksum::PortugueseTaxIdChecksum;
 pub use crate::secondary_validation::rodne_cislo_checksum::RodneCisloNumberChecksum;
 pub use crate::secondary_validation::romanian_personal_numeric_code::RomanianPersonalNumericCode;
+pub use crate::secondary_validation::singapore_nric_checksum::SingaporeNricChecksum;
 pub use crate::secondary_validation::slovenia_tin_checksum::SloveniaTinChecksum;
 pub use crate::secondary_validation::slovenian_pin_checksum::SlovenianPINChecksum;
 pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
@@ -183,6 +189,8 @@ impl SecondaryValidator {
     pub fn compile(&self) -> Arc<dyn Validator> {
         match self {
             SecondaryValidator::AbaRtnChecksum => Arc::new(AbaRtnChecksum),
+            SecondaryValidator::AustralianMedicareChecksum => Arc::new(AustralianMedicareChecksum),
+            SecondaryValidator::AustralianTfnChecksum => Arc::new(AustralianTfnChecksum),
             SecondaryValidator::AustrianSSNChecksum => Arc::new(AustrianSSNChecksum),
             SecondaryValidator::BelgiumNationalRegisterChecksum => {
                 Arc::new(BelgiumNationalRegisterChecksum)
@@ -248,6 +256,7 @@ impl SecondaryValidator {
             SecondaryValidator::RomanianPersonalNumericCode => {
                 Arc::new(RomanianPersonalNumericCode)
             }
+            SecondaryValidator::SingaporeNricChecksum => Arc::new(SingaporeNricChecksum),
             SecondaryValidator::SlovenianPINChecksum => Arc::new(SlovenianPINChecksum),
             SecondaryValidator::SloveniaTinChecksum => Arc::new(SloveniaTinChecksum),
             SecondaryValidator::SpanishDniChecksum => Arc::new(SpanishDniChecksum),
