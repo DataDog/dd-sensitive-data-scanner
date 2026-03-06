@@ -166,7 +166,7 @@ fn collect_named_capture_group_asts<'a>(ast: &'a Ast, group_name: &str) -> Vec<&
             if let GroupKind::CaptureName { name, .. } = &group.kind
                 && name.name == group_name
             {
-                matching_groups.push(group.ast.as_ref());
+                matching_groups.push(ast);
             }
             matching_groups.extend(collect_named_capture_group_asts(
                 group.ast.as_ref(),
