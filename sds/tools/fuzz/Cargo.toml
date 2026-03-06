@@ -13,10 +13,10 @@ name = "fuzz"
 path = "src/main.rs"
 
 [dependencies]
-afl = "0.14.5"
+afl = "0.17.0"
 ahash = "0.8.11"
 dd-sds = { path = "../../" }
 
 # optional
 hyperscan = { version = "0.3.2", features = ["static"], optional = true }
-rand = "0.8.5"
+rand = "0.10.0"
