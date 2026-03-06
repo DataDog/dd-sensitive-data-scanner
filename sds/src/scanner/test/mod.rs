@@ -15,7 +15,7 @@ use crate::scanner::regex_rule::config::{
 };
 use crate::scanner::scope::Scope;
 use crate::scanner::{CreateScannerError, Scanner, get_next_regex_start};
-use crate::validation::RegexValidationError;
+use crate::validation::{RegexPatternCaptureGroupsValidationError, RegexValidationError};
 
 use crate::{Encoding, Utf8Encoding};
 use crate::{PartialRedactDirection, Path, PathSegment, RuleMatch, simple_event::SimpleEvent};
@@ -953,6 +953,23 @@ fn test_capture_group() {
     // Only the "world" part of the match should be redacted
     assert_eq!(content, "hello [REDACTED] i am here");
     assert_eq!(matches.len(), 1);
+}
+
+#[test]
+fn test_capture_group_matching_empty_string_is_rejected() {
+    let rule = RootRuleConfig::new(
+        RegexRuleConfig::new(r"hello (?<sds_match>d*)")
+            .with_pattern_capture_groups(vec!["sds_match".to_string()])
+            .build(),
+    );
+
+    let scanner_result = ScannerBuilder::new(&[rule]).build();
+    assert!(matches!(
+        scanner_result,
+        Err(CreateScannerError::InvalidPatternCaptureGroups(
+            RegexPatternCaptureGroupsValidationError::CaptureGroupMatchesEmptyString
+        ))
+    ));
 }
 
 #[test]

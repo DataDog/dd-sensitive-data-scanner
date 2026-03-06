@@ -3,7 +3,10 @@ use crate::scanner::config::RuleConfig;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::regex_store::get_memoized_regex;
-use crate::validation::{RegexPatternCaptureGroupsValidationError, validate_and_create_regex};
+use crate::validation::{
+    RegexPatternCaptureGroupsValidationError, validate_and_create_regex,
+    validate_named_capture_group_minimum_length,
+};
 use crate::{CompiledRule, CreateScannerError, Labels};
 use regex_automata::util::captures::GroupInfo;
 use serde::{Deserialize, Serialize};
@@ -121,6 +124,7 @@ impl RegexRuleConfig {
 }
 
 fn is_pattern_capture_groups_valid(
+    pattern: &str,
     pattern_capture_groups: &Option<Vec<String>>,
     group_info: &GroupInfo,
 ) -> Result<(), RegexPatternCaptureGroupsValidationError> {
@@ -154,6 +158,7 @@ fn is_pattern_capture_groups_valid(
     if pattern_capture_group != "sds_match" {
         return Err(RegexPatternCaptureGroupsValidationError::TargetedCaptureGroupMustBeSdsMatch);
     }
+    validate_named_capture_group_minimum_length(pattern, pattern_capture_group)?;
     Ok(())
 }
 
@@ -173,7 +178,11 @@ impl RuleConfig for RegexRuleConfig {
             .map(|config| compile_keywords_proximity_config(config, &rule_labels))
             .unwrap_or(Ok((None, None)))?;
 
-        is_pattern_capture_groups_valid(&self.pattern_capture_groups, regex.group_info())?;
+        is_pattern_capture_groups_valid(
+            &self.pattern,
+            &self.pattern_capture_groups,
+            regex.group_info(),
+        )?;
 
         Ok(Box::new(RegexCompiledRule {
             rule_index,
@@ -495,6 +504,11 @@ mod test {
                 ),
             ),
             (
+                "hello (?<sds_match>d*)",
+                vec!["sds_match".to_string()],
+                Err(RegexPatternCaptureGroupsValidationError::CaptureGroupMatchesEmptyString),
+            ),
+            (
                 "hello (?<sds_match>world)",
                 vec!["sds_match".to_string(), "sds_match2".to_string()],
                 Err(RegexPatternCaptureGroupsValidationError::TooManyCaptureGroups(2)),
@@ -505,6 +519,7 @@ mod test {
                 RegexRuleConfig::new(pattern).with_pattern_capture_groups(capture_groups);
             assert_eq!(
                 is_pattern_capture_groups_valid(
+                    &rule_config.pattern,
                     &rule_config.pattern_capture_groups,
                     &get_memoized_regex(pattern, validate_and_create_regex)
                         .unwrap()
