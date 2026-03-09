@@ -6,6 +6,10 @@ const INVALID_FIRST: &[char] = &['D', 'F', 'I', 'Q', 'U', 'V'];
 const INVALID_SECOND: &[char] = &['D', 'F', 'I', 'O', 'Q', 'U', 'V'];
 const INVALID_PREFIXES: &[&str] = &["BG", "GB", "NK", "KN", "NT", "TN", "ZZ"];
 
+const PATTERN_LENGTH: usize = 9;
+const PREFIX_LENGTH: usize = 2;
+const SUFFIX_INDEX: usize = PATTERN_LENGTH - 1;
+
 impl Validator for UkNinoFormatCheck {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         let chars: Vec<char> = regex_match
@@ -14,7 +18,7 @@ impl Validator for UkNinoFormatCheck {
             .map(|c| c.to_ascii_uppercase())
             .collect();
 
-        if chars.len() != 9 {
+        if chars.len() != PATTERN_LENGTH {
             return false;
         }
 
@@ -25,8 +29,8 @@ impl Validator for UkNinoFormatCheck {
             return false;
         }
 
-        let prefix: String = chars[..2].iter().collect();
-        let suffix = chars[8];
+        let prefix: String = chars[..PREFIX_LENGTH].iter().collect();
+        let suffix = chars[SUFFIX_INDEX];
 
         if INVALID_FIRST.contains(&c1)
             || INVALID_SECOND.contains(&c2)
