@@ -6,6 +6,11 @@ pub struct UkTrnChecksum;
 const WEIGHTS: &[u32; 9] = &[6, 7, 8, 9, 10, 5, 4, 3, 2];
 const REMAINDER_LOOKUP: [u32; 11] = [2, 1, 9, 8, 7, 6, 5, 4, 3, 2, 1];
 
+/// Length of the UTR (used for both Self Assessment and Corporation Tax).
+const UTR_DIGIT_LENGTH: usize = 10;
+/// Length when a 3-digit prefix precedes the 10-digit UTR; we validate the last 10 digits.
+const PREFIXED_UTR_DIGIT_LENGTH: usize = 13;
+
 impl Validator for UkTrnChecksum {
     fn is_valid_match(&self, regex_match: &str) -> bool {
         // Self Assessment UTR may have one leading or trailing K; more than one K is invalid.
@@ -20,14 +25,14 @@ impl Validator for UkTrnChecksum {
 
         let digits: Vec<char> = regex_match.chars().filter(|c| c.is_ascii_digit()).collect();
         let ten_digits = match digits.len() {
-            10 => digits,
-            13 => digits[3..13].to_vec(), // 13-digit = 3 prefix + 10-digit UTR
+            UTR_DIGIT_LENGTH => digits,
+            PREFIXED_UTR_DIGIT_LENGTH => digits[3..PREFIXED_UTR_DIGIT_LENGTH].to_vec(), // 3-digit prefix + 10-digit UTR
             _ => return false,
         };
 
         // UTR has check digit at index 0 and data at 1..10; validate_mod11_weighted_checksum
         // expects data first then check, so we reorder to avoid duplicating the algorithm.
-        let data_then_check: String = ten_digits[1..10]
+        let data_then_check: String = ten_digits[1..UTR_DIGIT_LENGTH]
             .iter()
             .chain(ten_digits[0..1].iter())
             .collect();
