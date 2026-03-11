@@ -49,6 +49,7 @@ mod spain_dni_checksum;
 mod spanish_nuss_checksum;
 mod sweden_pin_checksum;
 mod uk_nino_format_check;
+mod uk_trn_checksum;
 mod us_dea_checksum;
 mod us_npi_checksum;
 mod verhoeff_checksum;
@@ -111,6 +112,7 @@ pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
 pub use crate::secondary_validation::spanish_nuss_checksum::SpanishNussChecksum;
 pub use crate::secondary_validation::sweden_pin_checksum::SwedenPINChecksum;
 pub use crate::secondary_validation::uk_nino_format_check::UkNinoFormatCheck;
+pub use crate::secondary_validation::uk_trn_checksum::UkTrnChecksum;
 pub use crate::secondary_validation::us_dea_checksum::UsDeaChecksum;
 pub use crate::secondary_validation::us_npi_checksum::UsNpiChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
@@ -265,6 +267,7 @@ impl SecondaryValidator {
             SecondaryValidator::SpanishNussChecksum => Arc::new(SpanishNussChecksum),
             SecondaryValidator::SwedenPINChecksum => Arc::new(SwedenPINChecksum),
             SecondaryValidator::UkNinoFormatCheck => Arc::new(UkNinoFormatCheck),
+            SecondaryValidator::UkTrnChecksum => Arc::new(UkTrnChecksum),
             SecondaryValidator::UsDeaChecksum => Arc::new(UsDeaChecksum),
             SecondaryValidator::UsNpiChecksum => Arc::new(UsNpiChecksum),
             SecondaryValidator::VerhoeffChecksum => Arc::new(VerhoeffChecksum),
