@@ -144,8 +144,8 @@ impl MatchValidator for AwsValidator {
                     let match_id = match_id.as_ref().unwrap();
                     // Let's reqwest the HTTP API endpoint to validate the matches
                     let mut datetime = chrono::Utc::now();
-                    if self.config.forced_datetime_utc.is_some() {
-                        datetime = self.config.forced_datetime_utc.unwrap()
+                    if let Some(forced_date) = self.config.forced_datetime_utc {
+                        datetime = forced_date;
                     }
                     let (body, headers) = generate_aws_headers_and_body(
                         &datetime,

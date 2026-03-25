@@ -100,6 +100,7 @@ impl Suppressions {
             let regex_builder = builder
                 .syntax(regex_automata::util::syntax::Config::default().case_insensitive(true));
 
+            #[allow(clippy::result_large_err)]
             let suppressions_regex =
                 get_memoized_regex(&pattern, |p| regex_builder.build(p)).unwrap();
             Ok(Some(CompiledSuppressions {
