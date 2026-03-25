@@ -226,7 +226,9 @@ fn compile_keywords(
         .syntax(regex_automata::util::syntax::Config::default().case_insensitive(true));
 
     Ok(Some((
+        #[allow(clippy::result_large_err)]
         get_memoized_regex(&content_pattern, |p| regex_builder.build(p)).unwrap(),
+        #[allow(clippy::result_large_err)]
         get_memoized_regex(&path_pattern, |p| regex_builder.build(p)).unwrap(),
     )))
 }
