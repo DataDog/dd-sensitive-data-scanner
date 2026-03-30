@@ -162,7 +162,14 @@ fn matches_body(body_matcher: &BTreeMap<String, BodyMatcher>, body: &str) -> boo
         let parts = path.split('.');
         let mut value = &parsed_body;
         for part in parts {
-            value = match value.get(part) {
+            let next = if let Ok(index) = part.parse::<usize>() {
+                // Numeric segment: try array index first, fall back to string key
+                // (handles both arrays and objects with numeric string keys like {"0": ...})
+                value.get(index).or_else(|| value.get(part))
+            } else {
+                value.get(part)
+            };
+            value = match next {
                 Some(value) => value,
                 None => return false,
             };
