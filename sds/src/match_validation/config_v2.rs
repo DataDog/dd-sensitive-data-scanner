@@ -534,4 +534,29 @@ calls:
         assert_eq!(provided.kind, "vendor_xyz");
         assert_eq!(provided.name, "client_subdomain");
     }
+
+    fn make_exact_body_matcher(path: &str, value: &str) -> BTreeMap<String, BodyMatcher> {
+        BTreeMap::from([(path.to_string(), BodyMatcher::ExactMatch(value.to_string()))])
+    }
+
+    // Path a.b.0.c where b is a JSON array: the numeric segment indexes into the array.
+    #[test]
+    fn test_matches_body_numeric_segment_indexes_into_array() {
+        let body = r#"{"a":{"b":[{"c":"value"}]}}"#;
+        assert!(matches_body(
+            &make_exact_body_matcher("a.b.0.c", "value"),
+            body
+        ));
+    }
+
+    // Path a.b.0.c where b is a JSON object with the string key "0": the numeric
+    // segment falls back to string-key lookup when array access returns nothing.
+    #[test]
+    fn test_matches_body_numeric_segment_falls_back_to_string_key() {
+        let body = r#"{"a":{"b":{"0":{"c":"value"}}}}"#;
+        assert!(matches_body(
+            &make_exact_body_matcher("a.b.0.c", "value"),
+            body
+        ));
+    }
 }
