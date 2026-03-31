@@ -1220,7 +1220,7 @@ calls:
           status_code: [400, 420]
         - type: invalid
           body:
-            message.stack[2].success.status:
+            $.message.stack[2].success.status:
               type: ExactMatch
               config: success
         "#;
@@ -1245,7 +1245,7 @@ calls:
         assert_eq!(
             config.calls[0].response.conditions[2].body,
             Some(BTreeMap::from([(
-                "message.stack[2].success.status".to_string(),
+                "$.message.stack[2].success.status".to_string(),
                 BodyMatcher::ExactMatch("success".to_string())
             )])),
         );

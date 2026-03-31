@@ -1140,7 +1140,7 @@ fn test_body_path_numeric_segment_indexes_into_array() {
                         status_code: Some(StatusCodeMatcher::Single(400)),
                         raw_body: None,
                         body: Some(BTreeMap::from([(
-                            "error.details.0.@type".to_string(),
+                            "$.error.details[0].@type".to_string(),
                             BodyMatcher::ExactMatch(
                                 "type.googleapis.com/google.rpc.BadRequest".to_string(),
                             ),
@@ -1151,7 +1151,7 @@ fn test_body_path_numeric_segment_indexes_into_array() {
                         status_code: Some(StatusCodeMatcher::Single(403)),
                         raw_body: None,
                         body: Some(BTreeMap::from([(
-                            "error.details.0.reason".to_string(),
+                            "$.error.details[0].reason".to_string(),
                             BodyMatcher::ExactMatch("API_KEY_SERVICE_BLOCKED".to_string()),
                         )])),
                     },
@@ -1160,7 +1160,7 @@ fn test_body_path_numeric_segment_indexes_into_array() {
                         status_code: Some(StatusCodeMatcher::Single(400)),
                         raw_body: None,
                         body: Some(BTreeMap::from([(
-                            "error.details.0.reason".to_string(),
+                            "$.error.details[0].reason".to_string(),
                             BodyMatcher::ExactMatch("API_KEY_INVALID".to_string()),
                         )])),
                     },
@@ -1190,15 +1190,14 @@ fn test_body_path_numeric_segment_indexes_into_array() {
     assert_eq!(matches[0].match_status, MatchStatus::Valid);
 }
 
-// When a path segment is numeric but the current JSON value is an object with a
-// matching string key (not an array), the string key fallback must succeed.
+// Numeric object keys should be expressed explicitly with JSONPath quoting.
 #[test]
-fn test_body_path_numeric_segment_falls_back_to_string_key_on_object() {
+fn test_body_path_jsonpath_quoted_numeric_key_on_object() {
     let body = r#"{"a":{"b":{"0":{"c":"value"}}}}"#;
 
     let mut body_map = BTreeMap::new();
     body_map.insert(
-        "a.b.0.c".to_string(),
+        "$.a.b['0'].c".to_string(),
         BodyMatcher::ExactMatch("value".to_string()),
     );
 
