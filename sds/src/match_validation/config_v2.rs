@@ -173,6 +173,10 @@ fn matches_body(body_matcher: &BTreeMap<String, BodyMatcher>, body: &str) -> boo
     false
 }
 
+/// Get the value at a given JSONPath
+///
+/// Simple parser as we don't need extensive JSONPath support and can thus avoid
+/// pulling in a heavy JSONPath library.
 fn get_json_path_value<'a>(
     root: &'a serde_json::Value,
     path: &str,
