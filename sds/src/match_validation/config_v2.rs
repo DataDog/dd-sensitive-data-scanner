@@ -236,6 +236,59 @@ fn get_json_path_value<'a>(
     Some(value)
 }
 
+/// Used for validating the body matcher path syntax
+pub fn is_valid_body_matcher_path(path: &str) -> bool {
+    let mut cursor = path;
+
+    if let Some(remaining) = cursor.strip_prefix('$') {
+        cursor = remaining;
+    }
+
+    if cursor.is_empty() {
+        return true;
+    }
+
+    while !cursor.is_empty() {
+        if let Some(remaining) = cursor.strip_prefix('.') {
+            let segment_end = remaining.find(['.', '[']).unwrap_or(remaining.len());
+            if segment_end == 0 {
+                return false;
+            }
+            cursor = &remaining[segment_end..];
+            continue;
+        }
+
+        if let Some(remaining) = cursor.strip_prefix('[') {
+            let Some(closing_bracket) = remaining.find(']') else {
+                return false;
+            };
+            let segment = &remaining[..closing_bracket];
+            let is_valid_segment = segment.parse::<usize>().is_ok()
+                || segment
+                    .strip_prefix('"')
+                    .and_then(|s| s.strip_suffix('"'))
+                    .is_some()
+                || segment
+                    .strip_prefix('\'')
+                    .and_then(|s| s.strip_suffix('\''))
+                    .is_some();
+            if !is_valid_segment {
+                return false;
+            }
+            cursor = &remaining[closing_bracket + 1..];
+            continue;
+        }
+
+        let segment_end = cursor.find(['.', '[']).unwrap_or(cursor.len());
+        if segment_end == 0 {
+            return false;
+        }
+        cursor = &cursor[segment_end..];
+    }
+
+    true
+}
+
 /// Type of response condition
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash, Copy)]
 #[serde(rename_all = "lowercase")]
