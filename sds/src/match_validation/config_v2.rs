@@ -114,7 +114,7 @@ pub struct ResponseCondition {
 
     /// Optional parsed body matchers (after JSON parsing)
     /// Maps JSON paths to matchers
-    /// Example: {"message.stack[2].success.status": BodyMatcher}
+    /// Example: {"$.message.stack[2].success.status": BodyMatcher}
     #[serde(skip_serializing_if = "Option::is_none")]
     pub body: Option<BTreeMap<String, BodyMatcher>>,
 }
@@ -159,14 +159,9 @@ fn matches_body(body_matcher: &BTreeMap<String, BodyMatcher>, body: &str) -> boo
         Err(_) => return false,
     };
     for (path, matcher) in body_matcher.iter() {
-        let parts = path.split('.');
-        let mut value = &parsed_body;
-        for part in parts {
-            value = match value.get(part) {
-                Some(value) => value,
-                None => return false,
-            };
-        }
+        let Some(value) = get_json_path_value(&parsed_body, path) else {
+            continue;
+        };
         let value_str = match value {
             serde_json::Value::String(s) => s.clone(),
             other => other.to_string(),
@@ -176,6 +171,122 @@ fn matches_body(body_matcher: &BTreeMap<String, BodyMatcher>, body: &str) -> boo
         }
     }
     false
+}
+
+/// Get the value at a given JSONPath
+///
+/// Simple parser as we don't need extensive JSONPath support and can thus avoid
+/// pulling in a heavy JSONPath library.
+fn get_json_path_value<'a>(
+    root: &'a serde_json::Value,
+    path: &str,
+) -> Option<&'a serde_json::Value> {
+    let mut cursor = path;
+    let mut value = root;
+
+    if let Some(remaining) = cursor.strip_prefix('$') {
+        cursor = remaining;
+    }
+
+    if cursor.is_empty() {
+        return Some(value);
+    }
+
+    while !cursor.is_empty() {
+        if let Some(remaining) = cursor.strip_prefix('.') {
+            let segment_end = remaining.find(['.', '[']).unwrap_or(remaining.len());
+            if segment_end == 0 {
+                return None;
+            }
+            let key = &remaining[..segment_end];
+            value = value.get(key)?;
+            cursor = &remaining[segment_end..];
+            continue;
+        }
+
+        if let Some(remaining) = cursor.strip_prefix('[') {
+            let closing_bracket = remaining.find(']')?;
+            let segment = &remaining[..closing_bracket];
+            value = if let Ok(index) = segment.parse::<usize>() {
+                value.get(index)?
+            } else {
+                let quoted_key = segment
+                    .strip_prefix('"')
+                    .and_then(|s| s.strip_suffix('"'))
+                    .or_else(|| {
+                        segment
+                            .strip_prefix('\'')
+                            .and_then(|s| s.strip_suffix('\''))
+                    })?;
+                value.get(quoted_key)?
+            };
+            cursor = &remaining[closing_bracket + 1..];
+            continue;
+        }
+
+        let segment_end = cursor.find(['.', '[']).unwrap_or(cursor.len());
+        if segment_end == 0 {
+            return None;
+        }
+        let key = &cursor[..segment_end];
+        value = value.get(key)?;
+        cursor = &cursor[segment_end..];
+    }
+
+    Some(value)
+}
+
+/// Used for validating the body matcher path syntax
+pub fn is_valid_body_matcher_path(path: &str) -> bool {
+    let mut cursor = path;
+
+    if let Some(remaining) = cursor.strip_prefix('$') {
+        cursor = remaining;
+    }
+
+    if cursor.is_empty() {
+        return true;
+    }
+
+    while !cursor.is_empty() {
+        if let Some(remaining) = cursor.strip_prefix('.') {
+            let segment_end = remaining.find(['.', '[']).unwrap_or(remaining.len());
+            if segment_end == 0 {
+                return false;
+            }
+            cursor = &remaining[segment_end..];
+            continue;
+        }
+
+        if let Some(remaining) = cursor.strip_prefix('[') {
+            let Some(closing_bracket) = remaining.find(']') else {
+                return false;
+            };
+            let segment = &remaining[..closing_bracket];
+            let is_valid_segment = segment.parse::<usize>().is_ok()
+                || segment
+                    .strip_prefix('"')
+                    .and_then(|s| s.strip_suffix('"'))
+                    .is_some()
+                || segment
+                    .strip_prefix('\'')
+                    .and_then(|s| s.strip_suffix('\''))
+                    .is_some();
+            if !is_valid_segment {
+                return false;
+            }
+            cursor = &remaining[closing_bracket + 1..];
+            continue;
+        }
+
+        let segment_end = cursor.find(['.', '[']).unwrap_or(cursor.len());
+        if segment_end == 0 {
+            return false;
+        }
+        cursor = &cursor[segment_end..];
+    }
+
+    true
 }
 
 /// Type of response condition
@@ -526,5 +637,120 @@ calls:
         let provided = &config.provides.as_ref().unwrap()[0];
         assert_eq!(provided.kind, "vendor_xyz");
         assert_eq!(provided.name, "client_subdomain");
+    }
+
+    fn make_exact_body_matcher(path: &str, value: &str) -> BTreeMap<String, BodyMatcher> {
+        BTreeMap::from([(path.to_string(), BodyMatcher::ExactMatch(value.to_string()))])
+    }
+
+    #[test]
+    fn test_get_json_path_value_with_root_prefix() {
+        let body: serde_json::Value =
+            serde_json::from_str(r#"{"a":{"b":[{"c":"value"}]}}"#).unwrap();
+
+        assert_eq!(
+            get_json_path_value(&body, "$.a.b[0].c"),
+            Some(&serde_json::Value::String("value".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_get_json_path_value_without_root_prefix() {
+        let body: serde_json::Value =
+            serde_json::from_str(r#"{"a":{"b":[{"c":"value"}]}}"#).unwrap();
+
+        assert_eq!(
+            get_json_path_value(&body, "a.b[0].c"),
+            Some(&serde_json::Value::String("value".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_get_json_path_value_with_quoted_numeric_key() {
+        let body: serde_json::Value =
+            serde_json::from_str(r#"{"a":{"b":{"0":{"c":"value"}}}}"#).unwrap();
+
+        assert_eq!(
+            get_json_path_value(&body, "$.a.b['0'].c"),
+            Some(&serde_json::Value::String("value".to_string()))
+        );
+        assert_eq!(
+            get_json_path_value(&body, "$.a.b.0.c"),
+            Some(&serde_json::Value::String("value".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_get_json_path_value_returns_root_for_dollar() {
+        let body: serde_json::Value = serde_json::from_str(r#"{"a":1}"#).unwrap();
+
+        assert_eq!(get_json_path_value(&body, "$"), Some(&body));
+    }
+
+    #[test]
+    fn test_get_json_path_value_with_root_array() {
+        let body: serde_json::Value =
+            serde_json::from_str(r#"[{"name":"first"},{"name":"second"}]"#).unwrap();
+
+        assert_eq!(
+            get_json_path_value(&body, "$[1].name"),
+            Some(&serde_json::Value::String("second".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_get_json_path_value_with_nested_arrays() {
+        let body: serde_json::Value =
+            serde_json::from_str(r#"{"a":[{"b":[{"c":"value"}]}]}"#).unwrap();
+
+        assert_eq!(
+            get_json_path_value(&body, "$.a[0].b[0].c"),
+            Some(&serde_json::Value::String("value".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_get_json_path_value_returns_none_for_missing_path() {
+        let body: serde_json::Value =
+            serde_json::from_str(r#"{"a":{"b":[{"c":"value"}]}}"#).unwrap();
+
+        assert_eq!(get_json_path_value(&body, "$.a.b[1].c"), None);
+    }
+
+    #[test]
+    fn test_get_json_path_value_returns_none_for_invalid_quoted_key() {
+        let body: serde_json::Value =
+            serde_json::from_str(r#"{"a":{"b":{"0":{"c":"value"}}}}"#).unwrap();
+
+        assert_eq!(get_json_path_value(&body, "$.a.b[0.c"), None);
+    }
+
+    // JSONPath $.a.b[0].c selects the first element from array b.
+    #[test]
+    fn test_matches_body_jsonpath_array_index() {
+        let body = r#"{"a":{"b":[{"c":"value"}]}}"#;
+        assert!(matches_body(
+            &make_exact_body_matcher("$.a.b[0].c", "value"),
+            body
+        ));
+    }
+
+    // JSONPath $.a.b['0'].c makes object-key access explicit when the key is numeric.
+    #[test]
+    fn test_matches_body_jsonpath_quoted_numeric_key() {
+        let body = r#"{"a":{"b":{"0":{"c":"value"}}}}"#;
+        assert!(matches_body(
+            &make_exact_body_matcher("$.a.b['0'].c", "value"),
+            body
+        ));
+    }
+
+    #[test]
+    fn test_matches_body_jsonpath_without_root_prefix() {
+        let body = r#"{"a":{"b":[{"c":"value"}]}}"#;
+        assert!(matches_body(
+            &make_exact_body_matcher("a.b[0].c", "value"),
+            body
+        ));
     }
 }

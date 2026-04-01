@@ -3,9 +3,9 @@ use crate::match_validation::config_v2::TemplatedMatchString;
 use crate::match_validation::validator_utils::generate_aws_headers_and_body;
 use crate::scanner::RootRuleConfig;
 use crate::{
-    AwsConfig, AwsType, CustomHttpConfig, CustomHttpConfigV2, HttpCallConfig, HttpErrorInfo,
-    HttpMethod, HttpRequestConfig, HttpResponseConfig, InternalMatchValidationType, MatchAction,
-    MatchPairingConfig, MatchStatus, MatchValidationType, PairedValidatorConfig,
+    AwsConfig, AwsType, BodyMatcher, CustomHttpConfig, CustomHttpConfigV2, HttpCallConfig,
+    HttpErrorInfo, HttpMethod, HttpRequestConfig, HttpResponseConfig, InternalMatchValidationType,
+    MatchAction, MatchPairingConfig, MatchStatus, MatchValidationType, PairedValidatorConfig,
     ProximityKeywordsConfig, RegexRuleConfig, ResponseCondition, ResponseConditionType, RuleMatch,
     Scanner, ScannerBuilder, StatusCodeMatcher, UnknownResponseTypeInfo, ValidationError,
 };
@@ -1087,4 +1087,130 @@ fn test_match_pairing_rule_can_consume_and_provide() {
         mock_api_key_valid.assert_hits(1);
         mock_app_key_valid.assert_hits(1);
     }
+}
+
+// A numeric path segment (e.g. `details.0.@type`) must index into a JSON array.
+// The response body has `details` as an array, so `details.0.@type` navigates to
+// the first element's `@type` field and the condition correctly fires as Valid.
+#[test]
+fn test_body_path_numeric_segment_indexes_into_array() {
+    let server = MockServer::start();
+
+    let response_body = r#"{"error":{"code":400,"message":"Invalid JSON payload received. Unknown name \"{}\": Cannot bind query parameter. Field '{}' could not be found in request message.","status":"INVALID_ARGUMENT","details":[{"@type":"type.googleapis.com/google.rpc.BadRequest","fieldViolations":[{"description":"Invalid JSON payload received. Unknown name \"{}\": Cannot bind query parameter. Field '{}' could not be found in request message."}]}]}}"#;
+
+    let mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1beta/models/gemini:countTokens")
+            .query_param("key", "valid_gemini_key")
+            .header("User-Agent", "Datadog Match Validator")
+            .header("api-key", "valid_gemini_key");
+        then.status(400)
+            .header("content-type", "application/json")
+            .body(response_body);
+    });
+
+    let http_config_v2 = CustomHttpConfigV2 {
+        match_pairing: None,
+        provides: None,
+        calls: vec![HttpCallConfig {
+            request: HttpRequestConfig {
+                endpoint: TemplatedMatchString(format!(
+                    "{}/v1beta/models/gemini:countTokens?key=$MATCH",
+                    server.base_url()
+                )),
+                method: HttpMethod::Post,
+                hosts: vec![],
+                headers: BTreeMap::from([
+                    (
+                        "User-Agent".to_string(),
+                        TemplatedMatchString("Datadog Match Validator".to_string()),
+                    ),
+                    (
+                        "api-key".to_string(),
+                        TemplatedMatchString("$MATCH".to_string()),
+                    ),
+                ]),
+                body: Some(TemplatedMatchString("{}".to_string())),
+                timeout: Duration::from_secs(3),
+            },
+            response: HttpResponseConfig {
+                conditions: vec![
+                    ResponseCondition {
+                        condition_type: ResponseConditionType::Valid,
+                        status_code: Some(StatusCodeMatcher::Single(400)),
+                        raw_body: None,
+                        body: Some(BTreeMap::from([(
+                            "$.error.details[0].@type".to_string(),
+                            BodyMatcher::ExactMatch(
+                                "type.googleapis.com/google.rpc.BadRequest".to_string(),
+                            ),
+                        )])),
+                    },
+                    ResponseCondition {
+                        condition_type: ResponseConditionType::Valid,
+                        status_code: Some(StatusCodeMatcher::Single(403)),
+                        raw_body: None,
+                        body: Some(BTreeMap::from([(
+                            "$.error.details[0].reason".to_string(),
+                            BodyMatcher::ExactMatch("API_KEY_SERVICE_BLOCKED".to_string()),
+                        )])),
+                    },
+                    ResponseCondition {
+                        condition_type: ResponseConditionType::Invalid,
+                        status_code: Some(StatusCodeMatcher::Single(400)),
+                        raw_body: None,
+                        body: Some(BTreeMap::from([(
+                            "$.error.details[0].reason".to_string(),
+                            BodyMatcher::ExactMatch("API_KEY_INVALID".to_string()),
+                        )])),
+                    },
+                ],
+            },
+        }],
+    };
+
+    let rule = RootRuleConfig::new(RegexRuleConfig::new("\\bvalid_gemini_key\\b").build())
+        .match_action(MatchAction::Redact {
+            replacement: "[REDACTED]".to_string(),
+        })
+        .third_party_active_checker(MatchValidationType::CustomHttpV2(http_config_v2));
+
+    let scanner = ScannerBuilder::new(&[rule])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
+
+    let mut content = "key: valid_gemini_key".to_string();
+    let mut matches = scanner.scan(&mut content).unwrap();
+    assert_eq!(matches.len(), 1);
+
+    scanner.validate_matches(&mut matches);
+    mock.assert();
+
+    assert_eq!(matches[0].match_status, MatchStatus::Valid);
+}
+
+// Numeric object keys should be expressed explicitly with JSONPath quoting.
+#[test]
+fn test_body_path_jsonpath_quoted_numeric_key_on_object() {
+    let body = r#"{"a":{"b":{"0":{"c":"value"}}}}"#;
+
+    let mut body_map = BTreeMap::new();
+    body_map.insert(
+        "$.a.b['0'].c".to_string(),
+        BodyMatcher::ExactMatch("value".to_string()),
+    );
+
+    // Use the ResponseCondition directly to exercise matches_body without a full scanner.
+    let condition = ResponseCondition {
+        condition_type: ResponseConditionType::Valid,
+        status_code: None,
+        raw_body: None,
+        body: Some(body_map),
+    };
+
+    assert_eq!(
+        condition.matches(200, body),
+        crate::match_validation::config_v2::ResponseConditionResult::Valid
+    );
 }

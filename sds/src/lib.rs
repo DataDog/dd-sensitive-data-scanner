@@ -45,6 +45,7 @@ pub use match_validation::{
         BodyMatcher, CustomHttpConfigV2, HttpCallConfig, HttpRequestConfig, HttpResponseConfig,
         MatchPairingConfig, PairedValidatorConfig, ResponseCondition, ResponseConditionResult,
         ResponseConditionType, StatusCodeMatcher, TemplateVariable, TemplatedMatchString,
+        is_valid_body_matcher_path,
     },
     match_status::{HttpErrorInfo, MatchStatus, UnknownResponseTypeInfo, ValidationError},
 };
