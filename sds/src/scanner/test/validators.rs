@@ -1,5 +1,6 @@
 use crate::SecondaryValidator::{
     ChineseIdChecksum, GithubTokenChecksum, IbanChecker, JwtExpirationChecker, NhsCheckDigit,
+    NonHexChecker,
 };
 use crate::scanner::RootRuleConfig;
 use crate::{MatchAction, RegexRuleConfig, ScannerBuilder, SecondaryValidator};
@@ -169,4 +170,33 @@ fn test_nhs_checksum() {
     let matches = scanner.scan(&mut content).unwrap();
     assert_eq!(matches.len(), 1);
     assert_eq!(content, "[NHS]");
+}
+
+#[test]
+fn test_non_hex_checker_filters_pure_hex() {
+    let rule = RegexRuleConfig::new("[a-zA-Z0-9_]{16,}");
+    let match_action = MatchAction::Redact {
+        replacement: "[token]".to_string(),
+    };
+
+    let rule_with_validator =
+        RootRuleConfig::new(rule.clone().with_validator(Some(NonHexChecker)).build())
+            .match_action(match_action.clone());
+
+    let scanner_without =
+        ScannerBuilder::new(&[RootRuleConfig::new(rule.build()).match_action(match_action)])
+            .build()
+            .unwrap();
+
+    let mut pure_hex = "0123456789abcdef".to_string();
+    assert_eq!(scanner_without.scan(&mut pure_hex).unwrap().len(), 1);
+
+    let scanner_with = ScannerBuilder::new(&[rule_with_validator]).build().unwrap();
+    let mut pure_hex_again = "0123456789abcdef".to_string();
+    assert_eq!(scanner_with.scan(&mut pure_hex_again).unwrap().len(), 0);
+    assert_eq!(pure_hex_again, "0123456789abcdef");
+
+    let mut with_prefix = "sk_live_0123456789abcd".to_string();
+    assert_eq!(scanner_with.scan(&mut with_prefix).unwrap().len(), 1);
+    assert_eq!(with_prefix, "[token]");
 }
