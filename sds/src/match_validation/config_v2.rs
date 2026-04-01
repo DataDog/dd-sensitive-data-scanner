@@ -635,6 +635,28 @@ calls:
     }
 
     #[test]
+    fn test_get_json_path_value_with_root_array() {
+        let body: serde_json::Value =
+            serde_json::from_str(r#"[{"name":"first"},{"name":"second"}]"#).unwrap();
+
+        assert_eq!(
+            get_json_path_value(&body, "$[1].name"),
+            Some(&serde_json::Value::String("second".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_get_json_path_value_with_nested_arrays() {
+        let body: serde_json::Value =
+            serde_json::from_str(r#"{"a":[{"b":[{"c":"value"}]}]}"#).unwrap();
+
+        assert_eq!(
+            get_json_path_value(&body, "$.a[0].b[0].c"),
+            Some(&serde_json::Value::String("value".to_string()))
+        );
+    }
+
+    #[test]
     fn test_get_json_path_value_returns_none_for_missing_path() {
         let body: serde_json::Value =
             serde_json::from_str(r#"{"a":{"b":[{"c":"value"}]}}"#).unwrap();
