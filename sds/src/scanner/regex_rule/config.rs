@@ -264,6 +264,7 @@ pub enum SecondaryValidator {
     MoneroAddress,
     NhsCheckDigit,
     NirChecksum,
+    NonHexChecker,
     PolishNationalIdChecksum,
     PolishNipChecksum,
     PortugueseTaxIdChecksum,

@@ -37,6 +37,7 @@ mod luxembourg_individual_nin_checksum;
 mod monero_address;
 mod nhs_check_digit;
 mod nir_checksum;
+mod non_hex_checker;
 mod polish_national_id_checksum;
 mod polish_nip_checksum;
 mod portuguese_tax_id_checksum;
@@ -100,6 +101,7 @@ pub use crate::secondary_validation::luxembourg_individual_nin_checksum::Luxembo
 pub use crate::secondary_validation::monero_address::MoneroAddress;
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 pub use crate::secondary_validation::nir_checksum::NirChecksum;
+pub use crate::secondary_validation::non_hex_checker::NonHexChecker;
 pub use crate::secondary_validation::polish_national_id_checksum::PolishNationalIdChecksum;
 pub use crate::secondary_validation::polish_nip_checksum::PolishNipChecksum;
 pub use crate::secondary_validation::portuguese_tax_id_checksum::PortugueseTaxIdChecksum;
@@ -253,6 +255,7 @@ impl SecondaryValidator {
             SecondaryValidator::MoneroAddress => Arc::new(MoneroAddress),
             SecondaryValidator::NhsCheckDigit => Arc::new(NhsCheckDigit),
             SecondaryValidator::NirChecksum => Arc::new(NirChecksum),
+            SecondaryValidator::NonHexChecker => Arc::new(NonHexChecker),
             SecondaryValidator::PolishNationalIdChecksum => Arc::new(PolishNationalIdChecksum),
             SecondaryValidator::PolishNipChecksum => Arc::new(PolishNipChecksum),
             SecondaryValidator::PortugueseTaxIdChecksum => Arc::new(PortugueseTaxIdChecksum),
