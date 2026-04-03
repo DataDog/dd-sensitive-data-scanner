@@ -2,7 +2,7 @@ use crate::match_action::MatchAction;
 use crate::scanner::regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig};
 use crate::scanner::scope::Scope;
 use crate::scanner::{RootRuleConfig, ScannerBuilder};
-use crate::{Path, PathSegment, simple_event::SimpleEvent};
+use crate::{Path, PathSegment, Suppressions, simple_event::SimpleEvent};
 use metrics::{Key, Label};
 use metrics_util::CompositeKey;
 use metrics_util::MetricKind::Counter;
@@ -45,6 +45,8 @@ fn should_submit_scanning_metrics() {
         .expect("metric not found");
     assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
 
+    // scanning.match_count is now emitted at rule level; with no custom labels on the rule,
+    // the key remains name-only (no label dimensions).
     let metric_name = "scanning.match_count";
     let metric_value = snapshot
         .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
@@ -94,6 +96,113 @@ fn should_submit_excluded_match_metric() {
         .expect("metric not found");
 
     assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+}
+
+#[test]
+fn should_submit_suppressed_match_metric() {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("bcdef").build())
+            .suppressions(Suppressions {
+                exact_match: vec!["bcdef".to_string()],
+                ..Default::default()
+            })
+            .match_action(MatchAction::None);
+
+        let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
+            "key1".to_string(),
+            SimpleEvent::String("bcdef".to_string()),
+        )]));
+
+        scanner.scan(&mut content).unwrap();
+    });
+
+    let snapshot = snapshotter.snapshot().into_hashmap();
+
+    let metric_value = snapshot
+        .get(&CompositeKey::new(
+            Counter,
+            Key::from_name("scanning.suppressed_match_count"),
+        ))
+        .expect("suppressed_match_count metric not found");
+    assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+}
+
+#[test]
+fn match_count_carries_combined_scanner_and_rule_labels() {
+    use crate::Labels;
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let rule = RootRuleConfig::new(
+            RegexRuleConfig::new("secret")
+                .with_labels(Labels::new(&[("rule_id", "r1")]))
+                .build(),
+        )
+        .match_action(MatchAction::None);
+
+        let scanner = ScannerBuilder::new(&[rule])
+            .labels(Labels::new(&[("scanner_id", "s1")]))
+            .build()
+            .unwrap();
+        let mut event = SimpleEvent::String("secret".to_string());
+        scanner.scan(&mut event).unwrap();
+    });
+
+    let snapshot = snapshotter.snapshot().into_hashmap();
+
+    // Both scanner and rule labels must appear on the metric key.
+    let labels = vec![Label::new("scanner_id", "s1"), Label::new("rule_id", "r1")];
+    let key = CompositeKey::new(Counter, Key::from_parts("scanning.match_count", labels));
+    assert_eq!(
+        snapshot.get(&key).expect("metric not found").2,
+        DebugValue::Counter(1)
+    );
+}
+
+#[test]
+fn suppressed_match_count_carries_combined_scanner_and_rule_labels() {
+    use crate::Labels;
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let rule = RootRuleConfig::new(
+            RegexRuleConfig::new("secret")
+                .with_labels(Labels::new(&[("rule_id", "r1")]))
+                .build(),
+        )
+        .suppressions(Suppressions {
+            exact_match: vec!["secret".to_string()],
+            ..Default::default()
+        })
+        .match_action(MatchAction::None);
+
+        let scanner = ScannerBuilder::new(&[rule])
+            .labels(Labels::new(&[("scanner_id", "s1")]))
+            .build()
+            .unwrap();
+        let mut event = SimpleEvent::String("secret".to_string());
+        scanner.scan(&mut event).unwrap();
+    });
+
+    let snapshot = snapshotter.snapshot().into_hashmap();
+
+    let labels = vec![Label::new("scanner_id", "s1"), Label::new("rule_id", "r1")];
+    let key = CompositeKey::new(
+        Counter,
+        Key::from_parts("scanning.suppressed_match_count", labels),
+    );
+    assert_eq!(
+        snapshot.get(&key).expect("metric not found").2,
+        DebugValue::Counter(1)
+    );
 }
 
 #[test]

@@ -74,6 +74,14 @@ impl CompiledRule for RegexCompiledRule {
         self.metrics.false_positive_excluded_attributes.increment(1);
     }
 
+    fn on_match(&self) {
+        self.metrics.match_count.increment(1);
+    }
+
+    fn on_suppressed_match(&self) {
+        self.metrics.suppressed_match_count.increment(1);
+    }
+
     fn as_regex_rule(&self) -> Option<&RegexCompiledRule> {
         Some(self)
     }
