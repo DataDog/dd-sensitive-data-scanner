@@ -336,6 +336,14 @@ pub trait CompiledRule: Send + Sync {
         // default is to do nothing
     }
 
+    fn on_match(&self) {
+        // default is to do nothing
+    }
+
+    fn on_suppressed_match(&self) {
+        // default is to do nothing
+    }
+
     fn as_regex_rule(&self) -> Option<&RegexCompiledRule> {
         None
     }
@@ -516,10 +524,10 @@ impl Scanner {
     ) {
         // Add number of scanned events
         self.metrics.num_scanned_events.increment(1);
-        // Add number of matches
-        self.metrics
-            .match_count
-            .increment(output_rule_matches.len() as u64);
+        // Increment per-rule match counters so dashboards can filter by both scanner and rule tags
+        for rule_match in output_rule_matches {
+            self.rules[rule_match.rule_index].on_match();
+        }
 
         if let Some(io_duration) = io_duration {
             let total_duration = start.elapsed();
@@ -698,7 +706,7 @@ impl Scanner {
                 );
 
                 if match_should_be_suppressed {
-                    self.metrics.suppressed_match_count.increment(1);
+                    self.rules[rule_match.rule_index].on_suppressed_match();
                 }
                 !match_should_be_suppressed
             } else {
