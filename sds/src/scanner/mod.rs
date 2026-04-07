@@ -332,7 +332,7 @@ pub trait CompiledRule: Send + Sync {
         false
     }
 
-    fn on_excluded_match_multipass_v0(&self) {
+    fn on_excluded_match_multipass_v0(&self, _path: &Path, _enable_debug_observability: bool) {
         // default is to do nothing
     }
 
@@ -367,6 +367,7 @@ struct ScannerFeatures {
     pub add_implicit_index_wildcards: bool,
     pub multipass_v0_enabled: bool,
     pub return_matches: bool,
+    pub enable_debug_observability: bool,
 }
 
 impl Default for ScannerFeatures {
@@ -375,6 +376,7 @@ impl Default for ScannerFeatures {
             add_implicit_index_wildcards: false,
             multipass_v0_enabled: true,
             return_matches: false,
+            enable_debug_observability: false,
         }
     }
 }
@@ -591,7 +593,7 @@ impl Scanner {
                                     .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
                                 if is_false_positive && self.scanner_features.multipass_v0_enabled {
                                     self.rules[rule_match.rule_index]
-                                        .on_excluded_match_multipass_v0();
+                                        .on_excluded_match_multipass_v0(&path, self.scanner_features.enable_debug_observability);
                                 }
                                 !is_false_positive
                             } else {
@@ -983,6 +985,14 @@ impl ScannerBuilder<'_> {
     /// matches in included scopes as a false positive.
     pub fn with_multipass_v0(mut self, value: bool) -> Self {
         self.scanner_features.multipass_v0_enabled = value;
+        self
+    }
+
+    /// Enables/Disables debug observability features. This defaults to FALSE.
+    /// When enabled, metrics will include additional tags (such as `sds_namespace`)
+    /// to help debug the source of matches.
+    pub fn with_debug_observability(mut self, value: bool) -> Self {
+        self.scanner_features.enable_debug_observability = value;
         self
     }
 

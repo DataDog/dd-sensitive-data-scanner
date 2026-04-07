@@ -97,6 +97,47 @@ fn should_submit_excluded_match_metric() {
 }
 
 #[test]
+fn should_submit_excluded_match_metric_with_debug_observability() {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("bcdef").build())
+            .scope(Scope::exclude(vec![Path::from(vec![PathSegment::Field(
+                "test".into(),
+            )])]))
+            .match_action(MatchAction::None);
+
+        let scanner = ScannerBuilder::new(&[rule_0])
+            .with_debug_observability(true)
+            .build()
+            .unwrap();
+        let mut content = SimpleEvent::Map(BTreeMap::from([
+            (
+                "z-match".to_string(),
+                SimpleEvent::String("bcdef".to_string()),
+            ),
+            ("test".to_string(), SimpleEvent::String("bcdef".to_string())),
+        ]));
+
+        scanner.scan(&mut content).unwrap();
+    });
+
+    let snapshot = snapshotter.snapshot().into_hashmap();
+
+    let metric_name = "false_positive.multipass.excluded_match";
+    let labels = vec![Label::new("sds_namespace", "z-match")];
+    let metric_value = snapshot
+        .get(&CompositeKey::new(
+            Counter,
+            Key::from_parts(metric_name, labels),
+        ))
+        .expect("metric not found");
+
+    assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+}
+
+#[test]
 fn should_submit_excluded_keywords_metric() {
     let recorder = DebuggingRecorder::new();
     let snapshotter = recorder.snapshotter();

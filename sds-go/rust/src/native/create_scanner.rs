@@ -13,6 +13,7 @@ use dd_sds::Scanner;
 pub unsafe extern "C" fn create_scanner(
     rules: i64,
     encoded_labels: *const c_char,
+    enable_debug_observability: i32,
     error_out: *mut *const c_char,
 ) -> i64 {
     handle_panic_ptr_return(Some(error_out), || {
@@ -23,7 +24,11 @@ pub unsafe extern "C" fn create_scanner(
         let labels = unsafe { read_json(encoded_labels).unwrap() };
 
         // create the scanner
-        let scanner = match Scanner::builder(&rules).labels(labels).build() {
+        let scanner = match Scanner::builder(&rules)
+            .labels(labels)
+            .with_debug_observability(enable_debug_observability != 0)
+            .build()
+        {
             Ok(s) => s,
             Err(err) => return err.into(),
         };
