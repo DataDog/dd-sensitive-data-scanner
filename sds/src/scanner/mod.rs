@@ -593,7 +593,10 @@ impl Scanner {
                                     .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
                                 if is_false_positive && self.scanner_features.multipass_v0_enabled {
                                     self.rules[rule_match.rule_index]
-                                        .on_excluded_match_multipass_v0(&path, self.scanner_features.enable_debug_observability);
+                                        .on_excluded_match_multipass_v0(
+                                            &path,
+                                            self.scanner_features.enable_debug_observability,
+                                        );
                                 }
                                 !is_false_positive
                             } else {
