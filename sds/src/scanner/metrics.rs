@@ -3,7 +3,11 @@ use metrics::{Counter, counter};
 
 #[derive(Clone)]
 pub struct RuleMetrics {
+    /// Pre-initialized counter for the fast path (debug observability disabled).
     pub false_positive_excluded_attributes: Counter,
+    /// Base labels when debug observability enabled,
+    /// used to attach the `sds_namespace` tag dynamically.
+    pub base_labels: Labels,
 }
 
 impl RuleMetrics {
@@ -13,6 +17,7 @@ impl RuleMetrics {
                 "false_positive.multipass.excluded_match",
                 labels.clone()
             ),
+            base_labels: labels.clone(),
         }
     }
 }

@@ -9,8 +9,9 @@ use crate::scanner::{
     RuleResult, RuleStatus, StringMatchesCtx, get_next_regex_start, is_false_positive_match,
 };
 use crate::secondary_validation::Validator;
-use crate::{CompiledRule, ExclusionCheck, Path, StringMatch};
+use crate::{CompiledRule, ExclusionCheck, Labels, Path, StringMatch};
 use ahash::AHashSet;
+use metrics::counter;
 use regex_automata::Input;
 use regex_automata::meta::Cache;
 use regex_automata::util::captures::Captures;
@@ -70,8 +71,16 @@ impl CompiledRule for RegexCompiledRule {
         true
     }
 
-    fn on_excluded_match_multipass_v0(&self) {
-        self.metrics.false_positive_excluded_attributes.increment(1);
+    fn on_excluded_match_multipass_v0(&self, path: &Path, enable_debug_observability: bool) {
+        if enable_debug_observability {
+            let labels = self
+                .metrics
+                .base_labels
+                .clone_with_labels(Labels::new(&[("sds_namespace", path.to_string())]));
+            counter!("false_positive.multipass.excluded_match", labels).increment(1);
+        } else {
+            self.metrics.false_positive_excluded_attributes.increment(1);
+        }
     }
 
     fn as_regex_rule(&self) -> Option<&RegexCompiledRule> {

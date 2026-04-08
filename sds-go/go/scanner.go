@@ -50,12 +50,25 @@ type ScanResult struct {
 	Matches []RuleMatch
 }
 
+// ScannerOptions contains optional configuration for scanner creation.
+type ScannerOptions struct {
+	// EnableDebugObservability adds extra tags to metrics to help debugging.
+	// Disabled by default to avoid high-cardinality metric series in production.
+	EnableDebugObservability bool
+}
+
 // CreateScanner creates a scanner in the underlying SDS shared library. The library
 // only returns an ID to then address what scanner to use on Scan calls. This ID is
 // stored in the Scanner Go object for convenience. See `Scan` to process events.
 // The rules used to create the Scanner are stored as a read-only information in the
 // returned Scanner.
 func CreateScanner(ruleConfigs []RuleConfig) (*Scanner, error) {
+	return CreateScannerWithOptions(ruleConfigs, ScannerOptions{})
+}
+
+// CreateScannerWithOptions creates a scanner with additional configuration options.
+// See CreateScanner for general usage.
+func CreateScannerWithOptions(ruleConfigs []RuleConfig, options ScannerOptions) (*Scanner, error) {
 	ruleList := CreateRuleList()
 	defer ruleList.Delete()
 
@@ -76,8 +89,12 @@ func CreateScanner(ruleConfigs []RuleConfig) (*Scanner, error) {
 	encodedLabelsJson := C.CString(string(labelsMarshalled))
 	defer C.free(unsafe.Pointer(encodedLabelsJson))
 
+	var cEnableDebugObservability C.int
+	if options.EnableDebugObservability {
+		cEnableDebugObservability = 1
+	}
 	var errorString *C.char
-	id := C.create_scanner(C.long(ruleList.nativePtr), encodedLabelsJson, &errorString)
+	id := C.create_scanner(C.long(ruleList.nativePtr), encodedLabelsJson, cEnableDebugObservability, &errorString)
 
 	if id < 0 {
 		switch id {
