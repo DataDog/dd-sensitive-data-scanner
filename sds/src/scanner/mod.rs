@@ -46,6 +46,9 @@ pub mod shared_data;
 pub mod shared_pool;
 pub mod suppression;
 
+#[cfg(feature = "vectorscan")]
+pub mod vectorscan;
+
 mod internal_rule_match_set;
 #[cfg(test)]
 mod test;
@@ -451,6 +454,8 @@ pub struct Scanner {
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
     per_scanner_data: SharedData,
     async_scan_timeout: Duration,
+    #[cfg(feature = "vectorscan")]
+    vectorscan_db: Option<vectorscan::VectorscanDb>,
 }
 
 impl Scanner {
@@ -1049,6 +1054,26 @@ impl ScannerBuilder<'_> {
             stats.increment_total_scanners();
         }
 
+        #[cfg(feature = "vectorscan")]
+        let vectorscan_db = {
+            let patterns: Vec<(usize, &str)> = self
+                .rules
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, config)| {
+                    config
+                        .inner
+                        .as_regex_rule()
+                        .map(|r| (idx, r.pattern.as_str()))
+                })
+                .collect();
+            if patterns.is_empty() {
+                None
+            } else {
+                vectorscan::VectorscanDb::new(&patterns).ok()
+            }
+        };
+
         Ok(Scanner {
             rules: compiled_rules,
             scoped_ruleset,
@@ -1058,6 +1083,8 @@ impl ScannerBuilder<'_> {
             labels: self.labels,
             per_scanner_data,
             async_scan_timeout: self.async_scan_timeout,
+            #[cfg(feature = "vectorscan")]
+            vectorscan_db,
         })
     }
 }
@@ -1091,9 +1118,33 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         let mut per_string_data = SharedData::new();
         let wildcard_indices_per_path = self.wildcarded_indexes.get(path);
 
+        #[cfg(feature = "vectorscan")]
+        let vs_matching_rules = self
+            .scanner
+            .vectorscan_db
+            .as_ref()
+            .map(|db| db.get_matching_rules(content));
+
         rule_visitor.visit_rule_indices(|rule_index| {
             if self.blocked_rules.contains(&rule_index) {
                 return Ok(());
+            }
+
+            #[cfg(feature = "vectorscan")]
+            if let Some(ref matching) = vs_matching_rules {
+                // Only apply pre-filter to regex rules that were indexed by vectorscan.
+                // Non-regex rules and fallback rules always pass through.
+                let is_vectorscan_indexed = self
+                    .scanner
+                    .vectorscan_db
+                    .as_ref()
+                    .is_some_and(|db| {
+                        !db.is_fallback_rule(rule_index)
+                            && db.has_rule(rule_index)
+                    });
+                if is_vectorscan_indexed && !matching.contains(&rule_index) {
+                    return Ok(());
+                }
             }
             let rule = &self.scanner.rules[rule_index];
             {
