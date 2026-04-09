@@ -6,7 +6,10 @@ publish = false
 license = "Apache-2.0"
 
 [workspace]
-members = ["tools/fuzz"]
+# NOTE: tools/fuzz is excluded because its optional hyperscan dep conflicts with
+# vectorscan-rs (both link native "hs"). Use `cargo build -p sds-fuzz` separately.
+members = []
+exclude = ["tools/fuzz"]
 
 [features]
 default = []
@@ -16,6 +19,7 @@ testing = []
 utf16_hash_match_action = []
 bench = []
 match_validation = []
+vectorscan = ["dep:vectorscan-rs"]
 
 [dependencies]
 ahash = "0.8.7"
@@ -54,6 +58,7 @@ futures = "0.3.31"
 tokio = { version = "1.46.1", features = ["full"] }
 moka = { version = "0.12.12", features = ["sync"] }
 once_cell = "1.21.3"
+vectorscan-rs = { version = "0.0.6", optional = true }
 # Prevent Security vulnerability (https://rustsec.org/advisories/RUSTSEC-2025-0047)
 # versions >=0.4.11 are fixed
 slab = "0.4.11"
