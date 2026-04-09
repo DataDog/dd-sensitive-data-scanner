@@ -126,7 +126,10 @@ fn should_submit_excluded_match_metric_with_debug_observability() {
     let snapshot = snapshotter.snapshot().into_hashmap();
 
     let metric_name = "false_positive.multipass.excluded_match";
-    let labels = vec![Label::new("sds_namespace", "z-match")];
+    let labels = vec![
+        Label::new("sds_namespace", "z-match"),
+        Label::new("sds_excluded_namespace", "test"),
+    ];
     let metric_value = snapshot
         .get(&CompositeKey::new(
             Counter,

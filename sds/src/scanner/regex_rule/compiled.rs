@@ -10,7 +10,7 @@ use crate::scanner::{
 };
 use crate::secondary_validation::Validator;
 use crate::{CompiledRule, ExclusionCheck, Labels, Path, StringMatch};
-use ahash::AHashSet;
+use ahash::AHashMap;
 use metrics::counter;
 use regex_automata::Input;
 use regex_automata::meta::Cache;
@@ -50,6 +50,7 @@ impl CompiledRule for RegexCompiledRule {
                 );
             }
             None => {
+                let enable_debug = ctx.enable_debug_observability;
                 let cache_value = ctx.regex_caches.get(&self.regex);
                 let true_positive_search = self.true_positive_matches(
                     content,
@@ -58,6 +59,8 @@ impl CompiledRule for RegexCompiledRule {
                     true,
                     ctx.exclusion_check,
                     ctx.excluded_matches,
+                    path,
+                    enable_debug,
                 );
                 for string_match in true_positive_search {
                     ctx.match_emitter.emit(string_match);
@@ -71,12 +74,17 @@ impl CompiledRule for RegexCompiledRule {
         true
     }
 
-    fn on_excluded_match_multipass_v0(&self, path: &Path, enable_debug_observability: bool) {
+    fn on_excluded_match_multipass_v0(
+        &self,
+        path: &Path,
+        excluded_path: &str,
+        enable_debug_observability: bool,
+    ) {
         if enable_debug_observability {
-            let labels = self
-                .metrics
-                .base_labels
-                .clone_with_labels(Labels::new(&[("sds_namespace", path.to_string())]));
+            let labels = self.metrics.base_labels.clone_with_labels(Labels::new(&[
+                ("sds_namespace", path.to_string()),
+                ("sds_excluded_namespace", excluded_path.to_string()),
+            ]));
             counter!("false_positive.multipass.excluded_match", labels).increment(1);
         } else {
             self.metrics.false_positive_excluded_attributes.increment(1);
@@ -101,6 +109,7 @@ impl RegexCompiledRule {
         ctx: &mut StringMatchesCtx,
         included_keywords: &CompiledIncludedProximityKeywords,
     ) {
+        let enable_debug = ctx.enable_debug_observability;
         let mut included_keyword_matches = included_keywords.keyword_matches(content);
 
         'included_keyword_search: while let Some(included_keyword_match) =
@@ -114,6 +123,8 @@ impl RegexCompiledRule {
                 false,
                 ctx.exclusion_check,
                 ctx.excluded_matches,
+                path,
+                enable_debug,
             );
 
             for true_positive_match in true_positive_search {
@@ -183,6 +194,8 @@ impl RegexCompiledRule {
             false,
             ctx.exclusion_check,
             ctx.excluded_matches,
+            path,
+            enable_debug,
         );
 
         for string_match in true_positive_search {
@@ -190,6 +203,7 @@ impl RegexCompiledRule {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn true_positive_matches<'a>(
         &'a self,
         content: &'a str,
@@ -197,7 +211,9 @@ impl RegexCompiledRule {
         cache: &'a mut RegexCacheValue,
         check_excluded_keywords: bool,
         exclusion_check: &'a ExclusionCheck<'a>,
-        excluded_matches: &'a mut AHashSet<String>,
+        excluded_matches: &'a mut AHashMap<String, String>,
+        scan_path: &'a Path<'a>,
+        enable_debug_observability: bool,
     ) -> TruePositiveSearch<'a> {
         TruePositiveSearch {
             rule: self,
@@ -208,6 +224,8 @@ impl RegexCompiledRule {
             check_excluded_keywords,
             exclusion_check,
             excluded_matches,
+            scan_path,
+            enable_debug_observability,
         }
     }
 }
@@ -219,8 +237,10 @@ pub struct TruePositiveSearch<'a> {
     cache: &'a mut Cache,
     check_excluded_keywords: bool,
     exclusion_check: &'a ExclusionCheck<'a>,
-    excluded_matches: &'a mut AHashSet<String>,
+    excluded_matches: &'a mut AHashMap<String, String>,
     captures: &'a mut Captures,
+    scan_path: &'a Path<'a>,
+    enable_debug_observability: bool,
 }
 
 impl TruePositiveSearch<'_> {
@@ -283,8 +303,15 @@ impl Iterator for TruePositiveSearch<'_> {
                 if self.exclusion_check.is_excluded(self.rule.rule_index) {
                     // Matches from excluded paths are saved and used to treat additional equal matches as false positives.
                     // Matches are checked against this `excluded_matches` set after all scanning has been done.
-                    self.excluded_matches
-                        .insert(self.content[regex_match_range.0..regex_match_range.1].to_string());
+                    let match_str = &self.content[regex_match_range.0..regex_match_range.1];
+                    if !self.excluded_matches.contains_key(match_str) {
+                        let path = if self.enable_debug_observability {
+                            self.scan_path.to_string()
+                        } else {
+                            String::new()
+                        };
+                        self.excluded_matches.insert(match_str.to_string(), path);
+                    }
                 } else {
                     return Some(StringMatch {
                         start: regex_match_range.0,
