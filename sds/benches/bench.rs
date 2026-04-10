@@ -206,12 +206,121 @@ pub fn included_keywords_on_path(c: &mut Criterion) {
     });
 }
 
+pub fn multipass_excluded_scan(c: &mut Criterion) {
+    // Realistic event: deeply nested structure with many paths, simulating
+    // a structured log with metadata, user data, and request/response bodies.
+    let mut root = BTreeMap::new();
+
+    // Top-level flat fields (50)
+    for i in 0..50 {
+        root.insert(
+            format!("attr-{}", i),
+            SimpleEvent::String(format!("token-abc-{}", i)),
+        );
+    }
+
+    // Nested "user" object with 20 fields
+    let mut user = BTreeMap::new();
+    for i in 0..20 {
+        user.insert(
+            format!("field-{}", i),
+            SimpleEvent::String("secret-key-99".to_string()),
+        );
+    }
+    root.insert("user".to_string(), SimpleEvent::Map(user));
+
+    // Nested "request" -> "headers" with 30 fields
+    let mut headers = BTreeMap::new();
+    for i in 0..30 {
+        headers.insert(
+            format!("x-header-{}", i),
+            SimpleEvent::String("bearer-tok-123".to_string()),
+        );
+    }
+    let mut request = BTreeMap::new();
+    request.insert("headers".to_string(), SimpleEvent::Map(headers));
+    // "request" -> "body" with 40 fields
+    let mut body = BTreeMap::new();
+    for i in 0..40 {
+        body.insert(
+            format!("param-{}", i),
+            SimpleEvent::String(format!("val-xyz-{}", i % 5)),
+        );
+    }
+    request.insert("body".to_string(), SimpleEvent::Map(body));
+    root.insert("request".to_string(), SimpleEvent::Map(request));
+
+    // Nested "response" -> "body" with 30 fields
+    let mut resp_body = BTreeMap::new();
+    for i in 0..30 {
+        resp_body.insert(
+            format!("field-{}", i),
+            SimpleEvent::String("secret-key-99".to_string()),
+        );
+    }
+    let mut response = BTreeMap::new();
+    response.insert("body".to_string(), SimpleEvent::Map(resp_body));
+    root.insert("response".to_string(), SimpleEvent::Map(response));
+
+    // Array of 20 items
+    let items: Vec<SimpleEvent> = (0..20)
+        .map(|i| {
+            let mut m = BTreeMap::new();
+            m.insert(
+                "id".to_string(),
+                SimpleEvent::String(format!("item-id-{}", i)),
+            );
+            m.insert(
+                "value".to_string(),
+                SimpleEvent::String("secret-key-99".to_string()),
+            );
+            SimpleEvent::Map(m)
+        })
+        .collect();
+    root.insert("items".to_string(), SimpleEvent::List(items));
+
+    // Excluded scope fields that share content with scanned fields
+    let mut excluded = BTreeMap::new();
+    for i in 0..10 {
+        excluded.insert(
+            format!("internal-{}", i),
+            SimpleEvent::String("secret-key-99".to_string()),
+        );
+    }
+    root.insert("_metadata".to_string(), SimpleEvent::Map(excluded));
+
+    let mut event = SimpleEvent::Map(root);
+
+    // Exclude _metadata.* paths
+    let excluded_paths: Vec<Path> = (0..10)
+        .map(|i| {
+            Path::from(vec![
+                PathSegment::Field("_metadata".into()),
+                PathSegment::Field(format!("internal-{}", i).into()),
+            ])
+        })
+        .collect();
+
+    let rule = RootRuleConfig::new(RegexRuleConfig::new("[a-z]+-[a-z]+-\\d+").build())
+        .scope(Scope::exclude(excluded_paths))
+        .match_action(dd_sds::MatchAction::None);
+
+    let scanner = Scanner::builder(&[rule]).build().unwrap();
+
+    c.bench_function("multipass_excluded_scan", |b| {
+        b.iter(|| {
+            let _result = scanner.scan(&mut event).unwrap();
+        })
+    });
+}
+
 criterion::criterion_group!(
     benches,
     scoped_ruleset,
     luhn_checksum,
     included_keywords,
-    included_keywords_on_path
+    included_keywords_on_path,
+    multipass_excluded_scan
 );
 
 criterion::criterion_main!(benches);

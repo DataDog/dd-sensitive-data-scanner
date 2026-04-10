@@ -25,7 +25,7 @@ pub use crate::secondary_validation::Validator;
 use crate::stats::GLOBAL_STATS;
 use crate::tokio::TOKIO_RUNTIME;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Path, ScannerError};
-use ahash::{AHashMap, AHashSet};
+use ahash::AHashMap;
 use futures::executor::block_on;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -218,9 +218,10 @@ pub struct StringMatchesCtx<'a> {
     rule_index: usize,
     pub regex_caches: &'a mut RegexCaches,
     pub exclusion_check: &'a ExclusionCheck<'a>,
-    pub excluded_matches: &'a mut AHashSet<String>,
+    pub excluded_matches: &'a mut AHashMap<String, String>,
     pub match_emitter: &'a mut dyn MatchEmitter,
     pub wildcard_indices: Option<&'a Vec<(usize, usize)>>,
+    pub enable_debug_observability: bool,
 
     // Shared Data
     pub per_string_data: &'a mut SharedData,
@@ -332,7 +333,12 @@ pub trait CompiledRule: Send + Sync {
         false
     }
 
-    fn on_excluded_match_multipass_v0(&self, _path: &Path, _enable_debug_observability: bool) {
+    fn on_excluded_match_multipass_v0(
+        &self,
+        _path: &Path,
+        _excluded_path: &str,
+        _enable_debug_observability: bool,
+    ) {
         // default is to do nothing
     }
 
@@ -555,7 +561,7 @@ impl Scanner {
         &self,
         event: &mut E,
         rule_matches: InternalRuleMatchSet<E::Encoding>,
-        excluded_matches: AHashSet<String>,
+        excluded_matches: AHashMap<String, String>,
         output_rule_matches: &mut Vec<RuleMatch>,
         need_match_content: bool,
     ) {
@@ -589,16 +595,18 @@ impl Scanner {
                                 .inner
                                 .should_exclude_multipass_v0()
                             {
-                                let is_false_positive = excluded_matches
-                                    .contains(&content[rule_match.utf8_start..rule_match.utf8_end]);
-                                if is_false_positive && self.scanner_features.multipass_v0_enabled {
+                                let match_content =
+                                    &content[rule_match.utf8_start..rule_match.utf8_end];
+                                let excluded_path = excluded_matches.get(match_content);
+                                if let Some(excluded_path) = excluded_path {
                                     self.rules[rule_match.rule_index]
                                         .on_excluded_match_multipass_v0(
                                             &path,
+                                            excluded_path,
                                             self.scanner_features.enable_debug_observability,
                                         );
                                 }
-                                !is_false_positive
+                                excluded_path.is_none()
                             } else {
                                 true
                             }
@@ -637,7 +645,7 @@ impl Scanner {
         let need_match_content = self.scanner_features.return_matches || options.validate_matches;
         // All matches, after some (but not all) false-positives have been removed.
         let mut rule_matches = InternalRuleMatchSet::new();
-        let mut excluded_matches = AHashSet::new();
+        let mut excluded_matches = AHashMap::new();
         let mut async_jobs = vec![];
 
         access_regex_caches(|regex_caches| {
@@ -1082,7 +1090,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     // Rules that shall be skipped for this scan
     // This list shall be small (<10), so a linear search is acceptable
     blocked_rules: &'a Vec<usize>,
-    excluded_matches: &'a mut AHashSet<String>,
+    excluded_matches: &'a mut AHashMap<String, String>,
     per_event_data: SharedData,
     wildcarded_indexes: &'a AHashMap<Path<'static>, Vec<(usize, usize)>>,
     async_jobs: &'a mut Vec<PendingRuleJob>,
@@ -1139,6 +1147,10 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     excluded_matches: self.excluded_matches,
                     match_emitter: &mut emitter,
                     wildcard_indices: wildcard_indices_per_path,
+                    enable_debug_observability: self
+                        .scanner
+                        .scanner_features
+                        .enable_debug_observability,
                     per_string_data: &mut per_string_data,
                     per_scanner_data: &self.scanner.per_scanner_data,
                     per_event_data: &mut self.per_event_data,
