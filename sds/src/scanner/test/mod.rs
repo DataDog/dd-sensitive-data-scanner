@@ -1,6 +1,7 @@
 mod async_rule;
 mod included_keywords;
 mod match_validation;
+mod merged_dfa;
 mod metrics;
 mod overlapping_matches;
 mod validators;

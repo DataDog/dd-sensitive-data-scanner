@@ -39,6 +39,7 @@ use tokio::time::timeout;
 pub mod config;
 pub mod debug_scan;
 pub mod error;
+pub mod merged_dfa;
 pub mod metrics;
 pub mod regex_rule;
 pub mod scope;
@@ -459,11 +460,17 @@ pub struct Scanner {
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
     per_scanner_data: SharedData,
     async_scan_timeout: Duration,
+    merged_dfa: Option<merged_dfa::MergedDfa>,
 }
 
 impl Scanner {
     pub fn builder(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder<'_> {
         ScannerBuilder::new(rules)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_merged_dfa(&self) -> bool {
+        self.merged_dfa.is_some()
     }
 
     // This function scans the given event with the rules configured in the scanner.
@@ -953,12 +960,13 @@ impl Drop for Scanner {
     }
 }
 
-#[derive(Default)]
 pub struct ScannerBuilder<'a> {
     rules: &'a [RootRuleConfig<Arc<dyn RuleConfig>>],
     labels: Labels,
     scanner_features: ScannerFeatures,
     async_scan_timeout: Duration,
+    merged_dfa_enabled: bool,
+    merged_dfa_nfa_limit: usize,
 }
 
 impl ScannerBuilder<'_> {
@@ -968,6 +976,8 @@ impl ScannerBuilder<'_> {
             labels: Labels::empty(),
             scanner_features: ScannerFeatures::default(),
             async_scan_timeout: Duration::from_secs(60 * 5),
+            merged_dfa_enabled: true,
+            merged_dfa_nfa_limit: merged_dfa::DEFAULT_MERGED_NFA_SIZE_LIMIT,
         }
     }
 
@@ -1004,6 +1014,11 @@ impl ScannerBuilder<'_> {
     /// to help debug the source of matches.
     pub fn with_debug_observability(mut self, value: bool) -> Self {
         self.scanner_features.enable_debug_observability = value;
+        self
+    }
+
+    pub fn with_merged_dfa(mut self, value: bool) -> Self {
+        self.merged_dfa_enabled = value;
         self
     }
 
@@ -1064,6 +1079,12 @@ impl ScannerBuilder<'_> {
         )
         .with_implicit_index_wildcards(self.scanner_features.add_implicit_index_wildcards);
 
+        let merged_dfa = if self.merged_dfa_enabled {
+            merged_dfa::MergedDfa::new(&compiled_rules, self.rules, self.merged_dfa_nfa_limit)
+        } else {
+            None
+        };
+
         {
             let stats = &*GLOBAL_STATS;
             stats.scanner_creations.increment(1);
@@ -1079,6 +1100,7 @@ impl ScannerBuilder<'_> {
             labels: self.labels,
             per_scanner_data,
             async_scan_timeout: self.async_scan_timeout,
+            merged_dfa,
         })
     }
 }
@@ -1112,10 +1134,27 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         let mut per_string_data = SharedData::new();
         let wildcard_indices_per_path = self.wildcarded_indexes.get(path);
 
+        // Run the merged DFA pre-filter once per string to identify which patterns match.
+        // Rules in the merged set that don't match are skipped entirely.
+        let mut merged_guard = self
+            .scanner
+            .merged_dfa
+            .as_ref()
+            .map(|m| m.get_matching_rules(content));
+
         rule_visitor.visit_rule_indices(|rule_index| {
             if self.blocked_rules.contains(&rule_index) {
                 return Ok(());
             }
+
+            // Skip this rule if the merged DFA confirms no match
+            if let (Some(merged), Some(guard)) = (&self.scanner.merged_dfa, &mut merged_guard)
+                && let Some(pid) = merged.rule_to_pattern(rule_index)
+                && !merged_dfa::MergedDfa::pattern_matched(guard.get_ref(), pid)
+            {
+                return Ok(());
+            }
+
             let rule = &self.scanner.rules[rule_index];
             {
                 if rule.inner.allow_scanner_to_exclude_namespace() {

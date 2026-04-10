@@ -66,6 +66,7 @@ serde_test = "1.0.176"
 httpmock = "0.7.0"
 dd-sds = { path = ".", features = ["bench"] }
 threadpool = "1.8.1"
+proptest = "1"
 
 [[bench]]
 name = "bench"
@@ -73,4 +74,8 @@ harness = false
 
 [[bench]]
 name = "multithreaded_scanning"
+harness = false
+
+[[bench]]
+name = "merged_dfa"
 harness = false
