@@ -1,4 +1,5 @@
 mod aba_rtn_checksum;
+mod atlassian_token_checksum;
 mod australian_medicare_checksum;
 mod australian_tfn_checksum;
 mod austrian_ssn_checksum;
@@ -60,6 +61,7 @@ pub use jwt_expiration_checker::generate_jwt;
 
 use crate::scanner::regex_rule::config::SecondaryValidator;
 pub use crate::secondary_validation::aba_rtn_checksum::AbaRtnChecksum;
+pub use crate::secondary_validation::atlassian_token_checksum::AtlassianTokenChecksum;
 pub use crate::secondary_validation::australian_medicare_checksum::AustralianMedicareChecksum;
 pub use crate::secondary_validation::australian_tfn_checksum::AustralianTfnChecksum;
 pub use crate::secondary_validation::austrian_ssn_checksum::AustrianSSNChecksum;
@@ -195,6 +197,7 @@ impl SecondaryValidator {
     pub fn compile(&self) -> Arc<dyn Validator> {
         match self {
             SecondaryValidator::AbaRtnChecksum => Arc::new(AbaRtnChecksum),
+            SecondaryValidator::AtlassianTokenChecksum => Arc::new(AtlassianTokenChecksum),
             SecondaryValidator::AustralianMedicareChecksum => Arc::new(AustralianMedicareChecksum),
             SecondaryValidator::AustralianTfnChecksum => Arc::new(AustralianTfnChecksum),
             SecondaryValidator::AustrianSSNChecksum => Arc::new(AustrianSSNChecksum),

@@ -218,6 +218,7 @@ pub struct ProximityKeywordsConfig {
 #[serde(tag = "type")]
 pub enum SecondaryValidator {
     AbaRtnChecksum,
+    AtlassianTokenChecksum,
     AustralianMedicareChecksum,
     AustralianTfnChecksum,
     AustrianSSNChecksum,
