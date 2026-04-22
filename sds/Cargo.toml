@@ -35,7 +35,7 @@ metrics = "0.24.0"
 metrics-util = "0.18.0"
 crc32fast = "1.4.0"
 base62 = "2.0.2"
-iban_validate = "4"
+iban_validate = "5"
 num_cpus = "1.16.0"
 
 lazy_static = "1.5.0"
