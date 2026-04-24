@@ -3,16 +3,12 @@ use chrono::{DateTime, Utc};
 
 pub const BASIC_AUTH_ENCODE_SUFFIX: &str = "%basicAuthEncode";
 
-/// If `header_value` matches `Basic <credentials>` where `<credentials>` contains
-/// a `:`, base64-encode the credentials portion. The part before `:` may be empty.
+/// If `header_value` matches `Basic <credentials>` , base64-encode the credentials portion.
 /// Returns the transformed value, or the original if the pattern doesn't match.
 pub fn apply_basic_auth_encode(header_value: &str) -> String {
     let Some(credentials) = header_value.strip_prefix("Basic ") else {
         return header_value.to_string();
     };
-    if !credentials.contains(':') {
-        return header_value.to_string();
-    }
     let encoded = base64::engine::general_purpose::STANDARD.encode(credentials);
     format!("Basic {encoded}")
 }
@@ -38,10 +34,10 @@ mod tests {
     }
 
     #[test]
-    fn test_basic_auth_encode_no_colon_is_noop() {
+    fn test_basic_auth_encode_no_colon() {
         assert_eq!(
             apply_basic_auth_encode("Basic tokenonly"),
-            "Basic tokenonly"
+            "Basic dG9rZW5vbmx5"
         );
     }
 
