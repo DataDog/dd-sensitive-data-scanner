@@ -1,4 +1,71 @@
+use base64::Engine;
 use chrono::{DateTime, Utc};
+
+pub const BASIC_AUTH_ENCODE_SUFFIX: &str = "%basicAuthEncode";
+
+/// If `header_value` matches `Basic <credentials>` where `<credentials>` contains
+/// a `:`, base64-encode the credentials portion. The part before `:` may be empty.
+/// Returns the transformed value, or the original if the pattern doesn't match.
+pub fn apply_basic_auth_encode(header_value: &str) -> String {
+    let Some(credentials) = header_value.strip_prefix("Basic ") else {
+        return header_value.to_string();
+    };
+    if !credentials.contains(':') {
+        return header_value.to_string();
+    }
+    let encoded = base64::engine::general_purpose::STANDARD.encode(credentials);
+    format!("Basic {encoded}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_basic_auth_encode_standard_credentials() {
+        assert_eq!(
+            apply_basic_auth_encode("Basic user:password"),
+            "Basic dXNlcjpwYXNzd29yZA=="
+        );
+    }
+
+    #[test]
+    fn test_basic_auth_encode_empty_username() {
+        assert_eq!(
+            apply_basic_auth_encode("Basic :password"),
+            "Basic OnBhc3N3b3Jk"
+        );
+    }
+
+    #[test]
+    fn test_basic_auth_encode_no_colon_is_noop() {
+        assert_eq!(
+            apply_basic_auth_encode("Basic tokenonly"),
+            "Basic tokenonly"
+        );
+    }
+
+    #[test]
+    fn test_basic_auth_encode_non_basic_prefix_is_noop() {
+        assert_eq!(
+            apply_basic_auth_encode("Bearer user:password"),
+            "Bearer user:password"
+        );
+    }
+
+    #[test]
+    fn test_basic_auth_encode_empty_string_is_noop() {
+        assert_eq!(apply_basic_auth_encode(""), "");
+    }
+
+    #[test]
+    fn test_basic_auth_encode_multiple_colons() {
+        assert_eq!(
+            apply_basic_auth_encode("Basic user:pass:extra"),
+            "Basic dXNlcjpwYXNzOmV4dHJh"
+        );
+    }
+}
 
 pub fn generate_aws_headers_and_body(
     datetime: &DateTime<Utc>,

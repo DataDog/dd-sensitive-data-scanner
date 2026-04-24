@@ -1,4 +1,5 @@
 use super::match_validator::MatchValidator;
+use super::validator_utils::{BASIC_AUTH_ENCODE_SUFFIX, apply_basic_auth_encode};
 use crate::match_validation::config_v2::{ResponseConditionResult, TemplateVariable};
 use crate::scanner::RootCompiledRule;
 use crate::{
@@ -412,7 +413,13 @@ fn prepare_request(endpoint_combination: &EndpointCombination) -> RequestBuilder
         for template_var in &endpoint_combination.template_vars {
             header_val = header_val.with_template_variable(template_var);
         }
-        request_builder = request_builder.header(header_key, header_val.to_string());
+        let (actual_key, final_value) =
+            if let Some(stripped) = header_key.strip_suffix(BASIC_AUTH_ENCODE_SUFFIX) {
+                (stripped, apply_basic_auth_encode(&header_val.to_string()))
+            } else {
+                (header_key.as_str(), header_val.to_string())
+            };
+        request_builder = request_builder.header(actual_key, final_value);
     }
     // Add request body with template substitution. For methods that can carry
     // a body (POST/PUT/PATCH), always set one so reqwest emits Content-Length:
@@ -1560,6 +1567,126 @@ match_pairing:
         // it contributed to the successful validation of the main match. The status is
         // propagated from the main match to all contributing matches.
         assert_eq!(all_matches[1].match_status, MatchStatus::Valid);
+    }
+
+    #[test]
+    fn integration_test_basic_auth_encode_header() {
+        let server = httpmock::MockServer::start();
+
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/secure")
+                .header("Authorization", "Basic dXNlcjpzZWNyZXRfcGFzcw==");
+            then.status(200).body("OK");
+        });
+
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/secure"
+      method: GET
+      headers:
+        Authorization%basicAuthEncode: "Basic user:$MATCH"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+"#,
+                server.base_url()
+            )
+            .as_str(),
+        );
+
+        let validator = HttpValidatorV2;
+        let mut matches = vec![create_test_match("secret_pass")];
+        let rules = vec![create_test_rule(config)];
+
+        validator.validate(&mut matches, &rules);
+
+        mock.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+    }
+
+    #[test]
+    fn integration_test_basic_auth_encode_empty_username() {
+        let server = httpmock::MockServer::start();
+
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/secure")
+                .header("Authorization", "Basic OnNlY3JldF9wYXNz");
+            then.status(200).body("OK");
+        });
+
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/secure"
+      method: GET
+      headers:
+        Authorization%basicAuthEncode: "Basic :$MATCH"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+"#,
+                server.base_url()
+            )
+            .as_str(),
+        );
+
+        let validator = HttpValidatorV2;
+        let mut matches = vec![create_test_match("secret_pass")];
+        let rules = vec![create_test_rule(config)];
+
+        validator.validate(&mut matches, &rules);
+
+        mock.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+    }
+
+    #[test]
+    fn integration_test_basic_auth_encode_not_applied_without_suffix() {
+        let server = httpmock::MockServer::start();
+
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/secure")
+                .header("Authorization", "Basic user:secret_pass");
+            then.status(200).body("OK");
+        });
+
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/secure"
+      method: GET
+      headers:
+        Authorization: "Basic user:$MATCH"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+"#,
+                server.base_url()
+            )
+            .as_str(),
+        );
+
+        let validator = HttpValidatorV2;
+        let mut matches = vec![create_test_match("secret_pass")];
+        let rules = vec![create_test_rule(config)];
+
+        validator.validate(&mut matches, &rules);
+
+        mock.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
     }
 
     #[test]
