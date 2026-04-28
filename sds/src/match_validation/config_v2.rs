@@ -1,6 +1,7 @@
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::{
+    borrow::Cow,
     collections::BTreeMap,
     fmt::{self, Display, Formatter},
     time::Duration,
@@ -379,10 +380,14 @@ pub struct TemplatedMatchString(pub String);
 
 impl TemplatedMatchString {
     pub fn with_template_variable(&self, template_variable: &TemplateVariable) -> Self {
-        TemplatedMatchString(
-            self.0
-                .replace(&template_variable.name, &template_variable.value),
+        self.render(
+            template_variable.name.as_str(),
+            template_variable.value.as_str(),
         )
+    }
+
+    fn render(&self, tag: &str, value: &str) -> Self {
+        TemplatedMatchString(self.0.replace(tag, value))
     }
 
     /// Render the template by substituting all variables and applying transformations.
@@ -391,6 +396,10 @@ impl TemplatedMatchString {
     /// transform-like syntax (e.g. `%base64(`) inside variable values is never
     /// interpreted as a transformation.
     pub fn render_with_variables(&self, variables: &[TemplateVariable]) -> String {
+        if !self.0.contains('%') {
+            return substitute_variables(&self.0, variables).into_owned();
+        }
+
         let segments = parse_template(&self.0);
         let mut result = String::new();
         for segment in segments {
@@ -493,12 +502,15 @@ fn apply_transform(name: &str, value: &str) -> String {
     }
 }
 
-fn substitute_variables(input: &str, variables: &[TemplateVariable]) -> String {
+fn substitute_variables<'a>(input: &'a str, variables: &[TemplateVariable]) -> Cow<'a, str> {
+    if !input.contains('$') {
+        return Cow::Borrowed(input);
+    }
     let mut result = input.to_string();
     for var in variables {
         result = result.replace(&var.name, &var.value);
     }
-    result
+    Cow::Owned(result)
 }
 
 impl Display for TemplatedMatchString {
