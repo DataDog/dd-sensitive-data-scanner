@@ -1,5 +1,4 @@
 use super::match_validator::MatchValidator;
-use super::validator_utils::{BASIC_AUTH_ENCODE_SUFFIX, apply_basic_auth_encode};
 use crate::match_validation::config_v2::{ResponseConditionResult, TemplateVariable};
 use crate::scanner::RootCompiledRule;
 use crate::{
@@ -393,11 +392,10 @@ fn generate_match_status_per_endpoint_combination(
 
 fn prepare_request(endpoint_combination: &EndpointCombination) -> RequestBuilder {
     let endpoint_config = &endpoint_combination.endpoint_config;
-    let mut endpoint = endpoint_config.request.endpoint.clone();
-    // Apply ALL template variables to the same endpoint
-    for template_var in &endpoint_combination.template_vars {
-        endpoint = endpoint.with_template_variable(template_var);
-    }
+    let endpoint = endpoint_config
+        .request
+        .endpoint
+        .render_with_variables(&endpoint_combination.template_vars);
     let mut request_builder = match endpoint_config.request.method {
         HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(endpoint.to_string()),
         HttpMethod::Post => BLOCKING_HTTP_CLIENT.post(endpoint.to_string()),
@@ -409,17 +407,9 @@ fn prepare_request(endpoint_combination: &EndpointCombination) -> RequestBuilder
 
     // Add headers
     for (header_key, header_value) in &endpoint_config.request.headers {
-        let mut header_val = header_value.clone();
-        for template_var in &endpoint_combination.template_vars {
-            header_val = header_val.with_template_variable(template_var);
-        }
-        let (actual_key, final_value) =
-            if let Some(stripped) = header_key.strip_suffix(BASIC_AUTH_ENCODE_SUFFIX) {
-                (stripped, apply_basic_auth_encode(&header_val.to_string()))
-            } else {
-                (header_key.as_str(), header_val.to_string())
-            };
-        request_builder = request_builder.header(actual_key, final_value);
+        let header_val =
+            header_value.render_with_variables(&endpoint_combination.template_vars);
+        request_builder = request_builder.header(header_key, header_val);
     }
     // Add request body with template substitution. For methods that can carry
     // a body (POST/PUT/PATCH), always set one so reqwest emits Content-Length:
@@ -429,11 +419,9 @@ fn prepare_request(endpoint_combination: &EndpointCombination) -> RequestBuilder
         HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch
     );
     if let Some(ref body_tpl) = endpoint_config.request.body {
-        let mut body_val = body_tpl.clone();
-        for template_var in &endpoint_combination.template_vars {
-            body_val = body_val.with_template_variable(template_var);
-        }
-        request_builder = request_builder.body(body_val.to_string());
+        let body_val =
+            body_tpl.render_with_variables(&endpoint_combination.template_vars);
+        request_builder = request_builder.body(body_val);
     } else if body_requires_content_length {
         request_builder = request_builder.body("");
     }
@@ -1570,7 +1558,7 @@ match_pairing:
     }
 
     #[test]
-    fn integration_test_basic_auth_encode_header() {
+    fn integration_test_base64_transform_in_header() {
         let server = httpmock::MockServer::start();
 
         let mock = server.mock(|when, then| {
@@ -1588,7 +1576,7 @@ calls:
       endpoint: "{}/secure"
       method: GET
       headers:
-        Authorization%basicAuthEncode: "Basic user:$MATCH"
+        Authorization: "Basic %base64(user:$MATCH)"
     response:
       conditions:
         - type: valid
@@ -1610,7 +1598,7 @@ calls:
     }
 
     #[test]
-    fn integration_test_basic_auth_encode_empty_username() {
+    fn integration_test_base64_transform_empty_username() {
         let server = httpmock::MockServer::start();
 
         let mock = server.mock(|when, then| {
@@ -1628,7 +1616,7 @@ calls:
       endpoint: "{}/secure"
       method: GET
       headers:
-        Authorization%basicAuthEncode: "Basic :$MATCH"
+        Authorization: "Basic %base64(:$MATCH)"
     response:
       conditions:
         - type: valid
@@ -1650,7 +1638,7 @@ calls:
     }
 
     #[test]
-    fn integration_test_basic_auth_encode_not_applied_without_suffix() {
+    fn integration_test_no_transform_leaves_value_unchanged() {
         let server = httpmock::MockServer::start();
 
         let mock = server.mock(|when, then| {
