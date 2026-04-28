@@ -396,7 +396,7 @@ impl TemplatedMatchString {
     /// transform-like syntax (e.g. `%base64(`) inside variable values is never
     /// interpreted as a transformation.
     pub fn render_with_variables(&self, variables: &[TemplateVariable]) -> String {
-        if !self.0.contains('%') {
+        if !may_contain_transform(&self.0) {
             return substitute_variables(&self.0, variables).into_owned();
         }
 
@@ -471,7 +471,7 @@ fn try_parse_transform_at(input: &str, start: usize) -> Option<(usize, usize, us
 
     let paren_offset = rest.find('(')?;
     let name = &rest[..paren_offset];
-    if name.is_empty() || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
+    if !KNOWN_TRANSFORMS.contains(&name) {
         return None;
     }
 
@@ -495,10 +495,17 @@ fn try_parse_transform_at(input: &str, start: usize) -> Option<(usize, usize, us
     None
 }
 
+const KNOWN_TRANSFORMS: &[&str] = &["base64"];
+const KNOWN_TRANSFORM_PREFIXES: &[&str] = &["%base64("];
+
+fn may_contain_transform(input: &str) -> bool {
+    KNOWN_TRANSFORM_PREFIXES.iter().any(|p| input.contains(p))
+}
+
 fn apply_transform(name: &str, value: &str) -> String {
     match name {
         "base64" => base64::engine::general_purpose::STANDARD.encode(value),
-        _ => value.to_string(),
+        _ => unreachable!("parser only accepts known transforms"),
     }
 }
 
@@ -1066,8 +1073,35 @@ calls:
     }
 
     #[test]
-    fn test_render_with_variables_unknown_transform_passes_through() {
+    fn test_render_with_variables_unknown_transform_is_literal() {
         let tpl = TemplatedMatchString("%unknown(data)".to_string());
-        assert_eq!(tpl.render_with_variables(&[]), "data");
+        assert_eq!(tpl.render_with_variables(&[]), "%unknown(data)");
+    }
+
+    #[test]
+    fn test_render_with_variables_percent_encoded_not_treated_as_transform() {
+        let tpl = TemplatedMatchString("%20(hello)".to_string());
+        assert_eq!(tpl.render_with_variables(&[]), "%20(hello)");
+    }
+
+    #[test]
+    fn test_render_with_variables_percent_encoded_inside_transform() {
+        let tpl = TemplatedMatchString("%base64($MATCH%20(bla))".to_string());
+        let vars = vec![TemplateVariable {
+            name: "$MATCH".to_string(),
+            value: "foo".to_string(),
+        }];
+        let expected = base64::engine::general_purpose::STANDARD.encode("foo%20(bla)");
+        assert_eq!(tpl.render_with_variables(&vars), expected);
+    }
+
+    #[test]
+    fn test_known_transform_prefixes_match_known_transforms() {
+        let expected: Vec<String> = KNOWN_TRANSFORMS
+            .iter()
+            .map(|name| format!("%{name}("))
+            .collect();
+        let actual: Vec<&str> = KNOWN_TRANSFORM_PREFIXES.to_vec();
+        assert_eq!(actual, expected);
     }
 }
