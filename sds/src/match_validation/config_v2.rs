@@ -1,3 +1,4 @@
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -377,24 +378,127 @@ pub struct PairedValidatorConfig {
 pub struct TemplatedMatchString(pub String);
 
 impl TemplatedMatchString {
-    // pub fn with_rule_match(&self, rule_match: &RuleMatch) -> Self {
-    //     self.render("$MATCH", rule_match.match_value.as_ref().unwrap())
-    // }
-
-    // pub fn with_host(&self, host: &str) -> Self {
-    //     self.render("$HOST", host)
-    // }
-
     pub fn with_template_variable(&self, template_variable: &TemplateVariable) -> Self {
-        self.render(
-            template_variable.name.as_str(),
-            template_variable.value.as_str(),
+        TemplatedMatchString(
+            self.0
+                .replace(&template_variable.name, &template_variable.value),
         )
     }
 
-    fn render(&self, tag: &str, value: &str) -> Self {
-        TemplatedMatchString(self.0.replace(tag, value))
+    /// Render the template by substituting all variables and applying transformations.
+    ///
+    /// The template string is parsed BEFORE variable substitution so that
+    /// transform-like syntax (e.g. `%base64(`) inside variable values is never
+    /// interpreted as a transformation.
+    pub fn render_with_variables(&self, variables: &[TemplateVariable]) -> String {
+        let segments = parse_template(&self.0);
+        let mut result = String::new();
+        for segment in segments {
+            match segment {
+                TemplateSegment::Literal(s) => {
+                    result.push_str(&substitute_variables(s, variables));
+                }
+                TemplateSegment::Transform { name, content } => {
+                    let rendered = substitute_variables(content, variables);
+                    result.push_str(&apply_transform(name, &rendered));
+                }
+            }
+        }
+        result
     }
+}
+
+#[derive(Debug, PartialEq)]
+enum TemplateSegment<'a> {
+    Literal(&'a str),
+    Transform { name: &'a str, content: &'a str },
+}
+
+/// Parse a template string into literal and transform segments.
+///
+/// Transform syntax: `%name(content)` where `name` is an alphanumeric/underscore
+/// identifier and parentheses inside `content` are balanced.
+/// A `%` that doesn't start a valid transform is kept as a literal character.
+fn parse_template(input: &str) -> Vec<TemplateSegment<'_>> {
+    let mut segments = Vec::new();
+    let mut pos = 0;
+
+    while pos < input.len() {
+        match input[pos..].find('%') {
+            Some(offset) => {
+                let pct = pos + offset;
+                if let Some((open_paren, content_start, content_end)) =
+                    try_parse_transform_at(input, pct)
+                {
+                    if pct > pos {
+                        segments.push(TemplateSegment::Literal(&input[pos..pct]));
+                    }
+                    segments.push(TemplateSegment::Transform {
+                        name: &input[pct + 1..open_paren],
+                        content: &input[content_start..content_end],
+                    });
+                    pos = content_end + 1;
+                } else {
+                    segments.push(TemplateSegment::Literal(&input[pos..pct + 1]));
+                    pos = pct + 1;
+                }
+            }
+            None => {
+                segments.push(TemplateSegment::Literal(&input[pos..]));
+                break;
+            }
+        }
+    }
+
+    segments
+}
+
+/// Try to parse `%name(content)` starting at `start` which points to `%`.
+/// Returns `(open_paren_idx, content_start_idx, content_end_idx)` on success,
+/// where content is `input[content_start..content_end]` and the `)` is at `content_end`.
+fn try_parse_transform_at(input: &str, start: usize) -> Option<(usize, usize, usize)> {
+    let after_pct = start + 1;
+    let rest = input.get(after_pct..)?;
+
+    let paren_offset = rest.find('(')?;
+    let name = &rest[..paren_offset];
+    if name.is_empty() || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
+        return None;
+    }
+
+    let open_paren = after_pct + paren_offset;
+    let content_start = open_paren + 1;
+    let mut depth: u32 = 1;
+
+    for (offset, byte) in input[content_start..].bytes().enumerate() {
+        match byte {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some((open_paren, content_start, content_start + offset));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn apply_transform(name: &str, value: &str) -> String {
+    match name {
+        "base64" => base64::engine::general_purpose::STANDARD.encode(value),
+        _ => value.to_string(),
+    }
+}
+
+fn substitute_variables(input: &str, variables: &[TemplateVariable]) -> String {
+    let mut result = input.to_string();
+    for var in variables {
+        result = result.replace(&var.name, &var.value);
+    }
+    result
 }
 
 impl Display for TemplatedMatchString {
@@ -752,5 +856,209 @@ calls:
             &make_exact_body_matcher("a.b[0].c", "value"),
             body
         ));
+    }
+
+    #[test]
+    fn test_parse_template_no_transforms() {
+        let segments = parse_template("Bearer $MATCH");
+        assert_eq!(segments, vec![TemplateSegment::Literal("Bearer $MATCH")]);
+    }
+
+    #[test]
+    fn test_parse_template_single_transform() {
+        let segments = parse_template("Basic %base64($USER:$MATCH)");
+        assert_eq!(
+            segments,
+            vec![
+                TemplateSegment::Literal("Basic "),
+                TemplateSegment::Transform {
+                    name: "base64",
+                    content: "$USER:$MATCH"
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_parse_template_transform_only() {
+        let segments = parse_template("%base64(content)");
+        assert_eq!(
+            segments,
+            vec![TemplateSegment::Transform {
+                name: "base64",
+                content: "content"
+            }]
+        );
+    }
+
+    #[test]
+    fn test_parse_template_transform_with_trailing_literal() {
+        let segments = parse_template("%base64(data) suffix");
+        assert_eq!(
+            segments,
+            vec![
+                TemplateSegment::Transform {
+                    name: "base64",
+                    content: "data"
+                },
+                TemplateSegment::Literal(" suffix"),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_parse_template_multiple_transforms() {
+        let segments = parse_template("a %base64(b) c %base64(d) e");
+        assert_eq!(
+            segments,
+            vec![
+                TemplateSegment::Literal("a "),
+                TemplateSegment::Transform {
+                    name: "base64",
+                    content: "b"
+                },
+                TemplateSegment::Literal(" c "),
+                TemplateSegment::Transform {
+                    name: "base64",
+                    content: "d"
+                },
+                TemplateSegment::Literal(" e"),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_parse_template_balanced_parens_in_content() {
+        let segments = parse_template("%base64(a(b)c)");
+        assert_eq!(
+            segments,
+            vec![TemplateSegment::Transform {
+                name: "base64",
+                content: "a(b)c"
+            }]
+        );
+    }
+
+    #[test]
+    fn test_parse_template_literal_percent_not_a_transform() {
+        assert_eq!(
+            parse_template("100%"),
+            vec![TemplateSegment::Literal("100%")]
+        );
+        // "%20" has no '(' so '%' is literal; parser splits at '%'.
+        assert_eq!(
+            parse_template("%20"),
+            vec![
+                TemplateSegment::Literal("%"),
+                TemplateSegment::Literal("20"),
+            ]
+        );
+        assert_eq!(
+            parse_template("a % b"),
+            vec![
+                TemplateSegment::Literal("a %"),
+                TemplateSegment::Literal(" b"),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_parse_template_unclosed_paren_treated_as_literal() {
+        let segments = parse_template("%base64(unclosed");
+        assert_eq!(
+            segments,
+            vec![
+                TemplateSegment::Literal("%"),
+                TemplateSegment::Literal("base64(unclosed"),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_render_with_variables_base64_transform() {
+        let tpl = TemplatedMatchString("Basic %base64($USER:$MATCH)".to_string());
+        let vars = vec![
+            TemplateVariable {
+                name: "$USER".to_string(),
+                value: "user".to_string(),
+            },
+            TemplateVariable {
+                name: "$MATCH".to_string(),
+                value: "password".to_string(),
+            },
+        ];
+        assert_eq!(
+            tpl.render_with_variables(&vars),
+            "Basic dXNlcjpwYXNzd29yZA=="
+        );
+    }
+
+    #[test]
+    fn test_no_render_with_transform_in_variables() {
+        let tpl = TemplatedMatchString("Basic $USER:$MATCH".to_string());
+        let vars = vec![
+            TemplateVariable {
+                name: "$USER".to_string(),
+                value: "%base64(user".to_string(),
+            },
+            TemplateVariable {
+                name: "$MATCH".to_string(),
+                value: "password)".to_string(),
+            },
+        ];
+        assert_eq!(
+            tpl.render_with_variables(&vars),
+            "Basic %base64(user:password)"
+        );
+    }
+
+    #[test]
+    fn test_render_with_variables_no_transforms() {
+        let tpl = TemplatedMatchString("Bearer $MATCH".to_string());
+        let vars = vec![TemplateVariable {
+            name: "$MATCH".to_string(),
+            value: "token123%20(bla)".to_string(),
+        }];
+        assert_eq!(tpl.render_with_variables(&vars), "Bearer token123%20(bla)");
+    }
+
+    #[test]
+    fn test_render_with_variables_prevents_injection() {
+        let tpl = TemplatedMatchString("Basic %base64($USER:$MATCH)".to_string());
+        let vars = vec![
+            TemplateVariable {
+                name: "$USER".to_string(),
+                value: "%base64(injected)".to_string(),
+            },
+            TemplateVariable {
+                name: "$MATCH".to_string(),
+                value: "pass".to_string(),
+            },
+        ];
+        // The %base64( inside $USER's value must NOT be interpreted as a transform.
+        // The entire "$USER:$MATCH" content is substituted, then base64-encoded.
+        assert_eq!(
+            tpl.render_with_variables(&vars),
+            "Basic JWJhc2U2NChpbmplY3RlZCk6cGFzcw=="
+        );
+    }
+
+    #[test]
+    fn test_render_with_variables_empty_username() {
+        let tpl = TemplatedMatchString("Basic %base64(:$MATCH)".to_string());
+        let vars = vec![TemplateVariable {
+            name: "$MATCH".to_string(),
+            value: "secret_pass".to_string(),
+        }];
+        assert_eq!(
+            tpl.render_with_variables(&vars),
+            "Basic OnNlY3JldF9wYXNz"
+        );
+    }
+
+    #[test]
+    fn test_render_with_variables_unknown_transform_passes_through() {
+        let tpl = TemplatedMatchString("%unknown(data)".to_string());
+        assert_eq!(tpl.render_with_variables(&[]), "data");
     }
 }
