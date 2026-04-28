@@ -407,8 +407,7 @@ fn prepare_request(endpoint_combination: &EndpointCombination) -> RequestBuilder
 
     // Add headers
     for (header_key, header_value) in &endpoint_config.request.headers {
-        let header_val =
-            header_value.render_with_variables(&endpoint_combination.template_vars);
+        let header_val = header_value.render_with_variables(&endpoint_combination.template_vars);
         request_builder = request_builder.header(header_key, header_val);
     }
     // Add request body with template substitution. For methods that can carry
@@ -419,8 +418,7 @@ fn prepare_request(endpoint_combination: &EndpointCombination) -> RequestBuilder
         HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch
     );
     if let Some(ref body_tpl) = endpoint_config.request.body {
-        let body_val =
-            body_tpl.render_with_variables(&endpoint_combination.template_vars);
+        let body_val = body_tpl.render_with_variables(&endpoint_combination.template_vars);
         request_builder = request_builder.body(body_val);
     } else if body_requires_content_length {
         request_builder = request_builder.body("");

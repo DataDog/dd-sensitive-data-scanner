@@ -1050,10 +1050,7 @@ calls:
             name: "$MATCH".to_string(),
             value: "secret_pass".to_string(),
         }];
-        assert_eq!(
-            tpl.render_with_variables(&vars),
-            "Basic OnNlY3JldF9wYXNz"
-        );
+        assert_eq!(tpl.render_with_variables(&vars), "Basic OnNlY3JldF9wYXNz");
     }
 
     #[test]
