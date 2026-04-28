@@ -379,17 +379,6 @@ pub struct PairedValidatorConfig {
 pub struct TemplatedMatchString(pub String);
 
 impl TemplatedMatchString {
-    pub fn with_template_variable(&self, template_variable: &TemplateVariable) -> Self {
-        self.render(
-            template_variable.name.as_str(),
-            template_variable.value.as_str(),
-        )
-    }
-
-    fn render(&self, tag: &str, value: &str) -> Self {
-        TemplatedMatchString(self.0.replace(tag, value))
-    }
-
     /// Render the template by substituting all variables and applying transformations.
     ///
     /// The template string is parsed BEFORE variable substitution so that

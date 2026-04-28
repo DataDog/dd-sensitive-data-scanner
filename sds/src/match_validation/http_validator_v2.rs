@@ -329,13 +329,10 @@ fn explode_endpoint_combinations(
                         });
                         if let Some(ref host) = host_opt {
                             // Render the host before we push it as a template variable
-                            let mut host_var = host.clone();
-                            for template_var in &template_vars {
-                                host_var = host_var.with_template_variable(template_var);
-                            }
+                            let host_var = host.render_with_variables(&template_vars);
                             template_vars.push(TemplateVariable {
                                 name: "$HOST".to_string(),
-                                value: host_var.to_string(),
+                                value: host_var,
                             });
                         }
                         (
@@ -397,11 +394,11 @@ fn prepare_request(endpoint_combination: &EndpointCombination) -> RequestBuilder
         .endpoint
         .render_with_variables(&endpoint_combination.template_vars);
     let mut request_builder = match endpoint_config.request.method {
-        HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(endpoint.to_string()),
-        HttpMethod::Post => BLOCKING_HTTP_CLIENT.post(endpoint.to_string()),
-        HttpMethod::Put => BLOCKING_HTTP_CLIENT.put(endpoint.to_string()),
-        HttpMethod::Delete => BLOCKING_HTTP_CLIENT.delete(endpoint.to_string()),
-        HttpMethod::Patch => BLOCKING_HTTP_CLIENT.patch(endpoint.to_string()),
+        HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(endpoint),
+        HttpMethod::Post => BLOCKING_HTTP_CLIENT.post(endpoint),
+        HttpMethod::Put => BLOCKING_HTTP_CLIENT.put(endpoint),
+        HttpMethod::Delete => BLOCKING_HTTP_CLIENT.delete(endpoint),
+        HttpMethod::Patch => BLOCKING_HTTP_CLIENT.patch(endpoint),
     };
     request_builder = request_builder.timeout(endpoint_config.request.timeout);
 
