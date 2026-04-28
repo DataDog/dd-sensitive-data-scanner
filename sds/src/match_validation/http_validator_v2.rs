@@ -582,12 +582,11 @@ calls:
             config.calls[0]
                 .request
                 .endpoint
-                .with_template_variable(&TemplateVariable {
+                .render_with_variables(&[TemplateVariable {
                     name: "$MATCH".to_string(),
                     value: rule_match.match_value.as_ref().unwrap().clone(),
-                })
-                .to_string(),
-            "http://localhost/test?secret=test".to_string()
+                }]),
+            "http://localhost/test?secret=test"
         );
     }
 
@@ -605,32 +604,34 @@ calls:
 "#,
         );
         let rule_match = create_test_match("test");
+        let match_value = rule_match.match_value.as_ref().unwrap().clone();
+        let endpoint = &config.calls[0].request.endpoint;
 
         // Test that with_host substitutes the host correctly
-        let endpoint_with_match =
-            config.calls[0]
-                .request
-                .endpoint
-                .with_template_variable(&TemplateVariable {
-                    name: "$MATCH".to_string(),
-                    value: rule_match.match_value.as_ref().unwrap().clone(),
-                });
         assert_eq!(
-            endpoint_with_match
-                .with_template_variable(&TemplateVariable {
+            endpoint.render_with_variables(&[
+                TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: match_value.clone(),
+                },
+                TemplateVariable {
                     name: "$HOST".to_string(),
                     value: "us".to_string(),
-                })
-                .to_string(),
+                },
+            ]),
             "http://us/test"
         );
         assert_eq!(
-            endpoint_with_match
-                .with_template_variable(&TemplateVariable {
+            endpoint.render_with_variables(&[
+                TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: match_value,
+                },
+                TemplateVariable {
                     name: "$HOST".to_string(),
                     value: "eu".to_string(),
-                })
-                .to_string(),
+                },
+            ]),
             "http://eu/test"
         );
     }
@@ -1257,30 +1258,33 @@ calls:
             ]
         );
         let rule_match = create_test_match("test");
-        let endpoint_with_match =
-            config.calls[0]
-                .request
-                .endpoint
-                .with_template_variable(&TemplateVariable {
-                    name: "$MATCH".to_string(),
-                    value: rule_match.match_value.as_ref().unwrap().clone(),
-                });
+        let match_value = rule_match.match_value.as_ref().unwrap().clone();
+        let endpoint = &config.calls[0].request.endpoint;
+
         assert_eq!(
-            endpoint_with_match
-                .with_template_variable(&TemplateVariable {
+            endpoint.render_with_variables(&[
+                TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: match_value.clone(),
+                },
+                TemplateVariable {
                     name: "$HOST".to_string(),
                     value: "us".to_string(),
-                })
-                .to_string(),
+                },
+            ]),
             "http://us/test1"
         );
         assert_eq!(
-            endpoint_with_match
-                .with_template_variable(&TemplateVariable {
+            endpoint.render_with_variables(&[
+                TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: match_value,
+                },
+                TemplateVariable {
                     name: "$HOST".to_string(),
                     value: "eu".to_string(),
-                })
-                .to_string(),
+                },
+            ]),
             "http://eu/test1"
         );
     }
