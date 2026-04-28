@@ -396,9 +396,9 @@ impl TemplatedMatchString {
                 TemplateSegment::Literal(s) => {
                     result.push_str(&substitute_variables(s, variables));
                 }
-                TemplateSegment::Transform { name, content } => {
+                TemplateSegment::Transform { kind, content } => {
                     let rendered = substitute_variables(content, variables);
-                    result.push_str(&apply_transform(name, &rendered));
+                    result.push_str(&kind.apply(&rendered));
                 }
             }
         }
@@ -406,10 +406,45 @@ impl TemplatedMatchString {
     }
 }
 
+/// Built-in `%name(content)` transforms for [`TemplatedMatchString`].
+///
+/// Add a variant when introducing a new transform; `apply` must stay exhaustive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum TemplateTransform {
+    Base64,
+}
+
+impl TemplateTransform {
+    const ALL: &'static [TemplateTransform] = &[TemplateTransform::Base64];
+
+    /// `%name(` — used by [`may_contain_transform`] to skip parsing when no transform syntax is present.
+    fn percent_prefix(self) -> &'static str {
+        match self {
+            TemplateTransform::Base64 => "%base64(",
+        }
+    }
+
+    fn parse(name: &str) -> Option<Self> {
+        match name {
+            "base64" => Some(Self::Base64),
+            _ => None,
+        }
+    }
+
+    fn apply(self, value: &str) -> String {
+        match self {
+            TemplateTransform::Base64 => base64::engine::general_purpose::STANDARD.encode(value),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 enum TemplateSegment<'a> {
     Literal(&'a str),
-    Transform { name: &'a str, content: &'a str },
+    Transform {
+        kind: TemplateTransform,
+        content: &'a str,
+    },
 }
 
 /// Parse a template string into literal and transform segments.
@@ -425,14 +460,13 @@ fn parse_template(input: &str) -> Vec<TemplateSegment<'_>> {
         match input[pos..].find('%') {
             Some(offset) => {
                 let pct = pos + offset;
-                if let Some((open_paren, content_start, content_end)) =
-                    try_parse_transform_at(input, pct)
+                if let Some((kind, content_start, content_end)) = try_parse_transform_at(input, pct)
                 {
                     if pct > pos {
                         segments.push(TemplateSegment::Literal(&input[pos..pct]));
                     }
                     segments.push(TemplateSegment::Transform {
-                        name: &input[pct + 1..open_paren],
+                        kind,
                         content: &input[content_start..content_end],
                     });
                     pos = content_end + 1;
@@ -452,17 +486,15 @@ fn parse_template(input: &str) -> Vec<TemplateSegment<'_>> {
 }
 
 /// Try to parse `%name(content)` starting at `start` which points to `%`.
-/// Returns `(open_paren_idx, content_start_idx, content_end_idx)` on success,
-/// where content is `input[content_start..content_end]` and the `)` is at `content_end`.
-fn try_parse_transform_at(input: &str, start: usize) -> Option<(usize, usize, usize)> {
+/// On success returns `(kind, content_start, content_end)` where content is
+/// `input[content_start..content_end]` and the closing `)` is at `content_end`.
+fn try_parse_transform_at(input: &str, start: usize) -> Option<(TemplateTransform, usize, usize)> {
     let after_pct = start + 1;
     let rest = input.get(after_pct..)?;
 
     let paren_offset = rest.find('(')?;
     let name = &rest[..paren_offset];
-    if !KNOWN_TRANSFORMS.contains(&name) {
-        return None;
-    }
+    let kind = TemplateTransform::parse(name)?;
 
     let open_paren = after_pct + paren_offset;
     let content_start = open_paren + 1;
@@ -474,7 +506,7 @@ fn try_parse_transform_at(input: &str, start: usize) -> Option<(usize, usize, us
             b')' => {
                 depth -= 1;
                 if depth == 0 {
-                    return Some((open_paren, content_start, content_start + offset));
+                    return Some((kind, content_start, content_start + offset));
                 }
             }
             _ => {}
@@ -484,18 +516,10 @@ fn try_parse_transform_at(input: &str, start: usize) -> Option<(usize, usize, us
     None
 }
 
-const KNOWN_TRANSFORMS: &[&str] = &["base64"];
-const KNOWN_TRANSFORM_PREFIXES: &[&str] = &["%base64("];
-
 fn may_contain_transform(input: &str) -> bool {
-    KNOWN_TRANSFORM_PREFIXES.iter().any(|p| input.contains(p))
-}
-
-fn apply_transform(name: &str, value: &str) -> String {
-    match name {
-        "base64" => base64::engine::general_purpose::STANDARD.encode(value),
-        _ => unreachable!("parser only accepts known transforms"),
-    }
+    TemplateTransform::ALL
+        .iter()
+        .any(|t| input.contains(t.percent_prefix()))
 }
 
 fn substitute_variables<'a>(input: &'a str, variables: &[TemplateVariable]) -> Cow<'a, str> {
@@ -880,7 +904,7 @@ calls:
             vec![
                 TemplateSegment::Literal("Basic "),
                 TemplateSegment::Transform {
-                    name: "base64",
+                    kind: TemplateTransform::Base64,
                     content: "$USER:$MATCH"
                 },
             ]
@@ -893,7 +917,7 @@ calls:
         assert_eq!(
             segments,
             vec![TemplateSegment::Transform {
-                name: "base64",
+                kind: TemplateTransform::Base64,
                 content: "content"
             }]
         );
@@ -906,7 +930,7 @@ calls:
             segments,
             vec![
                 TemplateSegment::Transform {
-                    name: "base64",
+                    kind: TemplateTransform::Base64,
                     content: "data"
                 },
                 TemplateSegment::Literal(" suffix"),
@@ -922,12 +946,12 @@ calls:
             vec![
                 TemplateSegment::Literal("a "),
                 TemplateSegment::Transform {
-                    name: "base64",
+                    kind: TemplateTransform::Base64,
                     content: "b"
                 },
                 TemplateSegment::Literal(" c "),
                 TemplateSegment::Transform {
-                    name: "base64",
+                    kind: TemplateTransform::Base64,
                     content: "d"
                 },
                 TemplateSegment::Literal(" e"),
@@ -941,7 +965,7 @@ calls:
         assert_eq!(
             segments,
             vec![TemplateSegment::Transform {
-                name: "base64",
+                kind: TemplateTransform::Base64,
                 content: "a(b)c"
             }]
         );
@@ -1085,12 +1109,12 @@ calls:
     }
 
     #[test]
-    fn test_known_transform_prefixes_match_known_transforms() {
-        let expected: Vec<String> = KNOWN_TRANSFORMS
-            .iter()
-            .map(|name| format!("%{name}("))
-            .collect();
-        let actual: Vec<&str> = KNOWN_TRANSFORM_PREFIXES.to_vec();
-        assert_eq!(actual, expected);
+    fn test_each_transform_lists_percent_prefix_and_round_trips_parse() {
+        for &t in TemplateTransform::ALL {
+            let p = t.percent_prefix();
+            assert!(p.starts_with('%') && p.ends_with('('));
+            let name = &p[1..p.len() - 1];
+            assert_eq!(TemplateTransform::parse(name), Some(t));
+        }
     }
 }
