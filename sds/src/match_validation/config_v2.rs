@@ -458,24 +458,30 @@ fn parse_template(input: &str) -> Vec<TemplateSegment<'_>> {
 
     while pos < input.len() {
         match input[pos..].find('%') {
+            // Found a '%' that might be the start of a transform
             Some(offset) => {
                 let pct = pos + offset;
+                // Can we parse the transform name?
                 if let Some((kind, content_start, content_end)) = try_parse_transform_at(input, pct)
                 {
+                    // Add any literal text before the transform
                     if pct > pos {
                         segments.push(TemplateSegment::Literal(&input[pos..pct]));
                     }
+                    // Add the transform segment (transform to apply, and the content to apply it to)
                     segments.push(TemplateSegment::Transform {
                         kind,
                         content: &input[content_start..content_end],
                     });
                     pos = content_end + 1;
                 } else {
+                    // No, likely a URL encoding or similar
                     segments.push(TemplateSegment::Literal(&input[pos..pct + 1]));
                     pos = pct + 1;
                 }
             }
             None => {
+                // No more '%' found, add any remaining literal text
                 segments.push(TemplateSegment::Literal(&input[pos..]));
                 break;
             }
