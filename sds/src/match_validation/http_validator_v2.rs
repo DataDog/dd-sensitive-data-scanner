@@ -329,13 +329,10 @@ fn explode_endpoint_combinations(
                         });
                         if let Some(ref host) = host_opt {
                             // Render the host before we push it as a template variable
-                            let mut host_var = host.clone();
-                            for template_var in &template_vars {
-                                host_var = host_var.with_template_variable(template_var);
-                            }
+                            let host_var = host.render_with_variables(&template_vars);
                             template_vars.push(TemplateVariable {
                                 name: "$HOST".to_string(),
-                                value: host_var.to_string(),
+                                value: host_var,
                             });
                         }
                         (
@@ -392,27 +389,23 @@ fn generate_match_status_per_endpoint_combination(
 
 fn prepare_request(endpoint_combination: &EndpointCombination) -> RequestBuilder {
     let endpoint_config = &endpoint_combination.endpoint_config;
-    let mut endpoint = endpoint_config.request.endpoint.clone();
-    // Apply ALL template variables to the same endpoint
-    for template_var in &endpoint_combination.template_vars {
-        endpoint = endpoint.with_template_variable(template_var);
-    }
+    let endpoint = endpoint_config
+        .request
+        .endpoint
+        .render_with_variables(&endpoint_combination.template_vars);
     let mut request_builder = match endpoint_config.request.method {
-        HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(endpoint.to_string()),
-        HttpMethod::Post => BLOCKING_HTTP_CLIENT.post(endpoint.to_string()),
-        HttpMethod::Put => BLOCKING_HTTP_CLIENT.put(endpoint.to_string()),
-        HttpMethod::Delete => BLOCKING_HTTP_CLIENT.delete(endpoint.to_string()),
-        HttpMethod::Patch => BLOCKING_HTTP_CLIENT.patch(endpoint.to_string()),
+        HttpMethod::Get => BLOCKING_HTTP_CLIENT.get(endpoint),
+        HttpMethod::Post => BLOCKING_HTTP_CLIENT.post(endpoint),
+        HttpMethod::Put => BLOCKING_HTTP_CLIENT.put(endpoint),
+        HttpMethod::Delete => BLOCKING_HTTP_CLIENT.delete(endpoint),
+        HttpMethod::Patch => BLOCKING_HTTP_CLIENT.patch(endpoint),
     };
     request_builder = request_builder.timeout(endpoint_config.request.timeout);
 
     // Add headers
     for (header_key, header_value) in &endpoint_config.request.headers {
-        let mut header_val = header_value.clone();
-        for template_var in &endpoint_combination.template_vars {
-            header_val = header_val.with_template_variable(template_var);
-        }
-        request_builder = request_builder.header(header_key, header_val.to_string());
+        let header_val = header_value.render_with_variables(&endpoint_combination.template_vars);
+        request_builder = request_builder.header(header_key, header_val);
     }
     // Add request body with template substitution. For methods that can carry
     // a body (POST/PUT/PATCH), always set one so reqwest emits Content-Length:
@@ -422,11 +415,8 @@ fn prepare_request(endpoint_combination: &EndpointCombination) -> RequestBuilder
         HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch
     );
     if let Some(ref body_tpl) = endpoint_config.request.body {
-        let mut body_val = body_tpl.clone();
-        for template_var in &endpoint_combination.template_vars {
-            body_val = body_val.with_template_variable(template_var);
-        }
-        request_builder = request_builder.body(body_val.to_string());
+        let body_val = body_tpl.render_with_variables(&endpoint_combination.template_vars);
+        request_builder = request_builder.body(body_val);
     } else if body_requires_content_length {
         request_builder = request_builder.body("");
     }
@@ -592,12 +582,11 @@ calls:
             config.calls[0]
                 .request
                 .endpoint
-                .with_template_variable(&TemplateVariable {
+                .render_with_variables(&[TemplateVariable {
                     name: "$MATCH".to_string(),
                     value: rule_match.match_value.as_ref().unwrap().clone(),
-                })
-                .to_string(),
-            "http://localhost/test?secret=test".to_string()
+                }]),
+            "http://localhost/test?secret=test"
         );
     }
 
@@ -615,32 +604,34 @@ calls:
 "#,
         );
         let rule_match = create_test_match("test");
+        let match_value = rule_match.match_value.as_ref().unwrap().clone();
+        let endpoint = &config.calls[0].request.endpoint;
 
         // Test that with_host substitutes the host correctly
-        let endpoint_with_match =
-            config.calls[0]
-                .request
-                .endpoint
-                .with_template_variable(&TemplateVariable {
-                    name: "$MATCH".to_string(),
-                    value: rule_match.match_value.as_ref().unwrap().clone(),
-                });
         assert_eq!(
-            endpoint_with_match
-                .with_template_variable(&TemplateVariable {
+            endpoint.render_with_variables(&[
+                TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: match_value.clone(),
+                },
+                TemplateVariable {
                     name: "$HOST".to_string(),
                     value: "us".to_string(),
-                })
-                .to_string(),
+                },
+            ]),
             "http://us/test"
         );
         assert_eq!(
-            endpoint_with_match
-                .with_template_variable(&TemplateVariable {
+            endpoint.render_with_variables(&[
+                TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: match_value,
+                },
+                TemplateVariable {
                     name: "$HOST".to_string(),
                     value: "eu".to_string(),
-                })
-                .to_string(),
+                },
+            ]),
             "http://eu/test"
         );
     }
@@ -1267,30 +1258,33 @@ calls:
             ]
         );
         let rule_match = create_test_match("test");
-        let endpoint_with_match =
-            config.calls[0]
-                .request
-                .endpoint
-                .with_template_variable(&TemplateVariable {
-                    name: "$MATCH".to_string(),
-                    value: rule_match.match_value.as_ref().unwrap().clone(),
-                });
+        let match_value = rule_match.match_value.as_ref().unwrap().clone();
+        let endpoint = &config.calls[0].request.endpoint;
+
         assert_eq!(
-            endpoint_with_match
-                .with_template_variable(&TemplateVariable {
+            endpoint.render_with_variables(&[
+                TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: match_value.clone(),
+                },
+                TemplateVariable {
                     name: "$HOST".to_string(),
                     value: "us".to_string(),
-                })
-                .to_string(),
+                },
+            ]),
             "http://us/test1"
         );
         assert_eq!(
-            endpoint_with_match
-                .with_template_variable(&TemplateVariable {
+            endpoint.render_with_variables(&[
+                TemplateVariable {
+                    name: "$MATCH".to_string(),
+                    value: match_value,
+                },
+                TemplateVariable {
                     name: "$HOST".to_string(),
                     value: "eu".to_string(),
-                })
-                .to_string(),
+                },
+            ]),
             "http://eu/test1"
         );
     }
@@ -1560,6 +1554,126 @@ match_pairing:
         // it contributed to the successful validation of the main match. The status is
         // propagated from the main match to all contributing matches.
         assert_eq!(all_matches[1].match_status, MatchStatus::Valid);
+    }
+
+    #[test]
+    fn integration_test_base64_transform_in_header() {
+        let server = httpmock::MockServer::start();
+
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/secure")
+                .header("Authorization", "Basic dXNlcjpzZWNyZXRfcGFzcw==");
+            then.status(200).body("OK");
+        });
+
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/secure"
+      method: GET
+      headers:
+        Authorization: "Basic %base64(user:$MATCH)"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+"#,
+                server.base_url()
+            )
+            .as_str(),
+        );
+
+        let validator = HttpValidatorV2;
+        let mut matches = vec![create_test_match("secret_pass")];
+        let rules = vec![create_test_rule(config)];
+
+        validator.validate(&mut matches, &rules);
+
+        mock.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+    }
+
+    #[test]
+    fn integration_test_base64_transform_empty_username() {
+        let server = httpmock::MockServer::start();
+
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/secure")
+                .header("Authorization", "Basic OnNlY3JldF9wYXNz");
+            then.status(200).body("OK");
+        });
+
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/secure"
+      method: GET
+      headers:
+        Authorization: "Basic %base64(:$MATCH)"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+"#,
+                server.base_url()
+            )
+            .as_str(),
+        );
+
+        let validator = HttpValidatorV2;
+        let mut matches = vec![create_test_match("secret_pass")];
+        let rules = vec![create_test_rule(config)];
+
+        validator.validate(&mut matches, &rules);
+
+        mock.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
+    }
+
+    #[test]
+    fn integration_test_no_transform_leaves_value_unchanged() {
+        let server = httpmock::MockServer::start();
+
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/secure")
+                .header("Authorization", "Basic user:secret_pass");
+            then.status(200).body("OK");
+        });
+
+        let config = config_from_yaml(
+            format!(
+                r#"
+calls:
+  - request:
+      endpoint: "{}/secure"
+      method: GET
+      headers:
+        Authorization: "Basic user:$MATCH"
+    response:
+      conditions:
+        - type: valid
+          status_code: 200
+"#,
+                server.base_url()
+            )
+            .as_str(),
+        );
+
+        let validator = HttpValidatorV2;
+        let mut matches = vec![create_test_match("secret_pass")];
+        let rules = vec![create_test_rule(config)];
+
+        validator.validate(&mut matches, &rules);
+
+        mock.assert();
+        assert_eq!(matches[0].match_status, MatchStatus::Valid);
     }
 
     #[test]
