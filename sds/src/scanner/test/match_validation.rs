@@ -1214,3 +1214,133 @@ fn test_body_path_jsonpath_quoted_numeric_key_on_object() {
         crate::match_validation::config_v2::ResponseConditionResult::Valid
     );
 }
+
+// SDS-2295: A provides rule for kind "azure_openai" must not contribute to a
+// match_pairing rule for kind "aws_provider", even when they share a parameter name.
+#[test]
+fn test_match_pairing_vendor_isolation() {
+    let server = MockServer::start();
+
+    // Only accept requests that use the aws resource name, not the azure one.
+    let mock_aws_valid = server.mock(|when, then| {
+        when.method(GET)
+            .path("/validate/aws-resource-beta")
+            .query_param("secret", "aws-secret-key123");
+        then.status(200);
+    });
+    // Any request using the azure resource name would be a bug.
+    let mock_azure_leak = server.mock(|when, then| {
+        when.method(GET)
+            .path("/validate/azure-resource-alpha")
+            .query_param("secret", "aws-secret-key123");
+        then.status(200);
+    });
+
+    // Rule that provides resource_name for azure_openai.
+    let rule_azure_resource =
+        RootRuleConfig::new(RegexRuleConfig::new("\\bazure-resource-[a-z]+\\b").build())
+            .match_action(MatchAction::None)
+            .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+                provides: Some(vec![PairedValidatorConfig {
+                    kind: "azure_openai".to_string(),
+                    name: "resource_name".to_string(),
+                }]),
+                calls: vec![],
+                match_pairing: None,
+            }));
+
+    // Rule that provides resource_name for aws_provider.
+    let rule_aws_resource =
+        RootRuleConfig::new(RegexRuleConfig::new("\\baws-resource-[a-z]+\\b").build())
+            .match_action(MatchAction::None)
+            .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+                provides: Some(vec![PairedValidatorConfig {
+                    kind: "aws_provider".to_string(),
+                    name: "resource_name".to_string(),
+                }]),
+                calls: vec![],
+                match_pairing: None,
+            }));
+
+    let mut parameters = BTreeMap::new();
+    parameters.insert("resource_name".to_string(), "$RESOURCE_NAME".to_string());
+
+    // Main rule that pairs with aws_provider only.
+    let rule_aws_secret =
+        RootRuleConfig::new(RegexRuleConfig::new("\\baws-secret-[a-z0-9]+\\b").build())
+            .match_action(MatchAction::None)
+            .third_party_active_checker(MatchValidationType::CustomHttpV2(CustomHttpConfigV2 {
+                match_pairing: Some(MatchPairingConfig {
+                    kind: "aws_provider".to_string(),
+                    parameters,
+                }),
+                provides: None,
+                calls: vec![HttpCallConfig {
+                    request: HttpRequestConfig {
+                        endpoint: TemplatedMatchString(format!(
+                            "{}/validate/$RESOURCE_NAME?secret=$MATCH",
+                            server.base_url()
+                        )),
+                        method: HttpMethod::Get,
+                        hosts: vec![],
+                        headers: BTreeMap::new(),
+                        body: None,
+                        timeout: Duration::from_secs(5),
+                    },
+                    response: HttpResponseConfig {
+                        conditions: vec![ResponseCondition {
+                            condition_type: ResponseConditionType::Valid,
+                            status_code: Some(StatusCodeMatcher::Single(200)),
+                            raw_body: None,
+                            body: None,
+                        }],
+                    },
+                }],
+            }));
+
+    let scanner = ScannerBuilder::new(&[rule_azure_resource, rule_aws_resource, rule_aws_secret])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
+
+    fn scan_and_validate(scanner: &Scanner, content: &str) -> Vec<RuleMatch> {
+        let mut matches = scanner.scan(&mut content.to_string()).unwrap();
+        scanner.validate_matches(&mut matches);
+        matches
+    }
+
+    fn status_for_rule(matches: &[RuleMatch], rule_idx: usize) -> MatchStatus {
+        matches
+            .iter()
+            .find(|m| m.rule_index == rule_idx)
+            .unwrap_or_else(|| panic!("missing match for rule index {rule_idx}"))
+            .match_status
+            .clone()
+    }
+
+    {
+        // Both vendor resource names present: aws_secret must pair with aws-resource-beta only.
+        let matches = scan_and_validate(
+            &scanner,
+            "azure-resource-alpha aws-resource-beta aws-secret-key123",
+        );
+
+        assert_eq!(status_for_rule(&matches, 2), MatchStatus::Valid);
+        mock_aws_valid.assert_hits(1);
+        // The azure resource must never have been substituted into the aws endpoint.
+        mock_azure_leak.assert_hits(0);
+    }
+
+    {
+        // Only the azure resource is present; aws_secret has no aws_provider match to pair with.
+        let matches = scan_and_validate(&scanner, "azure-resource-alpha aws-secret-key123");
+
+        assert_eq!(
+            status_for_rule(&matches, 2),
+            MatchStatus::MissingDependentMatch
+        );
+        // Cumulative counts: no new calls from this scenario (still 1 from above, never 1 for azure).
+        mock_aws_valid.assert_hits(1);
+        mock_azure_leak.assert_hits(0);
+    }
+}
