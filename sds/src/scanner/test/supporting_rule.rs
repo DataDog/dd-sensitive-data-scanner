@@ -1,5 +1,5 @@
 use crate::match_validation::config_v2::TemplatedMatchString;
-use crate::scanner::{RootRuleConfig, ScanOptionBuilder};
+use crate::scanner::{CreateScannerError, RootRuleConfig, ScanOptionBuilder};
 use crate::{
     CustomHttpConfigV2, HttpCallConfig, HttpMethod, HttpRequestConfig, HttpResponseConfig,
     MatchAction, MatchPairingConfig, MatchValidationType, PairedValidatorConfig, RegexRuleConfig,
@@ -159,4 +159,38 @@ fn test_is_supporting_rule_serialization_round_trip() {
     let json = serde_json::to_string(&config).unwrap();
     let deserialized: RootRuleConfig<RegexRuleConfig> = serde_json::from_str(&json).unwrap();
     assert!(deserialized.is_supporting_rule);
+}
+
+/// When only supporting rules match (no main rules match), the output must be empty.
+#[test]
+fn test_only_supporting_rule_matches_produces_empty_output() {
+    let supporting_rule =
+        RootRuleConfig::new(RegexRuleConfig::new("\\bsupporting_\\w+\\b").build())
+            .match_action(MatchAction::None)
+            .is_supporting_rule(true);
+
+    let scanner = ScannerBuilder::new(&[supporting_rule])
+        .with_return_matches(true)
+        .build()
+        .unwrap();
+
+    let mut content = "supporting_value".to_string();
+    let matches = scanner.scan(&mut content).unwrap();
+
+    assert!(matches.is_empty());
+}
+
+/// Building a scanner with a supporting rule that has a non-None match action must fail.
+#[test]
+fn test_supporting_rule_with_match_action_is_rejected_at_build_time() {
+    let supporting_rule =
+        RootRuleConfig::new(RegexRuleConfig::new("\\bsecret_\\w+\\b").build())
+            .match_action(MatchAction::Redact {
+                replacement: "[REDACTED]".to_string(),
+            })
+            .is_supporting_rule(true);
+
+    let result = ScannerBuilder::new(&[supporting_rule]).build();
+
+    assert_eq!(result.err().unwrap(), CreateScannerError::InvalidSupportingRuleConfig);
 }
