@@ -555,6 +555,7 @@ mod tests {
             match_validation_type: Some(MatchValidationType::CustomHttpV2(config)),
             suppressions: None,
             precedence: Precedence::default(),
+            is_supporting_rule: false,
         }
     }
 
@@ -1367,6 +1368,7 @@ calls:
                 match_validation_type: Some(MatchValidationType::CustomHttpV2(provider_config)),
                 suppressions: None,
                 precedence: Precedence::default(),
+                is_supporting_rule: false,
             },
             RootCompiledRule {
                 inner: Box::new(MockCompiledRule),
@@ -1384,6 +1386,7 @@ calls:
                 )),
                 suppressions: None,
                 precedence: Precedence::default(),
+                is_supporting_rule: false,
             },
         ];
 
@@ -1492,6 +1495,7 @@ match_pairing:
                 match_validation_type: Some(MatchValidationType::CustomHttpV2(config.clone())),
                 suppressions: None,
                 precedence: Precedence::default(),
+                is_supporting_rule: false,
             },
             RootCompiledRule {
                 inner: Box::new(MockCompiledRule),
@@ -1509,6 +1513,7 @@ match_pairing:
                 )),
                 suppressions: None,
                 precedence: Precedence::default(),
+                is_supporting_rule: false,
             },
         ];
 
@@ -1704,6 +1709,7 @@ match_pairing:
                 match_validation_type: Some(MatchValidationType::CustomHttpV2(config.clone())),
                 suppressions: None,
                 precedence: Precedence::default(),
+                is_supporting_rule: false,
             },
             RootCompiledRule {
                 inner: Box::new(MockCompiledRule),
@@ -1721,6 +1727,7 @@ match_pairing:
                 )),
                 suppressions: None,
                 precedence: Precedence::default(),
+                is_supporting_rule: false,
             },
         ];
 
