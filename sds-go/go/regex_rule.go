@@ -20,6 +20,7 @@ type RegexRuleConfig struct {
 	SecondaryValidator      *SecondaryValidator      `json:"validator,omitempty"`
 	ThirdPartyActiveChecker ThirdPartyActiveChecker  `json:"third_party_active_checker,omitempty"`
 	PatternCaptureGroups    []string                 `json:"pattern_capture_groups,omitempty"`
+	IsSupportingRule        bool                     `json:"is_supporting_rule,omitempty"`
 }
 
 // ThirdPartyActiveChecker is used to validate if a given match is still active or not. It applies well to tokens that have an expiration date for instance.
@@ -127,6 +128,7 @@ type ExtraConfig struct {
 	SecondaryValidator      *SecondaryValidator
 	ThirdPartyActiveChecker ThirdPartyActiveChecker
 	PatternCaptureGroups    []string
+	IsSupportingRule        bool
 }
 
 // CreateProximityKeywordsConfig creates a ProximityKeywordsConfig.
@@ -197,6 +199,7 @@ func NewMatchingRule(id string, pattern string, extraConfig ExtraConfig) RegexRu
 		SecondaryValidator:      extraConfig.SecondaryValidator,
 		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
 		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
+		IsSupportingRule:        extraConfig.IsSupportingRule,
 	}
 }
 
@@ -230,6 +233,7 @@ func NewRedactingRule(id string, pattern string, redactionValue string, extraCon
 		SecondaryValidator:      extraConfig.SecondaryValidator,
 		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
 		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
+		IsSupportingRule:        extraConfig.IsSupportingRule,
 	}
 }
 
@@ -245,6 +249,7 @@ func NewHashRule(id string, pattern string, extraConfig ExtraConfig) RegexRuleCo
 		SecondaryValidator:      extraConfig.SecondaryValidator,
 		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
 		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
+		IsSupportingRule:        extraConfig.IsSupportingRule,
 	}
 }
 
@@ -261,6 +266,7 @@ func NewPartialRedactRule(id string, pattern string, characterCount uint32, dire
 		ProximityKeywords:       extraConfig.ProximityKeywords,
 		SecondaryValidator:      extraConfig.SecondaryValidator,
 		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
+		IsSupportingRule:        extraConfig.IsSupportingRule,
 	}
 }
 

@@ -1040,3 +1040,46 @@ func TestCreateScannerFailsOnEmptySdsMatchCaptureGroup(t *testing.T) {
 		t.Fatal("on failed creation, the returned scanner should be nil")
 	}
 }
+
+func TestSupportingRuleMatchExcludedFromOutput(t *testing.T) {
+	rules := []RuleConfig{
+		NewMatchingRule("supporting", `\bprefix_\w+\b`, ExtraConfig{IsSupportingRule: true}),
+		NewMatchingRule("main", `\bmain_\w+\b`, ExtraConfig{}),
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create scanner:", err.Error())
+	}
+	defer scanner.Delete()
+
+	result, err := scanner.Scan([]byte("prefix_abc and main_token"))
+	if err != nil {
+		t.Fatal("failed to scan:", err.Error())
+	}
+
+	if len(result.Matches) != 1 {
+		t.Fatalf("expected 1 match, got %d", len(result.Matches))
+	}
+	// rule index 1 is the main rule
+	if result.Matches[0].RuleIdx != 1 {
+		t.Fatalf("expected match from rule index 1 (main), got rule index %d", result.Matches[0].RuleIdx)
+	}
+}
+
+func TestCreateScannerFailsOnSupportingRuleWithMatchAction(t *testing.T) {
+	rules := []RuleConfig{
+		NewRedactingRule("supporting", `\bsecret_\w+\b`, "[REDACTED]", ExtraConfig{IsSupportingRule: true}),
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err == nil {
+		t.Fatal("creating scanner should fail when a supporting rule has a non-None match action")
+	}
+	if scanner != nil {
+		t.Fatal("on failed creation, the returned scanner should be nil")
+	}
+	if err != ErrInvalidSupportingRuleConfig {
+		t.Fatalf("expected ErrInvalidSupportingRuleConfig, got: %v", err)
+	}
+}
