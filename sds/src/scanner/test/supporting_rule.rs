@@ -183,14 +183,16 @@ fn test_only_supporting_rule_matches_produces_empty_output() {
 /// Building a scanner with a supporting rule that has a non-None match action must fail.
 #[test]
 fn test_supporting_rule_with_match_action_is_rejected_at_build_time() {
-    let supporting_rule =
-        RootRuleConfig::new(RegexRuleConfig::new("\\bsecret_\\w+\\b").build())
-            .match_action(MatchAction::Redact {
-                replacement: "[REDACTED]".to_string(),
-            })
-            .is_supporting_rule(true);
+    let supporting_rule = RootRuleConfig::new(RegexRuleConfig::new("\\bsecret_\\w+\\b").build())
+        .match_action(MatchAction::Redact {
+            replacement: "[REDACTED]".to_string(),
+        })
+        .is_supporting_rule(true);
 
     let result = ScannerBuilder::new(&[supporting_rule]).build();
 
-    assert_eq!(result.err().unwrap(), CreateScannerError::InvalidSupportingRuleConfig);
+    assert_eq!(
+        result.err().unwrap(),
+        CreateScannerError::InvalidSupportingRuleConfig
+    );
 }

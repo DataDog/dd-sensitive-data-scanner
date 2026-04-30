@@ -18,11 +18,11 @@ import (
 import "C"
 
 var (
-	ErrUnknown                      error = fmt.Errorf("unknown error")
-	ErrInvalidRegex                 error = fmt.Errorf("invalid regex")
-	ErrInvalidKeywords              error = fmt.Errorf("invalid keywords")
-	ErrInvalidMatchAction           error = fmt.Errorf("invalid match action")
-	ErrInvalidSupportingRuleConfig  error = fmt.Errorf("supporting rules cannot have a match action other than None")
+	ErrUnknown                     error = fmt.Errorf("unknown error")
+	ErrInvalidRegex                error = fmt.Errorf("invalid regex")
+	ErrInvalidKeywords             error = fmt.Errorf("invalid keywords")
+	ErrInvalidMatchAction          error = fmt.Errorf("invalid match action")
+	ErrInvalidSupportingRuleConfig error = fmt.Errorf("supporting rules cannot have a match action other than None")
 )
 
 // Scanner wraps an SDS scanner.
