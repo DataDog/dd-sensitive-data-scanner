@@ -193,6 +193,6 @@ fn test_supporting_rule_with_match_action_is_rejected_at_build_time() {
 
     assert_eq!(
         result.err().unwrap(),
-        CreateScannerError::InvalidSupportingRuleConfig
+        CreateScannerError::SupportingRuleHasMatchAction
     );
 }

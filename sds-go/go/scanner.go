@@ -115,7 +115,7 @@ func CreateScannerWithOptions(ruleConfigs []RuleConfig, options ScannerOptions) 
 			} else {
 				return nil, fmt.Errorf("internal panic")
 			}
-		case -8: // rust: CreateScannerError::InvalidSupportingRuleConfig
+		case -8: // rust: CreateScannerError::SupportingRuleHasMatchAction
 			return nil, ErrSupportingRuleHasMatchAction
 		}
 

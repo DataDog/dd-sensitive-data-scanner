@@ -1050,7 +1050,7 @@ impl ScannerBuilder<'_> {
             .enumerate()
             .map(|(rule_index, config)| {
                 if config.is_supporting_rule && config.match_action != MatchAction::None {
-                    return Err(CreateScannerError::InvalidSupportingRuleConfig);
+                    return Err(CreateScannerError::SupportingRuleHasMatchAction);
                 }
                 let inner = config.convert_to_compiled_rule(rule_index, self.labels.clone())?;
                 config.match_action.validate()?;
