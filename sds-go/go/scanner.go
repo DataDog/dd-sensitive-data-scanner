@@ -18,10 +18,10 @@ import (
 import "C"
 
 var (
-	ErrUnknown                     error = fmt.Errorf("unknown error")
-	ErrInvalidRegex                error = fmt.Errorf("invalid regex")
-	ErrInvalidKeywords             error = fmt.Errorf("invalid keywords")
-	ErrInvalidMatchAction          error = fmt.Errorf("invalid match action")
+	ErrUnknown                      error = fmt.Errorf("unknown error")
+	ErrInvalidRegex                 error = fmt.Errorf("invalid regex")
+	ErrInvalidKeywords              error = fmt.Errorf("invalid keywords")
+	ErrInvalidMatchAction           error = fmt.Errorf("invalid match action")
 	ErrSupportingRuleHasMatchAction error = fmt.Errorf("supporting rules cannot have a match action other than None")
 )
 
