@@ -22,7 +22,7 @@ var (
 	ErrInvalidRegex                error = fmt.Errorf("invalid regex")
 	ErrInvalidKeywords             error = fmt.Errorf("invalid keywords")
 	ErrInvalidMatchAction          error = fmt.Errorf("invalid match action")
-	ErrInvalidSupportingRuleConfig error = fmt.Errorf("supporting rules cannot have a match action other than None")
+	ErrSupportingRuleHasMatchAction error = fmt.Errorf("supporting rules cannot have a match action other than None")
 )
 
 // Scanner wraps an SDS scanner.
@@ -116,7 +116,7 @@ func CreateScannerWithOptions(ruleConfigs []RuleConfig, options ScannerOptions) 
 				return nil, fmt.Errorf("internal panic")
 			}
 		case -8: // rust: CreateScannerError::InvalidSupportingRuleConfig
-			return nil, ErrInvalidSupportingRuleConfig
+			return nil, ErrSupportingRuleHasMatchAction
 		}
 
 		return nil, ErrUnknown

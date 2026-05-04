@@ -1079,7 +1079,7 @@ func TestCreateScannerFailsOnSupportingRuleWithMatchAction(t *testing.T) {
 	if scanner != nil {
 		t.Fatal("on failed creation, the returned scanner should be nil")
 	}
-	if err != ErrInvalidSupportingRuleConfig {
-		t.Fatalf("expected ErrInvalidSupportingRuleConfig, got: %v", err)
+	if err != ErrSupportingRuleHasMatchAction {
+		t.Fatalf("expected ErrSupportingRuleHasMatchAction, got: %v", err)
 	}
 }
