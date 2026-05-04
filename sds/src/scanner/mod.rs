@@ -102,6 +102,8 @@ pub struct RootRuleConfig<T> {
     suppressions: Option<Suppressions>,
     #[serde(default)]
     precedence: Precedence,
+    #[serde(default)]
+    pub is_supporting_rule: bool,
     #[serde(flatten)]
     pub inner: T,
 }
@@ -129,6 +131,7 @@ impl<T> RootRuleConfig<T> {
             third_party_active_checker: None,
             suppressions: None,
             precedence: Precedence::default(),
+            is_supporting_rule: false,
             inner,
         }
     }
@@ -142,6 +145,7 @@ impl<T> RootRuleConfig<T> {
             third_party_active_checker: self.third_party_active_checker,
             suppressions: self.suppressions,
             precedence: self.precedence,
+            is_supporting_rule: self.is_supporting_rule,
             inner: func(self.inner),
         }
     }
@@ -174,6 +178,11 @@ impl<T> RootRuleConfig<T> {
         self
     }
 
+    pub fn is_supporting_rule(mut self, value: bool) -> Self {
+        self.is_supporting_rule = value;
+        self
+    }
+
     fn get_third_party_active_checker(&self) -> Option<&MatchValidationType> {
         #[allow(deprecated)]
         self.third_party_active_checker
@@ -196,6 +205,7 @@ pub struct RootCompiledRule {
     pub match_validation_type: Option<MatchValidationType>,
     pub suppressions: Option<CompiledSuppressions>,
     pub precedence: Precedence,
+    pub is_supporting_rule: bool,
 }
 
 impl RootCompiledRule {
@@ -694,6 +704,12 @@ impl Scanner {
             self.validate_matches(&mut output_rule_matches);
         }
 
+        // Supporting rules exist only to provide template variables to CustomHttpV2 validators of
+        // other rules. Their matches must not appear in the final output. They are retained above
+        // until after validate_matches so that match pairing can reference their match values.
+        output_rule_matches
+            .retain(|rule_match| !self.rules[rule_match.rule_index].is_supporting_rule);
+
         Ok((output_rule_matches, total_io_duration))
     }
 
@@ -1033,6 +1049,9 @@ impl ScannerBuilder<'_> {
             .iter()
             .enumerate()
             .map(|(rule_index, config)| {
+                if config.is_supporting_rule && config.match_action != MatchAction::None {
+                    return Err(CreateScannerError::SupportingRuleHasMatchAction);
+                }
                 let inner = config.convert_to_compiled_rule(rule_index, self.labels.clone())?;
                 config.match_action.validate()?;
                 let compiled_suppressions = match &config.suppressions {
@@ -1046,6 +1065,7 @@ impl ScannerBuilder<'_> {
                     match_validation_type: config.get_third_party_active_checker().cloned(),
                     suppressions: compiled_suppressions,
                     precedence: config.precedence,
+                    is_supporting_rule: config.is_supporting_rule,
                 })
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;

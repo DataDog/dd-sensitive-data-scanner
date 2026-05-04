@@ -16,6 +16,7 @@ impl From<CreateScannerError> for i64 {
             CreateScannerError::InvalidMatchValidator(_) => -5,
             CreateScannerError::InvalidSuppressions(_) => -6,
             CreateScannerError::InvalidPatternCaptureGroups(_) => -7,
+            CreateScannerError::SupportingRuleHasMatchAction => -8,
         }
     }
 }
@@ -46,6 +47,9 @@ pub enum CreateScannerError {
     /// The pattern capture groups are invalid (too many capture groups, capture group not present, etc.)
     #[error(transparent)]
     InvalidPatternCaptureGroups(#[from] RegexPatternCaptureGroupsValidationError),
+    /// A supporting rule has a non-None match action, which is not allowed
+    #[error("Supporting rules cannot have a match action other than None")]
+    SupportingRuleHasMatchAction,
 }
 
 #[derive(Debug, PartialEq, Eq, Error)]
