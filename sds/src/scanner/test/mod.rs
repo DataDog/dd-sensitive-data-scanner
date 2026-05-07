@@ -3,6 +3,7 @@ mod included_keywords;
 mod match_validation;
 mod metrics;
 mod overlapping_matches;
+mod parallel_scan;
 mod supporting_rule;
 mod validators;
 
