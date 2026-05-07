@@ -1,14 +1,5 @@
-/// Regression test for the LocalPool/RAYON_THREAD_POOL re-entrancy panic.
-///
-/// Before the fix, calling scan_with_options(validate=true) from multiple threads simultaneously
-/// would panic with:
-///   "cannot execute `LocalPool` executor from within another executor: EnterError"
-///
-/// The panic occurred because validate_matches() (which uses RAYON_THREAD_POOL) was called inside
-/// block_on(), whose LocalPool context conflicts with rayon scheduler re-entrancy on the same thread.
-///
-/// The fix moves validate_matches() and the supporting-rule filter into finalize_matches(), called
-/// after block_on() returns, fully outside any futures executor context.
+/// Regression test: scanning with match validation enabled must not panic when called
+/// concurrently from multiple threads.
 use crate::scanner::{RootRuleConfig, ScanOptionBuilder, ScannerBuilder};
 use crate::{MatchAction, RegexRuleConfig};
 
