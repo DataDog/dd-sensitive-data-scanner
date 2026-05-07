@@ -493,7 +493,22 @@ impl Scanner {
         event: &mut E,
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
-        block_on(self.internal_scan_with_metrics(event, options))
+        let start = Instant::now();
+        let validate = options.validate_matches;
+        // Collect matches inside block_on, then run finalize_matches (which uses rayon) outside of
+        // it to avoid re-entrancy between the futures LocalPool executor and RAYON_THREAD_POOL.
+        let result = block_on(self.internal_scan_collect(event, options));
+        match result {
+            Ok((mut rule_matches, io_duration)) => {
+                self.finalize_matches(&mut rule_matches, validate);
+                self.record_metrics(&rule_matches, start, Some(io_duration));
+                Ok(rule_matches)
+            }
+            Err(e) => {
+                self.record_metrics(&[], start, None);
+                Err(e)
+            }
+        }
     }
 
     // This function scans the given event with the rules configured in the scanner.
@@ -512,18 +527,32 @@ impl Scanner {
         event: &mut E,
         options: ScanOptions,
     ) -> Result<Vec<RuleMatch>, ScannerError> {
-        let fut = self.internal_scan_with_metrics(event, options);
+        let start = Instant::now();
+        let validate = options.validate_matches;
+        let fut = self.internal_scan_collect(event, options);
 
         // The sleep from the timeout requires being in a tokio context
         // The guard needs to be dropped before await since the guard is !Send
-        let timeout = {
+        let timeout_result = {
             let _tokio_guard = TOKIO_RUNTIME.enter();
             timeout(self.async_scan_timeout, fut)
         };
 
-        timeout.await.unwrap_or(Err(ScannerError::Transient(
+        let result = timeout_result.await.unwrap_or(Err(ScannerError::Transient(
             "Async scan timeout".to_string(),
-        )))
+        )));
+
+        match result {
+            Ok((mut rule_matches, io_duration)) => {
+                self.finalize_matches(&mut rule_matches, validate);
+                self.record_metrics(&rule_matches, start, Some(io_duration));
+                Ok(rule_matches)
+            }
+            Err(e) => {
+                self.record_metrics(&[], start, None);
+                Err(e)
+            }
+        }
     }
 
     fn record_metrics(
@@ -545,25 +574,6 @@ impl Scanner {
             self.metrics
                 .cpu_duration
                 .increment(cpu_duration.as_nanos() as u64);
-        }
-    }
-
-    async fn internal_scan_with_metrics<E: Event>(
-        &self,
-        event: &mut E,
-        options: ScanOptions,
-    ) -> Result<Vec<RuleMatch>, ScannerError> {
-        let start = Instant::now();
-        let result = self.internal_scan(event, options).await;
-        match result {
-            Ok((rule_matches, io_duration)) => {
-                self.record_metrics(&rule_matches, start, Some(io_duration));
-                Ok(rule_matches)
-            }
-            Err(e) => {
-                self.record_metrics(&[], start, None);
-                Err(e)
-            }
         }
     }
 
@@ -645,7 +655,7 @@ impl Scanner {
         });
     }
 
-    async fn internal_scan<E: Event>(
+    async fn internal_scan_collect<E: Event>(
         &self,
         event: &mut E,
         options: ScanOptions,
@@ -699,16 +709,6 @@ impl Scanner {
             &mut output_rule_matches,
             need_match_content,
         );
-
-        if options.validate_matches {
-            self.validate_matches(&mut output_rule_matches);
-        }
-
-        // Supporting rules exist only to provide template variables to CustomHttpV2 validators of
-        // other rules. Their matches must not appear in the final output. They are retained above
-        // until after validate_matches so that match pairing can reference their match values.
-        output_rule_matches
-            .retain(|rule_match| !self.rules[rule_match.rule_index].is_supporting_rule);
 
         Ok((output_rule_matches, total_io_duration))
     }
@@ -779,6 +779,20 @@ impl Scanner {
         // Sort rule_matches by start index
         validated_rule_matches.sort_by_key(|rule_match| rule_match.start_index);
         *rule_matches = validated_rule_matches;
+    }
+
+    // Runs optional validation and drops supporting-rule matches from the output.
+    // Must be called OUTSIDE of any futures executor (e.g. block_on) because validate_matches
+    // uses RAYON_THREAD_POOL internally; running rayon inside block_on causes an EnterError panic
+    // when the calling thread re-enters the LocalPool executor context.
+    fn finalize_matches(&self, rule_matches: &mut Vec<RuleMatch>, validate: bool) {
+        if validate {
+            self.validate_matches(rule_matches);
+        }
+        // Supporting rules exist only to provide template variables to CustomHttpV2 validators of
+        // other rules. Their matches must not appear in the final output. They are retained until
+        // after validate_matches so that match pairing can reference their match values.
+        rule_matches.retain(|rule_match| !self.rules[rule_match.rule_index].is_supporting_rule);
     }
 
     /// Apply mutations from actions, and shift indices to match the mutated values.
