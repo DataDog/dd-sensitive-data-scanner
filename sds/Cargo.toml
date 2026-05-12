@@ -19,13 +19,9 @@ match_validation = []
 
 [dependencies]
 ahash = "0.8.7"
-# Overriding with fix repo due to: https://github.com/seiflotfy/rust-farmhash/pull/16
-farmhash = { git = "https://github.com/fuchsnj/rust-farmhash", rev = "82d80b689d65fbd378b13deff10cdd07794df64e" }
 nom = "7.1.3"
 regex = "1.9.5"
 regex-automata = "0.4.7"
-# Switch over to the original repo when this issue is resolved: https://github.com/rust-lang/regex/issues/1241
-regex-automata-fork = { git = "https://github.com/fbryden/regex", rev = "6952250af962ca3e364da47382b16dba9c703431", package = "regex-automata" }
 regex-syntax = "0.7.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_with = "3.6.1"
@@ -57,6 +53,8 @@ once_cell = "1.21.3"
 # Prevent Security vulnerability (https://rustsec.org/advisories/RUSTSEC-2025-0047)
 # versions >=0.4.11 are fixed
 slab = "0.4.11"
+farmhash2 = "1.1.5"
+regex-pool = "0.1.0"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

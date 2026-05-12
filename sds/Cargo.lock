@@ -773,7 +773,7 @@ dependencies = [
  "criterion",
  "dd-sds",
  "ethaddr",
- "farmhash",
+ "farmhash2",
  "futures",
  "httpmock",
  "iban_validate",
@@ -788,8 +788,8 @@ dependencies = [
  "once_cell",
  "rayon",
  "regex",
- "regex-automata 0.4.14",
- "regex-automata 0.4.9",
+ "regex-automata",
+ "regex-pool",
  "regex-syntax 0.7.5",
  "reqwest",
  "serde",
@@ -960,9 +960,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "farmhash"
+name = "farmhash2"
 version = "1.1.5"
-source = "git+https://github.com/fuchsnj/rust-farmhash?rev=82d80b689d65fbd378b13deff10cdd07794df64e#82d80b689d65fbd378b13deff10cdd07794df64e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c08c4e203d1ec89aa6b1c81b7c14ef14f1a985e2eee5e452c5c1abf66ccee9d2"
 
 [[package]]
 name = "fastrand"
@@ -1810,7 +1811,7 @@ version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "507460a910eb7b32ee961886ff48539633b788a36b65692b95f225b844c82553"
 dependencies = [
- "regex-automata 0.4.14",
+ "regex-automata",
 ]
 
 [[package]]
@@ -2481,18 +2482,8 @@ checksum = "e10754a14b9137dd7b1e3e5b0493cc9171fdd105e0ab477f51b72e7f3ac0e276"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata 0.4.14",
+ "regex-automata",
  "regex-syntax 0.8.10",
-]
-
-[[package]]
-name = "regex-automata"
-version = "0.4.9"
-source = "git+https://github.com/fbryden/regex?rev=6952250af962ca3e364da47382b16dba9c703431#6952250af962ca3e364da47382b16dba9c703431"
-dependencies = [
- "aho-corasick",
- "memchr",
- "regex-syntax 0.8.5",
 ]
 
 [[package]]
@@ -2507,15 +2498,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex-pool"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9810c6934bd9892cf2e398077c51ee6e324ce7953ff7facfb0510c018dd26fd9"
+
+[[package]]
 name = "regex-syntax"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dbb5fb1acd8a1a18b3dd5be62d25485eb770e05afb408a9627d14d451bae12da"
-
-[[package]]
-name = "regex-syntax"
-version = "0.8.5"
-source = "git+https://github.com/fbryden/regex?rev=6952250af962ca3e364da47382b16dba9c703431#6952250af962ca3e364da47382b16dba9c703431"
 
 [[package]]
 name = "regex-syntax"
