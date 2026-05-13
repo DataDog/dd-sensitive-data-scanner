@@ -396,7 +396,7 @@ dependencies = [
  "chrono",
  "crc32fast",
  "ethaddr",
- "farmhash",
+ "farmhash2",
  "futures",
  "iban_validate",
  "iso_iec_7064",
@@ -410,8 +410,8 @@ dependencies = [
  "once_cell",
  "rayon",
  "regex",
- "regex-automata 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "regex-automata 0.4.9 (git+https://github.com/fbryden/regex?rev=6952250af962ca3e364da47382b16dba9c703431)",
+ "regex-automata",
+ "regex-pool",
  "regex-syntax 0.7.5",
  "reqwest",
  "serde",
@@ -510,9 +510,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "farmhash"
+name = "farmhash2"
 version = "1.1.5"
-source = "git+https://github.com/fuchsnj/rust-farmhash?rev=82d80b689d65fbd378b13deff10cdd07794df64e#82d80b689d65fbd378b13deff10cdd07794df64e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c08c4e203d1ec89aa6b1c81b7c14ef14f1a985e2eee5e452c5c1abf66ccee9d2"
 
 [[package]]
 name = "fiat-crypto"
@@ -1563,8 +1564,8 @@ checksum = "b544ef1b4eac5dc2db33ea63606ae9ffcfac26c1416a2806ae0bf5f56b201191"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "regex-syntax 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex-automata",
+ "regex-syntax 0.8.5",
 ]
 
 [[package]]
@@ -1575,18 +1576,14 @@ checksum = "809e8dc61f6de73b46c85f4c96486310fe304c434cfa43669d7b40f711150908"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-syntax 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex-syntax 0.8.5",
 ]
 
 [[package]]
-name = "regex-automata"
-version = "0.4.9"
-source = "git+https://github.com/fbryden/regex?rev=6952250af962ca3e364da47382b16dba9c703431#6952250af962ca3e364da47382b16dba9c703431"
-dependencies = [
- "aho-corasick",
- "memchr",
- "regex-syntax 0.8.5 (git+https://github.com/fbryden/regex?rev=6952250af962ca3e364da47382b16dba9c703431)",
-]
+name = "regex-pool"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9d1c4e093793ea93da49df43979b94c6b73d94c00baba346eeda9f58e53e8e5"
 
 [[package]]
 name = "regex-syntax"
@@ -1599,11 +1596,6 @@ name = "regex-syntax"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
-
-[[package]]
-name = "regex-syntax"
-version = "0.8.5"
-source = "git+https://github.com/fbryden/regex?rev=6952250af962ca3e364da47382b16dba9c703431#6952250af962ca3e364da47382b16dba9c703431"
 
 [[package]]
 name = "reqwest"
