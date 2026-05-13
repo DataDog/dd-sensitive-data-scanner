@@ -1,17 +1,17 @@
 #![allow(clippy::missing_safety_doc)]
 
+use crate::{RootRuleConfig, RuleConfig};
 use core::panic::UnwindSafe;
-use dd_sds::{RootRuleConfig, RuleConfig};
 use serde::de::DeserializeOwned;
 use std::ffi::{CStr, CString, c_char};
 use std::io::{Error, ErrorKind};
 use std::sync::{Arc, Mutex};
 
-pub mod create_scanner;
-pub mod delete_scanner;
-pub mod rule;
-pub mod scan;
-pub mod validation;
+mod create_scanner;
+mod delete_scanner;
+mod rule;
+mod scan;
+mod validation;
 
 pub const ERR_PANIC: i64 = -5;
 

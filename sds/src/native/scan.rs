@@ -3,9 +3,10 @@ use std::ffi::c_void;
 use std::slice;
 use std::sync::Arc;
 
-use crate::convert_panic_to_go_error;
-use dd_sds::{ScanOptionBuilder, Scanner, Utf8Encoding};
-use sds_bindings_utils::{BinaryEvent, encode_response};
+use crate::bindings_utils::{BinaryEvent, encode_response};
+use crate::{ScanOptionBuilder, Scanner, Utf8Encoding};
+
+use super::convert_panic_to_go_error;
 
 /// # Safety
 ///

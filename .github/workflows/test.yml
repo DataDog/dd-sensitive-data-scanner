@@ -47,12 +47,12 @@ jobs:
           go version
           go install honnef.co/go/tools/cmd/staticcheck@latest
           export PATH=$PATH:$(go env GOPATH)/bin
-          LD_LIBRARY_PATH=sds-go/rust/target/release staticcheck ./...
+          LD_LIBRARY_PATH=../../sds/target/release staticcheck ./...
           cd ../..
           make format-go
       - name: "Run the Go unit tests"
         working-directory: sds-go/go
-        run: LD_LIBRARY_PATH=../rust/target/release go test -v .
+        run: LD_LIBRARY_PATH=../../sds/target/release go test -v .
       - name: "Make sure the example builds and stays relevant"
         working-directory: sds-go/go
         run: |

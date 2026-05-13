@@ -3,14 +3,14 @@ set -e
 
 root=$(pwd)
 license_config=$root/license-tool.toml
-paths=("/sds" "/sds-go/rust" "/sds-bindings-utils")
+paths=("/sds")
 
 for path in "${paths[@]}"; do
   cd "${root}${path}"
   dd-rust-license-tool -c $license_config write
 done
 
-expected=$(cat "${root}"/*/**/LICENSE-3rdparty.csv | LC_COLLATE=C sort -u)
+expected=$(cat "${root}/sds/LICENSE-3rdparty.csv" | LC_COLLATE=C sort -u)
 
 for path in "${paths[@]}"; do
   cd "${root}${path}"

@@ -1,10 +1,10 @@
-use dd_sds::{RegexRuleConfig, RootRuleConfig};
+use crate::{RegexRuleConfig, RootRuleConfig};
 use std::ffi::c_char;
 use std::mem::ManuallyDrop;
 use std::sync::{Arc, Mutex};
 
-use crate::native::{convert_panic_to_go_error, handle_panic_ptr_return, read_json};
-use crate::{RuleDoublePtr, RuleList, RulePtr};
+use super::{RuleDoublePtr, RuleList, RulePtr, convert_panic_to_go_error};
+use crate::native::{handle_panic_ptr_return, read_json};
 
 /// # Safety
 ///
