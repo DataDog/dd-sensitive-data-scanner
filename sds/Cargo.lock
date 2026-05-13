@@ -769,8 +769,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "dd-sds"
-version = "0.1.2"
+name = "dd-sensitive-data-scanner"
+version = "0.0.0"
 dependencies = [
  "afl",
  "ahash",
@@ -781,7 +781,7 @@ dependencies = [
  "chrono",
  "crc32fast",
  "criterion",
- "dd-sds",
+ "dd-sensitive-data-scanner",
  "ethaddr",
  "farmhash2",
  "futures",

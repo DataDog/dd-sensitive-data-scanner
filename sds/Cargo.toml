@@ -1,11 +1,14 @@
 [package]
-name = "dd-sds"
-version = "0.1.2"
+name = "dd-sensitive-data-scanner"
+version = "0.0.0"
 edition = "2024"
-publish = false
+description = "Core Sensitive Data Scanner library for detecting and redacting sensitive information."
+repository = "https://github.com/DataDog/dd-sensitive-data-scanner"
+documentation = "https://datadoghq.dev/dd-sensitive-data-scanner/dd_sds/"
 license = "Apache-2.0"
 
 [lib]
+name = "dd_sds"
 crate-type = ["staticlib", "cdylib", "lib"]
 
 [features]
@@ -74,7 +77,7 @@ serde_json = "1.0.114"
 serde_yaml = "0.9.34"
 serde_test = "1.0.176"
 httpmock = "0.7.0"
-dd-sds = { path = ".", features = ["bench"] }
+dd-sds = { package = "dd-sensitive-data-scanner", path = ".", features = ["bench"] }
 threadpool = "1.8.1"
 
 [[bench]]
