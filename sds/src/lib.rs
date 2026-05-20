@@ -47,6 +47,11 @@ mod validation;
 
 #[cfg(feature = "dd_sds_go")]
 mod native;
+#[cfg(feature = "dd_sds_go")]
+pub use native::{
+    GoError, RuleDoublePtr, RuleList, RulePtr, convert_panic_to_go_error, handle_go_error,
+    handle_panic_ptr_return, read_json,
+};
 
 #[cfg(feature = "sds-bindings-utils")]
 pub use bindings_utils::{
