@@ -769,9 +769,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "dd-sds"
-version = "0.1.2"
+name = "dd-sensitive-data-scanner"
+version = "0.0.0"
 dependencies = [
+ "afl",
  "ahash",
  "aws-sign-v4",
  "base62",
@@ -780,11 +781,12 @@ dependencies = [
  "chrono",
  "crc32fast",
  "criterion",
- "dd-sds",
+ "dd-sensitive-data-scanner",
  "ethaddr",
  "farmhash2",
  "futures",
  "httpmock",
+ "hyperscan",
  "iban_validate",
  "iso_iec_7064",
  "lazy_static",
@@ -795,6 +797,7 @@ dependencies = [
  "nom",
  "num_cpus",
  "once_cell",
+ "rand 0.8.6",
  "rayon",
  "regex",
  "regex-automata",
@@ -803,6 +806,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "serde_path_to_error",
  "serde_test",
  "serde_with",
  "serde_yaml",
@@ -2713,17 +2717,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
-name = "sds-fuzz"
-version = "0.1.0"
-dependencies = [
- "afl",
- "ahash",
- "dd-sds",
- "hyperscan",
- "rand 0.8.6",
-]
-
-[[package]]
 name = "sealed"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2824,6 +2817,17 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "serde_path_to_error"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10a9ff822e371bb5403e391ecd83e182e0e77ba7f6fe0160b795797109d1b457"
+dependencies = [
+ "itoa",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]

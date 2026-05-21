@@ -1,0 +1,73 @@
+name: Publish Crate
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_version:
+        description: "Base semver version to publish as <base>-<date>-<short sha>"
+        required: true
+        default: "0.1.0"
+      dry_run:
+        description: "Package the crate without uploading it to crates.io"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup update stable
+
+      - name: Compute crate version
+        id: version
+        run: |
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          date_stamp="$(date -u +%Y%m%d)"
+          version="${{ inputs.base_version }}-${date_stamp}-${short_sha}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Publishing version ${version}"
+
+      - name: Prepare manifest for publishing
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+
+          manifest = pathlib.Path("sds/Cargo.toml")
+          contents = manifest.read_text()
+          version = "${{ steps.version.outputs.version }}"
+
+          contents = re.sub(
+              r'(?m)^version = ".*"$',
+              f'version = "{version}"',
+              contents,
+              count=1,
+          )
+          contents = re.sub(r'(?m)^publish = false\n', "", contents, count=1)
+          contents = re.sub(r'(?m)^dd-sds = \{ package = "dd-sensitive-data-scanner", path = "\.", features = \["bench"\] \}\n', "", contents, count=1)
+
+          manifest.write_text(contents)
+          PY
+
+      - name: Verify package
+        run: cargo package --manifest-path="sds/Cargo.toml" --allow-dirty
+
+      - name: Authenticate with crates.io
+        if: ${{ !inputs.dry_run }}
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: Publish to crates.io
+        if: ${{ !inputs.dry_run }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --manifest-path="sds/Cargo.toml" --allow-dirty

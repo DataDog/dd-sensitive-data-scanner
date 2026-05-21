@@ -1,7 +1,7 @@
 package dd_sds
 
 /*
-#cgo LDFLAGS: -L../rust/target/release -ldd_sds_go
+#cgo LDFLAGS: -L../../sds/target/release -ldd_sds
 
 #include <stdlib.h>
 #include <dd_sds.h>

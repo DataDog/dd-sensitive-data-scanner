@@ -1,6 +1,7 @@
-use crate::convert_panic_to_go_error;
-use dd_sds::Scanner;
+use crate::Scanner;
 use std::sync::Arc;
+
+use super::convert_panic_to_go_error;
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn delete_scanner(scanner_id: i64) {

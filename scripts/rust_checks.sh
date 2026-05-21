@@ -1,9 +1,9 @@
 set -e
 
-for manifest_path in sds/Cargo.toml sds-go/rust/Cargo.toml; do
-    cargo check --manifest-path="$manifest_path" --benches --workspace
-    cargo clippy --manifest-path="$manifest_path" --workspace -- -D warnings
-done
+cargo check --manifest-path="sds/Cargo.toml" --benches --features dd_sds_go
+cargo check --manifest-path="sds/Cargo.toml" --bin fuzz --features sds-fuzz
+cargo clippy --manifest-path="sds/Cargo.toml" --features dd_sds_go -- -D warnings
+cargo clippy --manifest-path="sds/Cargo.toml" --bin fuzz --features sds-fuzz -- -D warnings
 
 DID_STASH=0
 
@@ -21,7 +21,5 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
     DID_STASH=1
 fi
 
-for manifest_path in sds/Cargo.toml sds-go/rust/Cargo.toml; do
-    cargo fmt --check --manifest-path="$manifest_path" --all
-    git diff --exit-code
-done
+cargo fmt --check --manifest-path="sds/Cargo.toml" --all
+git diff --exit-code

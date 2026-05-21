@@ -1,4 +1,4 @@
-use dd_sds::{Encoding, Event, EventVisitor, Path, PathSegment, RuleMatch, ScannerError};
+use crate::{Encoding, Event, EventVisitor, Path, PathSegment, RuleMatch, ScannerError};
 use std::borrow::Cow;
 use std::{collections::BTreeMap, marker::PhantomData};
 
@@ -32,7 +32,7 @@ impl<E: Encoding> BinaryEvent<E> {
             storage: BTreeMap::new(),
             strings_are_valid_utf8,
             event_id,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 }
@@ -99,7 +99,7 @@ impl<E: Encoding> Event for BinaryEvent<E> {
 
                     index += len;
                     let visit_result = visitor.visit_string(&content)?;
-                    if visit_result.might_mutate && !self.storage.contains_key(&visit_result.path) {
+                    if visit_result.might_mutate && !self.storage.contains_key(visit_result.path) {
                         self.storage.insert(
                             visit_result.path.into_static(),
                             (false, content.to_string()),

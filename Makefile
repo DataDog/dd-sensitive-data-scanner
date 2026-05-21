@@ -15,7 +15,7 @@ help:     ## Show this help.
 .PHONY: build-sds-go
 build-sds-go: ## Build the sds-go lib.
 	@echo "Building sds-go lib"
-	cargo build --manifest-path="sds-go/rust/Cargo.toml" --release
+	cargo build --manifest-path="sds/Cargo.toml" --release --features dd_sds_go
 
 ##@ Formatting
 
@@ -29,7 +29,6 @@ format-go: ## Format the golang lib.
 format-rust: ## Format the rust lib.
 	@echo "Formatting rust lib"
 	cargo fmt --manifest-path="sds/Cargo.toml" --all
-	cargo fmt --manifest-path="sds-go/rust/Cargo.toml" --all
 
 .PHONY: format-all
 format-all: format-rust format-go ## Format the rust lib and golang libs.
@@ -44,8 +43,8 @@ test-go: ## Test the golang lib.
 .PHONY: test-rust
 test-rust: ## Test the rust lib.
 	@echo "Testing rust lib"
-	cargo test --manifest-path="sds/Cargo.toml" --workspace
-	cargo test --manifest-path="sds-go/rust/Cargo.toml" --workspace
+	cargo test --manifest-path="sds/Cargo.toml"
+	cargo test --manifest-path="sds/Cargo.toml" --features dd_sds_go
 
 .PHONY: test-all
 test-all: test-rust test-go ## Test the rust lib and golang libs.

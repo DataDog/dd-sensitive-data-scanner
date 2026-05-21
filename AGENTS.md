@@ -1,6 +1,6 @@
 # Agent Guidance for running commands in this repository
 
-This is a multi-language library providing core Sensitive Data Scanner (SDS) functionality for detecting and redacting sensitive information. The core is written in Rust with Go FFI bindings.
+This is a multi-language library providing core Sensitive Data Scanner (SDS) functionality for detecting and redacting sensitive information. The Rust implementation lives in a single crate under `sds/`, with Go FFI bindings gated behind Cargo features.
 
 **Documentation:** https://datadoghq.dev/dd-sensitive-data-scanner/dd_sds/
 
@@ -17,7 +17,7 @@ Use `make` to see available commands for building, testing, and formatting.
 ## Project Structure
 
 ```
-sds/                    # Core Rust library
+sds/                    # Single Rust crate
 ├── src/
 │   ├── scanner/        # Core scanning engine
 │   ├── parser/         # Pattern parsing
@@ -26,13 +26,10 @@ sds/                    # Core Rust library
 │   ├── proximity_keywords/     # Keyword proximity detection
 │   └── ...
 ├── benches/            # Performance benchmarks
-└── tools/fuzz/         # AFL fuzzing tests
+└── tools/fuzz/         # AFL fuzzing target declared by sds/Cargo.toml
 
 sds-go/                 # Go FFI wrapper
-├── go/                 # Go bindings
-└── rust/               # Rust side of FFI
-
-sds-bindings-utils/     # Shared binding utilities
+└── go/                 # Go bindings
 ```
 
 Key files: 
@@ -40,6 +37,8 @@ Key files:
 - `sds/src/scanner/mod.rs` - Core scanner implementation
 - `sds/src/event.rs` - Event trait for scanning interface
 - `sds/src/match_action.rs` - Redaction/masking actions
+- `sds/src/native/` - Rust side of the Go FFI, enabled with the `dd_sds_go` feature
+- `sds/src/bindings_utils.rs` - Shared binding utilities, enabled with the `sds-bindings-utils` feature
 - `sds-go/go/scanner.go` - Main Go API
 
 

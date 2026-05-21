@@ -2,8 +2,9 @@ use std::ffi::c_char;
 use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
-use crate::{RuleList, handle_panic_ptr_return, read_json};
-use dd_sds::Scanner;
+use crate::Scanner;
+
+use super::{RuleList, handle_panic_ptr_return, read_json};
 
 /// # Safety
 ///

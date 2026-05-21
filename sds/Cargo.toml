@@ -1,29 +1,40 @@
 [package]
-name = "dd-sds"
-version = "0.1.2"
+name = "dd-sensitive-data-scanner"
+version = "0.0.0"
 edition = "2024"
-publish = false
+description = "Core Sensitive Data Scanner library for detecting and redacting sensitive information."
+repository = "https://github.com/DataDog/dd-sensitive-data-scanner"
+documentation = "https://datadoghq.dev/dd-sensitive-data-scanner/dd_sds/"
 license = "Apache-2.0"
 
-[workspace]
-members = ["tools/fuzz"]
+[lib]
+name = "dd_sds"
+crate-type = ["staticlib", "cdylib", "lib"]
 
 [features]
-default = []
+default = ["dd-sds"]
+dd-sds = []
+sds-bindings-utils = ["dd-sds"]
+dd_sds_go = ["dd-sds", "sds-bindings-utils", "dep:serde_path_to_error"]
+sds-fuzz = ["dd-sds", "dep:afl", "dep:rand"]
 testing = []
 
 # Deprecated - Support hash from UTF-16 encoded bytes for backward compatibility. Users should use instead standalone hash match action
 utf16_hash_match_action = []
 bench = []
 match_validation = []
+hyperscan = ["sds-fuzz", "dep:hyperscan"]
+manual_test = ["sds-fuzz"]
 
 [dependencies]
 ahash = "0.8.7"
+afl = { version = "0.14.5", optional = true }
 nom = "7.1.3"
 regex = "1.9.5"
 regex-automata = "0.4.7"
 regex-syntax = "0.7.5"
 serde = { version = "1.0", features = ["derive"] }
+serde_path_to_error = { version = "0.1.17", optional = true }
 serde_with = "3.6.1"
 strum = { version = "0.25", features = ["derive"] }
 thiserror = "1.0.58"
@@ -50,11 +61,15 @@ futures = "0.3.31"
 tokio = { version = "1.46.1", features = ["full"] }
 moka = { version = "0.12.12", features = ["sync"] }
 once_cell = "1.21.3"
+rand = { version = "0.8.5", optional = true }
 # Prevent Security vulnerability (https://rustsec.org/advisories/RUSTSEC-2025-0047)
 # versions >=0.4.11 are fixed
 slab = "0.4.11"
 farmhash2 = "1.1.5"
 regex-pool = "0.1.1"
+
+# Optional fuzzing dependency.
+hyperscan = { version = "0.3.2", features = ["static"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
@@ -62,7 +77,7 @@ serde_json = "1.0.114"
 serde_yaml = "0.9.34"
 serde_test = "1.0.176"
 httpmock = "0.7.0"
-dd-sds = { path = ".", features = ["bench"] }
+dd-sds = { package = "dd-sensitive-data-scanner", path = ".", features = ["bench"] }
 threadpool = "1.8.1"
 
 [[bench]]
@@ -72,3 +87,8 @@ harness = false
 [[bench]]
 name = "multithreaded_scanning"
 harness = false
+
+[[bin]]
+name = "fuzz"
+path = "tools/fuzz/src/main.rs"
+required-features = ["sds-fuzz"]
