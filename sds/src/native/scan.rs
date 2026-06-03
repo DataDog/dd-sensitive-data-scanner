@@ -93,7 +93,6 @@ pub unsafe extern "C" fn scan(
     }
 }
 
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_vec(ptr: *const c_char, len: i64, cap: i64) {
     unsafe {
