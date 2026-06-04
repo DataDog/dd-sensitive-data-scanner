@@ -238,6 +238,9 @@ pub struct StringMatchesCtx<'a> {
     pub per_scanner_data: &'a SharedData,
     pub per_event_data: &'a mut SharedData,
     pub event_id: Option<&'a str>,
+
+    // Per-scan metadata supplied by the caller via `ScanOptions::scan_metadata`.
+    pub scan_metadata: &'a AHashMap<String, String>,
 }
 
 impl StringMatchesCtx<'_> {
@@ -406,6 +409,10 @@ pub struct ScanOptions {
     // Whether to validate matches using third-party validators (e.g., checksum validation for credit cards).
     // When enabled, the scanner automatically collects match content needed for validation.
     pub validate_matches: bool,
+    // Arbitrary key-value metadata passed through to each rule's `get_string_matches` call via
+    // `StringMatchesCtx::scan_metadata`. Rules may use this to receive per-scan context (e.g.
+    // an org identifier) without requiring changes to the `CompiledRule` trait signature.
+    pub scan_metadata: AHashMap<String, String>,
 }
 
 impl Default for ScanOptions {
@@ -414,6 +421,7 @@ impl Default for ScanOptions {
             blocked_rules_idx: vec![],
             wildcarded_indices: AHashMap::new(),
             validate_matches: false,
+            scan_metadata: AHashMap::new(),
         }
     }
 }
@@ -422,6 +430,7 @@ pub struct ScanOptionBuilder {
     blocked_rules_idx: Vec<usize>,
     wildcarded_indices: AHashMap<Path<'static>, Vec<(usize, usize)>>,
     validate_matches: bool,
+    scan_metadata: AHashMap<String, String>,
 }
 
 impl ScanOptionBuilder {
@@ -430,6 +439,7 @@ impl ScanOptionBuilder {
             blocked_rules_idx: vec![],
             wildcarded_indices: AHashMap::new(),
             validate_matches: false,
+            scan_metadata: AHashMap::new(),
         }
     }
 
@@ -451,11 +461,17 @@ impl ScanOptionBuilder {
         self
     }
 
+    pub fn with_scan_metadata(mut self, scan_metadata: AHashMap<String, String>) -> Self {
+        self.scan_metadata = scan_metadata;
+        self
+    }
+
     pub fn build(self) -> ScanOptions {
         ScanOptions {
             blocked_rules_idx: self.blocked_rules_idx,
             wildcarded_indices: self.wildcarded_indices,
             validate_matches: self.validate_matches,
+            scan_metadata: self.scan_metadata,
         }
     }
 }
@@ -681,6 +697,7 @@ impl Scanner {
                     wildcarded_indexes: &options.wildcarded_indices,
                     async_jobs: &mut async_jobs,
                     event_id: event.get_id().map(|s| s.to_string()),
+                    scan_metadata: &options.scan_metadata,
                 },
             )
         })?;
@@ -1129,6 +1146,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     wildcarded_indexes: &'a AHashMap<Path<'static>, Vec<(usize, usize)>>,
     async_jobs: &'a mut Vec<PendingRuleJob>,
     event_id: Option<String>,
+    scan_metadata: &'a AHashMap<String, String>,
 }
 
 impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
@@ -1189,6 +1207,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     per_scanner_data: &self.scanner.per_scanner_data,
                     per_event_data: &mut self.per_event_data,
                     event_id: self.event_id.as_deref(),
+                    scan_metadata: self.scan_metadata,
                 };
 
                 let async_status = rule.get_string_matches(content, path, &mut ctx)?;
