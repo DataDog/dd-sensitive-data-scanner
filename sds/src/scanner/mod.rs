@@ -773,20 +773,42 @@ impl Scanner {
             }
         }
 
-        RAYON_THREAD_POOL.install(|| {
-            use rayon::prelude::*;
+        // Skip the pool hop when there's nothing to validate.
+        if !match_validator_rule_match_per_type.is_empty() {
+            let run_validation = || {
+                use rayon::prelude::*;
 
-            match_validator_rule_match_per_type.par_iter_mut().for_each(
-                |(match_validation_type, matches_per_type)| {
-                    let match_validator = self.match_validators_per_type.get(match_validation_type);
-                    if let Some(match_validator) = match_validator {
-                        match_validator
-                            .as_ref()
-                            .validate(matches_per_type, &self.rules)
-                    }
-                },
-            );
-        });
+                match_validator_rule_match_per_type.par_iter_mut().for_each(
+                    |(match_validation_type, matches_per_type)| {
+                        let match_validator =
+                            self.match_validators_per_type.get(match_validation_type);
+                        if let Some(match_validator) = match_validator {
+                            match_validator
+                                .as_ref()
+                                .validate(matches_per_type, &self.rules)
+                        }
+                    },
+                );
+            };
+
+            // TODO(SDSP-450): move validation onto the async TOKIO_RUNTIME. It is I/O-bound
+            // (blocking HTTP to third-party checkers), so a Rayon (CPU-bound) pool is a poor
+            // fit and forces the workaround below. Async validation would remove it entirely.
+            //
+            // If we're already on a Rayon worker (e.g. the caller scans from its own parallel
+            // iterator), calling `install` here blocks the worker, and Rayon keeps it busy by
+            // stealing more of the caller's jobs — which scan and validate and steal again,
+            // recursing until the stack overflows. Running `install` on a separate OS thread
+            // parks this worker instead, breaking the recursion; validation still runs in
+            // parallel on RAYON_THREAD_POOL.
+            if rayon::current_thread_index().is_some() {
+                std::thread::scope(|s| {
+                    s.spawn(|| RAYON_THREAD_POOL.install(run_validation));
+                });
+            } else {
+                RAYON_THREAD_POOL.install(run_validation);
+            }
+        }
 
         // Refill the rule_matches with the validated matches
         for (_, mut matches) in match_validator_rule_match_per_type {
