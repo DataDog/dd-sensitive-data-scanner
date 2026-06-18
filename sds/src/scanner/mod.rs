@@ -791,7 +791,7 @@ impl Scanner {
                 );
             };
 
-            // TODO(validation): move validation onto the async TOKIO_RUNTIME. It is I/O-bound
+            // TODO(SDSP-450): move validation onto the async TOKIO_RUNTIME. It is I/O-bound
             // (blocking HTTP to third-party checkers), so a Rayon (CPU-bound) pool is a poor
             // fit and forces the workaround below. Async validation would remove it entirely.
             //
