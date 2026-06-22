@@ -56,8 +56,8 @@ const PARTIAL_REDACT_CHARACTER: char = '*';
 pub enum MatchActionValidationError {
     #[error("Partial redaction chars must be non-zero")]
     PartialRedactionNumCharsZero,
-    #[error("Pseudonymization regex must be valid")]
-    PseudonymizationRegexInvalid,
+    #[error("Pseudonymization regex must be valid: {regex}")]
+    PseudonymizationRegexInvalid { regex: String },
     #[error("Pseudonymization string builder must not be empty")]
     PseudonymizationStringBuilderEmpty,
     #[error("Pseudonymization allowed data must not be empty")]
@@ -71,7 +71,9 @@ pub enum MatchActionValidationError {
 impl From<faker::FakerValidationError> for MatchActionValidationError {
     fn from(error: faker::FakerValidationError) -> Self {
         match error {
-            faker::FakerValidationError::RegexInvalid => Self::PseudonymizationRegexInvalid,
+            faker::FakerValidationError::RegexInvalid { regex } => {
+                Self::PseudonymizationRegexInvalid { regex }
+            }
             faker::FakerValidationError::StringBuilderEmpty => {
                 Self::PseudonymizationStringBuilderEmpty
             }

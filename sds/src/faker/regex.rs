@@ -17,11 +17,15 @@ pub fn validate(regex: &str) -> Result<(), FakerValidationError> {
     let regex = normalize_regex(regex)?;
     rand_regex::Regex::compile(&regex, MAX_REPEAT)
         .map(|_| ())
-        .map_err(|_| FakerValidationError::RegexInvalid)
+        .map_err(|_| FakerValidationError::RegexInvalid {
+            regex: regex.to_string(),
+        })
 }
 
 fn normalize_regex(regex: &str) -> Result<String, FakerValidationError> {
-    convert_to_rust_regex(regex).map_err(|_| FakerValidationError::RegexInvalid)
+    convert_to_rust_regex(regex).map_err(|_| FakerValidationError::RegexInvalid {
+        regex: regex.to_string(),
+    })
 }
 
 #[cfg(test)]
