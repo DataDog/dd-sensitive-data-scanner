@@ -58,6 +58,8 @@ pub enum MatchActionValidationError {
     PartialRedactionNumCharsZero,
     #[error("Pseudonymization regex must be valid: {regex}")]
     PseudonymizationRegexInvalid { regex: String },
+    #[error("Pseudonymization regex is not supported: {regex} ({reason})")]
+    PseudonymizationRegexUnsupported { regex: String, reason: String },
     #[error("Pseudonymization string builder must not be empty")]
     PseudonymizationStringBuilderEmpty,
     #[error("Pseudonymization allowed data must not be empty")]
@@ -73,6 +75,9 @@ impl From<faker::FakerValidationError> for MatchActionValidationError {
         match error {
             faker::FakerValidationError::RegexInvalid { regex } => {
                 Self::PseudonymizationRegexInvalid { regex }
+            }
+            faker::FakerValidationError::RegexUnsupported { regex, reason } => {
+                Self::PseudonymizationRegexUnsupported { regex, reason }
             }
             faker::FakerValidationError::StringBuilderEmpty => {
                 Self::PseudonymizationStringBuilderEmpty

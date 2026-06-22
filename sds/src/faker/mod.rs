@@ -21,6 +21,8 @@ pub enum PseudonymizationType {
 pub enum FakerValidationError {
     #[error("Pseudonymization regex must be valid: {regex}")]
     RegexInvalid { regex: String },
+    #[error("Pseudonymization regex is not supported: {regex} ({reason})")]
+    RegexUnsupported { regex: String, reason: String },
     #[error("Pseudonymization string builder must not be empty")]
     StringBuilderEmpty,
     #[error("Pseudonymization allowed data must not be empty")]
@@ -45,10 +47,9 @@ pub fn build(pseudonymization_type: &PseudonymizationType, match_hash: &str) -> 
 pub fn validate(pseudonymization_type: &PseudonymizationType) -> Result<(), FakerValidationError> {
     match pseudonymization_type {
         PseudonymizationType::Regex { regex } => {
-            ::regex::Regex::new(regex)
-                .map_err(|_| FakerValidationError::RegexInvalid {
-                    regex: regex.clone(),
-                })?;
+            ::regex::Regex::new(regex).map_err(|_| FakerValidationError::RegexInvalid {
+                regex: regex.clone(),
+            })?;
             regex::validate(regex)
         }
         PseudonymizationType::Faker {
