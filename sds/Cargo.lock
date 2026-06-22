@@ -799,6 +799,7 @@ dependencies = [
  "num_cpus",
  "once_cell",
  "rand 0.8.6",
+ "rand_regex",
  "rayon",
  "regex",
  "regex-automata",
@@ -2398,6 +2399,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c"
 dependencies = [
  "getrandom 0.3.4",
+]
+
+[[package]]
+name = "rand_regex"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8276e2c4e37f1907c587794d9b8b3334e1d44f36e05f8c13d61c50c19c264ae2"
+dependencies = [
+ "rand 0.8.6",
+ "regex-syntax 0.7.5",
 ]
 
 [[package]]

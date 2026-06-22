@@ -16,7 +16,7 @@ default = ["dd-sds"]
 dd-sds = []
 sds-bindings-utils = ["dd-sds"]
 dd_sds_go = ["dd-sds", "sds-bindings-utils", "dep:serde_path_to_error"]
-sds-fuzz = ["dd-sds", "dep:afl", "dep:rand"]
+sds-fuzz = ["dd-sds", "dep:afl"]
 testing = []
 
 # Deprecated - Support hash from UTF-16 encoded bytes for backward compatibility. Users should use instead standalone hash match action
@@ -61,7 +61,8 @@ futures = "0.3.31"
 tokio = { version = "1.46.1", features = ["full"] }
 moka = { version = "0.12.12", features = ["sync"] }
 once_cell = "1.21.3"
-rand = { version = "0.8.5", optional = true }
+rand = "0.8.5"
+rand_regex = "0.16"
 # Prevent Security vulnerability (https://rustsec.org/advisories/RUSTSEC-2025-0047)
 # versions >=0.4.11 are fixed
 slab = "0.4.11"

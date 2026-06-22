@@ -7,7 +7,9 @@ use std::{borrow::Cow, cmp::min};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::rule_match::ReplacementType;
+use crate::{faker, rule_match::ReplacementType};
+
+pub use crate::faker::PseudonymizationType;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(tag = "type")]
@@ -30,6 +32,8 @@ pub enum MatchAction {
         direction: PartialRedactDirection,
         character_count: usize,
     },
+    /// Replace the match with a pseudonymized value
+    Pseudonymize(PseudonymizationType),
 }
 
 impl MatchAction {
@@ -52,6 +56,34 @@ const PARTIAL_REDACT_CHARACTER: char = '*';
 pub enum MatchActionValidationError {
     #[error("Partial redaction chars must be non-zero")]
     PartialRedactionNumCharsZero,
+    #[error("Pseudonymization regex must be valid")]
+    PseudonymizationRegexInvalid,
+    #[error("Pseudonymization string builder must not be empty")]
+    PseudonymizationStringBuilderEmpty,
+    #[error("Pseudonymization allowed data must not be empty")]
+    PseudonymizationAllowedDataEmpty,
+    #[error("Pseudonymization placeholder must have allowed data: {placeholder}")]
+    PseudonymizationPlaceholderMissing { placeholder: String },
+    #[error("Pseudonymization allowed data list must not be empty: {key}")]
+    PseudonymizationAllowedDataEmptyList { key: String },
+}
+
+impl From<faker::FakerValidationError> for MatchActionValidationError {
+    fn from(error: faker::FakerValidationError) -> Self {
+        match error {
+            faker::FakerValidationError::RegexInvalid => Self::PseudonymizationRegexInvalid,
+            faker::FakerValidationError::StringBuilderEmpty => {
+                Self::PseudonymizationStringBuilderEmpty
+            }
+            faker::FakerValidationError::AllowedDataEmpty => Self::PseudonymizationAllowedDataEmpty,
+            faker::FakerValidationError::PlaceholderMissing { placeholder } => {
+                Self::PseudonymizationPlaceholderMissing { placeholder }
+            }
+            faker::FakerValidationError::AllowedDataEmptyList { key } => {
+                Self::PseudonymizationAllowedDataEmptyList { key }
+            }
+        }
+    }
 }
 
 impl MatchAction {
@@ -70,6 +102,9 @@ impl MatchAction {
             MatchAction::None | MatchAction::Redact { replacement: _ } | MatchAction::Hash => {
                 Ok(())
             }
+            MatchAction::Pseudonymize(pseudonymization_type) => {
+                faker::validate(pseudonymization_type).map_err(Into::into)
+            }
             #[cfg(any(test, feature = "utf16_hash_match_action"))]
             #[allow(deprecated)]
             MatchAction::Utf16Hash => Ok(()),
@@ -86,6 +121,7 @@ impl MatchAction {
             #[allow(deprecated)]
             MatchAction::Utf16Hash => true,
             MatchAction::PartialRedact { .. } => true,
+            MatchAction::Pseudonymize(_) => true,
         }
     }
 
@@ -101,6 +137,7 @@ impl MatchAction {
                 PartialRedactDirection::FirstCharacters => ReplacementType::PartialStart,
                 PartialRedactDirection::LastCharacters => ReplacementType::PartialEnd,
             },
+            MatchAction::Pseudonymize(_) => ReplacementType::Placeholder,
         }
     }
 
@@ -137,6 +174,14 @@ impl MatchAction {
                     matched_content,
                 )),
             },
+            MatchAction::Pseudonymize(pseudonymization_type) => {
+                let match_hash = Self::hash(matched_content);
+                Some(Replacement {
+                    start: 0,
+                    end: matched_content.len(),
+                    replacement: Cow::Owned(faker::build(pseudonymization_type, &match_hash)),
+                })
+            }
         }
     }
 
@@ -216,8 +261,10 @@ pub struct Replacement<'a> {
 
 #[cfg(test)]
 mod test {
+    use ahash::AHashMap;
+
     use crate::match_action::PartialRedactDirection::{FirstCharacters, LastCharacters};
-    use crate::match_action::{MatchAction, Replacement};
+    use crate::match_action::{MatchAction, PseudonymizationType, Replacement};
 
     #[test]
     fn match_with_no_action() {
@@ -459,5 +506,25 @@ mod test {
                 replacement: "5170af09fd870c17".into()
             })
         );
+    }
+
+    #[test]
+    fn match_with_pseudonymization_is_deterministic() {
+        let mut allowed_data = AHashMap::new();
+        allowed_data.insert(
+            "first_name".to_string(),
+            vec!["Alice".to_string(), "Bob".to_string()],
+        );
+
+        let match_action = MatchAction::Pseudonymize(PseudonymizationType::Faker {
+            string_builder: "{first_name}".to_string(),
+            allowed_data,
+        });
+
+        let first_replacement = match_action.get_replacement("coty").unwrap();
+        let second_replacement = match_action.get_replacement("coty").unwrap();
+
+        assert_eq!(first_replacement, second_replacement);
+        assert!(!first_replacement.replacement.is_empty());
     }
 }

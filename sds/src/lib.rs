@@ -13,6 +13,9 @@ mod event;
 mod match_action;
 
 #[cfg(feature = "dd-sds")]
+mod faker;
+
+#[cfg(feature = "dd-sds")]
 mod ast_utils;
 #[cfg(feature = "dd-sds")]
 mod event_json;
@@ -67,7 +70,7 @@ pub use encoding::{EncodeIndices, Encoding, Utf8Encoding};
 #[cfg(feature = "dd-sds")]
 pub use event::{Event, EventVisitor, VisitStringResult};
 #[cfg(feature = "dd-sds")]
-pub use match_action::{MatchAction, PartialRedactDirection};
+pub use match_action::{MatchAction, PartialRedactDirection, PseudonymizationType};
 
 #[cfg(feature = "dd-sds")]
 pub use match_validation::{
