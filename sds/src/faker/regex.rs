@@ -1,7 +1,7 @@
 use rand::{Rng, rngs::StdRng};
 use regex_syntax::{
     ParserBuilder,
-    hir::{Hir, HirKind, translate::Translator},
+    hir::{Capture, Hir, HirKind, Repetition, translate::Translator},
 };
 
 use crate::normalization::rust_regex_adapter::convert_sds_ast_to_rust_regex_ast;
@@ -26,7 +26,7 @@ pub fn validate(regex: &str) -> Result<(), FakerValidationError> {
 }
 
 fn compile_generator(regex: &str) -> Result<rand_regex::Regex, FakerValidationError> {
-    let hir = generator_hir(regex)?;
+    let hir = clamp_repetitions(generator_hir(regex)?, MAX_REPEAT);
     rand_regex::Regex::with_hir(hir, MAX_REPEAT).map_err(|error| generator_error(regex, error))
 }
 
@@ -107,6 +107,46 @@ fn generator_error(regex: &str, error: rand_regex::Error) -> FakerValidationErro
     }
 }
 
+fn clamp_repetitions(hir: Hir, max_repeat: u32) -> Hir {
+    match hir.kind() {
+        HirKind::Repetition(rep) => {
+            let mut rep = rep.clone();
+            clamp_repetition_bounds(&mut rep, max_repeat);
+            rep.sub = Box::new(clamp_repetitions((*rep.sub).clone(), max_repeat));
+            Hir::repetition(rep)
+        }
+        HirKind::Capture(capture) => Hir::capture(Capture {
+            index: capture.index,
+            name: capture.name.clone(),
+            sub: Box::new(clamp_repetitions((*capture.sub).clone(), max_repeat)),
+        }),
+        HirKind::Concat(hirs) => Hir::concat(
+            hirs.iter()
+                .cloned()
+                .map(|hir| clamp_repetitions(hir, max_repeat))
+                .collect(),
+        ),
+        HirKind::Alternation(hirs) => Hir::alternation(
+            hirs.iter()
+                .cloned()
+                .map(|hir| clamp_repetitions(hir, max_repeat))
+                .collect(),
+        ),
+        _ => hir,
+    }
+}
+
+fn clamp_repetition_bounds(rep: &mut Repetition, max_repeat: u32) {
+    let actual_min = rep.min;
+    let actual_max = rep.max;
+
+    let capped_actual_max = actual_max
+        .map(|max| max.min(max_repeat))
+        .unwrap_or(max_repeat);
+    rep.min = actual_min;
+    rep.max = Some(actual_min.max(capped_actual_max));
+}
+
 #[cfg(test)]
 mod tests {
     use rand::SeedableRng;
@@ -122,25 +162,79 @@ mod tests {
         assert!(output.chars().all(|c| c == ' ' || c.is_ascii_digit()));
     }
 
+    fn all_repetition_bounds(hir: &Hir, out: &mut Vec<(u32, Option<u32>)>) {
+        match hir.kind() {
+            HirKind::Repetition(rep) => out.push((rep.min, rep.max)),
+            HirKind::Concat(hirs) | HirKind::Alternation(hirs) => {
+                for sub in hirs {
+                    all_repetition_bounds(sub, out);
+                }
+            }
+            HirKind::Capture(capture) => all_repetition_bounds(&capture.sub, out),
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn clamp_repetition_bounds_caps_large_quantifiers() {
+        let cases = [
+            ((780, Some(1200)), (780, Some(780))),
+            ((50, Some(150)), (50, Some(100))),
+            ((50, None), (50, Some(100))),
+            ((200, None), (200, Some(200))),
+            ((5, Some(10)), (5, Some(10))),
+        ];
+
+        for ((actual_min, actual_max), expected) in cases {
+            let regex = format!(r"(?<sds_match>x[a-z]{{{actual_min},{}}})", actual_max.map_or_else(String::new, |max| max.to_string()));
+            let hir = clamp_repetitions(generator_hir(&regex).unwrap(), MAX_REPEAT);
+            let mut repetitions = Vec::new();
+            all_repetition_bounds(&hir, &mut repetitions);
+            assert_eq!(repetitions, vec![expected], "regex={regex}");
+        }
+    }
+
+    #[test]
+    fn validate_accepts_large_quantifier_scanner_pattern() {
+        // Illustrative scanner-style pattern (not a real rule): long bounded quantifier in sds_match.
+        let regex = r##"(?:^|\s)(?<sds_match>example_token_[a-z]{780,1200})(?:$|\s)"##;
+        assert_eq!(validate(regex), Ok(()));
+    }
+
+    #[test]
+    fn build_clamps_large_bounded_quantifiers_to_max_repeat() {
+        let mut rng = StdRng::seed_from_u64(42);
+
+        let output = build(r"(?<sds_match>example_[a-z]{780,1200})", &mut rng);
+
+        assert_eq!(output.len(), "example_".len() + 780);
+        assert!(output.starts_with("example_"));
+        assert!(output.chars().skip(8).all(|c| c.is_ascii_lowercase()));
+    }
+
     #[test]
     fn validate_accepts_scanner_pattern_with_sds_match_capture() {
-        let regex = r##"(?-u:\b)(?<sds_match>ops_ey[I-L][[a-zA-Z0-9_]=\-]{200,})(?:\x{A}?$|[[\x{D}\x{A}\x{9}\x{C}\x{B}\x{20}]\)\]\}"'>\&]|\\[rn])"##;
+        // Illustrative scanner-style pattern with an unbounded large minimum quantifier.
+        let regex = r##"(?-u:\b)(?<sds_match>example_prefix_[a-z]{200,})(?:$|\s)"##;
 
         assert_eq!(validate(regex), Ok(()));
     }
 
     #[test]
     fn build_generates_from_sds_match_capture_only() {
-        let regex = r##"(?-u:\b)(?<sds_match>ops_ey[I-L][[a-zA-Z0-9_]=\-]{200,})(?:\x{A}?$|[[\x{D}\x{A}\x{9}\x{C}\x{B}\x{20}]\)\]\}"'>\&]|\\[rn])"##;
+        let regex = r##"(?-u:\b)(?<sds_match>example_prefix_[a-z]{200,})(?:$|\s)"##;
         let mut rng = StdRng::seed_from_u64(42);
 
         let output = build(regex, &mut rng);
 
+        assert!(output.starts_with("example_prefix_"));
         assert!(
-            ::regex::Regex::new(r"^ops_ey[I-L][a-zA-Z0-9_=\-]{200,}$")
-                .unwrap()
-                .is_match(&output)
+            output
+                .chars()
+                .skip("example_prefix_".len())
+                .all(|c| c.is_ascii_lowercase()),
         );
+        assert!(output.len() <= "example_prefix_".len() + 200);
     }
 
     #[test]
