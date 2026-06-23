@@ -156,6 +156,7 @@ radix_trie,https://github.com/michaelsproul/rust_radix_trie,MIT,Michael Sproul <
 rand,https://github.com/rust-random/rand,MIT OR Apache-2.0,"The Rand Project Developers, The Rust Project Developers"
 rand_chacha,https://github.com/rust-random/rand,MIT OR Apache-2.0,"The Rand Project Developers, The Rust Project Developers, The CryptoCorrosion Contributors"
 rand_core,https://github.com/rust-random/rand,MIT OR Apache-2.0,"The Rand Project Developers, The Rust Project Developers"
+rand_regex,https://github.com/kennytm/rand_regex,MIT,kennytm <kennytm@gmail.com>
 rapidhash,https://github.com/hoxxep/rapidhash,MIT OR Apache-2.0,Liam Gray <gmail@liamg.me>
 raw-cpuid,https://github.com/gz/rust-cpuid,MIT,Gerd Zellweger <mail@gerdzellweger.com>
 rayon,https://github.com/rayon-rs/rayon,MIT OR Apache-2.0,The rayon Authors
