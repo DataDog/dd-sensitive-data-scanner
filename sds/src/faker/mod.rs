@@ -47,12 +47,7 @@ pub fn build(pseudonymization_type: &PseudonymizationType, match_hash: &str) -> 
 
 pub fn validate(pseudonymization_type: &PseudonymizationType) -> Result<(), FakerValidationError> {
     match pseudonymization_type {
-        PseudonymizationType::Regex { regex } => {
-            ::regex::Regex::new(regex).map_err(|_| FakerValidationError::RegexInvalid {
-                regex: regex.clone(),
-            })?;
-            regex::validate(regex)
-        }
+        PseudonymizationType::Regex { regex } => regex::validate(regex),
         PseudonymizationType::Faker {
             string_builder,
             allowed_data,
@@ -116,6 +111,15 @@ mod tests {
             .any(|output| output != first_output);
 
         assert!(found_different_output);
+    }
+
+    #[test]
+    fn validate_accepts_large_quantifier_scanner_pattern() {
+        let pseudonymization_type = PseudonymizationType::Regex {
+            regex: r##"(?:^|\s)(?<sds_match>example_token_[a-z]{780,1200})(?:$|\s)"##.to_string(),
+        };
+
+        assert_eq!(validate(&pseudonymization_type), Ok(()));
     }
 
     #[test]
