@@ -1,12 +1,15 @@
 use rand::{Rng, rngs::StdRng};
 use regex_syntax::{
     ParserBuilder,
-    hir::{Hir, HirKind},
+    hir::{Hir, HirKind, translate::Translator},
 };
 
-use crate::normalization::rust_regex_adapter::convert_to_rust_regex;
+use crate::normalization::rust_regex_adapter::convert_sds_ast_to_rust_regex_ast;
+use crate::parser::ast::Ast;
+use crate::parser::regex_parser::parse_regex_pattern;
 
 use super::FakerValidationError;
+use super::ast_preprocess::strip_assertions;
 
 const MAX_REPEAT: u32 = 100;
 const SDS_MATCH_CAPTURE_NAME: &str = "sds_match";
@@ -22,12 +25,6 @@ pub fn validate(regex: &str) -> Result<(), FakerValidationError> {
     compile_generator(regex).map(|_| ())
 }
 
-fn normalize_regex(regex: &str) -> Result<String, FakerValidationError> {
-    convert_to_rust_regex(regex).map_err(|_| FakerValidationError::RegexInvalid {
-        regex: regex.to_string(),
-    })
-}
-
 fn compile_generator(regex: &str) -> Result<rand_regex::Regex, FakerValidationError> {
     let hir = generator_hir(regex)?;
     rand_regex::Regex::with_hir(hir, MAX_REPEAT).map_err(|error| generator_error(regex, error))
@@ -39,8 +36,25 @@ fn generator_hir(regex: &str) -> Result<Hir, FakerValidationError> {
         return Ok(capture_hir);
     }
 
-    let normalized_regex = normalize_regex(regex)?;
-    parse_hir(&normalized_regex, regex)
+    let sds_ast = parse_regex_pattern(regex).map_err(|_| FakerValidationError::RegexInvalid {
+        regex: regex.to_string(),
+    })?;
+
+    let generator_ast = strip_assertions(sds_ast);
+    if matches!(generator_ast, Ast::Empty) {
+        return Err(FakerValidationError::RegexUnsupported {
+            regex: regex.to_string(),
+            reason: UNSUPPORTED_ZERO_WIDTH_ASSERTION_REASON.to_string(),
+        });
+    }
+
+    let rust_ast = convert_sds_ast_to_rust_regex_ast(&generator_ast).map_err(|_| {
+        FakerValidationError::RegexInvalid {
+            regex: regex.to_string(),
+        }
+    })?;
+
+    translate_rust_ast_to_hir(&rust_ast, regex)
 }
 
 fn parse_hir(pattern: &str, error_regex: &str) -> Result<Hir, FakerValidationError> {
@@ -69,6 +83,18 @@ fn find_named_capture(hir: &Hir, name: &str) -> Option<Hir> {
     }
 }
 
+fn translate_rust_ast_to_hir(
+    rust_ast: &regex_syntax::ast::Ast,
+    error_regex: &str,
+) -> Result<Hir, FakerValidationError> {
+    let pattern = rust_ast.to_string();
+    Translator::new()
+        .translate(&pattern, rust_ast)
+        .map_err(|_| FakerValidationError::RegexInvalid {
+            regex: error_regex.to_string(),
+        })
+}
+
 fn generator_error(regex: &str, error: rand_regex::Error) -> FakerValidationError {
     match error {
         rand_regex::Error::Anchor => FakerValidationError::RegexUnsupported {
@@ -86,14 +112,6 @@ mod tests {
     use rand::SeedableRng;
 
     use super::*;
-
-    #[test]
-    fn normalizes_perl_digit_class_to_ascii_digits() {
-        assert_eq!(
-            normalize_regex(r"0\d( ?\d{2}){4}"),
-            Ok(r"0[0-9]( ?[0-9]{2}){4}".to_string())
-        );
-    }
 
     #[test]
     fn build_uses_ascii_digits_for_perl_digit_class() {
@@ -126,8 +144,33 @@ mod tests {
     }
 
     #[test]
-    fn validate_rejects_whole_pattern_zero_width_assertions() {
+    fn validate_accepts_scanner_pattern_with_stripped_assertions() {
+        let regex = r"\b[a-z]{3}\b";
+
+        assert_eq!(validate(regex), Ok(()));
+    }
+
+    #[test]
+    fn build_generates_from_pattern_with_stripped_assertions() {
+        let regex = r"\b[a-z]{3}\b";
+        let mut rng = StdRng::seed_from_u64(42);
+
+        let output = build(regex, &mut rng);
+
+        assert_eq!(output.len(), 3);
+        assert!(output.chars().all(|c| c.is_ascii_lowercase()));
+    }
+
+    #[test]
+    fn validate_strips_assertions_around_literal() {
         let regex = r"\bfoo$";
+
+        assert_eq!(validate(regex), Ok(()));
+    }
+
+    #[test]
+    fn validate_rejects_assertion_only_pattern() {
+        let regex = r"^\b$";
 
         assert_eq!(
             validate(regex),

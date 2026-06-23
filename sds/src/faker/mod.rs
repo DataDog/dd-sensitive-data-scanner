@@ -1,3 +1,4 @@
+mod ast_preprocess;
 mod regex;
 mod template;
 
