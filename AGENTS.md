@@ -61,6 +61,7 @@ Key files:
 - Test edge cases, error conditions, and happy paths
 - Ensure tests are maintainable and clearly named
 - Each test should validate one specific behavior
+- **Always use simple, fake regex patterns in tests** (e.g. `"secret"`, `"foo"`, `"[0-9]+"`) — never real production regexes. A reader should understand what a test asserts without decoding a complex pattern. It is always possible to construct a simple regex that exercises any edge case.
 
 ## Maintenance
 
