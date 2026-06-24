@@ -70,6 +70,8 @@ pub use encoding::{EncodeIndices, Encoding, Utf8Encoding};
 #[cfg(feature = "dd-sds")]
 pub use event::{Event, EventVisitor, VisitStringResult};
 #[cfg(feature = "dd-sds")]
+pub use faker::{StatelessPseudonymizer, StatelessPseudonymizerError, terminal_pool};
+#[cfg(feature = "dd-sds")]
 pub use match_action::{MatchAction, PartialRedactDirection, PseudonymizationType};
 
 #[cfg(feature = "dd-sds")]
