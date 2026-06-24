@@ -186,7 +186,10 @@ mod tests {
         ];
 
         for ((actual_min, actual_max), expected) in cases {
-            let regex = format!(r"(?<sds_match>x[a-z]{{{actual_min},{}}})", actual_max.map_or_else(String::new, |max| max.to_string()));
+            let regex = format!(
+                r"(?<sds_match>x[a-z]{{{actual_min},{}}})",
+                actual_max.map_or_else(String::new, |max| max.to_string())
+            );
             let hir = clamp_repetitions(generator_hir(&regex).unwrap(), MAX_REPEAT);
             let mut repetitions = Vec::new();
             all_repetition_bounds(&hir, &mut repetitions);

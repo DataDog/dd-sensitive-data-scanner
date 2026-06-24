@@ -1,11 +1,14 @@
 mod ast_preprocess;
 mod regex;
+mod stateless;
 mod template;
 
 use ahash::AHashMap;
 use rand::{SeedableRng, rngs::StdRng};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+pub use stateless::{StatelessPseudonymizer, StatelessPseudonymizerError, terminal_pool};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum PseudonymizationType {

@@ -812,6 +812,7 @@ dependencies = [
  "serde_test",
  "serde_with",
  "serde_yaml",
+ "sha2",
  "slab",
  "slotmap",
  "strum",
