@@ -1,5 +1,5 @@
 use crate::scanner::error::CreateScannerError;
-use crate::{CompiledRule, Labels, RegexRuleConfig};
+use crate::{CompiledRule, Labels, MatchGroupingStrategy, RegexRuleConfig};
 
 pub trait RuleConfig: Send + Sync {
     fn convert_to_compiled_rule(
@@ -10,5 +10,9 @@ pub trait RuleConfig: Send + Sync {
 
     fn as_regex_rule(&self) -> Option<&RegexRuleConfig> {
         None
+    }
+
+    fn default_match_grouping(&self) -> MatchGroupingStrategy {
+        MatchGroupingStrategy::Disabled
     }
 }

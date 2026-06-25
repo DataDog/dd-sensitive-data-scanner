@@ -513,7 +513,8 @@ mod tests {
     use std::{collections::BTreeMap, time::Duration};
 
     use crate::{
-        CompiledRule, MatchAction, Path, Precedence, ReplacementType, RootCompiledRule, Scope,
+        CompiledRule, MatchAction, MatchGroupingStrategy, Path, Precedence, ReplacementType,
+        RootCompiledRule, Scope,
         match_validation::config_v2::{
             BodyMatcher, CustomHttpConfigV2, StatusCodeMatcher, TemplatedMatchString,
         },
@@ -556,6 +557,7 @@ mod tests {
             suppressions: None,
             precedence: Precedence::default(),
             is_supporting_rule: false,
+            match_grouping: MatchGroupingStrategy::default(),
         }
     }
 
@@ -1369,6 +1371,7 @@ calls:
                 suppressions: None,
                 precedence: Precedence::default(),
                 is_supporting_rule: false,
+                match_grouping: MatchGroupingStrategy::default(),
             },
             RootCompiledRule {
                 inner: Box::new(MockCompiledRule),
@@ -1387,6 +1390,7 @@ calls:
                 suppressions: None,
                 precedence: Precedence::default(),
                 is_supporting_rule: false,
+                match_grouping: MatchGroupingStrategy::default(),
             },
         ];
 
@@ -1496,6 +1500,7 @@ match_pairing:
                 suppressions: None,
                 precedence: Precedence::default(),
                 is_supporting_rule: false,
+                match_grouping: MatchGroupingStrategy::default(),
             },
             RootCompiledRule {
                 inner: Box::new(MockCompiledRule),
@@ -1514,6 +1519,7 @@ match_pairing:
                 suppressions: None,
                 precedence: Precedence::default(),
                 is_supporting_rule: false,
+                match_grouping: MatchGroupingStrategy::default(),
             },
         ];
 
@@ -1710,6 +1716,7 @@ match_pairing:
                 suppressions: None,
                 precedence: Precedence::default(),
                 is_supporting_rule: false,
+                match_grouping: MatchGroupingStrategy::default(),
             },
             RootCompiledRule {
                 inner: Box::new(MockCompiledRule),
@@ -1728,6 +1735,7 @@ match_pairing:
                 suppressions: None,
                 precedence: Precedence::default(),
                 is_supporting_rule: false,
+                match_grouping: MatchGroupingStrategy::default(),
             },
         ];
 

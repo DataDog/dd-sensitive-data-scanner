@@ -90,6 +90,15 @@ pub enum Precedence {
     Specific,
 }
 
+/// Controls whether adjacent matches from the same rule should be merged into one span.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MatchGroupingStrategy {
+    #[default]
+    Disabled,
+    AdjacentWhitespace,
+}
+
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RootRuleConfig<T> {
@@ -198,6 +207,12 @@ impl<T> Deref for RootRuleConfig<T> {
         &self.inner
     }
 }
+
+impl RootRuleConfig<Arc<dyn RuleConfig>> {
+    fn resolved_match_grouping(&self) -> MatchGroupingStrategy {
+        self.inner.default_match_grouping()
+    }
+}
 pub struct RootCompiledRule {
     pub inner: Box<dyn CompiledRule>,
     pub scope: Scope,
@@ -206,6 +221,7 @@ pub struct RootCompiledRule {
     pub suppressions: Option<CompiledSuppressions>,
     pub precedence: Precedence,
     pub is_supporting_rule: bool,
+    pub match_grouping: MatchGroupingStrategy,
 }
 
 impl RootCompiledRule {
@@ -651,6 +667,8 @@ impl Scanner {
 
                     self.suppress_matches::<E::Encoding>(&mut rule_matches, content, regex_caches);
 
+                    self.group_adjacent_rule_matches::<E::Encoding>(&mut rule_matches, content);
+
                     self.sort_and_remove_overlapping_rules::<E::Encoding>(&mut rule_matches);
 
                     let will_mutate = rule_matches.iter().any(|rule_match| {
@@ -751,6 +769,40 @@ impl Scanner {
                 true
             }
         });
+    }
+
+    fn group_adjacent_rule_matches<E: Encoding>(
+        &self,
+        rule_matches: &mut Vec<InternalRuleMatch<E>>,
+        content: &str,
+    ) {
+        if rule_matches.len() <= 1 {
+            return;
+        }
+
+        let mut grouped: Vec<InternalRuleMatch<E>> = Vec::with_capacity(rule_matches.len());
+
+        for current in rule_matches.drain(..) {
+            if let Some(last) = grouped.last_mut()
+                && self.rules[last.rule_index].match_grouping
+                    == MatchGroupingStrategy::AdjacentWhitespace
+                && last.rule_index == current.rule_index
+                && last.utf8_end < current.utf8_start
+                && content[last.utf8_end..current.utf8_start]
+                    .chars()
+                    .all(|c| c.is_whitespace())
+            {
+                last.utf8_end = current.utf8_end;
+                last.custom_end = current.custom_end;
+                if last.keyword.is_none() {
+                    last.keyword = current.keyword;
+                }
+                continue;
+            }
+            grouped.push(current);
+        }
+
+        *rule_matches = grouped;
     }
 
     pub fn validate_matches(&self, rule_matches: &mut Vec<RuleMatch>) {
@@ -1119,6 +1171,7 @@ impl ScannerBuilder<'_> {
                     suppressions: compiled_suppressions,
                     precedence: config.precedence,
                     is_supporting_rule: config.is_supporting_rule,
+                    match_grouping: config.resolved_match_grouping(),
                 })
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;
