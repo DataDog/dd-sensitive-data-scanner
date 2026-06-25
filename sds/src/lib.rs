@@ -106,9 +106,9 @@ pub use scanner::shared_pool::{SharedPool, SharedPoolGuard};
 pub use scanner::suppression::Suppressions;
 #[cfg(feature = "dd-sds")]
 pub use scanner::{
-    CompiledRule, MatchEmitter, Precedence, RootCompiledRule, RootRuleConfig, RuleResult,
-    RuleStatus, ScanOptionBuilder, Scanner, ScannerBuilder, SharedData, StringMatch,
-    StringMatchesCtx,
+    CompiledRule, MatchEmitter, MatchGroupingStrategy, Precedence, RootCompiledRule,
+    RootRuleConfig, RuleResult, RuleStatus, ScanOptionBuilder, Scanner, ScannerBuilder, SharedData,
+    StringMatch, StringMatchesCtx,
     config::RuleConfig,
     error::{CreateScannerError, ScannerError},
     regex_rule::config::{
