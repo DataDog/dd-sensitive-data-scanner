@@ -1,11 +1,14 @@
 use crate::RuleMatch;
 use crate::scanner::RootCompiledRule;
+#[cfg(feature = "third-party-active-checkers")]
 use rayon::{ThreadPool, ThreadPoolBuilder};
+#[cfg(feature = "third-party-active-checkers")]
 use std::sync::LazyLock;
 use std::vec::Vec;
 
 /// A locally configured thread pool is used for Rayon to prevent conflicts with other libraries
 /// that might override the (default) global thread pool with different (potentially undesirable) settings
+#[cfg(feature = "third-party-active-checkers")]
 pub static RAYON_THREAD_POOL: LazyLock<ThreadPool> =
     LazyLock::new(|| ThreadPoolBuilder::new().build().unwrap());
 

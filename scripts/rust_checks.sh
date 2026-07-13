@@ -4,6 +4,8 @@ cargo check --manifest-path="sds/Cargo.toml" --benches --features dd_sds_go
 cargo check --manifest-path="sds/Cargo.toml" --bin fuzz --features sds-fuzz
 cargo clippy --manifest-path="sds/Cargo.toml" --features dd_sds_go -- -D warnings
 cargo clippy --manifest-path="sds/Cargo.toml" --bin fuzz --features sds-fuzz -- -D warnings
+# Ensure the crate also builds cleanly without third-party active checkers (no reqwest/aws-sign-v4).
+cargo clippy --manifest-path="sds/Cargo.toml" --no-default-features --features dd-sds,dd_sds_go -- -D warnings
 
 DID_STASH=0
 

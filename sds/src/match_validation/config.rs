@@ -4,10 +4,13 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::{hash::Hash, time::Duration};
 
+#[cfg(feature = "third-party-active-checkers")]
 use crate::match_validation::http_validator_v2::HttpValidatorV2;
 
+#[cfg(feature = "third-party-active-checkers")]
 use super::aws_validator::AwsValidator;
 use super::config_v2::CustomHttpConfigV2;
+#[cfg(feature = "third-party-active-checkers")]
 use super::http_validator::HttpValidator;
 use super::match_validator::MatchValidator;
 
@@ -276,6 +279,7 @@ impl MatchValidationType {
             MatchValidationType::CustomHttpV2(_) => InternalMatchValidationType::CustomHttpV2,
         }
     }
+    #[cfg(feature = "third-party-active-checkers")]
     pub fn into_match_validator(&self) -> Result<Box<dyn MatchValidator>, String> {
         match self {
             MatchValidationType::Aws(aws_type) => match aws_type {
@@ -289,6 +293,14 @@ impl MatchValidationType {
             )),
             MatchValidationType::CustomHttpV2(_) => Ok(Box::new(HttpValidatorV2)),
         }
+    }
+
+    /// When the `third-party-active-checkers` feature is disabled, no network-backed
+    /// validators can be created. Callers should gate validator creation on the same
+    /// feature; this stub exists only so the type keeps a stable public API.
+    #[cfg(not(feature = "third-party-active-checkers"))]
+    pub fn into_match_validator(&self) -> Result<Box<dyn MatchValidator>, String> {
+        Err("Third-party active checkers are not enabled in this build".to_string())
     }
 }
 

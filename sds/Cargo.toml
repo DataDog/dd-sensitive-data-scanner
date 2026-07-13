@@ -12,8 +12,13 @@ name = "dd_sds"
 crate-type = ["staticlib", "cdylib", "lib"]
 
 [features]
-default = ["dd-sds"]
+default = ["dd-sds", "third-party-active-checkers"]
 dd-sds = []
+# Enables third-party active checkers (HTTP and AWS match validation) and their
+# associated network dependencies (reqwest, aws-sign-v4). Enabled by default.
+# Build with `--no-default-features` (plus the features you need) to produce a
+# scanner without these dependencies.
+third-party-active-checkers = ["dep:reqwest", "dep:aws-sign-v4", "dep:rayon"]
 sds-bindings-utils = ["dd-sds"]
 dd_sds_go = ["dd-sds", "sds-bindings-utils", "dep:serde_path_to_error"]
 sds-fuzz = ["dd-sds", "dep:afl", "dep:rand"]
@@ -46,13 +51,13 @@ iban_validate = "4"
 num_cpus = "1.16.0"
 
 lazy_static = "1.5.0"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "charset", "http2", "rustls-tls-native-roots"] }
-aws-sign-v4 = "0.3.0"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "charset", "http2", "rustls-tls-native-roots"], optional = true }
+aws-sign-v4 = { version = "0.3.0", optional = true }
 chrono = { version = "0.4", features = ["serde"] }
 slotmap = "1.0.7"
 base64 = "0.22.1"
 serde_json = "1.0.114"
-rayon = "1.10.0"
+rayon = { version = "1.10.0", optional = true }
 bitcoin = "0.32.6"
 iso_iec_7064 = "0.1.1"
 ethaddr = "0.2.2"

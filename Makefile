@@ -13,9 +13,14 @@ help:     ## Show this help.
 ##@ Build sds-go
 
 .PHONY: build-sds-go
-build-sds-go: ## Build the sds-go lib.
+build-sds-go: ## Build the sds-go lib (third-party active checkers included by default).
 	@echo "Building sds-go lib"
 	cargo build --manifest-path="sds/Cargo.toml" --release --features dd_sds_go
+
+.PHONY: build-sds-go-no-third-party-active-checkers
+build-sds-go-no-third-party-active-checkers: ## Build the sds-go lib without third-party active checkers (drops reqwest/aws-sign-v4).
+	@echo "Building sds-go lib without third-party active checkers"
+	cargo build --manifest-path="sds/Cargo.toml" --release --no-default-features --features dd-sds,dd_sds_go
 
 ##@ Formatting
 
@@ -45,6 +50,8 @@ test-rust: ## Test the rust lib.
 	@echo "Testing rust lib"
 	cargo test --manifest-path="sds/Cargo.toml"
 	cargo test --manifest-path="sds/Cargo.toml" --features dd_sds_go
+	@echo "Checking rust lib builds without third-party active checkers"
+	cargo check --manifest-path="sds/Cargo.toml" --no-default-features --features dd-sds,dd_sds_go
 
 .PHONY: test-all
 test-all: test-rust test-go ## Test the rust lib and golang libs.
