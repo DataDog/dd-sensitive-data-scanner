@@ -1088,10 +1088,7 @@ impl ScannerBuilder<'_> {
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
         // When third-party active checkers are compiled out, no validators are ever
         // created; the map stays empty and `mut` would be unused.
-        #[cfg_attr(
-            not(feature = "third-party-active-checkers"),
-            allow(unused_mut)
-        )]
+        #[cfg_attr(not(feature = "third-party-active-checkers"), allow(unused_mut))]
         let mut match_validators_per_type = AHashMap::new();
 
         #[cfg(feature = "third-party-active-checkers")]
