@@ -7,9 +7,11 @@ use crate::match_validation::{
     match_validator::MatchValidator,
 };
 
+#[cfg(feature = "third-party-active-checkers")]
 use error::MatchValidatorCreationError;
 
 use self::metrics::ScannerMetrics;
+#[cfg(feature = "third-party-active-checkers")]
 use crate::match_validation::match_validator::RAYON_THREAD_POOL;
 use crate::observability::labels::Labels;
 use crate::rule_match::{InternalRuleMatch, RuleMatch};
@@ -482,6 +484,9 @@ pub struct Scanner {
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
     labels: Labels,
+    // Without third-party active checkers this map is always empty and never read, but it is kept
+    // in the struct so the type stays identical across build configurations.
+    #[cfg_attr(not(feature = "third-party-active-checkers"), allow(dead_code))]
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
     per_scanner_data: SharedData,
     async_scan_timeout: Duration,
@@ -753,6 +758,7 @@ impl Scanner {
         });
     }
 
+    #[cfg(feature = "third-party-active-checkers")]
     pub fn validate_matches(&self, rule_matches: &mut Vec<RuleMatch>) {
         // Create MatchValidatorRuleMatch per match_validator_type to pass it to each match_validator
         let mut match_validator_rule_match_per_type = AHashMap::new();
@@ -825,9 +831,12 @@ impl Scanner {
     // uses RAYON_THREAD_POOL internally; running rayon inside block_on causes an EnterError panic
     // when the calling thread re-enters the LocalPool executor context.
     fn finalize_matches(&self, rule_matches: &mut Vec<RuleMatch>, validate: bool) {
+        #[cfg(feature = "third-party-active-checkers")]
         if validate {
             self.validate_matches(rule_matches);
         }
+        #[cfg(not(feature = "third-party-active-checkers"))]
+        let _ = validate;
         // Supporting rules exist only to provide template variables to CustomHttpV2 validators of
         // other rules. Their matches must not appear in the final output. They are retained until
         // after validate_matches so that match pairing can reference their match values.
@@ -1077,8 +1086,15 @@ impl ScannerBuilder<'_> {
     }
 
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
+        // When third-party active checkers are compiled out, no validators are ever
+        // created; the map stays empty and `mut` would be unused.
+        #[cfg_attr(
+            not(feature = "third-party-active-checkers"),
+            allow(unused_mut)
+        )]
         let mut match_validators_per_type = AHashMap::new();
 
+        #[cfg(feature = "third-party-active-checkers")]
         for rule in self.rules.iter() {
             if let Some(match_validation_type) = &rule.get_third_party_active_checker()
                 && match_validation_type.can_create_match_validator()

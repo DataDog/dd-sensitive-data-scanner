@@ -1,3 +1,4 @@
+#[cfg(feature = "third-party-active-checkers")]
 use reqwest::blocking::Response;
 use serde::{Deserialize, Serialize};
 
@@ -49,6 +50,7 @@ impl UnknownResponseTypeInfo {
     }
 }
 
+#[cfg(feature = "third-party-active-checkers")]
 impl From<Response> for UnknownResponseTypeInfo {
     fn from(response: Response) -> Self {
         let status_code = response.status().as_u16();
