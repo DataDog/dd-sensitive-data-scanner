@@ -95,6 +95,7 @@ pub enum Precedence {
 #[serde_as]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RootRuleConfig<T> {
+    #[serde(default)]
     pub match_action: MatchAction,
     #[serde(default)]
     pub scope: Scope,

@@ -307,7 +307,7 @@ pub struct JwtClaimsValidatorConfig {
 
 #[cfg(test)]
 mod test {
-    use crate::{AwsType, CustomHttpConfig, MatchValidationType, RootRuleConfig};
+    use crate::{AwsType, CustomHttpConfig, MatchAction, MatchValidationType, RootRuleConfig};
     use std::collections::BTreeMap;
     use strum::IntoEnumIterator;
 
@@ -349,6 +349,13 @@ mod test {
                 pattern_capture_groups: Some(vec!["capture_group".to_string()]),
             }
         );
+    }
+
+    #[test]
+    fn match_action_should_default_to_none_on_deserialization() {
+        let config: RootRuleConfig<RegexRuleConfig> =
+            serde_json::from_str(r#"{"pattern":"hello"}"#).unwrap();
+        assert_eq!(config.match_action, MatchAction::None);
     }
 
     #[test]
