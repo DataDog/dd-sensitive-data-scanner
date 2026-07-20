@@ -751,7 +751,7 @@ mod test {
 
         assert_eq!(
             content_pattern,
-            "(?:(?-u:\\b)|(?:_))hello(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))world\\*|(?:\\-|_|\\.| |/)aws(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))aws(?:\\-|_|\\.| |/)access(?:(?-u:\\b)|(?:_))"
+            "(?:(?-u:\\b)|(?:_))hello(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))world\\*|(?:\\-|_|\\.| |/)aws(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))aws(?:\\-|_|\\.| |/)?access(?:(?-u:\\b)|(?:_))"
         );
         assert_eq!(
             path_pattern,
@@ -771,7 +771,7 @@ mod test {
     fn test_calculate_multi_word_keyword_pattern() {
         assert_eq!(
             calculate_keyword_content_pattern("multi word-KEYWORD").to_string(),
-            "(?:(?-u:\\b)|(?:_))multi(?:\\-|_|\\.| |/)word(?:\\-|_|\\.| |/)KEYWORD(?:(?-u:\\b)|(?:_))"
+            "(?:(?-u:\\b)|(?:_))multi(?:\\-|_|\\.| |/)?word(?:\\-|_|\\.| |/)?KEYWORD(?:(?-u:\\b)|(?:_))"
         )
     }
 
