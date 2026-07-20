@@ -1,6 +1,6 @@
 use regex_syntax::ast::{
     Alternation, Assertion, AssertionKind, Ast, Flag, Flags, FlagsItem, FlagsItemKind, Group,
-    GroupKind, Literal, LiteralKind, Position, Span,
+    GroupKind, Literal, LiteralKind, Position, Repetition, RepetitionKind, RepetitionOp, Span,
 };
 
 pub(crate) fn should_push_word_boundary(c: char) -> bool {
@@ -21,6 +21,19 @@ pub(crate) fn any_char(chars: &[char]) -> Ast {
             items: vec![],
         }),
         ast: Box::new(Ast::Alternation(Alternation { span: span(), asts })),
+    })
+}
+
+/// Makes `inner` optional (i.e. matches zero or one occurrence of it)
+pub(crate) fn optional(inner: Ast) -> Ast {
+    Ast::Repetition(Repetition {
+        span: span(),
+        op: RepetitionOp {
+            span: span(),
+            kind: RepetitionKind::ZeroOrOne,
+        },
+        greedy: true,
+        ast: Box::new(inner),
     })
 }
 
