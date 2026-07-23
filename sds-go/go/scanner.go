@@ -136,7 +136,7 @@ func (s *Scanner) Delete() {
 	s.RuleConfigs = nil
 }
 
-func (s *Scanner) lowLevelScan(encodedEvent []byte, withValidateMatching bool) ([]byte, error) {
+func (s *Scanner) lowLevelScan(encodedEvent []byte, withValidateMatching bool, scanMetadata map[string]string) ([]byte, error) {
 	cdata := C.CBytes(encodedEvent)
 	defer C.free(cdata)
 
@@ -150,7 +150,18 @@ func (s *Scanner) lowLevelScan(encodedEvent []byte, withValidateMatching bool) (
 	} else {
 		cWithValidateMatching = 0
 	}
-	rvdata := C.scan(C.long(s.Id), cdata, C.long(len(encodedEvent)), (*C.long)(unsafe.Pointer(&retsize)), (*C.long)(unsafe.Pointer(&retcap)), &errorString, cWithValidateMatching)
+
+	var cScanMetadata *C.char
+	if len(scanMetadata) > 0 {
+		metadataJSON, err := json.Marshal(scanMetadata)
+		if err != nil {
+			return nil, fmt.Errorf("scan metadata: %w", err)
+		}
+		cScanMetadata = C.CString(string(metadataJSON))
+		defer C.free(unsafe.Pointer(cScanMetadata))
+	}
+
+	rvdata := C.scan(C.long(s.Id), cdata, C.long(len(encodedEvent)), (*C.long)(unsafe.Pointer(&retsize)), (*C.long)(unsafe.Pointer(&retcap)), &errorString, cWithValidateMatching, cScanMetadata)
 	if errorString != nil {
 		defer C.free_string(errorString)
 		return nil, fmt.Errorf("internal panic: %v", C.GoString(errorString))
@@ -173,8 +184,8 @@ func (s *Scanner) lowLevelScan(encodedEvent []byte, withValidateMatching bool) (
 	return response, nil
 }
 
-func (s *Scanner) scanEncodedMapEvent(encodedEvent []byte, event map[string]interface{}, withValidateMatching bool) (ScanResult, error) {
-	response, err := s.lowLevelScan(encodedEvent, withValidateMatching)
+func (s *Scanner) scanEncodedMapEvent(encodedEvent []byte, event map[string]interface{}, withValidateMatching bool, scanMetadata map[string]string) (ScanResult, error) {
+	response, err := s.lowLevelScan(encodedEvent, withValidateMatching, scanMetadata)
 	if err != nil {
 		return ScanResult{}, err
 	}
@@ -188,8 +199,8 @@ func (s *Scanner) scanEncodedMapEvent(encodedEvent []byte, event map[string]inte
 	return result, nil
 }
 
-func (s *Scanner) scanEncodedStringEvent(encodedEvent []byte, withValidateMatching bool) (ScanResult, error) {
-	response, err := s.lowLevelScan(encodedEvent, withValidateMatching)
+func (s *Scanner) scanEncodedStringEvent(encodedEvent []byte, withValidateMatching bool, scanMetadata map[string]string) (ScanResult, error) {
+	response, err := s.lowLevelScan(encodedEvent, withValidateMatching, scanMetadata)
 	if err != nil {
 		return ScanResult{}, err
 	}
@@ -204,15 +215,22 @@ func (s *Scanner) scanEncodedStringEvent(encodedEvent []byte, withValidateMatchi
 	return result, nil
 }
 
-// Scan sends the string event to the SDS shared library for processing.
-// withValidateMatching defaults to false.
-func (s *Scanner) Scan(event []byte) (ScanResult, error) {
-	return s.ScanWithValidation(event, false)
+// ScanCallOptions configures a single scan call.
+type ScanCallOptions struct {
+	ValidateMatching bool
+	// Metadata is arbitrary key/value context forwarded to rules for this scan via
+	// scan_metadata_json.
+	Metadata map[string]string
 }
 
-// ScanWithValidation sends the string event to the SDS shared library for processing
-// with explicit control over match validation.
-func (s *Scanner) ScanWithValidation(event []byte, withValidateMatching bool) (ScanResult, error) {
+// Scan sends the string event to the SDS shared library for processing.
+// Match validation is disabled.
+func (s *Scanner) Scan(event []byte) (ScanResult, error) {
+	return s.ScanWithOptions(event, ScanCallOptions{})
+}
+
+// ScanWithOptions sends the string event to the SDS shared library for processing.
+func (s *Scanner) ScanWithOptions(event []byte, opts ScanCallOptions) (ScanResult, error) {
 	encodedEvent := make([]byte, 0)
 	encodedEvent, err := encodeStringEvent(event, encodedEvent)
 	if err != nil {
@@ -220,7 +238,7 @@ func (s *Scanner) ScanWithValidation(event []byte, withValidateMatching bool) (S
 	}
 
 	var result ScanResult
-	if result, err = s.scanEncodedStringEvent(encodedEvent, withValidateMatching); err != nil {
+	if result, err = s.scanEncodedStringEvent(encodedEvent, opts.ValidateMatching, opts.Metadata); err != nil {
 		return ScanResult{}, err
 	}
 
@@ -234,24 +252,22 @@ func (s *Scanner) ScanWithValidation(event []byte, withValidateMatching bool) (S
 
 // ScanEventsMap sends a map event to the SDS shared library for processing.
 // In case of mutation, event is updated in place.
-// The returned ScanResult contains the mutated string in the Event attribute (not the event)
-// withValidateMatching defaults to false.
+// The returned ScanResult contains the mutated string in the Event attribute (not the event).
+// Match validation is disabled.
 func (s *Scanner) ScanEventsMap(event map[string]interface{}) (ScanResult, error) {
-	return s.ScanEventsMapWithValidation(event, false)
+	return s.ScanEventsMapWithOptions(event, ScanCallOptions{})
 }
 
-// ScanEventsMapWithValidation sends a map event to the SDS shared library for processing
-// with explicit control over match validation.
+// ScanEventsMapWithOptions sends a map event to the SDS shared library for processing.
 // In case of mutation, event is updated in place.
-// The returned ScanResult contains the mutated string in the Event attribute (not the event)
-func (s *Scanner) ScanEventsMapWithValidation(event map[string]interface{}, withValidateMatching bool) (ScanResult, error) {
+func (s *Scanner) ScanEventsMapWithOptions(event map[string]interface{}, opts ScanCallOptions) (ScanResult, error) {
 	encodedEvent := make([]byte, 0)
 	encodedEvent, err := encodeMapEvent(event, encodedEvent)
 	if err != nil {
 		return ScanResult{}, err
 	}
 
-	return s.scanEncodedMapEvent(encodedEvent, event, withValidateMatching)
+	return s.scanEncodedMapEvent(encodedEvent, event, opts.ValidateMatching, opts.Metadata)
 }
 
 // encodeStringEvent encodes teh given event to send it to the SDS shared library.
