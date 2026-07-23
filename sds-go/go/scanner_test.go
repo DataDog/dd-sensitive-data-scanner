@@ -1083,3 +1083,25 @@ func TestCreateScannerFailsOnSupportingRuleWithMatchAction(t *testing.T) {
 		t.Fatalf("expected ErrSupportingRuleHasMatchAction, got: %v", err)
 	}
 }
+
+// TODO: truly exercise match validation by configuring a rule with a
+// third_party_active_checker (e.g. CustomHttp) and asserting MatchStatus
+// after ScanWithValidation(..., true), similar to the Rust tests in
+// sds/src/scanner/test/match_validation.rs.
+func TestScanWithValidation(t *testing.T) {
+	scanner, err := CreateScanner([]RuleConfig{
+		NewMatchingRule("digits", `\d{16}`, ExtraConfig{}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer scanner.Delete()
+
+	result, err := scanner.ScanWithValidation([]byte("1234567890123456"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Matches) != 1 {
+		t.Fatalf("expected 1 match, got %d", len(result.Matches))
+	}
+}
