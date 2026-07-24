@@ -1,43 +1,24 @@
-#ifndef DD_SDS_H
-#define DD_SDS_H
-
-/* Generated from the Rust FFI. Run `make update-sds-go-header` to update. */
-
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdint.h>
+// From the Go documentation, it's recommended to include stdlib.h if we need
+// to use C.free.
 #include <stdlib.h>
+#include <stdbool.h>
 
-void append_rule_to_list(int64_t rule, int64_t list);
+long create_regex_rule(const char* json_config);
 
-int64_t create_regex_rule(const char *json_config);
+long create_scanner(long rule_list, const char* encoded_labels, int enable_debug_observability, const char** error);
+void delete_scanner(long scanner_id);
 
-int64_t create_rule_list(void);
+// event is a non-null terminated TODO
+// scan_metadata_json may be NULL, or a null-terminated UTF-8 JSON object string.
+const char* scan(long scanner_id, const void* event, long event_size, long *retsize, long *retcap, const char** error, int with_validate_matching, const char* scan_metadata_json);
 
-int64_t create_scanner(int64_t rules,
-                       const char *encoded_labels,
-                       int32_t enable_debug_observability,
-                       const char **error_out);
+void free_vec(const char* string, long len, long cap);
+void free_string(const char* string);
 
-void delete_scanner(int64_t scanner_id);
+void free_any_rule(long rule_ptr);
 
-void free_any_rule(int64_t rule_ptr);
+long create_rule_list();
+void append_rule_to_list(long rule_ptr, long list_ptr);
+void free_rule_list(long list_ptr);
 
-void free_rule_list(int64_t list);
-
-void free_string(const char *ptr);
-
-void free_vec(const char *ptr, int64_t len, int64_t cap);
-
-const char *scan(int64_t scanner_id,
-                 const void *event,
-                 int64_t event_size,
-                 int64_t *retsize,
-                 int64_t *retcapacity,
-                 const char **error_out,
-                 int32_t with_validate_matching,
-                 const char *scan_metadata_json);
-
-const char *validate_regex(const char *regex, const char **error_out);
-
-#endif  /* DD_SDS_H */
+const char* validate_regex(const char* regex, const char** error_out);

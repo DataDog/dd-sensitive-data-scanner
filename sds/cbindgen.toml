@@ -1,9 +1,0 @@
-language = "C"
-include_guard = "DD_SDS_H"
-autogen_warning = "/* Generated from the Rust FFI. Run `make update-sds-go-header` to update. */"
-documentation = false
-style = "type"
-sort_by = "Name"
-
-[export]
-item_types = ["functions"]
