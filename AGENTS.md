@@ -7,6 +7,9 @@ This is a multi-language library providing core Sensitive Data Scanner (SDS) fun
 ## Build & Test Commands
 
 Use `make` to see available commands for building, testing, and formatting.
+`make check-rust` requires `cargo-hack` 0.6.45, and `make check-sds-go-header` requires `cbindgen`
+0.29.2. The Rust check and test targets require the Hyperscan development library so they can check
+every Cargo feature.
 
 ## Code Quality Requirements
 
@@ -40,6 +43,7 @@ Key files:
 - `sds/src/native/` - Rust side of the Go FFI, enabled with the `dd_sds_go` feature
 - `sds/src/bindings_utils.rs` - Shared binding utilities, enabled with the `sds-bindings-utils` feature
 - `sds-go/go/scanner.go` - Main Go API
+- `sds-go/go/dd_sds.h` - Generated C header for the Rust FFI
 
 
 ## Code Quality Standards
