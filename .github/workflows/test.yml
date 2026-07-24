@@ -35,11 +35,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes libhyperscan-dev
           cargo install cargo-hack --version 0.6.45 --locked
-          cargo install cbindgen --version 0.29.2 --locked
       - name: "Rust checks"
         run: make check-rust
-      - name: "Verify the Go C header matches the Rust FFI"
-        run: make check-sds-go-header
       - name: "Rust tests"
         run: make test-rust
   sds-go:
@@ -47,8 +44,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: source "$HOME/.cargo/env"
-      - name: "Build the SDS Go/Rust wrapper"
-        run: make build-sds-go
+      - name: "Install Go binding check dependencies"
+        run: cargo install cbindgen --version 0.29.2 --locked
+      - name: "Build and test the SDS Go bindings"
+        run: make check-sds-go-bindings
       - name: "Run the Go linter"
         run: |
           cd sds-go/go
@@ -58,9 +57,6 @@ jobs:
           LD_LIBRARY_PATH=../../sds/target/release staticcheck ./...
           cd ../..
           make format-go
-      - name: "Run the Go unit tests"
-        working-directory: sds-go/go
-        run: LD_LIBRARY_PATH=../../sds/target/release go test -v .
       - name: "Make sure the example builds and stays relevant"
         working-directory: sds-go/go
         run: |

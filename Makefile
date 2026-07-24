@@ -47,7 +47,7 @@ format-all: format-rust format-go ## Format the rust lib and golang libs.
 .PHONY: test-go
 test-go: ## Test the golang lib.
 	@echo "Testing golang lib"
-	cd sds-go/go && go test ./...
+	cd sds-go/go && LD_LIBRARY_PATH="$(ROOT_DIR)/sds/target/release" DYLD_LIBRARY_PATH="$(ROOT_DIR)/sds/target/release" go test ./...
 	
 .PHONY: test-rust
 test-rust: ## Test the rust lib.
@@ -73,9 +73,11 @@ check-rust: ## Check the rust lib.
 	@echo "Checking rust lib"
 	bash ./scripts/rust_checks.sh
 
-.PHONY: check-sds-go-header
-check-sds-go-header: ## Check that the Go C header matches the Rust FFI.
+.PHONY: check-sds-go-bindings
+check-sds-go-bindings: ## Build and test the Go bindings against the Rust library.
 	cd sds && cbindgen --quiet --config cbindgen.toml --crate dd-sensitive-data-scanner --verify --output ../sds-go/go/dd_sds.h .
+	$(MAKE) build-sds-go
+	$(MAKE) test-go
 
 ##@ Licenses generation
 
