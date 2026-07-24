@@ -39,8 +39,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: source "$HOME/.cargo/env"
-      - name: "Build the SDS Go/Rust wrapper"
-        run: make build-sds-go
+      - name: "Install Go binding check dependencies"
+        run: cargo install cbindgen --version 0.29.2 --locked
+      - name: "Verify, build, and test the SDS Go bindings"
+        run: make check-sds-go-bindings
       - name: "Run the Go linter"
         run: |
           cd sds-go/go
@@ -50,9 +52,6 @@ jobs:
           LD_LIBRARY_PATH=../../sds/target/release staticcheck ./...
           cd ../..
           make format-go
-      - name: "Run the Go unit tests"
-        working-directory: sds-go/go
-        run: LD_LIBRARY_PATH=../../sds/target/release go test -v .
       - name: "Make sure the example builds and stays relevant"
         working-directory: sds-go/go
         run: |

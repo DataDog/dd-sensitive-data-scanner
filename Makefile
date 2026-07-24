@@ -22,6 +22,10 @@ build-sds-go-no-third-party-active-checkers: ## Build the sds-go lib without thi
 	@echo "Building sds-go lib without third-party active checkers"
 	cargo build --manifest-path="sds/Cargo.toml" --release --no-default-features --features dd-sds,dd_sds_go
 
+.PHONY: update-sds-go-header
+update-sds-go-header: ## Regenerate the C header used by the Go bindings.
+	cd sds && cbindgen --quiet --config cbindgen.toml --crate dd-sensitive-data-scanner --output ../sds-go/go/dd_sds.h .
+
 ##@ Formatting
 
 .PHONY: format-go
@@ -43,7 +47,7 @@ format-all: format-rust format-go ## Format the rust lib and golang libs.
 .PHONY: test-go
 test-go: ## Test the golang lib.
 	@echo "Testing golang lib"
-	cd sds-go/go && go test ./...
+	cd sds-go/go && LD_LIBRARY_PATH="$(ROOT_DIR)/sds/target/release" DYLD_LIBRARY_PATH="$(ROOT_DIR)/sds/target/release" go test -count=1 ./...
 	
 .PHONY: test-rust
 test-rust: ## Test the rust lib.
@@ -71,6 +75,12 @@ check-go: ## Check the golang lib.
 check-rust: ## Check the rust lib.
 	@echo "Checking rust lib"
 	bash ./scripts/rust_checks.sh
+
+.PHONY: check-sds-go-bindings
+check-sds-go-bindings: ## Verify, build, and test the Go bindings against the Rust FFI.
+	cd sds && cbindgen --quiet --config cbindgen.toml --crate dd-sensitive-data-scanner --verify --output ../sds-go/go/dd_sds.h .
+	$(MAKE) build-sds-go
+	$(MAKE) test-go
 
 ##@ Licenses generation
 

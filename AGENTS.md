@@ -7,6 +7,7 @@ This is a multi-language library providing core Sensitive Data Scanner (SDS) fun
 ## Build & Test Commands
 
 Use `make` to see available commands for building, testing, and formatting.
+`make check-sds-go-bindings` requires `cbindgen` 0.29.2.
 
 ## Code Quality Requirements
 
@@ -40,6 +41,7 @@ Key files:
 - `sds/src/native/` - Rust side of the Go FFI, enabled with the `dd_sds_go` feature
 - `sds/src/bindings_utils.rs` - Shared binding utilities, enabled with the `sds-bindings-utils` feature
 - `sds-go/go/scanner.go` - Main Go API
+- `sds-go/go/dd_sds.h` - Generated C header for the Rust FFI
 
 
 ## Code Quality Standards

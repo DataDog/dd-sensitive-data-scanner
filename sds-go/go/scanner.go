@@ -90,12 +90,12 @@ func CreateScannerWithOptions(ruleConfigs []RuleConfig, options ScannerOptions) 
 	encodedLabelsJson := C.CString(string(labelsMarshalled))
 	defer C.free(unsafe.Pointer(encodedLabelsJson))
 
-	var cEnableDebugObservability C.int
+	var cEnableDebugObservability C.int32_t
 	if options.EnableDebugObservability {
 		cEnableDebugObservability = 1
 	}
 	var errorString *C.char
-	id := C.create_scanner(C.long(ruleList.nativePtr), encodedLabelsJson, cEnableDebugObservability, &errorString)
+	id := C.create_scanner(C.int64_t(ruleList.nativePtr), encodedLabelsJson, cEnableDebugObservability, &errorString)
 
 	if id < 0 {
 		switch id {
@@ -131,7 +131,7 @@ func CreateScannerWithOptions(ruleConfigs []RuleConfig, options ScannerOptions) 
 // Delete deletes the instance of the current Scanner.
 // The current Scanner should not be reused.
 func (s *Scanner) Delete() {
-	C.delete_scanner(C.long(s.Id))
+	C.delete_scanner(C.int64_t(s.Id))
 	s.Id = 0
 	s.RuleConfigs = nil
 }
@@ -144,7 +144,7 @@ func (s *Scanner) lowLevelScan(encodedEvent []byte, withValidateMatching bool, s
 	var retcap int64
 	var errorString *C.char
 
-	var cWithValidateMatching C.int
+	var cWithValidateMatching C.int32_t
 	if withValidateMatching {
 		cWithValidateMatching = 1
 	} else {
@@ -161,7 +161,7 @@ func (s *Scanner) lowLevelScan(encodedEvent []byte, withValidateMatching bool, s
 		defer C.free(unsafe.Pointer(cScanMetadata))
 	}
 
-	rvdata := C.scan(C.long(s.Id), cdata, C.long(len(encodedEvent)), (*C.long)(unsafe.Pointer(&retsize)), (*C.long)(unsafe.Pointer(&retcap)), &errorString, cWithValidateMatching, cScanMetadata)
+	rvdata := C.scan(C.int64_t(s.Id), cdata, C.int64_t(len(encodedEvent)), (*C.int64_t)(unsafe.Pointer(&retsize)), (*C.int64_t)(unsafe.Pointer(&retcap)), &errorString, cWithValidateMatching, cScanMetadata)
 	if errorString != nil {
 		defer C.free_string(errorString)
 		return nil, fmt.Errorf("internal panic: %v", C.GoString(errorString))
@@ -174,7 +174,7 @@ func (s *Scanner) lowLevelScan(encodedEvent []byte, withValidateMatching bool, s
 
 	// otherwise we received data initially owned by rust, once we've used it,
 	// use `free_vec` to let know rust it can drop this memory.
-	defer C.free_vec(rvdata, C.long(retsize), C.long(retcap))
+	defer C.free_vec(rvdata, C.int64_t(retsize), C.int64_t(retcap))
 
 	// Note that in the Go 1.21 documentation, GoBytes is part of:
 	// > A few special functions convert between Go and C types by making copies of the data.

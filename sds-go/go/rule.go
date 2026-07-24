@@ -24,7 +24,7 @@ func CreateRuleFromRawPtr(ptr int64) Rule {
 // Delete deletes the native resources associated with this Rule.
 // It is safe to delete it while it is still being used by a scanner.
 func (r Rule) Delete() {
-	C.free_any_rule(C.long(r.nativeRulePtr))
+	C.free_any_rule(C.int64_t(r.nativeRulePtr))
 }
 
 type RuleList struct {
@@ -40,11 +40,11 @@ func CreateRuleList() RuleList {
 }
 
 func (l RuleList) AppendRule(r *Rule) {
-	C.append_rule_to_list(C.long(r.nativeRulePtr), C.long(l.nativePtr))
+	C.append_rule_to_list(C.int64_t(r.nativeRulePtr), C.int64_t(l.nativePtr))
 }
 
 // Delete deletes the native resources associated with this RuleList.
 // It is safe to delete it while it is still being used by a scanner.
 func (r RuleList) Delete() {
-	C.free_rule_list(C.long(r.nativePtr))
+	C.free_rule_list(C.int64_t(r.nativePtr))
 }
