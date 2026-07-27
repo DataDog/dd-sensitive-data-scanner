@@ -1,27 +1,10 @@
-set -e
+#!/usr/bin/env bash
 
-cargo check --manifest-path="sds/Cargo.toml" --benches --features dd_sds_go
-cargo check --manifest-path="sds/Cargo.toml" --bin fuzz --features sds-fuzz
-cargo clippy --manifest-path="sds/Cargo.toml" --features dd_sds_go -- -D warnings
-cargo clippy --manifest-path="sds/Cargo.toml" --bin fuzz --features sds-fuzz -- -D warnings
-# Ensure the crate also builds cleanly without third-party active checkers (no reqwest/aws-sign-v4).
-cargo clippy --manifest-path="sds/Cargo.toml" --no-default-features --features dd-sds,dd_sds_go -- -D warnings
+set -euo pipefail
 
-DID_STASH=0
+cd "$(dirname "$0")/../sds"
 
-## Formatting related checks
-cleanup() {
-    if [ "$DID_STASH" -eq 1 ]; then
-        git stash pop -q || true
-    fi
-}
-trap cleanup EXIT
-
-# Stash only if there are changes (staged or unstaged)
-if ! git diff --quiet || ! git diff --cached --quiet; then
-    git stash push -u -m "rust_checks.sh temp stash" >/dev/null 2>&1 || true
-    DID_STASH=1
-fi
-
-cargo fmt --check --manifest-path="sds/Cargo.toml" --all
-git diff --exit-code
+cargo hack check --each-feature --no-dev-deps
+cargo hack clippy --each-feature --no-dev-deps -- -D warnings
+cargo check --all-targets --all-features
+cargo fmt --all --check

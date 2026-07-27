@@ -30,8 +30,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
+      - name: "Install Rust check dependencies"
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libhyperscan-dev
+          cargo install cargo-hack --version 0.6.45 --locked
       - name: "Rust checks"
-        run: bash ./scripts/rust_checks.sh
+        run: make check-rust
       - name: "Rust tests"
         run: make test-rust
   sds-go:

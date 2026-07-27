@@ -8,6 +8,8 @@ This is a multi-language library providing core Sensitive Data Scanner (SDS) fun
 
 Use `make` to see available commands for building, testing, and formatting.
 `make check-sds-go-bindings` requires `cbindgen` 0.29.2.
+`make check-rust` requires `cargo-hack` 0.6.45. The Rust check and test targets require the
+Hyperscan development library so they can check every Cargo feature.
 
 ## Code Quality Requirements
 
