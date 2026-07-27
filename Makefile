@@ -22,8 +22,16 @@ build-sds-go-no-third-party-active-checkers: ## Build the sds-go lib without thi
 	@echo "Building sds-go lib without third-party active checkers"
 	cargo build --manifest-path="sds/Cargo.toml" --release --no-default-features --features dd-sds,dd_sds_go
 
+.PHONY: check-cbindgen
+check-cbindgen: ## Ensure cbindgen is installed for Go binding header generation.
+	@if ! command -v cbindgen >/dev/null 2>&1; then \
+		echo "error: cbindgen is not installed (required for Go binding header generation)." >&2; \
+		echo "Install with: cargo install cbindgen --version 0.29.2 --locked" >&2; \
+		exit 1; \
+	fi
+
 .PHONY: update-sds-go-header
-update-sds-go-header: ## Regenerate the C header used by the Go bindings.
+update-sds-go-header: check-cbindgen ## Regenerate the C header used by the Go bindings.
 	cd sds && cbindgen --quiet --config cbindgen.toml --crate dd-sensitive-data-scanner --output ../sds-go/go/dd_sds.h .
 
 ##@ Formatting
