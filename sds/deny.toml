@@ -1,0 +1,31 @@
+[advisories]
+version = 2
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "warn"
+ignore = [
+  # async-std is only reachable through httpmock, a dev/test-only dependency,
+  # so it never ships in the library. RUSTSEC-2025-0052 has no safe upgrade.
+  { id = "RUSTSEC-2025-0052", reason = "async-std is unmaintained but only pulled in transitively by the httpmock dev-dependency" },
+]
+
+[bans]
+multiple-versions = "allow"  # Allow multiple versions of same crate
+
+[licenses]
+version = 2
+# Only licenses actually present in the dependency graph are allowed. All are
+# permissive and part of Datadog's standard allow policy (from Saluki).
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "ISC",
+  "MIT",
+  "MITNFA",
+  "Unicode-3.0",
+  "Zlib",
+]

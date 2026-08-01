@@ -70,3 +70,12 @@ jobs:
         run: cargo install dd-rust-license-tool
       - name: "Check LICENSE-3rdparty.csv"
         run: make check-licenses
+  cargo-deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: "Install cargo-deny"
+        run: cargo install cargo-deny --version 0.19.8 --locked
+      - name: "Check dependency advisories, licenses and bans"
+        run: make check-deny

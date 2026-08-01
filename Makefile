@@ -69,6 +69,13 @@ check-rust: ## Check the rust lib.
 	@echo "Checking rust lib"
 	bash ./scripts/rust_checks.sh
 
+##@ Supply chain
+
+.PHONY: check-deny
+check-deny: ## Check dependencies for advisories, license and ban policy (cargo-deny).
+	@echo "Checking dependencies with cargo-deny"
+	cd sds && cargo deny --all-features check
+
 ##@ Licenses generation
 
 .PHONY: update-licenses
