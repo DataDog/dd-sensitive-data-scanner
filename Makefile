@@ -15,12 +15,12 @@ help:     ## Show this help.
 .PHONY: build-sds-go
 build-sds-go: ## Build the sds-go lib (third-party active checkers included by default).
 	@echo "Building sds-go lib"
-	cargo build --manifest-path="sds/Cargo.toml" --release --features dd_sds_go
+	cd sds && cargo build --release --features dd_sds_go
 
 .PHONY: build-sds-go-no-third-party-active-checkers
 build-sds-go-no-third-party-active-checkers: ## Build the sds-go lib without third-party active checkers (drops reqwest/aws-sign-v4).
 	@echo "Building sds-go lib without third-party active checkers"
-	cargo build --manifest-path="sds/Cargo.toml" --release --no-default-features --features dd-sds,dd_sds_go
+	cd sds && cargo build --release --no-default-features --features dd_sds_go
 
 ##@ Formatting
 
@@ -33,7 +33,7 @@ format-go: ## Format the golang lib.
 .PHONY: format-rust
 format-rust: ## Format the rust lib.
 	@echo "Formatting rust lib"
-	cargo fmt --manifest-path="sds/Cargo.toml" --all
+	cd sds && cargo fmt --all
 
 .PHONY: format-all
 format-all: format-rust format-go ## Format the rust lib and golang libs.
@@ -48,10 +48,7 @@ test-go: ## Test the golang lib.
 .PHONY: test-rust
 test-rust: ## Test the rust lib.
 	@echo "Testing rust lib"
-	cargo test --manifest-path="sds/Cargo.toml"
-	cargo test --manifest-path="sds/Cargo.toml" --features dd_sds_go
-	@echo "Checking rust lib builds without third-party active checkers"
-	cargo check --manifest-path="sds/Cargo.toml" --no-default-features --features dd-sds,dd_sds_go
+	cd sds && cargo test --lib --all-features
 
 .PHONY: test-all
 test-all: test-rust test-go ## Test the rust lib and golang libs.
@@ -71,6 +68,13 @@ check-go: ## Check the golang lib.
 check-rust: ## Check the rust lib.
 	@echo "Checking rust lib"
 	bash ./scripts/rust_checks.sh
+
+##@ Supply chain
+
+.PHONY: check-deny
+check-deny: ## Check dependencies for advisories, license and ban policy (cargo-deny).
+	@echo "Checking dependencies with cargo-deny"
+	cd sds && cargo deny --all-features check
 
 ##@ Licenses generation
 

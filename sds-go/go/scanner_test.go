@@ -902,7 +902,9 @@ func runTestMap(t *testing.T, scanner *Scanner, testData map[string]mapTestResul
 
 func runTest(t *testing.T, scanner *Scanner, testData map[string]testResult, withThirdPartyActiveChecking bool) {
 	for event, expected := range testData {
-		result, err := scanner.ScanWithValidation([]byte(event), withThirdPartyActiveChecking)
+		result, err := scanner.ScanWithOptions([]byte(event), ScanCallOptions{
+			ValidateMatching: withThirdPartyActiveChecking,
+		})
 		if err != nil {
 			t.Fatal("failed to scan the event:", err.Error())
 		}
@@ -1081,5 +1083,32 @@ func TestCreateScannerFailsOnSupportingRuleWithMatchAction(t *testing.T) {
 	}
 	if err != ErrSupportingRuleHasMatchAction {
 		t.Fatalf("expected ErrSupportingRuleHasMatchAction, got: %v", err)
+	}
+}
+
+func TestScanWithOptions(t *testing.T) {
+	scanner, err := CreateScanner([]RuleConfig{
+		NewMatchingRule("digits", `\d{16}`, ExtraConfig{
+			ThirdPartyActiveChecker: NewCustomHttpValidation("https://api.example.com/validate"),
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer scanner.Delete()
+
+	result, err := scanner.ScanWithOptions([]byte("1234567890123456"), ScanCallOptions{
+		ValidateMatching: true,
+		Metadata:         map[string]string{"org_id": "123"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Matches) != 1 {
+		t.Fatalf("expected 1 match, got %d", len(result.Matches))
+	}
+	// Unreachable endpoint → Error(...); the point is validation ran and set a status.
+	if result.Matches[0].MatchStatus == "" || result.Matches[0].MatchStatus == MatchStatusNotChecked {
+		t.Fatalf("expected match validation status, got %q", result.Matches[0].MatchStatus)
 	}
 }

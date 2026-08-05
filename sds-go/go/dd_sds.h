@@ -9,7 +9,8 @@ long create_scanner(long rule_list, const char* encoded_labels, int enable_debug
 void delete_scanner(long scanner_id);
 
 // event is a non-null terminated TODO
-const char* scan(long scanner_id, const void* event, long event_size, long *retsize, long *retcap, const char** error, int with_validate_matching);
+// scan_metadata_json may be NULL, or a null-terminated UTF-8 JSON object string.
+const char* scan(long scanner_id, const void* event, long event_size, long *retsize, long *retcap, const char** error, int with_validate_matching, const char* scan_metadata_json);
 
 void free_vec(const char* string, long len, long cap);
 void free_string(const char* string);
