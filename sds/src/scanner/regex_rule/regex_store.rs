@@ -34,6 +34,12 @@ pub fn get_memoized_regex<T>(
     get_memoized_regex_with_custom_store(pattern, regex_factory, &REGEX_STORE)
 }
 
+/// Drops store bookkeeping for regexes no longer referenced by any scanner (otherwise
+/// cleared only every `GC_FREQUENCY` inserts).
+pub fn gc_regex_store() {
+    REGEX_STORE.lock().unwrap().gc();
+}
+
 fn get_memoized_regex_with_custom_store<T>(
     pattern: &str,
     regex_factory: impl FnOnce(&str) -> Result<regex_automata::meta::Regex, T>,

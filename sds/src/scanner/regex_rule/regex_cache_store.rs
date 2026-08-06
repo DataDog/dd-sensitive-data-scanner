@@ -1,5 +1,5 @@
 use crate::SharedPool;
-use crate::scanner::regex_rule::regex_store::{RegexCacheKey, SharedRegex};
+use crate::scanner::regex_rule::regex_store::{RegexCacheKey, SharedRegex, gc_regex_store};
 use lazy_static::lazy_static;
 use regex_automata::meta::Regex as MetaRegex;
 use slotmap::SecondaryMap;
@@ -31,6 +31,13 @@ pub fn access_regex_caches<T>(func: impl FnOnce(&mut RegexCaches) -> T) -> T {
 /// old pool alive via their `Arc` clone; caches are recreated on the next scan.
 pub fn reset_regex_caches() {
     *REGEX_CACHE_STORE.write().unwrap() = new_regex_cache_pool();
+}
+
+/// Clears both scanning caches: per-thread scratch (`reset_regex_caches`) and unreferenced
+/// compiled regexes (`gc_regex_store`). Call when idle to drop dd-sds to a near-zero footprint.
+pub fn clear_all_caches() {
+    reset_regex_caches();
+    gc_regex_store();
 }
 
 pub struct RegexCaches {
