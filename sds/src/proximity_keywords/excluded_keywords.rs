@@ -129,6 +129,35 @@ pub fn get_excluded_keyword_match(
 mod tests {
 
     use super::*;
+    use crate::Labels;
+    use crate::proximity_keywords::compile_keywords_proximity_config;
+    use crate::scanner::regex_rule::config::ProximityKeywordsConfig;
+
+    fn compile_excluded_keywords(
+        look_ahead: usize,
+        keywords: &[&str],
+    ) -> CompiledExcludedProximityKeywords {
+        let (_, excluded) = compile_keywords_proximity_config(
+            &ProximityKeywordsConfig {
+                look_ahead_character_count: look_ahead,
+                included_keywords: vec![],
+                excluded_keywords: keywords.iter().map(|s| s.to_string()).collect(),
+            },
+            &Labels::empty(),
+        )
+        .unwrap();
+        excluded.unwrap()
+    }
+
+    #[test]
+    fn excluded_multi_word_keyword_matches_concatenated_words() {
+        // Interior link chars are optional so a multi-word excluded keyword also matches
+        // when the words are concatenated together (e.g. "blable" for "bla ble").
+        let excluded = compile_excluded_keywords(30, &["bla ble"]);
+
+        assert!(excluded.is_false_positive_match("blable secret", 7));
+        assert!(excluded.is_false_positive_match("bla ble secret", 8));
+    }
 
     struct TestGetSpanBoundsData {
         content: String,
