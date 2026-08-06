@@ -110,7 +110,10 @@ pub use scanner::{
         ClaimRequirement, JwtClaimsValidatorConfig, ProximityKeywordsConfig, RegexRuleConfig,
         SecondaryValidator,
     },
-    regex_rule::{RegexCacheKey, RegexCacheValue, RegexCaches, SharedRegex, get_memoized_regex},
+    regex_rule::{
+        RegexCacheKey, RegexCacheValue, RegexCaches, SharedRegex, get_memoized_regex,
+        reset_regex_caches,
+    },
     scope::Scope,
 };
 #[cfg(feature = "dd-sds")]
