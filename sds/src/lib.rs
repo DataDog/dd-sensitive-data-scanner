@@ -111,8 +111,8 @@ pub use scanner::{
         SecondaryValidator,
     },
     regex_rule::{
-        RegexCacheKey, RegexCacheValue, RegexCaches, SharedRegex, get_memoized_regex,
-        reset_regex_caches,
+        RegexCacheKey, RegexCacheValue, RegexCaches, SharedRegex, clear_all_caches, gc_regex_store,
+        get_memoized_regex, reset_regex_caches,
     },
     scope::Scope,
 };
