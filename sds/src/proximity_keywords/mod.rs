@@ -5,7 +5,8 @@ pub use crate::proximity_keywords::excluded_keywords::CompiledExcludedProximityK
 pub use crate::proximity_keywords::included_keywords::*;
 
 use crate::ast_utils::{
-    any_char, literal_ast, non_capturing_group, should_push_word_boundary, span, word_boundary,
+    any_char, literal_ast, non_capturing_group, optional, should_push_word_boundary, span,
+    word_boundary,
 };
 use crate::proximity_keywords::ProximityKeywordsValidationError::{
     EmptyKeyword, InvalidLookAheadCharacterCount, KeywordTooLong, TooManyKeywords,
@@ -240,11 +241,22 @@ fn calculate_keyword_content_pattern(keyword: &str) -> Ast {
         keyword_pattern.push(word_boundary_or_link_char())
     }
 
-    for c in keyword.chars() {
+    let char_count = keyword.chars().count();
+    for (i, c) in keyword.chars().enumerate() {
         if MULTI_WORD_KEYWORDS_LINK_CHARS.contains(&c) {
             // All "link chars" are treated the same, so the regex is built allowing any of them
-            // interchangeably
-            keyword_pattern.push(any_char(MULTI_WORD_KEYWORDS_LINK_CHARS))
+            // interchangeably.
+            let separator = any_char(MULTI_WORD_KEYWORDS_LINK_CHARS);
+            if i == 0 || i == char_count - 1 {
+                // A link char at the very start/end of the keyword (e.g. "-host") is part of
+                // the keyword's own literal shape, not a separator between two words, so it
+                // must stay mandatory.
+                keyword_pattern.push(separator)
+            } else {
+                // An interior separator is optional so that concatenated words
+                // (e.g. "blable" for the keyword "bla ble") are matched as well.
+                keyword_pattern.push(optional(separator))
+            }
         } else {
             keyword_pattern.push(Ast::Literal(literal_ast(c)))
         }
@@ -739,7 +751,7 @@ mod test {
 
         assert_eq!(
             content_pattern,
-            "(?:(?-u:\\b)|(?:_))hello(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))world\\*|(?:\\-|_|\\.| |/)aws(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))aws(?:\\-|_|\\.| |/)access(?:(?-u:\\b)|(?:_))"
+            "(?:(?-u:\\b)|(?:_))hello(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))world\\*|(?:\\-|_|\\.| |/)aws(?:(?-u:\\b)|(?:_))|(?:(?-u:\\b)|(?:_))aws(?:\\-|_|\\.| |/)?access(?:(?-u:\\b)|(?:_))"
         );
         assert_eq!(
             path_pattern,
@@ -759,7 +771,7 @@ mod test {
     fn test_calculate_multi_word_keyword_pattern() {
         assert_eq!(
             calculate_keyword_content_pattern("multi word-KEYWORD").to_string(),
-            "(?:(?-u:\\b)|(?:_))multi(?:\\-|_|\\.| |/)word(?:\\-|_|\\.| |/)KEYWORD(?:(?-u:\\b)|(?:_))"
+            "(?:(?-u:\\b)|(?:_))multi(?:\\-|_|\\.| |/)?word(?:\\-|_|\\.| |/)?KEYWORD(?:(?-u:\\b)|(?:_))"
         )
     }
 

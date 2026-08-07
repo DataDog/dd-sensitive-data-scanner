@@ -246,4 +246,50 @@ mod test {
             vec![0]
         );
     }
+
+    #[test]
+    fn multi_word_keyword_matches_concatenated_words() {
+        let keywords = compile_keywords(30, &["bla ble"]);
+
+        assert_eq!(
+            collect_keyword_matches(keywords.keyword_matches("blable secret")),
+            vec![0]
+        );
+        assert_eq!(
+            collect_keyword_matches(keywords.keyword_matches("bla ble secret")),
+            vec![0]
+        );
+        assert_eq!(
+            collect_keyword_matches(keywords.keyword_matches("bla_ble secret")),
+            vec![0]
+        );
+        assert_eq!(
+            collect_keyword_matches(keywords.keyword_matches("bla.ble secret")),
+            vec![0]
+        );
+    }
+
+    #[test]
+    fn leading_and_trailing_link_chars_stay_mandatory() {
+        // The leading "-" is part of the keyword's own shape, not a word separator, so it
+        // must not become optional (otherwise "-host" would also match bare "host").
+        let keywords = compile_keywords(30, &["-host"]);
+
+        assert_eq!(
+            collect_keyword_matches(keywords.keyword_matches("-host ping")),
+            vec![0]
+        );
+        assert!(collect_keyword_matches(keywords.keyword_matches("host ping")).is_empty());
+
+        // Same reasoning for a trailing link char: the "-" in "host-" must stay mandatory,
+        // so it requires an actual link char after "host" and won't match bare "host" with
+        // nothing following it.
+        let keywords = compile_keywords(30, &["host-"]);
+
+        assert_eq!(
+            collect_keyword_matches(keywords.keyword_matches("host-local")),
+            vec![0]
+        );
+        assert!(collect_keyword_matches(keywords.keyword_matches("this is host")).is_empty());
+    }
 }
