@@ -72,6 +72,7 @@ rand = { version = "0.8.5", optional = true }
 slab = "0.4.11"
 farmhash2 = "1.1.5"
 regex-pool = "0.1.1"
+tiktoken-rs = "0.11.0"
 
 # Optional fuzzing dependency.
 hyperscan = { version = "0.3.2", features = ["static"], optional = true }
