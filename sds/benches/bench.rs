@@ -3,7 +3,7 @@ use dd_sds::{
     ContentVisitor, ExclusionCheck, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
     RootRuleConfig, RuleIndexVisitor, ScannerError, Scope, ScopedRuleSet,
 };
-use dd_sds::{LuhnChecksum, Validator};
+use dd_sds::{EntropyCheck, LuhnChecksum, TokenEfficiencyCheck, Validator};
 use dd_sds::{Scanner, SimpleEvent};
 use std::collections::BTreeMap;
 
@@ -112,6 +112,35 @@ pub fn luhn_checksum(c: &mut Criterion) {
             for credit_card in credit_cards.clone().into_iter() {
                 LuhnChecksum.is_valid_match(credit_card);
                 // luhn::valid(credit_card);
+            }
+        })
+    });
+}
+
+/// `TokenEfficiencyCheck` runs a full BPE tokenization, so it is far more expensive than the
+/// other statistical validator. Benchmark it against `EntropyCheck` on identical inputs to keep
+/// that gap visible.
+pub fn token_efficiency_vs_entropy(c: &mut Criterion) {
+    let values = vec![
+        "SOKXxs00k30PUuH4KLoDPNmwlQ4EwXKw",
+        "LibraryWebpageUploadUr1RowStatus",
+        "d41d8cd98f00b204e9800998ecf8427e",
+        "this is a normal sentence with common words",
+    ];
+
+    c.bench_function("entropy-check", |b| {
+        b.iter(|| {
+            for value in &values {
+                EntropyCheck.is_valid_match(value);
+            }
+        })
+    });
+
+    let token_efficiency = TokenEfficiencyCheck::new();
+    c.bench_function("token-efficiency-check", |b| {
+        b.iter(|| {
+            for value in &values {
+                token_efficiency.is_valid_match(value);
             }
         })
     });
@@ -318,6 +347,7 @@ criterion::criterion_group!(
     benches,
     scoped_ruleset,
     luhn_checksum,
+    token_efficiency_vs_entropy,
     included_keywords,
     included_keywords_on_path,
     multipass_excluded_scan
