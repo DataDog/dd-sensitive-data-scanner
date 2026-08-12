@@ -50,6 +50,7 @@ mod slovenian_pin_checksum;
 mod spain_dni_checksum;
 mod spanish_nuss_checksum;
 mod sweden_pin_checksum;
+mod token_efficiency;
 mod uk_nino_format_check;
 mod uk_trn_checksum;
 mod us_dea_checksum;
@@ -115,6 +116,7 @@ pub use crate::secondary_validation::slovenian_pin_checksum::SlovenianPINChecksu
 pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
 pub use crate::secondary_validation::spanish_nuss_checksum::SpanishNussChecksum;
 pub use crate::secondary_validation::sweden_pin_checksum::SwedenPINChecksum;
+pub use crate::secondary_validation::token_efficiency::TokenEfficiencyCheck;
 pub use crate::secondary_validation::uk_nino_format_check::UkNinoFormatCheck;
 pub use crate::secondary_validation::uk_trn_checksum::UkTrnChecksum;
 pub use crate::secondary_validation::us_dea_checksum::UsDeaChecksum;
@@ -272,6 +274,7 @@ impl SecondaryValidator {
             SecondaryValidator::SpanishDniChecksum => Arc::new(SpanishDniChecksum),
             SecondaryValidator::SpanishNussChecksum => Arc::new(SpanishNussChecksum),
             SecondaryValidator::SwedenPINChecksum => Arc::new(SwedenPINChecksum),
+            SecondaryValidator::TokenEfficiencyCheck => Arc::new(TokenEfficiencyCheck::new()),
             SecondaryValidator::UkNinoFormatCheck => Arc::new(UkNinoFormatCheck),
             SecondaryValidator::UkTrnChecksum => Arc::new(UkTrnChecksum),
             SecondaryValidator::UsDeaChecksum => Arc::new(UsDeaChecksum),
