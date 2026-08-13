@@ -131,5 +131,5 @@ pub use scanner::debug_scan::debug_scan;
 #[cfg(all(feature = "dd-sds", any(feature = "testing", feature = "bench")))]
 pub use crate::{
     scoped_ruleset::{ContentVisitor, RuleIndexVisitor, ScopedRuleSet},
-    secondary_validation::{LuhnChecksum, Validator},
+    secondary_validation::{EntropyCheck, LuhnChecksum, TokenEfficiencyCheck, Validator},
 };

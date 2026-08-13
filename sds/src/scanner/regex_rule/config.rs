@@ -277,6 +277,7 @@ pub enum SecondaryValidator {
     SpanishDniChecksum,
     SpanishNussChecksum,
     SwedenPINChecksum,
+    TokenEfficiencyCheck,
     UkNinoFormatCheck,
     UkTrnChecksum,
     UsDeaChecksum,

@@ -1,6 +1,6 @@
 use crate::SecondaryValidator::{
     ChineseIdChecksum, GithubTokenChecksum, IbanChecker, JwtExpirationChecker, NhsCheckDigit,
-    NonHexChecker,
+    NonHexChecker, TokenEfficiencyCheck,
 };
 use crate::scanner::RootRuleConfig;
 use crate::{MatchAction, RegexRuleConfig, ScannerBuilder, SecondaryValidator};
@@ -199,4 +199,35 @@ fn test_non_hex_checker_filters_pure_hex() {
     let mut with_prefix = "sk_live_0123456789abcd".to_string();
     assert_eq!(scanner_with.scan(&mut with_prefix).unwrap().len(), 1);
     assert_eq!(with_prefix, "[token]");
+}
+
+#[test]
+fn test_token_efficiency_check_filters_identifiers() {
+    let rule = RegexRuleConfig::new("[A-Za-z0-9]{16,}");
+    let match_action = MatchAction::Redact {
+        replacement: "[secret]".to_string(),
+    };
+
+    let rule_with_validator = RootRuleConfig::new(
+        rule.clone()
+            .with_validator(Some(TokenEfficiencyCheck))
+            .build(),
+    )
+    .match_action(match_action.clone());
+
+    // Both values are 32 mixed-case alphanumerics, so the regex alone cannot tell them apart.
+    let mut content =
+        "SOKXxs00k30PUuH4KLoDPNmwlQ4EwXKw LibraryWebpageUploadUr1RowStatus".to_string();
+    let scanner_without =
+        ScannerBuilder::new(&[RootRuleConfig::new(rule.build()).match_action(match_action)])
+            .build()
+            .unwrap();
+    assert_eq!(scanner_without.scan(&mut content).unwrap().len(), 2);
+    assert_eq!(content, "[secret] [secret]");
+
+    let scanner_with = ScannerBuilder::new(&[rule_with_validator]).build().unwrap();
+    let mut content =
+        "SOKXxs00k30PUuH4KLoDPNmwlQ4EwXKw LibraryWebpageUploadUr1RowStatus".to_string();
+    assert_eq!(scanner_with.scan(&mut content).unwrap().len(), 1);
+    assert_eq!(content, "[secret] LibraryWebpageUploadUr1RowStatus");
 }
