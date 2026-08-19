@@ -7,6 +7,7 @@ package dd_sds
 import "C"
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"unsafe"
@@ -287,4 +288,41 @@ func (m MatchAction) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(o)
+}
+
+// UnmarshalJSON decodes MatchAction JSON produced by MarshalJSON. The inner
+// match_action key mirrors type for round-trip with Go-marshaled rules; Rust
+// only uses the type tag on MatchAction.
+func (m *MatchAction) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Type           MatchActionType           `json:"type"`
+		MatchAction    MatchActionType           `json:"match_action"`
+		RedactionValue string                    `json:"replacement"`
+		CharacterCount uint32                    `json:"character_count"`
+		Direction      PartialRedactionDirection `json:"direction"`
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&raw); err != nil {
+		return err
+	}
+
+	actionType := raw.Type
+	if actionType == "" {
+		actionType = raw.MatchAction
+	}
+	if actionType == "" {
+		actionType = MatchActionNone
+	}
+
+	m.Type = actionType
+	switch actionType {
+	case MatchActionRedact:
+		m.RedactionValue = raw.RedactionValue
+	case MatchActionPartialRedact:
+		m.CharacterCount = raw.CharacterCount
+		m.Direction = raw.Direction
+	}
+	return nil
 }
