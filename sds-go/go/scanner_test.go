@@ -445,6 +445,53 @@ func TestProximityKeywords(t *testing.T) {
 	runTest(t, scanner, testData, false)
 }
 
+func TestScanStringWithSuppressions(t *testing.T) {
+	rules := []RuleConfig{
+		NewRedactingRule("rule_email", `[a-z]+@[a-z.]+`, "[REDACTED]", ExtraConfig{
+			Suppressions: Suppressions{
+				StartsWith: []string{"admin"},
+				EndsWith:   []string{"@datadoghq.com"},
+				ExactMatch: []string{"oli@oli.com"},
+			},
+		}),
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create the scanner:", err.Error())
+	}
+	defer scanner.Delete()
+
+	testData := map[string]bool{
+		"arthur@datadoghq.com": false,
+		"admin@google.com":     false,
+		"oli@oli.com":          false,
+		"arthur@yahoo.com":     true,
+	}
+
+	for input, shouldBeRedacted := range testData {
+		result, err := scanner.Scan([]byte(input))
+		if err != nil {
+			t.Fatal("failed to scan the event:", err.Error())
+		}
+		if shouldBeRedacted {
+			if string(result.Event) != "[REDACTED]" {
+				t.Fatalf("match %q should have been redacted, got %q", input, result.Event)
+			}
+			if len(result.Matches) == 0 {
+				t.Fatalf("match %q should have been reported", input)
+			}
+		} else {
+			if string(result.Event) != input {
+				t.Fatalf("match %q should have been suppressed, got %q", input, result.Event)
+			}
+			if len(result.Matches) != 0 {
+				t.Fatalf("match %q should not have been reported, got %d matches", input, len(result.Matches))
+			}
+		}
+	}
+}
+
 func TestSecondaryValidator(t *testing.T) {
 	scannerWithoutChecksum, err := CreateScanner([]RuleConfig{
 		NewRedactingRule("rule_card",
@@ -1083,6 +1130,29 @@ func TestCreateScannerFailsOnSupportingRuleWithMatchAction(t *testing.T) {
 	}
 	if err != ErrSupportingRuleHasMatchAction {
 		t.Fatalf("expected ErrSupportingRuleHasMatchAction, got: %v", err)
+	}
+}
+
+func TestCreateScannerFailsOnInvalidSuppressions(t *testing.T) {
+	cases := []struct {
+		name         string
+		suppressions Suppressions
+	}{
+		{"empty string", Suppressions{StartsWith: []string{""}}},
+		{"duplicate", Suppressions{ExactMatch: []string{"foo", "foo"}}},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			scanner, err := CreateScanner([]RuleConfig{
+				NewMatchingRule("rule", `\w+`, ExtraConfig{Suppressions: tt.suppressions}),
+			})
+			if err != ErrInvalidSuppressions {
+				t.Fatalf("err = %v, want ErrInvalidSuppressions", err)
+			}
+			if scanner != nil {
+				t.Fatal("on failed creation, the returned scanner should be nil")
+			}
+		})
 	}
 }
 
