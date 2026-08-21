@@ -18,6 +18,7 @@ type RegexRuleConfig struct {
 	Pattern                 string                   `json:"pattern"`
 	MatchAction             MatchAction              `json:"match_action"`
 	ProximityKeywords       *ProximityKeywordsConfig `json:"proximity_keywords,omitempty"`
+	Suppressions            Suppressions             `json:"suppressions,omitempty"`
 	SecondaryValidator      *SecondaryValidator      `json:"validator,omitempty"`
 	ThirdPartyActiveChecker ThirdPartyActiveChecker  `json:"third_party_active_checker,omitempty"`
 	PatternCaptureGroups    []string                 `json:"pattern_capture_groups,omitempty"`
@@ -126,6 +127,7 @@ const (
 // ExtraConfig is used to provide more configuration while creating the rules.
 type ExtraConfig struct {
 	ProximityKeywords       *ProximityKeywordsConfig
+	Suppressions            Suppressions
 	SecondaryValidator      *SecondaryValidator
 	ThirdPartyActiveChecker ThirdPartyActiveChecker
 	PatternCaptureGroups    []string
@@ -153,6 +155,13 @@ type ProximityKeywordsConfig struct {
 	LookAheadCharacterCount uint32   `json:"look_ahead_character_count"`
 	IncludedKeywords        []string `json:"included_keywords"`
 	ExcludedKeywords        []string `json:"excluded_keywords"`
+}
+
+// Suppressions holds a configuration to suppress matches.
+type Suppressions struct {
+	StartsWith []string `json:"starts_with,omitempty"`
+	EndsWith   []string `json:"ends_with,omitempty"`
+	ExactMatch []string `json:"exact_match,omitempty"`
 }
 
 type MatchStatus string
@@ -197,6 +206,7 @@ func NewMatchingRule(id string, pattern string, extraConfig ExtraConfig) RegexRu
 			Type: MatchActionNone,
 		},
 		ProximityKeywords:       extraConfig.ProximityKeywords,
+		Suppressions:            extraConfig.Suppressions,
 		SecondaryValidator:      extraConfig.SecondaryValidator,
 		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
 		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
@@ -231,6 +241,7 @@ func NewRedactingRule(id string, pattern string, redactionValue string, extraCon
 			RedactionValue: redactionValue,
 		},
 		ProximityKeywords:       extraConfig.ProximityKeywords,
+		Suppressions:            extraConfig.Suppressions,
 		SecondaryValidator:      extraConfig.SecondaryValidator,
 		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
 		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
@@ -247,6 +258,7 @@ func NewHashRule(id string, pattern string, extraConfig ExtraConfig) RegexRuleCo
 			Type: MatchActionHash,
 		},
 		ProximityKeywords:       extraConfig.ProximityKeywords,
+		Suppressions:            extraConfig.Suppressions,
 		SecondaryValidator:      extraConfig.SecondaryValidator,
 		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
 		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
@@ -265,6 +277,7 @@ func NewPartialRedactRule(id string, pattern string, characterCount uint32, dire
 			Direction:      direction,
 		},
 		ProximityKeywords:       extraConfig.ProximityKeywords,
+		Suppressions:            extraConfig.Suppressions,
 		SecondaryValidator:      extraConfig.SecondaryValidator,
 		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
 		IsSupportingRule:        extraConfig.IsSupportingRule,
