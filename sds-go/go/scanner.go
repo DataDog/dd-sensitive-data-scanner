@@ -23,6 +23,7 @@ var (
 	ErrInvalidKeywords              error = fmt.Errorf("invalid keywords")
 	ErrInvalidMatchAction           error = fmt.Errorf("invalid match action")
 	ErrInvalidSuppressions          error = fmt.Errorf("invalid suppressions")
+	ErrInvalidPatternCaptureGroups  error = fmt.Errorf("invalid pattern capture groups")
 	ErrSupportingRuleHasMatchAction error = fmt.Errorf("supporting rules cannot have a match action other than None")
 )
 
@@ -118,6 +119,8 @@ func CreateScannerWithOptions(ruleConfigs []RuleConfig, options ScannerOptions) 
 			}
 		case -6: // rust: CreateScannerError::InvalidSuppressions
 			return nil, ErrInvalidSuppressions
+		case -7: // rust: CreateScannerError::InvalidPatternCaptureGroups
+			return nil, ErrInvalidPatternCaptureGroups
 		case -8: // rust: CreateScannerError::SupportingRuleHasMatchAction
 			return nil, ErrSupportingRuleHasMatchAction
 		}

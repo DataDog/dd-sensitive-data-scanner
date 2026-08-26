@@ -97,3 +97,30 @@ func TestRegexRuleConfigUnmarshalJSON_withMatchAction(t *testing.T) {
 		t.Fatalf("MatchAction.Type = %q, want %q", cfg.MatchAction.Type, MatchActionNone)
 	}
 }
+
+func TestRegexRuleConfigUnmarshalJSON_withPatternCaptureGroups(t *testing.T) {
+	raw := `{
+		"id": "r",
+		"pattern": "hello (?<sds_match>world)",
+		"pattern_capture_groups": ["sds_match"]
+	}`
+	var cfg RegexRuleConfig
+	dec := json.NewDecoder(bytes.NewReader([]byte(raw)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&cfg); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := []string{"sds_match"}
+	if !reflect.DeepEqual(cfg.PatternCaptureGroups, want) {
+		t.Fatalf("PatternCaptureGroups = %#v, want %#v", cfg.PatternCaptureGroups, want)
+	}
+}
+
+func TestNewPartialRedactRule_copiesPatternCaptureGroups(t *testing.T) {
+	extra := ExtraConfig{PatternCaptureGroups: []string{"sds_match"}}
+	got := NewPartialRedactRule("r", "secret", 4, FirstCharacters, extra)
+	want := []string{"sds_match"}
+	if !reflect.DeepEqual(got.PatternCaptureGroups, want) {
+		t.Fatalf("PatternCaptureGroups = %#v, want %#v", got.PatternCaptureGroups, want)
+	}
+}
