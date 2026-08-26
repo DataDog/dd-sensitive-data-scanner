@@ -1088,6 +1088,9 @@ func TestCreateScannerFailsOnEmptySdsMatchCaptureGroup(t *testing.T) {
 	if scanner != nil {
 		t.Fatal("on failed creation, the returned scanner should be nil")
 	}
+	if err != ErrInvalidPatternCaptureGroups {
+		t.Fatalf("err = %v, want ErrInvalidPatternCaptureGroups", err)
+	}
 }
 
 func TestSupportingRuleMatchExcludedFromOutput(t *testing.T) {

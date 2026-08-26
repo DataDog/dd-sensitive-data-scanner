@@ -280,6 +280,7 @@ func NewPartialRedactRule(id string, pattern string, characterCount uint32, dire
 		Suppressions:            extraConfig.Suppressions,
 		SecondaryValidator:      extraConfig.SecondaryValidator,
 		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
+		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
 		IsSupportingRule:        extraConfig.IsSupportingRule,
 	}
 }
