@@ -21,13 +21,11 @@ type mapTestResult struct {
 }
 
 func TestCreateScannerFailOnBadRegex(t *testing.T) {
-	var extraConfig ExtraConfig
-
 	// scanner ok
 	rules := []RuleConfig{
-		NewMatchingRule("rule_hello", "hello", extraConfig),
-		NewMatchingRule("rule_world", "(?i)WoRlD", extraConfig),
-		NewRedactingRule("rule_secret", "se..et", "aaaaaaaaa", extraConfig),
+		RegexRuleConfig{Id: "rule_hello", Pattern: "hello", MatchAction: MatchAction{Type: MatchActionNone}},
+		RegexRuleConfig{Id: "rule_world", Pattern: "(?i)WoRlD", MatchAction: MatchAction{Type: MatchActionNone}},
+		RegexRuleConfig{Id: "rule_secret", Pattern: "se..et", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "aaaaaaaaa"}},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -39,9 +37,9 @@ func TestCreateScannerFailOnBadRegex(t *testing.T) {
 	// this scanner creation should fail, one of the rule
 	// contains a bad regex
 	rules = []RuleConfig{
-		NewMatchingRule("rule_hello", "hello", extraConfig),
-		NewMatchingRule("rule_world", "(?i)Wo))RlD", extraConfig),
-		NewRedactingRule("rule_secret", "se..et", "aaaaaaaaa", extraConfig),
+		RegexRuleConfig{Id: "rule_hello", Pattern: "hello", MatchAction: MatchAction{Type: MatchActionNone}},
+		RegexRuleConfig{Id: "rule_world", Pattern: "(?i)Wo))RlD", MatchAction: MatchAction{Type: MatchActionNone}},
+		RegexRuleConfig{Id: "rule_secret", Pattern: "se..et", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "aaaaaaaaa"}},
 	}
 
 	scanner, err = CreateScanner(rules)
@@ -56,13 +54,7 @@ func TestCreateScannerFailOnBadRegex(t *testing.T) {
 func TestCreateScannerFailedOnInvalidRule(t *testing.T) {
 	// scanner ok
 	rules := []RuleConfig{
-		RegexRuleConfig{
-			Id:      "rule_hello",
-			Pattern: "hello",
-			MatchAction: MatchAction{
-				Type: MatchActionType("unknown"),
-			},
-		},
+		RegexRuleConfig{Id: "rule_hello", Pattern: "hello", MatchAction: MatchAction{Type: MatchActionType("unknown")}},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -75,12 +67,10 @@ func TestCreateScannerFailedOnInvalidRule(t *testing.T) {
 }
 
 func TestCreateScanner(t *testing.T) {
-	var extraConfig ExtraConfig
-
 	rules := []RuleConfig{
-		NewMatchingRule("rule_hello", "hello", extraConfig),
-		NewMatchingRule("rule_world", "(?i)WoRlD", extraConfig),
-		NewRedactingRule("rule_secret", "se..et", "aaaaaaaaa", extraConfig),
+		RegexRuleConfig{Id: "rule_hello", Pattern: "hello", MatchAction: MatchAction{Type: MatchActionNone}},
+		RegexRuleConfig{Id: "rule_world", Pattern: "(?i)WoRlD", MatchAction: MatchAction{Type: MatchActionNone}},
+		RegexRuleConfig{Id: "rule_secret", Pattern: "se..et", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "aaaaaaaaa"}},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -93,12 +83,10 @@ func TestCreateScanner(t *testing.T) {
 }
 
 func TestScanMapEvent(t *testing.T) {
-	var extraConfig ExtraConfig
-
 	rules := []RuleConfig{
-		NewMatchingRule("rule_hello", "hello", extraConfig),
-		NewMatchingRule("rule_world", "(?i)WoRlD", extraConfig),
-		NewRedactingRule("rule_secret", "se..et", "[REDACTED]", extraConfig),
+		RegexRuleConfig{Id: "rule_hello", Pattern: "hello", MatchAction: MatchAction{Type: MatchActionNone}},
+		RegexRuleConfig{Id: "rule_world", Pattern: "(?i)WoRlD", MatchAction: MatchAction{Type: MatchActionNone}},
+		RegexRuleConfig{Id: "rule_secret", Pattern: "se..et", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[REDACTED]"}},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -256,10 +244,8 @@ func TestScanMapEvent(t *testing.T) {
 }
 
 func TestScanStringWithHash(t *testing.T) {
-	var extraConfig ExtraConfig
-
 	rules := []RuleConfig{
-		NewHashRule("rule_secret", "se..et", extraConfig),
+		RegexRuleConfig{Id: "rule_secret", Pattern: "se..et", MatchAction: MatchAction{Type: MatchActionHash}},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -285,12 +271,10 @@ func TestScanStringWithHash(t *testing.T) {
 }
 
 func TestScanStringEvent(t *testing.T) {
-	var extraConfig ExtraConfig
-
 	rules := []RuleConfig{
-		NewMatchingRule("rule_hello", "hello", extraConfig),
-		NewMatchingRule("rule_world", "(?i)WoRlD", extraConfig),
-		NewRedactingRule("rule_secret", "se..et", "[REDACTED]", extraConfig),
+		RegexRuleConfig{Id: "rule_hello", Pattern: "hello", MatchAction: MatchAction{Type: MatchActionNone}},
+		RegexRuleConfig{Id: "rule_world", Pattern: "(?i)WoRlD", MatchAction: MatchAction{Type: MatchActionNone}},
+		RegexRuleConfig{Id: "rule_secret", Pattern: "se..et", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[REDACTED]"}},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -366,12 +350,10 @@ func TestScanStringEvent(t *testing.T) {
 }
 
 func TestScanStringEventMultipleMutations(t *testing.T) {
-	var extraConfig ExtraConfig
-
 	rules := []RuleConfig{
-		NewMatchingRule("rule_hello", "hello", extraConfig),
-		NewRedactingRule("rule_secret", "se..et", "[REDACTED]", extraConfig),
-		NewRedactingRule("rule_numbers", "[0-9]{4}", "[NREDAC]", extraConfig),
+		RegexRuleConfig{Id: "rule_hello", Pattern: "hello", MatchAction: MatchAction{Type: MatchActionNone}},
+		RegexRuleConfig{Id: "rule_secret", Pattern: "se..et", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[REDACTED]"}},
+		RegexRuleConfig{Id: "rule_numbers", Pattern: "[0-9]{4}", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[NREDAC]"}},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -409,12 +391,8 @@ func TestScanStringEventMultipleMutations(t *testing.T) {
 }
 
 func TestProximityKeywords(t *testing.T) {
-	extraConfig := ExtraConfig{
-		ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil),
-	}
-
 	rules := []RuleConfig{
-		NewMatchingRule("rule_6_numbers", "[0-9]{6}", extraConfig),
+		RegexRuleConfig{Id: "rule_6_numbers", Pattern: "[0-9]{6}", MatchAction: MatchAction{Type: MatchActionNone}, ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil)},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -447,13 +425,7 @@ func TestProximityKeywords(t *testing.T) {
 
 func TestScanStringWithSuppressions(t *testing.T) {
 	rules := []RuleConfig{
-		NewRedactingRule("rule_email", `[a-z]+@[a-z.]+`, "[REDACTED]", ExtraConfig{
-			Suppressions: Suppressions{
-				StartsWith: []string{"admin"},
-				EndsWith:   []string{"@datadoghq.com"},
-				ExactMatch: []string{"oli@oli.com"},
-			},
-		}),
+		RegexRuleConfig{Id: "rule_email", Pattern: `[a-z]+@[a-z.]+`, MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[REDACTED]"}, Suppressions: Suppressions{StartsWith: []string{"admin"}, EndsWith: []string{"@datadoghq.com"}, ExactMatch: []string{"oli@oli.com"}}},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -494,18 +466,14 @@ func TestScanStringWithSuppressions(t *testing.T) {
 
 func TestSecondaryValidator(t *testing.T) {
 	scannerWithoutChecksum, err := CreateScanner([]RuleConfig{
-		NewRedactingRule("rule_card",
-			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
-			"[redacted]", ExtraConfig{}),
+		RegexRuleConfig{Id: "rule_digits", Pattern: "[0-9]{16}", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[redacted]"}},
 	})
 	if err != nil {
 		t.Fatal("failed to create the scanner wo checksum:", err.Error())
 	}
 	defer scannerWithoutChecksum.Delete()
 	scannerWithChecksum, err := CreateScanner([]RuleConfig{
-		NewRedactingRule("rule_card",
-			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
-			"[redacted]", ExtraConfig{SecondaryValidator: NewSecondaryValidator("LuhnChecksum")}),
+		RegexRuleConfig{Id: "rule_digits", Pattern: "[0-9]{16}", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[redacted]"}, SecondaryValidator: NewSecondaryValidator("LuhnChecksum")},
 	})
 	if err != nil {
 		t.Fatal("failed to create the scanner with checksum:", err.Error())
@@ -513,7 +481,7 @@ func TestSecondaryValidator(t *testing.T) {
 	defer scannerWithChecksum.Delete()
 
 	testData := map[string]testResult{
-		"4556997807150071 4111 1111 1111 1111": {
+		"0000000000000001 4111111111111111": {
 			mutated: true,
 			str:     "[redacted] [redacted]",
 			rules: []RuleMatch{
@@ -528,7 +496,7 @@ func TestSecondaryValidator(t *testing.T) {
 					StartIndex:        11,
 					ReplacementType:   ReplacementTypePlaceholder,
 					EndIndexExclusive: 21,
-					ShiftOffset:       -15,
+					ShiftOffset:       -12,
 				},
 			},
 		},
@@ -536,15 +504,15 @@ func TestSecondaryValidator(t *testing.T) {
 	runTest(t, scannerWithoutChecksum, testData, false)
 
 	testData = map[string]testResult{
-		"4556997807150071 4111 1111 1111 1111": {
+		"0000000000000001 4111111111111111": {
 			mutated: true,
-			str:     "4556997807150071 [redacted]",
+			str:     "0000000000000001 [redacted]",
 			rules: []RuleMatch{{
 				RuleIdx:           0,
 				StartIndex:        17,
 				ReplacementType:   ReplacementTypePlaceholder,
 				EndIndexExclusive: 27,
-				ShiftOffset:       -9,
+				ShiftOffset:       -6,
 			}},
 		},
 	}
@@ -553,18 +521,14 @@ func TestSecondaryValidator(t *testing.T) {
 
 func TestAustrianChecksumSecondaryValidator(t *testing.T) {
 	scannerWithoutChecksum, err := CreateScanner([]RuleConfig{
-		NewRedactingRule("austrian_ssn_rule",
-			`\b\d{4}-?(0[1-9]|[12][0-9]|3[01])(0[1-9]|1[0-2])\d{2}\b`,
-			"[redacted]", ExtraConfig{}),
+		RegexRuleConfig{Id: "austrian_ssn_rule", Pattern: `\b\d{4}-?(0[1-9]|[12][0-9]|3[01])(0[1-9]|1[0-2])\d{2}\b`, MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[redacted]"}},
 	})
 	if err != nil {
 		t.Fatal("failed to create the scanner wo checksum:", err.Error())
 	}
 	defer scannerWithoutChecksum.Delete()
 	scannerWithChecksum, err := CreateScanner([]RuleConfig{
-		NewRedactingRule("austrian_ssn_rule",
-			`\b\d{4}-?(0[1-9]|[12][0-9]|3[01])(0[1-9]|1[0-2])\d{2}\b`,
-			"[redacted]", ExtraConfig{SecondaryValidator: NewSecondaryValidator("AustrianSSNChecksum")}),
+		RegexRuleConfig{Id: "austrian_ssn_rule", Pattern: `\b\d{4}-?(0[1-9]|[12][0-9]|3[01])(0[1-9]|1[0-2])\d{2}\b`, MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[redacted]"}, SecondaryValidator: NewSecondaryValidator("AustrianSSNChecksum")},
 	})
 	if err != nil {
 		t.Fatal("failed to create the scanner with checksum:", err.Error())
@@ -614,37 +578,14 @@ func TestAustrianChecksumSecondaryValidator(t *testing.T) {
 
 func TestJWTSecondaryValidator(t *testing.T) {
 	scannerWithoutChecksum, err := CreateScanner([]RuleConfig{
-		NewRedactingRule("rule_oauth_test",
-			`ey[\w=-]+\.ey[\w=-]+\.[\w-]+`,
-			"[redacted]", ExtraConfig{}),
+		RegexRuleConfig{Id: "rule_oauth_test", Pattern: `ey[\w=-]+\.ey[\w=-]+\.[\w-]+`, MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[redacted]"}},
 	})
 	if err != nil {
 		t.Fatal("failed to create the scanner wo checksum:", err.Error())
 	}
 	defer scannerWithoutChecksum.Delete()
 	scannerWithChecksum, err := CreateScanner([]RuleConfig{
-		NewRedactingRule("rule_oauth_test",
-			`ey[\w=-]+\.ey[\w=-]+\.[\w-]+`,
-			"[redacted]", ExtraConfig{
-				SecondaryValidator: NewJwtClaimsValidator(JwtClaimsValidatorConfig{
-					RequiredHeaders: map[string]ClaimRequirement{
-						"alg": ClaimRequirementExactValue{
-							Value: "HS256",
-						},
-						"typ": ClaimRequirementPresent{},
-					},
-					RequiredClaims: map[string]ClaimRequirement{
-						"app": ClaimRequirementRegexMatch{
-							Pattern: `test_\w`,
-						},
-						"version": ClaimRequirementExactValue{
-							Value: "2",
-						},
-						"scope": ClaimRequirementPresent{},
-					},
-				}),
-			},
-		),
+		RegexRuleConfig{Id: "rule_oauth_test", Pattern: `ey[\w=-]+\.ey[\w=-]+\.[\w-]+`, MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[redacted]"}, SecondaryValidator: NewJwtClaimsValidator(JwtClaimsValidatorConfig{RequiredHeaders: map[string]ClaimRequirement{"alg": ClaimRequirementExactValue{Value: "HS256"}, "typ": ClaimRequirementPresent{}}, RequiredClaims: map[string]ClaimRequirement{"app": ClaimRequirementRegexMatch{Pattern: `test_\w`}, "version": ClaimRequirementExactValue{Value: "2"}, "scope": ClaimRequirementPresent{}}})},
 	})
 	if err != nil {
 		t.Fatal("failed to create the scanner with checksum:", err.Error())
@@ -696,18 +637,16 @@ func TestJWTSecondaryValidator(t *testing.T) {
 func TestThirdPartyActiveChecker(t *testing.T) {
 	// Test rule without third party validation
 	scannerWithoutValidation, err := CreateScanner([]RuleConfig{
-		NewMatchingRule("rule_aws_key", "AKIA[0-9A-Z]{16}", ExtraConfig{}),
+		RegexRuleConfig{Id: "rule_aws_key", Pattern: "AKIA[0-9A-Z]{16}", MatchAction: MatchAction{Type: MatchActionNone}},
 	})
 	if err != nil {
 		t.Fatal("failed to create scanner without validation:", err.Error())
 	}
 	defer scannerWithoutValidation.Delete()
 
-	// Test rule with CustomHttp validation using ExtraConfig
+	// Test rule with CustomHttp validation
 	scannerWithHttpValidation, err := CreateScanner([]RuleConfig{
-		NewMatchingRule("rule_api_key", "sk-[a-zA-Z0-9]{48}", ExtraConfig{
-			ThirdPartyActiveChecker: NewCustomHttpValidation("https://api.example.com/validate"),
-		}),
+		RegexRuleConfig{Id: "rule_api_key", Pattern: "sk-[a-zA-Z0-9]{48}", MatchAction: MatchAction{Type: MatchActionNone}, ThirdPartyActiveChecker: NewCustomHttpValidation("https://api.example.com/validate")},
 	})
 	if err != nil {
 		t.Fatal("failed to create scanner with HTTP validation:", err.Error())
@@ -751,12 +690,8 @@ func TestThirdPartyActiveChecker(t *testing.T) {
 }
 
 func TestPartialRedactStart(t *testing.T) {
-	extraConfig := ExtraConfig{
-		ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil),
-	}
-
 	rules := []RuleConfig{
-		NewPartialRedactRule("rule_6_numbers", "[0-9]{6}", 4, FirstCharacters, extraConfig),
+		RegexRuleConfig{Id: "rule_6_numbers", Pattern: "[0-9]{6}", MatchAction: MatchAction{Type: MatchActionPartialRedact, CharacterCount: 4, Direction: FirstCharacters}, ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil)},
 	}
 	scanner, err := CreateScanner(rules)
 	if err != nil {
@@ -787,12 +722,8 @@ func TestPartialRedactStart(t *testing.T) {
 }
 
 func TestPartialRedactEnd(t *testing.T) {
-	extraConfig := ExtraConfig{
-		ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil),
-	}
-
 	rules := []RuleConfig{
-		NewPartialRedactRule("rule_6_numbers", "[0-9]{6}", 4, LastCharacters, extraConfig),
+		RegexRuleConfig{Id: "rule_6_numbers", Pattern: "[0-9]{6}", MatchAction: MatchAction{Type: MatchActionPartialRedact, CharacterCount: 4, Direction: LastCharacters}, ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, nil)},
 	}
 	scanner, err := CreateScanner(rules)
 	if err != nil {
@@ -824,11 +755,7 @@ func TestPartialRedactEnd(t *testing.T) {
 
 func TestExclude(t *testing.T) {
 	rules := []RuleConfig{
-		NewRedactingRule("rule_card",
-			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
-			"[REDACTED]", ExtraConfig{
-				ProximityKeywords: CreateProximityKeywordsConfig(10, nil, []string{"traceid"}),
-			}),
+		RegexRuleConfig{Id: "rule_secret", Pattern: "secret", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[REDACTED]"}, ProximityKeywords: CreateProximityKeywordsConfig(10, nil, []string{"traceid"})},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -838,7 +765,7 @@ func TestExclude(t *testing.T) {
 	defer scanner.Delete()
 
 	testData := map[string]testResult{
-		"this is a potato 4111 1111 1111 1111": {
+		"this is a potato secret": {
 			mutated: true,
 			str:     "this is a potato [REDACTED]",
 			rules: []RuleMatch{{
@@ -846,11 +773,11 @@ func TestExclude(t *testing.T) {
 				StartIndex:        17,
 				ReplacementType:   ReplacementTypePlaceholder,
 				EndIndexExclusive: 17 + uint32(len("[REDACTED]")),
-				ShiftOffset:       -9,
+				ShiftOffset:       4,
 			}},
 		},
 
-		"this is a credit card 4111 1111 1111 1111": {
+		"this is a credit card secret": {
 			mutated: true,
 			str:     "this is a credit card [REDACTED]",
 			rules: []RuleMatch{{
@@ -858,12 +785,12 @@ func TestExclude(t *testing.T) {
 				StartIndex:        22,
 				ReplacementType:   ReplacementTypePlaceholder,
 				EndIndexExclusive: 22 + uint32(len("[REDACTED]")),
-				ShiftOffset:       -9,
+				ShiftOffset:       4,
 			}},
 		},
-		"this is a traceid 4111 1111 1111 1111": {
+		"this is a traceid secret": {
 			mutated: false,
-			str:     "this is a traceid 4111 1111 1111 1111",
+			str:     "this is a traceid secret",
 			rules:   []RuleMatch{},
 		},
 	}
@@ -874,11 +801,7 @@ func TestExclude(t *testing.T) {
 func TestIncludeExclude(t *testing.T) {
 	// Include rules take priority over exclude rules
 	rules := []RuleConfig{
-		NewRedactingRule("rule_card",
-			"\\b4\\d{3}(?:(?:\\s\\d{4}){3}|(?:\\.\\d{4}){3}|(?:-\\d{4}){3}|(?:\\d{9}(?:\\d{3}(?:\\d{3})?)?))\\b",
-			"[REDACTED]", ExtraConfig{
-				ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, []string{"card", "traceid"}),
-			}),
+		RegexRuleConfig{Id: "rule_secret", Pattern: "secret", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[REDACTED]"}, ProximityKeywords: CreateProximityKeywordsConfig(10, []string{"card"}, []string{"card", "traceid"})},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -888,13 +811,13 @@ func TestIncludeExclude(t *testing.T) {
 	defer scanner.Delete()
 
 	testData := map[string]testResult{
-		"this is a potato 4111 1111 1111 1111": {
+		"this is a potato secret": {
 			mutated: false,
-			str:     "this is a potato 4111 1111 1111 1111",
+			str:     "this is a potato secret",
 			rules:   []RuleMatch{},
 		},
 
-		"this is a credit card 4111 1111 1111 1111": {
+		"this is a credit card secret": {
 			mutated: true,
 			str:     "this is a credit card [REDACTED]",
 			rules: []RuleMatch{{
@@ -902,12 +825,12 @@ func TestIncludeExclude(t *testing.T) {
 				StartIndex:        22,
 				ReplacementType:   ReplacementTypePlaceholder,
 				EndIndexExclusive: 22 + uint32(len("[REDACTED]")),
-				ShiftOffset:       -9,
+				ShiftOffset:       4,
 			}},
 		},
-		"this is a traceid 4111 1111 1111 1111": {
+		"this is a traceid secret": {
 			mutated: false,
-			str:     "this is a traceid 4111 1111 1111 1111",
+			str:     "this is a traceid secret",
 			rules:   []RuleMatch{},
 		},
 	}
@@ -1046,13 +969,7 @@ func NewCustomHttpValidation(endpoint string) ThirdPartyActiveChecker {
 }
 
 func TestScanStringWithCaptureGroup(t *testing.T) {
-	var extraConfig ExtraConfig
-	extraConfig.PatternCaptureGroups = []string{"sds_match"}
-	rule := NewMatchingRule("rule_secret", "hello (?<sds_match>world)", extraConfig)
-	rule.MatchAction = MatchAction{
-		Type:           MatchActionRedact,
-		RedactionValue: "[REDACTED]",
-	}
+	rule := RegexRuleConfig{Id: "rule_secret", Pattern: "hello (?<sds_match>world)", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[REDACTED]"}, PatternCaptureGroups: []string{"sds_match"}}
 	rules := []RuleConfig{
 		rule,
 	}
@@ -1074,11 +991,8 @@ func TestScanStringWithCaptureGroup(t *testing.T) {
 }
 
 func TestCreateScannerFailsOnEmptySdsMatchCaptureGroup(t *testing.T) {
-	var extraConfig ExtraConfig
-	extraConfig.PatternCaptureGroups = []string{"sds_match"}
-
 	rules := []RuleConfig{
-		NewMatchingRule("rule_secret", "hello (?<sds_match>d*)", extraConfig),
+		RegexRuleConfig{Id: "rule_secret", Pattern: "hello (?<sds_match>d*)", MatchAction: MatchAction{Type: MatchActionNone}, PatternCaptureGroups: []string{"sds_match"}},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -1095,8 +1009,8 @@ func TestCreateScannerFailsOnEmptySdsMatchCaptureGroup(t *testing.T) {
 
 func TestSupportingRuleMatchExcludedFromOutput(t *testing.T) {
 	rules := []RuleConfig{
-		NewMatchingRule("supporting", `\bprefix_\w+\b`, ExtraConfig{IsSupportingRule: true}),
-		NewMatchingRule("main", `\bmain_\w+\b`, ExtraConfig{}),
+		RegexRuleConfig{Id: "supporting", Pattern: `\bprefix_\w+\b`, MatchAction: MatchAction{Type: MatchActionNone}, IsSupportingRule: true},
+		RegexRuleConfig{Id: "main", Pattern: `\bmain_\w+\b`, MatchAction: MatchAction{Type: MatchActionNone}},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -1121,7 +1035,7 @@ func TestSupportingRuleMatchExcludedFromOutput(t *testing.T) {
 
 func TestCreateScannerFailsOnSupportingRuleWithMatchAction(t *testing.T) {
 	rules := []RuleConfig{
-		NewRedactingRule("supporting", `\bsecret_\w+\b`, "[REDACTED]", ExtraConfig{IsSupportingRule: true}),
+		RegexRuleConfig{Id: "supporting", Pattern: `\bsecret_\w+\b`, MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[REDACTED]"}, IsSupportingRule: true},
 	}
 
 	scanner, err := CreateScanner(rules)
@@ -1147,7 +1061,7 @@ func TestCreateScannerFailsOnInvalidSuppressions(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			scanner, err := CreateScanner([]RuleConfig{
-				NewMatchingRule("rule", `\w+`, ExtraConfig{Suppressions: tt.suppressions}),
+				RegexRuleConfig{Id: "rule", Pattern: `\w+`, MatchAction: MatchAction{Type: MatchActionNone}, Suppressions: tt.suppressions},
 			})
 			if err != ErrInvalidSuppressions {
 				t.Fatalf("err = %v, want ErrInvalidSuppressions", err)
@@ -1161,9 +1075,7 @@ func TestCreateScannerFailsOnInvalidSuppressions(t *testing.T) {
 
 func TestScanWithOptions(t *testing.T) {
 	scanner, err := CreateScanner([]RuleConfig{
-		NewMatchingRule("digits", `\d{16}`, ExtraConfig{
-			ThirdPartyActiveChecker: NewCustomHttpValidation("https://api.example.com/validate"),
-		}),
+		RegexRuleConfig{Id: "digits", Pattern: `\d{16}`, MatchAction: MatchAction{Type: MatchActionNone}, ThirdPartyActiveChecker: NewCustomHttpValidation("https://api.example.com/validate")},
 	})
 	if err != nil {
 		t.Fatal(err)
