@@ -124,16 +124,6 @@ const (
 	LastCharacters  = PartialRedactionDirection("LastCharacters")
 )
 
-// ExtraConfig is used to provide more configuration while creating the rules.
-type ExtraConfig struct {
-	ProximityKeywords       *ProximityKeywordsConfig
-	Suppressions            Suppressions
-	SecondaryValidator      *SecondaryValidator
-	ThirdPartyActiveChecker ThirdPartyActiveChecker
-	PatternCaptureGroups    []string
-	IsSupportingRule        bool
-}
-
 // CreateProximityKeywordsConfig creates a ProximityKeywordsConfig.
 func CreateProximityKeywordsConfig(lookAheadCharaceterCount uint32, includedKeywords []string, excludedKeywords []string) *ProximityKeywordsConfig {
 	if includedKeywords == nil {
@@ -197,23 +187,6 @@ type MatchAction struct {
 	Direction PartialRedactionDirection
 }
 
-// NewMatchingRule returns a matching rule with no match _action_.
-func NewMatchingRule(id string, pattern string, extraConfig ExtraConfig) RegexRuleConfig {
-	return RegexRuleConfig{
-		Id:      id,
-		Pattern: pattern,
-		MatchAction: MatchAction{
-			Type: MatchActionNone,
-		},
-		ProximityKeywords:       extraConfig.ProximityKeywords,
-		Suppressions:            extraConfig.Suppressions,
-		SecondaryValidator:      extraConfig.SecondaryValidator,
-		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
-		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
-		IsSupportingRule:        extraConfig.IsSupportingRule,
-	}
-}
-
 func (c RegexRuleConfig) CreateRule() (*Rule, error) {
 	data, err := json.Marshal(c)
 	if err != nil {
@@ -228,60 +201,6 @@ func (c RegexRuleConfig) CreateRule() (*Rule, error) {
 		return nil, fmt.Errorf("Failed to create regex rule with id %s", c.Id)
 	} else {
 		return &Rule{nativeRulePtr: int64(ptr)}, nil
-	}
-}
-
-// NewRedactingRule returns a matching rule redacting events.
-func NewRedactingRule(id string, pattern string, redactionValue string, extraConfig ExtraConfig) RegexRuleConfig {
-	return RegexRuleConfig{
-		Id:      id,
-		Pattern: pattern,
-		MatchAction: MatchAction{
-			Type:           MatchActionRedact,
-			RedactionValue: redactionValue,
-		},
-		ProximityKeywords:       extraConfig.ProximityKeywords,
-		Suppressions:            extraConfig.Suppressions,
-		SecondaryValidator:      extraConfig.SecondaryValidator,
-		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
-		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
-		IsSupportingRule:        extraConfig.IsSupportingRule,
-	}
-}
-
-// NewHashRule returns a matching rule redacting with hashes.
-func NewHashRule(id string, pattern string, extraConfig ExtraConfig) RegexRuleConfig {
-	return RegexRuleConfig{
-		Id:      id,
-		Pattern: pattern,
-		MatchAction: MatchAction{
-			Type: MatchActionHash,
-		},
-		ProximityKeywords:       extraConfig.ProximityKeywords,
-		Suppressions:            extraConfig.Suppressions,
-		SecondaryValidator:      extraConfig.SecondaryValidator,
-		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
-		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
-		IsSupportingRule:        extraConfig.IsSupportingRule,
-	}
-}
-
-// NewPartialRedactRule returns a matching rule partially redacting matches.
-func NewPartialRedactRule(id string, pattern string, characterCount uint32, direction PartialRedactionDirection, extraConfig ExtraConfig) RegexRuleConfig {
-	return RegexRuleConfig{
-		Id:      id,
-		Pattern: pattern,
-		MatchAction: MatchAction{
-			Type:           MatchActionPartialRedact,
-			CharacterCount: characterCount,
-			Direction:      direction,
-		},
-		ProximityKeywords:       extraConfig.ProximityKeywords,
-		Suppressions:            extraConfig.Suppressions,
-		SecondaryValidator:      extraConfig.SecondaryValidator,
-		ThirdPartyActiveChecker: extraConfig.ThirdPartyActiveChecker,
-		PatternCaptureGroups:    extraConfig.PatternCaptureGroups,
-		IsSupportingRule:        extraConfig.IsSupportingRule,
 	}
 }
 

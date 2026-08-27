@@ -115,12 +115,3 @@ func TestRegexRuleConfigUnmarshalJSON_withPatternCaptureGroups(t *testing.T) {
 		t.Fatalf("PatternCaptureGroups = %#v, want %#v", cfg.PatternCaptureGroups, want)
 	}
 }
-
-func TestNewPartialRedactRule_copiesPatternCaptureGroups(t *testing.T) {
-	extra := ExtraConfig{PatternCaptureGroups: []string{"sds_match"}}
-	got := NewPartialRedactRule("r", "secret", 4, FirstCharacters, extra)
-	want := []string{"sds_match"}
-	if !reflect.DeepEqual(got.PatternCaptureGroups, want) {
-		t.Fatalf("PatternCaptureGroups = %#v, want %#v", got.PatternCaptureGroups, want)
-	}
-}
