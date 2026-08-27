@@ -1097,3 +1097,55 @@ func TestScanWithOptions(t *testing.T) {
 		t.Fatalf("expected match validation status, got %q", result.Matches[0].MatchStatus)
 	}
 }
+
+func TestScanStringWithPrecedence(t *testing.T) {
+	rules := []RuleConfig{
+		RegexRuleConfig{Id: "catchall", Pattern: "secret", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[CATCHALL]"}, Precedence: PrecedenceCatchall},
+		RegexRuleConfig{Id: "generic", Pattern: "secret", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[GENERIC]"}, Precedence: PrecedenceGeneric},
+		RegexRuleConfig{Id: "specific", Pattern: "secret", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[SPECIFIC]"}, Precedence: PrecedenceSpecific},
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create the scanner:", err.Error())
+	}
+	defer scanner.Delete()
+
+	result, err := scanner.Scan([]byte("secret"))
+	if err != nil {
+		t.Fatal("failed to scan the event:", err.Error())
+	}
+	if string(result.Event) != "[SPECIFIC]" {
+		t.Fatalf("expected mutated event %q, got %q", "[SPECIFIC]", result.Event)
+	}
+	if len(result.Matches) != 1 {
+		t.Fatalf("expected 1 match, got %d", len(result.Matches))
+	}
+	if result.Matches[0].RuleIdx != 2 {
+		t.Fatalf("expected RuleIdx 2, got %d", result.Matches[0].RuleIdx)
+	}
+}
+
+func TestScanStringWithDefaultPrecedence(t *testing.T) {
+	rules := []RuleConfig{
+		RegexRuleConfig{Id: "generic", Pattern: "secret", MatchAction: MatchAction{Type: MatchActionNone}, Precedence: PrecedenceGeneric},
+		RegexRuleConfig{Id: "specific", Pattern: "secret", MatchAction: MatchAction{Type: MatchActionNone}},
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create the scanner:", err.Error())
+	}
+	defer scanner.Delete()
+
+	result, err := scanner.Scan([]byte("secret"))
+	if err != nil {
+		t.Fatal("failed to scan the event:", err.Error())
+	}
+	if len(result.Matches) != 1 {
+		t.Fatalf("expected 1 match, got %d", len(result.Matches))
+	}
+	if result.Matches[0].RuleIdx != 1 {
+		t.Fatalf("expected RuleIdx 1, got %d", result.Matches[0].RuleIdx)
+	}
+}
