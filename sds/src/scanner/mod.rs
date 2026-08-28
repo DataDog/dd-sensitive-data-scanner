@@ -27,6 +27,7 @@ pub use crate::secondary_validation::Validator;
 use crate::stats::GLOBAL_STATS;
 use crate::tokio::TOKIO_RUNTIME;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Path, ScannerError};
+use ::metrics::counter;
 use ahash::AHashMap;
 use futures::executor::block_on;
 use serde::{Deserialize, Serialize};
@@ -599,10 +600,26 @@ impl Scanner {
     ) {
         // Add number of scanned events
         self.metrics.num_scanned_events.increment(1);
-        // Add number of matches
-        self.metrics
-            .match_count
-            .increment(output_rule_matches.len() as u64);
+        // Add number of matches, tagged per rule so `sds_rule_name` can break down match counts
+        // by the rule's sensitive_data_category/sensitive_data tags.
+        let mut match_counts_by_rule: AHashMap<usize, u64> = AHashMap::new();
+        for rule_match in output_rule_matches {
+            *match_counts_by_rule
+                .entry(rule_match.rule_index)
+                .or_default() += 1;
+        }
+        for (rule_index, count) in match_counts_by_rule {
+            match self.rules[rule_index].sds_rule_name.as_deref() {
+                Some(sds_rule_name) => {
+                    let labels = self.labels.clone_with_labels(Labels::new(&[(
+                        "sds_rule_name",
+                        sds_rule_name.to_string(),
+                    )]));
+                    counter!("scanning.match_count", labels).increment(count);
+                }
+                None => self.metrics.match_count.increment(count),
+            }
+        }
 
         if let Some(io_duration) = io_duration {
             let total_duration = start.elapsed();
