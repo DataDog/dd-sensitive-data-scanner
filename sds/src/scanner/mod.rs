@@ -32,7 +32,6 @@ use ahash::AHashMap;
 use futures::executor::block_on;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -109,8 +108,11 @@ pub struct RootRuleConfig<T> {
     precedence: Precedence,
     #[serde(default)]
     pub is_supporting_rule: bool,
+    /// Raw `"key:value"` strings, matching the format used by standard rule definitions
+    /// (e.g. `sensitive_data:travis_ci_access_token`). Not parsed into a map since no
+    /// producer of these values does so either; consumers parse the entries they need.
     #[serde(default)]
-    pub tags: BTreeMap<String, String>,
+    pub tags: Vec<String>,
     #[serde(flatten)]
     pub inner: T,
 }
@@ -139,7 +141,7 @@ impl<T> RootRuleConfig<T> {
             suppressions: None,
             precedence: Precedence::default(),
             is_supporting_rule: false,
-            tags: BTreeMap::new(),
+            tags: Vec::new(),
             inner,
         }
     }
@@ -192,7 +194,7 @@ impl<T> RootRuleConfig<T> {
         self
     }
 
-    pub fn tags(mut self, tags: BTreeMap<String, String>) -> Self {
+    pub fn tags(mut self, tags: Vec<String>) -> Self {
         self.tags = tags;
         self
     }

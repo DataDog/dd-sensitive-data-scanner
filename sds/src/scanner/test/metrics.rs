@@ -69,16 +69,10 @@ fn should_submit_match_count_metric_tagged_with_sds_rule_name() {
     metrics::with_local_recorder(&recorder, || {
         let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("secret").build())
             .match_action(MatchAction::None)
-            .tags(BTreeMap::from([
-                (
-                    "sensitive_data_category".to_string(),
-                    "credentials".to_string(),
-                ),
-                (
-                    "sensitive_data".to_string(),
-                    "travis_ci_access_token".to_string(),
-                ),
-            ]));
+            .tags(vec![
+                "sensitive_data_category:credentials".to_string(),
+                "sensitive_data:travis_ci_access_token".to_string(),
+            ]);
 
         let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
         let mut content = SimpleEvent::Map(BTreeMap::from([(
@@ -114,10 +108,7 @@ fn should_submit_match_count_metric_with_missing_category_tag() {
     metrics::with_local_recorder(&recorder, || {
         let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("secret").build())
             .match_action(MatchAction::None)
-            .tags(BTreeMap::from([(
-                "sensitive_data".to_string(),
-                "travis_ci_access_token".to_string(),
-            )]));
+            .tags(vec!["sensitive_data:travis_ci_access_token".to_string()]);
 
         let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
         let mut content = SimpleEvent::Map(BTreeMap::from([(
@@ -153,10 +144,7 @@ fn should_submit_untagged_match_count_metric_when_sensitive_data_tag_is_missing(
     metrics::with_local_recorder(&recorder, || {
         let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("secret").build())
             .match_action(MatchAction::None)
-            .tags(BTreeMap::from([(
-                "sensitive_data_category".to_string(),
-                "credentials".to_string(),
-            )]));
+            .tags(vec!["sensitive_data_category:credentials".to_string()]);
 
         let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
         let mut content = SimpleEvent::Map(BTreeMap::from([(
@@ -185,22 +173,16 @@ fn should_submit_separately_tagged_match_count_metrics_for_multiple_rules() {
     metrics::with_local_recorder(&recorder, || {
         let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("secret").build())
             .match_action(MatchAction::None)
-            .tags(BTreeMap::from([
-                (
-                    "sensitive_data_category".to_string(),
-                    "credentials".to_string(),
-                ),
-                (
-                    "sensitive_data".to_string(),
-                    "travis_ci_access_token".to_string(),
-                ),
-            ]));
+            .tags(vec![
+                "sensitive_data_category:credentials".to_string(),
+                "sensitive_data:travis_ci_access_token".to_string(),
+            ]);
         let rule_1 = RootRuleConfig::new(RegexRuleConfig::new("foo").build())
             .match_action(MatchAction::None)
-            .tags(BTreeMap::from([
-                ("sensitive_data_category".to_string(), "pii".to_string()),
-                ("sensitive_data".to_string(), "email".to_string()),
-            ]));
+            .tags(vec![
+                "sensitive_data_category:pii".to_string(),
+                "sensitive_data:email".to_string(),
+            ]);
 
         let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
         let mut content = SimpleEvent::Map(BTreeMap::from([(
