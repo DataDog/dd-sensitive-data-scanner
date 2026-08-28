@@ -31,6 +31,7 @@ use ahash::AHashMap;
 use futures::executor::block_on;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -107,6 +108,8 @@ pub struct RootRuleConfig<T> {
     precedence: Precedence,
     #[serde(default)]
     pub is_supporting_rule: bool,
+    #[serde(default)]
+    pub tags: BTreeMap<String, String>,
     #[serde(flatten)]
     pub inner: T,
 }
@@ -135,6 +138,7 @@ impl<T> RootRuleConfig<T> {
             suppressions: None,
             precedence: Precedence::default(),
             is_supporting_rule: false,
+            tags: BTreeMap::new(),
             inner,
         }
     }
@@ -149,6 +153,7 @@ impl<T> RootRuleConfig<T> {
             suppressions: self.suppressions,
             precedence: self.precedence,
             is_supporting_rule: self.is_supporting_rule,
+            tags: self.tags,
             inner: func(self.inner),
         }
     }
@@ -183,6 +188,11 @@ impl<T> RootRuleConfig<T> {
 
     pub fn is_supporting_rule(mut self, value: bool) -> Self {
         self.is_supporting_rule = value;
+        self
+    }
+
+    pub fn tags(mut self, tags: BTreeMap<String, String>) -> Self {
+        self.tags = tags;
         self
     }
 
