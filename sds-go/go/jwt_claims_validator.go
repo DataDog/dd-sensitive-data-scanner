@@ -62,6 +62,17 @@ func (c ClaimRequirementPresent) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// ClaimRequirementNotExpired represents a claim that must be present and not expired
+type ClaimRequirementNotExpired struct{}
+
+func (c ClaimRequirementNotExpired) claimRequirementType() string { return "NotExpired" }
+
+func (c ClaimRequirementNotExpired) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type": "NotExpired",
+	})
+}
+
 // ClaimRequirementExactValue represents a claim that must have an exact string value
 type ClaimRequirementExactValue struct {
 	Value string
@@ -106,6 +117,8 @@ func UnmarshalClaimRequirement(data []byte) (ClaimRequirement, error) {
 	switch rawRequirement.Type {
 	case "Present":
 		return ClaimRequirementPresent{}, nil
+	case "NotExpired":
+		return ClaimRequirementNotExpired{}, nil
 	case "ExactValue":
 		return ClaimRequirementExactValue{Value: rawRequirement.Config}, nil
 	case "RegexMatch":
