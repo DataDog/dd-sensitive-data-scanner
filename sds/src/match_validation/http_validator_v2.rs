@@ -556,6 +556,7 @@ mod tests {
             suppressions: None,
             precedence: Precedence::default(),
             is_supporting_rule: false,
+            sds_rule_name: None,
         }
     }
 
@@ -1369,6 +1370,7 @@ calls:
                 suppressions: None,
                 precedence: Precedence::default(),
                 is_supporting_rule: false,
+                sds_rule_name: None,
             },
             RootCompiledRule {
                 inner: Box::new(MockCompiledRule),
@@ -1387,6 +1389,7 @@ calls:
                 suppressions: None,
                 precedence: Precedence::default(),
                 is_supporting_rule: false,
+                sds_rule_name: None,
             },
         ];
 
@@ -1496,6 +1499,7 @@ match_pairing:
                 suppressions: None,
                 precedence: Precedence::default(),
                 is_supporting_rule: false,
+                sds_rule_name: None,
             },
             RootCompiledRule {
                 inner: Box::new(MockCompiledRule),
@@ -1514,6 +1518,7 @@ match_pairing:
                 suppressions: None,
                 precedence: Precedence::default(),
                 is_supporting_rule: false,
+                sds_rule_name: None,
             },
         ];
 
@@ -1710,6 +1715,7 @@ match_pairing:
                 suppressions: None,
                 precedence: Precedence::default(),
                 is_supporting_rule: false,
+                sds_rule_name: None,
             },
             RootCompiledRule {
                 inner: Box::new(MockCompiledRule),
@@ -1728,6 +1734,7 @@ match_pairing:
                 suppressions: None,
                 precedence: Precedence::default(),
                 is_supporting_rule: false,
+                sds_rule_name: None,
             },
         ];
 

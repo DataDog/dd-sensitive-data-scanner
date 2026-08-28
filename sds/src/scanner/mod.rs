@@ -219,6 +219,10 @@ pub struct RootCompiledRule {
     pub suppressions: Option<CompiledSuppressions>,
     pub precedence: Precedence,
     pub is_supporting_rule: bool,
+    /// Precomputed `"{sensitive_data_category}/{sensitive_data}"` tag value derived from
+    /// the rule's `tags`, used to tag `scanning.match_count`. `None` when the rule has no
+    /// `sensitive_data` tag.
+    pub sds_rule_name: Option<String>,
 }
 
 impl RootCompiledRule {
