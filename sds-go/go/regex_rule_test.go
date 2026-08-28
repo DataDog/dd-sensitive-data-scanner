@@ -115,3 +115,20 @@ func TestRegexRuleConfigUnmarshalJSON_withPatternCaptureGroups(t *testing.T) {
 		t.Fatalf("PatternCaptureGroups = %#v, want %#v", cfg.PatternCaptureGroups, want)
 	}
 }
+
+func TestRegexRuleConfigUnmarshalJSON_withPrecedence(t *testing.T) {
+	raw := `{
+		"id": "r",
+		"pattern": "secret",
+		"precedence": "Generic"
+	}`
+	var cfg RegexRuleConfig
+	dec := json.NewDecoder(bytes.NewReader([]byte(raw)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&cfg); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if cfg.Precedence != PrecedenceGeneric {
+		t.Fatalf("Precedence = %q, want %q", cfg.Precedence, PrecedenceGeneric)
+	}
+}

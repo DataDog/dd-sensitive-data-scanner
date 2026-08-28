@@ -17,6 +17,7 @@ type RegexRuleConfig struct {
 	Id                      string                   `json:"id"`
 	Pattern                 string                   `json:"pattern"`
 	MatchAction             MatchAction              `json:"match_action"`
+	Precedence              Precedence               `json:"precedence,omitempty"`
 	ProximityKeywords       *ProximityKeywordsConfig `json:"proximity_keywords,omitempty"`
 	Suppressions            Suppressions             `json:"suppressions,omitempty"`
 	SecondaryValidator      *SecondaryValidator      `json:"validator,omitempty"`
@@ -76,6 +77,7 @@ func (t ThirdPartyActiveChecker) MarshalJSON() ([]byte, error) {
 
 type MatchActionType string
 type ReplacementType string
+type Precedence string
 
 const (
 	MatchActionNone          = MatchActionType("None")
@@ -88,6 +90,10 @@ const (
 	ReplacementTypeHash         = ReplacementType("hash")
 	ReplacementTypePartialStart = ReplacementType("partial_beginning")
 	ReplacementTypePartialEnd   = ReplacementType("partial_end")
+
+	PrecedenceSpecific = Precedence("Specific")
+	PrecedenceGeneric  = Precedence("Generic")
+	PrecedenceCatchall = Precedence("Catchall")
 )
 
 type SecondaryValidatorType string
