@@ -132,3 +132,98 @@ func TestRegexRuleConfigUnmarshalJSON_withPrecedence(t *testing.T) {
 		t.Fatalf("Precedence = %q, want %q", cfg.Precedence, PrecedenceGeneric)
 	}
 }
+
+func TestRegexRuleConfigUnmarshalJSON_withValidator(t *testing.T) {
+	raw := `{
+		"id": "r",
+		"pattern": "secret",
+		"validator": {"type": "LuhnChecksum"}
+	}`
+	var cfg RegexRuleConfig
+	dec := json.NewDecoder(bytes.NewReader([]byte(raw)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&cfg); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := NewSecondaryValidator("LuhnChecksum")
+	if !reflect.DeepEqual(cfg.SecondaryValidator, want) {
+		t.Fatalf("SecondaryValidator = %#v, want %#v", cfg.SecondaryValidator, want)
+	}
+}
+
+func TestRegexRuleConfigUnmarshalJSON_withJwtClaimsValidator(t *testing.T) {
+	raw := `{
+		"id": "r",
+		"pattern": "secret",
+		"validator": {
+			"type": "JwtClaimsValidator",
+			"config": {
+				"required_headers": {
+					"alg": {"type": "ExactValue", "config": "HS256"},
+					"typ": {"type": "Present"}
+				},
+				"required_claims": {
+					"app": {"type": "RegexMatch", "config": "test_\\w"},
+					"version": {"type": "ExactValue", "config": "2"},
+					"scope": {"type": "Present"}
+				}
+			}
+		}
+	}`
+	var cfg RegexRuleConfig
+	dec := json.NewDecoder(bytes.NewReader([]byte(raw)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&cfg); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := NewJwtClaimsValidator(JwtClaimsValidatorConfig{
+		RequiredHeaders: map[string]ClaimRequirement{
+			"alg": ClaimRequirementExactValue{Value: "HS256"},
+			"typ": ClaimRequirementPresent{},
+		},
+		RequiredClaims: map[string]ClaimRequirement{
+			"app":     ClaimRequirementRegexMatch{Pattern: `test_\w`},
+			"version": ClaimRequirementExactValue{Value: "2"},
+			"scope":   ClaimRequirementPresent{},
+		},
+	})
+	if !reflect.DeepEqual(cfg.SecondaryValidator, want) {
+		t.Fatalf("SecondaryValidator = %#v, want %#v", cfg.SecondaryValidator, want)
+	}
+}
+
+func TestSecondaryValidatorUnmarshalJSON_legacyString(t *testing.T) {
+	var got SecondaryValidator
+	if err := json.Unmarshal([]byte(`"LuhnChecksum"`), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	want := SecondaryValidator{Type: LuhnChecksum}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %#v, want %#v", got, want)
+	}
+}
+
+func TestSecondaryValidatorMarshalJSON_jwtRoundTrip(t *testing.T) {
+	in := NewJwtClaimsValidator(JwtClaimsValidatorConfig{
+		RequiredHeaders: map[string]ClaimRequirement{
+			"alg": ClaimRequirementExactValue{Value: "HS256"},
+		},
+		RequiredClaims: map[string]ClaimRequirement{
+			"scope": ClaimRequirementPresent{},
+		},
+	})
+	data, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var got SecondaryValidator
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !reflect.DeepEqual(&got, in) {
+		t.Fatalf("round trip mismatch: got %#v, want %#v", &got, in)
+	}
+}

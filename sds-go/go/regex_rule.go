@@ -123,6 +123,51 @@ func NewJwtClaimsValidator(config JwtClaimsValidatorConfig) *SecondaryValidator 
 	}
 }
 
+// UnmarshalJSON handles deserialization from various JSON formats
+func (v *SecondaryValidator) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as a simple string first (legacy format)
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		v.Type = SecondaryValidatorType(str)
+		v.Config = nil
+		return nil
+	}
+
+	// Unmarshal as object using structured approach
+	var rawMap struct {
+		Type   string          `json:"type"`
+		Config json.RawMessage `json:"config"`
+	}
+	if err := json.Unmarshal(data, &rawMap); err != nil {
+		return fmt.Errorf("validator must be either a string or object: %v", err)
+	}
+
+	v.Type = SecondaryValidatorType(rawMap.Type)
+
+	// Handle configuration if present
+	if len(rawMap.Config) > 0 {
+		switch rawMap.Type {
+		case string(JwtValidatorType):
+			var jwtConfig JwtClaimsValidatorConfig
+			if err := json.Unmarshal(rawMap.Config, &jwtConfig); err != nil {
+				return fmt.Errorf("failed to unmarshal JWT config: %v", err)
+			}
+			v.Config = jwtConfig
+		default:
+			// For other validators, unmarshal as generic interface
+			var config interface{}
+			if err := json.Unmarshal(rawMap.Config, &config); err != nil {
+				return fmt.Errorf("failed to unmarshal config: %v", err)
+			}
+			v.Config = config
+		}
+	} else {
+		v.Config = nil
+	}
+
+	return nil
+}
+
 type PartialRedactionDirection string
 
 const (
