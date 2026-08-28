@@ -1,5 +1,18 @@
 use crate::Labels;
 use metrics::{Counter, counter};
+use std::collections::BTreeMap;
+
+/// Computes the `"{sensitive_data_category}/{sensitive_data}"` tag value for a rule from its
+/// `tags`. Missing `sensitive_data_category` falls back to `"missing_category"`. Missing
+/// `sensitive_data` yields `None`, since there's nothing meaningful to tag with.
+pub fn compute_sds_rule_name(tags: &BTreeMap<String, String>) -> Option<String> {
+    let sensitive_data = tags.get("sensitive_data")?;
+    let sensitive_data_category = tags
+        .get("sensitive_data_category")
+        .map(String::as_str)
+        .unwrap_or("missing_category");
+    Some(format!("{sensitive_data_category}/{sensitive_data}"))
+}
 
 #[derive(Clone)]
 pub struct RuleMetrics {
@@ -47,5 +60,55 @@ impl ScannerMetrics {
             suppressed_match_count: counter!("scanning.suppressed_match_count", labels.clone()),
             cpu_duration: counter!("scanning.cpu_duration", labels.clone()),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::compute_sds_rule_name;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn compute_sds_rule_name_returns_none_for_empty_tags() {
+        assert_eq!(compute_sds_rule_name(&BTreeMap::new()), None);
+    }
+
+    #[test]
+    fn compute_sds_rule_name_concatenates_category_and_data() {
+        let tags = BTreeMap::from([
+            (
+                "sensitive_data_category".to_string(),
+                "credentials".to_string(),
+            ),
+            (
+                "sensitive_data".to_string(),
+                "travis_ci_access_token".to_string(),
+            ),
+        ]);
+        assert_eq!(
+            compute_sds_rule_name(&tags),
+            Some("credentials/travis_ci_access_token".to_string())
+        );
+    }
+
+    #[test]
+    fn compute_sds_rule_name_returns_none_when_category_present_but_data_missing() {
+        let tags = BTreeMap::from([(
+            "sensitive_data_category".to_string(),
+            "credentials".to_string(),
+        )]);
+        assert_eq!(compute_sds_rule_name(&tags), None);
+    }
+
+    #[test]
+    fn compute_sds_rule_name_falls_back_to_missing_category_when_category_absent() {
+        let tags = BTreeMap::from([(
+            "sensitive_data".to_string(),
+            "travis_ci_access_token".to_string(),
+        )]);
+        assert_eq!(
+            compute_sds_rule_name(&tags),
+            Some("missing_category/travis_ci_access_token".to_string())
+        );
     }
 }

@@ -1147,6 +1147,7 @@ impl ScannerBuilder<'_> {
                     suppressions: compiled_suppressions,
                     precedence: config.precedence,
                     is_supporting_rule: config.is_supporting_rule,
+                    sds_rule_name: metrics::compute_sds_rule_name(&config.tags),
                 })
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;
