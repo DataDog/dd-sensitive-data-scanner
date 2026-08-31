@@ -2,6 +2,8 @@ package dd_sds
 
 import (
 	"bytes"
+	"encoding/base64"
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
@@ -632,6 +634,45 @@ func TestJWTSecondaryValidator(t *testing.T) {
 		},
 	}
 	runTest(t, scannerWithChecksum, testData, false)
+
+	t.Run("not expired", func(t *testing.T) {
+		expired := jwtWithExp(1)
+		unexpired := jwtWithExp(4102444800)
+		event := expired + " " + unexpired
+
+		scanner, err := CreateScanner([]RuleConfig{
+			RegexRuleConfig{
+				Id:          "jwt_exp",
+				Pattern:     `eyJhbGciOiJub25lIn0\.[A-Za-z0-9_-]+\.sig`,
+				MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[redacted]"},
+				SecondaryValidator: NewJwtClaimsValidator(JwtClaimsValidatorConfig{
+					RequiredHeaders: map[string]ClaimRequirement{},
+					RequiredClaims: map[string]ClaimRequirement{
+						"exp": ClaimRequirementNotExpired{},
+					},
+				}),
+			},
+		})
+		if err != nil {
+			t.Fatal("failed to create the scanner:", err.Error())
+		}
+		defer scanner.Delete()
+
+		result, err := scanner.Scan([]byte(event))
+		if err != nil {
+			t.Fatal("failed to scan the event:", err.Error())
+		}
+		want := expired + " [redacted]"
+		if string(result.Event) != want {
+			t.Fatalf("expected mutated event %q, got %q", want, result.Event)
+		}
+	})
+}
+
+func jwtWithExp(exp int64) string {
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none"}`))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"exp":%d}`, exp)))
+	return header + "." + payload + ".sig"
 }
 
 func TestThirdPartyActiveChecker(t *testing.T) {
