@@ -8,10 +8,10 @@ import (
 
 func main() {
 	rules := []sds.RuleConfig{
-		sds.NewMatchingRule("hello", "hello", sds.ExtraConfig{}),
-		sds.NewMatchingRule("world", "(?i)WoRlD", sds.ExtraConfig{}),
-		sds.NewRedactingRule("secret", "se..et", "[REDACTED]", sds.ExtraConfig{}),
-		sds.NewHashRule("hash", "apikey", sds.ExtraConfig{}),
+		sds.RegexRuleConfig{Id: "hello", Pattern: "hello", MatchAction: sds.MatchAction{Type: sds.MatchActionNone}},
+		sds.RegexRuleConfig{Id: "world", Pattern: "(?i)WoRlD", MatchAction: sds.MatchAction{Type: sds.MatchActionNone}},
+		sds.RegexRuleConfig{Id: "secret", Pattern: "se..et", MatchAction: sds.MatchAction{Type: sds.MatchActionRedact, RedactionValue: "[REDACTED]"}},
+		sds.RegexRuleConfig{Id: "hash", Pattern: "apikey", MatchAction: sds.MatchAction{Type: sds.MatchActionHash}},
 	}
 
 	scanner, err := sds.CreateScanner(rules)
