@@ -27,6 +27,7 @@ pub use crate::secondary_validation::Validator;
 use crate::stats::GLOBAL_STATS;
 use crate::tokio::TOKIO_RUNTIME;
 use crate::{CreateScannerError, EncodeIndices, MatchAction, Path, ScannerError};
+use ::metrics::counter;
 use ahash::AHashMap;
 use futures::executor::block_on;
 use serde::{Deserialize, Serialize};
@@ -107,6 +108,11 @@ pub struct RootRuleConfig<T> {
     precedence: Precedence,
     #[serde(default)]
     pub is_supporting_rule: bool,
+    /// Raw `"key:value"` strings, matching the format used by standard rule definitions
+    /// (e.g. `sensitive_data:travis_ci_access_token`). Not parsed into a map since no
+    /// producer of these values does so either; consumers parse the entries they need.
+    #[serde(default)]
+    pub tags: Vec<String>,
     #[serde(flatten)]
     pub inner: T,
 }
@@ -135,6 +141,7 @@ impl<T> RootRuleConfig<T> {
             suppressions: None,
             precedence: Precedence::default(),
             is_supporting_rule: false,
+            tags: Vec::new(),
             inner,
         }
     }
@@ -149,6 +156,7 @@ impl<T> RootRuleConfig<T> {
             suppressions: self.suppressions,
             precedence: self.precedence,
             is_supporting_rule: self.is_supporting_rule,
+            tags: self.tags,
             inner: func(self.inner),
         }
     }
@@ -186,6 +194,11 @@ impl<T> RootRuleConfig<T> {
         self
     }
 
+    pub fn tags(mut self, tags: Vec<String>) -> Self {
+        self.tags = tags;
+        self
+    }
+
     fn get_third_party_active_checker(&self) -> Option<&MatchValidationType> {
         #[allow(deprecated)]
         self.third_party_active_checker
@@ -209,6 +222,10 @@ pub struct RootCompiledRule {
     pub suppressions: Option<CompiledSuppressions>,
     pub precedence: Precedence,
     pub is_supporting_rule: bool,
+    /// Precomputed `"{sensitive_data_category}/{sensitive_data}"` tag value derived from
+    /// the rule's `tags`, used to tag `scanning.match_count`. `None` when the rule has no
+    /// `sensitive_data` tag.
+    pub sds_rule_name: Option<String>,
 }
 
 impl RootCompiledRule {
@@ -585,10 +602,26 @@ impl Scanner {
     ) {
         // Add number of scanned events
         self.metrics.num_scanned_events.increment(1);
-        // Add number of matches
-        self.metrics
-            .match_count
-            .increment(output_rule_matches.len() as u64);
+        // Add number of matches, tagged per rule so `sds_rule_name` can break down match counts
+        // by the rule's sensitive_data_category/sensitive_data tags.
+        let mut match_counts_by_rule: AHashMap<usize, u64> = AHashMap::new();
+        for rule_match in output_rule_matches {
+            *match_counts_by_rule
+                .entry(rule_match.rule_index)
+                .or_default() += 1;
+        }
+        for (rule_index, count) in match_counts_by_rule {
+            match self.rules[rule_index].sds_rule_name.as_deref() {
+                Some(sds_rule_name) => {
+                    let labels = self.labels.clone_with_labels(Labels::new(&[(
+                        "sds_rule_name",
+                        sds_rule_name.to_string(),
+                    )]));
+                    counter!("scanning.match_count", labels).increment(count);
+                }
+                None => self.metrics.match_count.increment(count),
+            }
+        }
 
         if let Some(io_duration) = io_duration {
             let total_duration = start.elapsed();
@@ -1133,6 +1166,7 @@ impl ScannerBuilder<'_> {
                     suppressions: compiled_suppressions,
                     precedence: config.precedence,
                     is_supporting_rule: config.is_supporting_rule,
+                    sds_rule_name: metrics::compute_sds_rule_name(&config.tags),
                 })
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;

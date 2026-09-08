@@ -62,6 +62,167 @@ fn should_submit_scanning_metrics() {
 }
 
 #[test]
+fn should_submit_match_count_metric_tagged_with_sds_rule_name() {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("secret").build())
+            .match_action(MatchAction::None)
+            .tags(vec![
+                "sensitive_data_category:credentials".to_string(),
+                "sensitive_data:travis_ci_access_token".to_string(),
+            ]);
+
+        let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
+            "key1".to_string(),
+            SimpleEvent::String("secret".to_string()),
+        )]));
+
+        scanner.scan(&mut content).unwrap();
+    });
+
+    let snapshot = snapshotter.snapshot().into_hashmap();
+
+    let metric_name = "scanning.match_count";
+    let labels = vec![Label::new(
+        "sds_rule_name",
+        "credentials/travis_ci_access_token",
+    )];
+    let metric_value = snapshot
+        .get(&CompositeKey::new(
+            Counter,
+            Key::from_parts(metric_name, labels),
+        ))
+        .expect("tagged match_count metric not found");
+
+    assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+}
+
+#[test]
+fn should_submit_match_count_metric_with_missing_category_tag() {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("secret").build())
+            .match_action(MatchAction::None)
+            .tags(vec!["sensitive_data:travis_ci_access_token".to_string()]);
+
+        let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
+            "key1".to_string(),
+            SimpleEvent::String("secret".to_string()),
+        )]));
+
+        scanner.scan(&mut content).unwrap();
+    });
+
+    let snapshot = snapshotter.snapshot().into_hashmap();
+
+    let metric_name = "scanning.match_count";
+    let labels = vec![Label::new(
+        "sds_rule_name",
+        "missing_category/travis_ci_access_token",
+    )];
+    let metric_value = snapshot
+        .get(&CompositeKey::new(
+            Counter,
+            Key::from_parts(metric_name, labels),
+        ))
+        .expect("tagged match_count metric not found");
+
+    assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+}
+
+#[test]
+fn should_submit_untagged_match_count_metric_when_sensitive_data_tag_is_missing() {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("secret").build())
+            .match_action(MatchAction::None)
+            .tags(vec!["sensitive_data_category:credentials".to_string()]);
+
+        let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
+            "key1".to_string(),
+            SimpleEvent::String("secret".to_string()),
+        )]));
+
+        scanner.scan(&mut content).unwrap();
+    });
+
+    let snapshot = snapshotter.snapshot().into_hashmap();
+
+    let metric_name = "scanning.match_count";
+    let metric_value = snapshot
+        .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
+        .expect("untagged match_count metric not found");
+
+    assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+}
+
+#[test]
+fn should_submit_separately_tagged_match_count_metrics_for_multiple_rules() {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("secret").build())
+            .match_action(MatchAction::None)
+            .tags(vec![
+                "sensitive_data_category:credentials".to_string(),
+                "sensitive_data:travis_ci_access_token".to_string(),
+            ]);
+        let rule_1 = RootRuleConfig::new(RegexRuleConfig::new("foo").build())
+            .match_action(MatchAction::None)
+            .tags(vec![
+                "sensitive_data_category:pii".to_string(),
+                "sensitive_data:email".to_string(),
+            ]);
+
+        let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
+            "key1".to_string(),
+            SimpleEvent::String("secret foo".to_string()),
+        )]));
+
+        scanner.scan(&mut content).unwrap();
+    });
+
+    let snapshot = snapshotter.snapshot().into_hashmap();
+
+    let metric_name = "scanning.match_count";
+
+    let credentials_labels = vec![Label::new(
+        "sds_rule_name",
+        "credentials/travis_ci_access_token",
+    )];
+    let credentials_metric_value = snapshot
+        .get(&CompositeKey::new(
+            Counter,
+            Key::from_parts(metric_name, credentials_labels),
+        ))
+        .expect("credentials match_count metric not found");
+    assert_eq!(
+        credentials_metric_value,
+        &(None, None, DebugValue::Counter(1))
+    );
+
+    let pii_labels = vec![Label::new("sds_rule_name", "pii/email")];
+    let pii_metric_value = snapshot
+        .get(&CompositeKey::new(
+            Counter,
+            Key::from_parts(metric_name, pii_labels),
+        ))
+        .expect("pii match_count metric not found");
+    assert_eq!(pii_metric_value, &(None, None, DebugValue::Counter(1)));
+}
+
+#[test]
 fn should_submit_excluded_match_metric() {
     let recorder = DebuggingRecorder::new();
     let snapshotter = recorder.snapshotter();
