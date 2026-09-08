@@ -266,6 +266,7 @@ pub enum SecondaryValidator {
     NhsCheckDigit,
     NirChecksum,
     NonHexChecker,
+    NonHexPlusTokenEfficiencyChecker,
     PolishNationalIdChecksum,
     PolishNipChecksum,
     PortugueseTaxIdChecksum,
