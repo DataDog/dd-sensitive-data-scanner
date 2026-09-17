@@ -81,40 +81,18 @@ pub fn debug_scan<E: Event>(
 
     let full_matches = full_scanner.scan(event)?;
 
-    let mut output: Vec<DebugRuleMatch> =
-        full_matches
-            .into_iter()
-            .map(|rule_match| {
-                let mut matched_status_info = MatchedInfo {
-                    included_keyword: None,
-                    included_keyword_start_index: None,
-                    included_keyword_end_exclusive: None,
-                };
-                if let Some(compiled_regex_rule) = full_scanner.rules[0].as_regex_rule()
-                    && let Some(compiled_included_keywords) = &compiled_regex_rule.included_keywords
-                {
-                    event.visit_string_mut(&rule_match.path, |content| {
-                        access_regex_caches(|caches| {
-                            if let Some(info) = compiled_included_keywords
-                                .find_keyword_before_match(rule_match.start_index, caches, content)
-                            {
-                                matched_status_info.included_keyword = Some(info.keyword);
-                                matched_status_info.included_keyword_start_index =
-                                    Some(info.keyword_start_index);
-                                matched_status_info.included_keyword_end_exclusive =
-                                    Some(info.keyword_end_index_exclusive);
-                            }
-                        });
-                        false
-                    });
-                }
+    let mut output: Vec<DebugRuleMatch> = full_matches
+        .into_iter()
+        .map(|rule_match| {
+            let matched_status_info =
+                included_keyword_info(event, &rule_match, full_scanner.rules[0].as_regex_rule());
 
-                DebugRuleMatch {
-                    rule_match,
-                    status: DebugRuleMatchStatus::Matched(matched_status_info),
-                }
-            })
-            .collect();
+            DebugRuleMatch {
+                rule_match,
+                status: DebugRuleMatchStatus::Matched(matched_status_info),
+            }
+        })
+        .collect();
 
     if let Some(regex_rule) = rule.inner.as_regex_rule() {
         let regex_compiled_rule = full_scanner.rules[0].as_regex_rule().unwrap();
@@ -192,25 +170,8 @@ fn debug_scan_excluded_keywords<E: Event>(
 
         for m in matches {
             if !output.iter().any(|x| x.rule_match == m) {
-                let mut excluded_info = ExcludedInfo {
-                    excluded_keyword: None,
-                    excluded_keyword_start_index: None,
-                    excluded_keyword_end_exclusive: None,
-                };
+                let excluded_info = excluded_keyword_info(event, &m, Some(regex_compiled_rule));
 
-                if let Some(compiled_excluded_keywords) = &regex_compiled_rule.excluded_keywords {
-                    event.visit_string_mut(&m.path, |content| {
-                        if let Some(info) = compiled_excluded_keywords
-                            .get_false_positive_match(content, m.start_index)
-                        {
-                            excluded_info.excluded_keyword_start_index = Some(info.start());
-                            excluded_info.excluded_keyword_end_exclusive = Some(info.end());
-                            excluded_info.excluded_keyword =
-                                Some(content[info.start()..info.end()].to_string());
-                        }
-                        false
-                    })
-                }
                 output.push(DebugRuleMatch {
                     rule_match: m,
                     status: DebugRuleMatchStatus::ExcludedKeyword(excluded_info),
@@ -317,6 +278,70 @@ fn debug_scan_suppressions<E: Event>(
     add_status_if_no_match(new_matches, output, DebugRuleMatchStatus::Suppressed);
 
     Ok(())
+}
+
+fn included_keyword_info<E: Event>(
+    event: &mut E,
+    rule_match: &RuleMatch,
+    regex_compiled_rule: Option<&RegexCompiledRule>,
+) -> MatchedInfo {
+    let mut included_info = MatchedInfo {
+        included_keyword: None,
+        included_keyword_start_index: None,
+        included_keyword_end_exclusive: None,
+    };
+
+    if let Some(compiled_included_keywords) =
+        regex_compiled_rule.and_then(|rule| rule.included_keywords.as_ref())
+    {
+        event.visit_string_mut(&rule_match.path, |content| {
+            access_regex_caches(|caches| {
+                if let Some(info) = compiled_included_keywords.find_keyword_before_match(
+                    rule_match.start_index,
+                    caches,
+                    content,
+                ) {
+                    included_info.included_keyword = Some(info.keyword);
+                    included_info.included_keyword_start_index = Some(info.keyword_start_index);
+                    included_info.included_keyword_end_exclusive =
+                        Some(info.keyword_end_index_exclusive);
+                }
+            });
+            false
+        });
+    }
+
+    included_info
+}
+
+fn excluded_keyword_info<E: Event>(
+    event: &mut E,
+    rule_match: &RuleMatch,
+    regex_compiled_rule: Option<&RegexCompiledRule>,
+) -> ExcludedInfo {
+    let mut excluded_info = ExcludedInfo {
+        excluded_keyword: None,
+        excluded_keyword_start_index: None,
+        excluded_keyword_end_exclusive: None,
+    };
+
+    if let Some(compiled_excluded_keywords) =
+        regex_compiled_rule.and_then(|rule| rule.excluded_keywords.as_ref())
+    {
+        event.visit_string_mut(&rule_match.path, |content| {
+            if let Some(info) =
+                compiled_excluded_keywords.get_false_positive_match(content, rule_match.start_index)
+            {
+                excluded_info.excluded_keyword_start_index = Some(info.start());
+                excluded_info.excluded_keyword_end_exclusive = Some(info.end());
+                excluded_info.excluded_keyword =
+                    Some(content[info.start()..info.end()].to_string());
+            }
+            false
+        });
+    }
+
+    excluded_info
 }
 
 fn add_status_if_no_match(
