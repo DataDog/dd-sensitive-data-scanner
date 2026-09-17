@@ -11,8 +11,7 @@ use thiserror::Error;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DebugRuleMatch {
     pub rule_match: RuleMatch,
-    #[serde(flatten)]
-    pub status: DebugRuleMatchStatus,
+    pub statuses: Vec<DebugRuleMatchStatus>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -89,7 +88,7 @@ pub fn debug_scan<E: Event>(
 
             DebugRuleMatch {
                 rule_match,
-                status: DebugRuleMatchStatus::Matched(matched_status_info),
+                statuses: vec![DebugRuleMatchStatus::Matched(matched_status_info)],
             }
         })
         .collect();
@@ -140,7 +139,7 @@ fn debug_scan_included_keywords<E: Event>(
             if !output.iter().any(|x| x.rule_match == m) {
                 output.push(DebugRuleMatch {
                     rule_match: m,
-                    status: DebugRuleMatchStatus::MissingIncludedKeyword,
+                    statuses: vec![DebugRuleMatchStatus::MissingIncludedKeyword],
                 });
             }
         }
@@ -174,7 +173,7 @@ fn debug_scan_excluded_keywords<E: Event>(
 
                 output.push(DebugRuleMatch {
                     rule_match: m,
-                    status: DebugRuleMatchStatus::ExcludedKeyword(excluded_info),
+                    statuses: vec![DebugRuleMatchStatus::ExcludedKeyword(excluded_info)],
                 });
             }
         }
@@ -353,7 +352,7 @@ fn add_status_if_no_match(
         if !output.iter().any(|x| x.rule_match == m) {
             output.push(DebugRuleMatch {
                 rule_match: m,
-                status: status.clone(),
+                statuses: vec![status.clone()],
             });
         }
     }
@@ -378,12 +377,12 @@ mod test {
         // Full match
         assert_eq!(matches.len(), 1);
         assert_eq!(
-            matches[0].status,
-            DebugRuleMatchStatus::Matched(MatchedInfo {
+            matches[0].statuses,
+            vec![DebugRuleMatchStatus::Matched(MatchedInfo {
                 included_keyword: None,
                 included_keyword_start_index: None,
                 included_keyword_end_exclusive: None,
-            })
+            })]
         );
         assert_eq!(matches[0].rule_match.start_index, 10);
     }
@@ -401,12 +400,12 @@ mod test {
 
         assert_eq!(matches.len(), 1);
         assert_eq!(
-            matches[0].status,
-            DebugRuleMatchStatus::Matched(MatchedInfo {
+            matches[0].statuses,
+            vec![DebugRuleMatchStatus::Matched(MatchedInfo {
                 included_keyword: Some("a".to_string()),
                 included_keyword_start_index: Some(8),
                 included_keyword_end_exclusive: Some(9),
-            })
+            })]
         );
         assert_eq!(matches[0].rule_match.start_index, 10);
     }
@@ -425,8 +424,8 @@ mod test {
 
         assert_eq!(matches.len(), 1);
         assert_eq!(
-            matches[0].status,
-            DebugRuleMatchStatus::MissingIncludedKeyword
+            matches[0].statuses,
+            vec![DebugRuleMatchStatus::MissingIncludedKeyword]
         );
         assert_eq!(matches[0].rule_match.start_index, 10);
     }
@@ -445,12 +444,12 @@ mod test {
 
         assert_eq!(matches.len(), 1);
         assert_eq!(
-            matches[0].status,
-            DebugRuleMatchStatus::ExcludedKeyword(ExcludedInfo {
+            matches[0].statuses,
+            vec![DebugRuleMatchStatus::ExcludedKeyword(ExcludedInfo {
                 excluded_keyword: Some("a".to_string()),
                 excluded_keyword_start_index: Some(8),
                 excluded_keyword_end_exclusive: Some(9),
-            })
+            })]
         );
     }
 
@@ -468,7 +467,7 @@ mod test {
         let matches = debug_scan(&mut msg, rule).unwrap();
 
         assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].status, DebugRuleMatchStatus::Suppressed);
+        assert_eq!(matches[0].statuses, vec![DebugRuleMatchStatus::Suppressed]);
         assert_eq!(matches[0].rule_match.start_index, 10);
     }
 
@@ -494,7 +493,10 @@ mod test {
         let matches = debug_scan(&mut event, rule).unwrap();
 
         assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].status, DebugRuleMatchStatus::NotInIncludedScope);
+        assert_eq!(
+            matches[0].statuses,
+            vec![DebugRuleMatchStatus::NotInIncludedScope]
+        );
         assert_eq!(matches[0].rule_match.start_index, 10);
     }
 
@@ -516,7 +518,10 @@ mod test {
         let matches = debug_scan(&mut event, rule).unwrap();
 
         assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].status, DebugRuleMatchStatus::InExcludedScope);
+        assert_eq!(
+            matches[0].statuses,
+            vec![DebugRuleMatchStatus::InExcludedScope]
+        );
     }
 
     #[test]
@@ -531,6 +536,9 @@ mod test {
         let matches = debug_scan(&mut event, rule).unwrap();
 
         assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].status, DebugRuleMatchStatus::ChecksumFailed);
+        assert_eq!(
+            matches[0].statuses,
+            vec![DebugRuleMatchStatus::ChecksumFailed]
+        );
     }
 }
