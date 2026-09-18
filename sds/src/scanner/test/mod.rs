@@ -6,6 +6,7 @@ mod overlapping_matches;
 mod parallel_scan;
 mod supporting_rule;
 mod validators;
+mod vin_checksum;
 
 use super::*;
 use super::{ScannerBuilder, StringMatch};
