@@ -284,6 +284,7 @@ pub enum SecondaryValidator {
     UsDeaChecksum,
     UsNpiChecksum,
     VerhoeffChecksum,
+    VinChecksum,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
