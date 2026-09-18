@@ -57,6 +57,7 @@ mod uk_trn_checksum;
 mod us_dea_checksum;
 mod us_npi_checksum;
 mod verhoeff_checksum;
+mod vin_checksum;
 
 #[cfg(test)]
 pub use jwt_expiration_checker::generate_jwt;
@@ -124,6 +125,7 @@ pub use crate::secondary_validation::uk_trn_checksum::UkTrnChecksum;
 pub use crate::secondary_validation::us_dea_checksum::UsDeaChecksum;
 pub use crate::secondary_validation::us_npi_checksum::UsNpiChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
+pub use crate::secondary_validation::vin_checksum::VinChecksum;
 
 use std::str::Chars;
 use std::sync::Arc;
@@ -285,6 +287,7 @@ impl SecondaryValidator {
             SecondaryValidator::UsDeaChecksum => Arc::new(UsDeaChecksum),
             SecondaryValidator::UsNpiChecksum => Arc::new(UsNpiChecksum),
             SecondaryValidator::VerhoeffChecksum => Arc::new(VerhoeffChecksum),
+            SecondaryValidator::VinChecksum => Arc::new(VinChecksum),
         }
     }
 }
