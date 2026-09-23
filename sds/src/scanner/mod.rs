@@ -186,6 +186,10 @@ impl<T> RootRuleConfig<T> {
         self
     }
 
+    pub fn get_suppressions(&self) -> Option<&Suppressions> {
+        self.suppressions.as_ref()
+    }
+
     fn get_third_party_active_checker(&self) -> Option<&MatchValidationType> {
         #[allow(deprecated)]
         self.third_party_active_checker
