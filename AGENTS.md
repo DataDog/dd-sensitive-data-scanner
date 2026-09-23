@@ -10,6 +10,12 @@ Use `make` to see available commands for building, testing, and formatting.
 `make check-rust` requires `cargo-hack` 0.6.45. The Rust check and test targets require the
 Hyperscan development library so they can check every Cargo feature.
 
+## Publishing and downstream dependency bumps
+
+- `.github/workflows/publish-crate.yml` calls the reusable `trigger_pr.yml` only after successful publication on `main`
+- The dispatch checks that the exact published version is available and not yanked in the crates.io index, then sends `crate_version`, `commit_author`, and `pr_url` to `ddoghq/sds-shared-library` via `repository_dispatch/create_pr`.
+- The protected environment's trigger GitHub App must have access to `ddoghq/sds-shared-library` with Contents: write. HTTP errors fail the workflow.
+
 ## Code Quality Requirements
 
 - **Warnings are errors:** CI runs with `RUSTFLAGS="-D warnings"`
