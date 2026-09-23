@@ -6,6 +6,7 @@ mod overlapping_matches;
 mod parallel_scan;
 mod supporting_rule;
 mod validators;
+mod vin_checksum;
 
 use super::*;
 use super::{ScannerBuilder, StringMatch};
@@ -16,6 +17,7 @@ use crate::scanner::regex_rule::config::{
     ProximityKeywordsConfig, RegexRuleConfig, SecondaryValidator::*,
 };
 use crate::scanner::scope::Scope;
+use crate::scanner::suppression::Suppressions;
 use crate::scanner::{CreateScannerError, Scanner, get_next_regex_start};
 use crate::validation::{RegexPatternCaptureGroupsValidationError, RegexValidationError};
 
@@ -88,6 +90,18 @@ impl RuleConfig for CustomRuleConfig {
     ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
         Ok(Box::new(CustomCompiledRule {}))
     }
+}
+
+#[test]
+fn root_rule_config_exposes_suppressions() {
+    let suppressions = Suppressions {
+        exact_match: vec!["secret".to_string()],
+        ..Suppressions::default()
+    };
+    let config =
+        RootRuleConfig::new(RegexRuleConfig::new("secret")).suppressions(suppressions.clone());
+
+    assert_eq!(config.get_suppressions(), Some(&suppressions));
 }
 
 #[test]
