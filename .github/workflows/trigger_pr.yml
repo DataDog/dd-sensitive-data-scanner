@@ -1,30 +1,50 @@
 name: Create a PR in sds repo to bump the version
 on:
-  push:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      crate_version:
+        description: Published dd-sensitive-data-scanner crates.io version
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   trigger:
     runs-on: ubuntu-latest
     environment: protected
     steps:
-      - name: Extract PR information from github
-        id: extract-pr-info
+      - name: Verify published version is available
+        env:
+          CRATE_VERSION: ${{ inputs.crate_version }}
         run: |
-          echo "Extracting PR information"
-          echo "/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls"
-          res=$(curl -L \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          for attempt in {1..12}; do
+            if curl --fail-with-body --silent --show-error --max-time 20 \
+                https://index.crates.io/dd/-s/dd-sensitive-data-scanner \
+                | jq -se --arg version "$CRATE_VERSION" 'any(.[]; .vers == $version and .yanked == false)' > /dev/null; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 12 ]; then
+              sleep 5
+            fi
+          done
+          echo "Published crate version $CRATE_VERSION is not available in the crates.io index" >&2
+          exit 1
+      - name: Extract PR information from GitHub
+        id: extract-pr-info
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          response=$(curl --fail-with-body --silent --show-error --location \
+            -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls)
-
-          pr_url=`echo $res | jq -r 'if .[0] then .[0].html_url else "UNKNOWN" end'`
-          author=`echo $res | jq -r 'if .[0] then .[0].user.login else "UNKNOWN" end'`
-          echo $res
-          echo $pr_url
-          echo $author
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls")
+          pr_url=$(jq -r --arg fallback "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA" \
+            '.[0].html_url // $fallback' <<< "$response")
+          author=$(jq -r --arg fallback "$GITHUB_ACTOR" '.[0].user.login // $fallback' <<< "$response")
           echo "PR_URL=$pr_url" >> "$GITHUB_OUTPUT"
           echo "COMMIT_AUTHOR=$author" >> "$GITHUB_OUTPUT"
       - name: Generate a token
@@ -33,22 +53,22 @@ jobs:
         with:
           app-id: ${{ vars.TRIGGER_APP_ID }}
           private-key: ${{ secrets.TRIGGER_GITHUB_APP_PRIVATE_KEY }}
-          owner: DataDog
-          repositories: "sds-shared-library"
-      - name: Trigger Workflow in Another Repository
+          owner: ddoghq
+          repositories: sds-shared-library
+      - name: Trigger dependency bump
+        env:
+          DISPATCH_TOKEN: ${{ steps.generate-token.outputs.token }}
+          CRATE_VERSION: ${{ inputs.crate_version }}
+          PR_URL: ${{ steps.extract-pr-info.outputs.PR_URL }}
+          COMMIT_AUTHOR: ${{ steps.extract-pr-info.outputs.COMMIT_AUTHOR }}
         run: |
-          # Set the required variables
-          repo_owner="DataDog" 
-          repo_name="sds-shared-library"  
-          event_type="create_pr" 
-          # Trigger the workflow
-          curl -L \
-              -X POST \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${{ steps.generate-token.outputs.token }}" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              https://api.github.com/repos/$repo_owner/$repo_name/dispatches \
-              -d "{\"event_type\": \"$event_type\", \"client_payload\": {\"commit_hash\": \"$GITHUB_SHA\" \
-                , \"pr_url\": \"${{steps.extract-pr-info.outputs.pr_url}}\" \
-                , \"commit_author\": \"${{steps.extract-pr-info.outputs.commit_author}}\" \
-              }}"
+          payload=$(jq -n --arg version "$CRATE_VERSION" --arg pr_url "$PR_URL" \
+            --arg author "$COMMIT_AUTHOR" \
+            '{event_type: "create_pr", client_payload: {crate_version: $version, pr_url: $pr_url, commit_author: $author}}')
+          curl --fail-with-body --silent --show-error --location \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $DISPATCH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/ddoghq/sds-shared-library/dispatches \
+            --data "$payload"
