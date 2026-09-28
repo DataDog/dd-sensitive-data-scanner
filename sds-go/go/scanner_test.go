@@ -2,6 +2,8 @@ package dd_sds
 
 import (
 	"bytes"
+	"encoding/base64"
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
@@ -632,6 +634,45 @@ func TestJWTSecondaryValidator(t *testing.T) {
 		},
 	}
 	runTest(t, scannerWithChecksum, testData, false)
+
+	t.Run("not expired", func(t *testing.T) {
+		expired := jwtWithExp(1)
+		unexpired := jwtWithExp(4102444800)
+		event := expired + " " + unexpired
+
+		scanner, err := CreateScanner([]RuleConfig{
+			RegexRuleConfig{
+				Id:          "jwt_exp",
+				Pattern:     `eyJhbGciOiJub25lIn0\.[A-Za-z0-9_-]+\.sig`,
+				MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[redacted]"},
+				SecondaryValidator: NewJwtClaimsValidator(JwtClaimsValidatorConfig{
+					RequiredHeaders: map[string]ClaimRequirement{},
+					RequiredClaims: map[string]ClaimRequirement{
+						"exp": ClaimRequirementNotExpired{},
+					},
+				}),
+			},
+		})
+		if err != nil {
+			t.Fatal("failed to create the scanner:", err.Error())
+		}
+		defer scanner.Delete()
+
+		result, err := scanner.Scan([]byte(event))
+		if err != nil {
+			t.Fatal("failed to scan the event:", err.Error())
+		}
+		want := expired + " [redacted]"
+		if string(result.Event) != want {
+			t.Fatalf("expected mutated event %q, got %q", want, result.Event)
+		}
+	})
+}
+
+func jwtWithExp(exp int64) string {
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none"}`))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"exp":%d}`, exp)))
+	return header + "." + payload + ".sig"
 }
 
 func TestThirdPartyActiveChecker(t *testing.T) {
@@ -1095,5 +1136,57 @@ func TestScanWithOptions(t *testing.T) {
 	// Unreachable endpoint → Error(...); the point is validation ran and set a status.
 	if result.Matches[0].MatchStatus == "" || result.Matches[0].MatchStatus == MatchStatusNotChecked {
 		t.Fatalf("expected match validation status, got %q", result.Matches[0].MatchStatus)
+	}
+}
+
+func TestScanStringWithPrecedence(t *testing.T) {
+	rules := []RuleConfig{
+		RegexRuleConfig{Id: "catchall", Pattern: "secret", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[CATCHALL]"}, Precedence: PrecedenceCatchall},
+		RegexRuleConfig{Id: "generic", Pattern: "secret", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[GENERIC]"}, Precedence: PrecedenceGeneric},
+		RegexRuleConfig{Id: "specific", Pattern: "secret", MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[SPECIFIC]"}, Precedence: PrecedenceSpecific},
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create the scanner:", err.Error())
+	}
+	defer scanner.Delete()
+
+	result, err := scanner.Scan([]byte("secret"))
+	if err != nil {
+		t.Fatal("failed to scan the event:", err.Error())
+	}
+	if string(result.Event) != "[SPECIFIC]" {
+		t.Fatalf("expected mutated event %q, got %q", "[SPECIFIC]", result.Event)
+	}
+	if len(result.Matches) != 1 {
+		t.Fatalf("expected 1 match, got %d", len(result.Matches))
+	}
+	if result.Matches[0].RuleIdx != 2 {
+		t.Fatalf("expected RuleIdx 2, got %d", result.Matches[0].RuleIdx)
+	}
+}
+
+func TestScanStringWithDefaultPrecedence(t *testing.T) {
+	rules := []RuleConfig{
+		RegexRuleConfig{Id: "generic", Pattern: "secret", MatchAction: MatchAction{Type: MatchActionNone}, Precedence: PrecedenceGeneric},
+		RegexRuleConfig{Id: "specific", Pattern: "secret", MatchAction: MatchAction{Type: MatchActionNone}},
+	}
+
+	scanner, err := CreateScanner(rules)
+	if err != nil {
+		t.Fatal("failed to create the scanner:", err.Error())
+	}
+	defer scanner.Delete()
+
+	result, err := scanner.Scan([]byte("secret"))
+	if err != nil {
+		t.Fatal("failed to scan the event:", err.Error())
+	}
+	if len(result.Matches) != 1 {
+		t.Fatalf("expected 1 match, got %d", len(result.Matches))
+	}
+	if result.Matches[0].RuleIdx != 1 {
+		t.Fatalf("expected RuleIdx 1, got %d", result.Matches[0].RuleIdx)
 	}
 }

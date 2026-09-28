@@ -10,6 +10,11 @@ Use `make` to see available commands for building, testing, and formatting.
 `make check-rust` requires `cargo-hack` 0.6.45. The Rust check and test targets require the
 Hyperscan development library so they can check every Cargo feature.
 
+## Publishing
+
+- `.github/workflows/publish-crate.yml` publishes the crate on pushes to `main` and supports manual publication or a dry run.
+- Crate publication does not automatically create a dependency bump PR in `ddoghq/sds-shared-library`.
+
 ## Code Quality Requirements
 
 - **Warnings are errors:** CI runs with `RUSTFLAGS="-D warnings"`

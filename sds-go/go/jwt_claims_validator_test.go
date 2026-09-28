@@ -97,6 +97,22 @@ func TestJwtClaimsValidatorConfig_UnmarshalJSON(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "config with not expired claim",
+			jsonData: `{
+				"required_claims": {
+					"exp": {"type": "NotExpired"}
+				},
+				"required_headers": {}
+			}`,
+			expected: JwtClaimsValidatorConfig{
+				RequiredClaims: map[string]ClaimRequirement{
+					"exp": ClaimRequirementNotExpired{},
+				},
+				RequiredHeaders: map[string]ClaimRequirement{},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -153,6 +169,7 @@ func TestJwtClaimsValidatorConfig_MarshalJSON(t *testing.T) {
 		RequiredClaims: map[string]ClaimRequirement{
 			"sub": ClaimRequirementPresent{},
 			"iss": ClaimRequirementExactValue{Value: "my-issuer"},
+			"exp": ClaimRequirementNotExpired{},
 		},
 		RequiredHeaders: map[string]ClaimRequirement{
 			"kid": ClaimRequirementExactValue{Value: "key-123"},
@@ -179,6 +196,10 @@ func TestJwtClaimsValidatorConfig_MarshalJSON(t *testing.T) {
 
 	if len(unmarshaledConfig.RequiredHeaders) != len(config.RequiredHeaders) {
 		t.Errorf("RequiredHeaders length after round-trip = %v, want %v", len(unmarshaledConfig.RequiredHeaders), len(config.RequiredHeaders))
+	}
+
+	if unmarshaledConfig.RequiredClaims["exp"].claimRequirementType() != "NotExpired" {
+		t.Errorf("RequiredClaims[exp] type after round-trip = %v, want NotExpired", unmarshaledConfig.RequiredClaims["exp"].claimRequirementType())
 	}
 }
 

@@ -17,6 +17,7 @@ type RegexRuleConfig struct {
 	Id                      string                   `json:"id"`
 	Pattern                 string                   `json:"pattern"`
 	MatchAction             MatchAction              `json:"match_action"`
+	Precedence              Precedence               `json:"precedence,omitempty"`
 	ProximityKeywords       *ProximityKeywordsConfig `json:"proximity_keywords,omitempty"`
 	Suppressions            Suppressions             `json:"suppressions,omitempty"`
 	SecondaryValidator      *SecondaryValidator      `json:"validator,omitempty"`
@@ -25,57 +26,9 @@ type RegexRuleConfig struct {
 	IsSupportingRule        bool                     `json:"is_supporting_rule,omitempty"`
 }
 
-// ThirdPartyActiveChecker is used to validate if a given match is still active or not. It applies well to tokens that have an expiration date for instance.
-type ThirdPartyActiveChecker struct {
-	Type   string                        `json:"type"`
-	Config ThirdPartyActiveCheckerConfig `json:"config"`
-}
-
-type ThirdPartyActiveCheckerConfig struct {
-	*ThirdPartyActiveCheckerConfigAws
-	*ThirdPartyActiveCheckerConfigHttp
-}
-
-type Duration struct {
-	Seconds uint64 `json:"secs"`
-	Nanos   uint64 `json:"nanos"`
-}
-
-type ThirdPartyActiveCheckerConfigAws struct {
-	Kind           string   `json:"kind"`
-	AwsStsEndpoint string   `json:"aws_sts_endpoint"`
-	Timeout        Duration `json:"timeout"`
-}
-
-type StatusCodeRange struct {
-	Start int `json:"start"`
-	End   int `json:"end"`
-}
-
-type ThirdPartyActiveCheckerConfigHttp struct {
-	Endpoint               string            `json:"endpoint"`
-	Hosts                  []string          `json:"hosts,omitempty"`
-	Method                 string            `json:"http_method"`
-	RequestHeader          map[string]string `json:"request_headers"`
-	ValidHttpStatusCodes   []StatusCodeRange `json:"valid_http_status_code"`
-	InvalidHttpStatusCodes []StatusCodeRange `json:"invalid_http_status_code"`
-	Timeout                int               `json:"timeout_seconds"`
-}
-
-// MarshalJSON implements custom JSON marshaling to handle empty validation types
-func (t ThirdPartyActiveChecker) MarshalJSON() ([]byte, error) {
-	// If Type is empty, marshal as null to omit the field
-	if t.Type == "" {
-		return []byte("null"), nil
-	}
-
-	// Otherwise, marshal normally
-	type Alias ThirdPartyActiveChecker
-	return json.Marshal((Alias)(t))
-}
-
 type MatchActionType string
 type ReplacementType string
+type Precedence string
 
 const (
 	MatchActionNone          = MatchActionType("None")
@@ -88,6 +41,10 @@ const (
 	ReplacementTypeHash         = ReplacementType("hash")
 	ReplacementTypePartialStart = ReplacementType("partial_beginning")
 	ReplacementTypePartialEnd   = ReplacementType("partial_end")
+
+	PrecedenceSpecific = Precedence("Specific")
+	PrecedenceGeneric  = Precedence("Generic")
+	PrecedenceCatchall = Precedence("Catchall")
 )
 
 type SecondaryValidatorType string
@@ -115,6 +72,51 @@ func NewJwtClaimsValidator(config JwtClaimsValidatorConfig) *SecondaryValidator 
 		Type:   JwtValidatorType,
 		Config: config,
 	}
+}
+
+// UnmarshalJSON handles deserialization from various JSON formats
+func (v *SecondaryValidator) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as a simple string first (legacy format)
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		v.Type = SecondaryValidatorType(str)
+		v.Config = nil
+		return nil
+	}
+
+	// Unmarshal as object using structured approach
+	var rawMap struct {
+		Type   string          `json:"type"`
+		Config json.RawMessage `json:"config"`
+	}
+	if err := json.Unmarshal(data, &rawMap); err != nil {
+		return fmt.Errorf("validator must be either a string or object: %v", err)
+	}
+
+	v.Type = SecondaryValidatorType(rawMap.Type)
+
+	// Handle configuration if present
+	if len(rawMap.Config) > 0 {
+		switch rawMap.Type {
+		case string(JwtValidatorType):
+			var jwtConfig JwtClaimsValidatorConfig
+			if err := json.Unmarshal(rawMap.Config, &jwtConfig); err != nil {
+				return fmt.Errorf("failed to unmarshal JWT config: %v", err)
+			}
+			v.Config = jwtConfig
+		default:
+			// For other validators, unmarshal as generic interface
+			var config interface{}
+			if err := json.Unmarshal(rawMap.Config, &config); err != nil {
+				return fmt.Errorf("failed to unmarshal config: %v", err)
+			}
+			v.Config = config
+		}
+	} else {
+		v.Config = nil
+	}
+
+	return nil
 }
 
 type PartialRedactionDirection string
@@ -158,11 +160,12 @@ type MatchStatus string
 
 const (
 	// The ordering here is important, values further down the list have a higher priority when merging.
-	MatchStatusNotChecked   = MatchStatus("NotChecked")
-	MatchStatusNotAvailable = MatchStatus("NotAvailable")
-	MatchStatusInvalid      = MatchStatus("Invalid")
-	MatchStatusError        = MatchStatus("Error")
-	MatchStatusValid        = MatchStatus("Valid")
+	MatchStatusNotChecked            = MatchStatus("NotChecked")
+	MatchStatusNotAvailable          = MatchStatus("NotAvailable")
+	MatchStatusMissingDependentMatch = MatchStatus("MissingDependentMatch")
+	MatchStatusInvalid               = MatchStatus("Invalid")
+	MatchStatusError                 = MatchStatus("Error")
+	MatchStatusValid                 = MatchStatus("Valid")
 )
 
 // RuleMatch stores the matches reported by the core library.

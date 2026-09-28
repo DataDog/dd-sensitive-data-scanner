@@ -39,6 +39,7 @@ mod monero_address;
 mod nhs_check_digit;
 mod nir_checksum;
 mod non_hex_checker;
+mod non_hex_plus_token_efficiency_checker;
 mod polish_national_id_checksum;
 mod polish_nip_checksum;
 mod portuguese_tax_id_checksum;
@@ -56,6 +57,7 @@ mod uk_trn_checksum;
 mod us_dea_checksum;
 mod us_npi_checksum;
 mod verhoeff_checksum;
+mod vin_checksum;
 
 #[cfg(test)]
 pub use jwt_expiration_checker::generate_jwt;
@@ -105,6 +107,7 @@ pub use crate::secondary_validation::monero_address::MoneroAddress;
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 pub use crate::secondary_validation::nir_checksum::NirChecksum;
 pub use crate::secondary_validation::non_hex_checker::NonHexChecker;
+pub use crate::secondary_validation::non_hex_plus_token_efficiency_checker::NonHexPlusTokenEfficiencyChecker;
 pub use crate::secondary_validation::polish_national_id_checksum::PolishNationalIdChecksum;
 pub use crate::secondary_validation::polish_nip_checksum::PolishNipChecksum;
 pub use crate::secondary_validation::portuguese_tax_id_checksum::PortugueseTaxIdChecksum;
@@ -122,6 +125,7 @@ pub use crate::secondary_validation::uk_trn_checksum::UkTrnChecksum;
 pub use crate::secondary_validation::us_dea_checksum::UsDeaChecksum;
 pub use crate::secondary_validation::us_npi_checksum::UsNpiChecksum;
 pub use crate::secondary_validation::verhoeff_checksum::VerhoeffChecksum;
+pub use crate::secondary_validation::vin_checksum::VinChecksum;
 
 use std::str::Chars;
 use std::sync::Arc;
@@ -261,6 +265,9 @@ impl SecondaryValidator {
             SecondaryValidator::NhsCheckDigit => Arc::new(NhsCheckDigit),
             SecondaryValidator::NirChecksum => Arc::new(NirChecksum),
             SecondaryValidator::NonHexChecker => Arc::new(NonHexChecker),
+            SecondaryValidator::NonHexPlusTokenEfficiencyChecker => {
+                Arc::new(NonHexPlusTokenEfficiencyChecker::new())
+            }
             SecondaryValidator::PolishNationalIdChecksum => Arc::new(PolishNationalIdChecksum),
             SecondaryValidator::PolishNipChecksum => Arc::new(PolishNipChecksum),
             SecondaryValidator::PortugueseTaxIdChecksum => Arc::new(PortugueseTaxIdChecksum),
@@ -280,6 +287,7 @@ impl SecondaryValidator {
             SecondaryValidator::UsDeaChecksum => Arc::new(UsDeaChecksum),
             SecondaryValidator::UsNpiChecksum => Arc::new(UsNpiChecksum),
             SecondaryValidator::VerhoeffChecksum => Arc::new(VerhoeffChecksum),
+            SecondaryValidator::VinChecksum => Arc::new(VinChecksum),
         }
     }
 }
