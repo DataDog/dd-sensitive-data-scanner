@@ -43,3 +43,88 @@ impl Default for Scope {
         Self::all()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use serde_json::{Value, json};
+
+    fn field_path(name: &'static str) -> Path<'static> {
+        Path::from(vec![name.into()])
+    }
+
+    fn field_path_json(name: &str) -> Value {
+        json!({"segments": [{"type": "Field", "value": name}]})
+    }
+
+    fn assert_json_round_trip(scope: Scope, expected: Value) {
+        assert_eq!(serde_json::to_value(&scope).unwrap(), expected);
+        assert_eq!(serde_json::from_value::<Scope>(expected).unwrap(), scope);
+    }
+
+    #[test]
+    fn test_all_scope_json() {
+        assert_json_round_trip(
+            Scope::all(),
+            json!({"include": "everything", "exclude": []}),
+        );
+    }
+
+    #[test]
+    fn test_default_scope_is_all() {
+        assert_eq!(Scope::default(), Scope::all());
+    }
+
+    #[test]
+    fn test_include_scope_json() {
+        assert_json_round_trip(
+            Scope::include(vec![field_path("a")]),
+            json!({"include": {"only": [field_path_json("a")]}, "exclude": []}),
+        );
+    }
+
+    #[test]
+    fn test_include_nothing_scope_json_differs_from_all() {
+        assert_json_round_trip(
+            Scope::include(vec![]),
+            json!({"include": {"only": []}, "exclude": []}),
+        );
+    }
+
+    #[test]
+    fn test_exclude_scope_json() {
+        assert_json_round_trip(
+            Scope::exclude(vec![field_path("a")]),
+            json!({"include": "everything", "exclude": [field_path_json("a")]}),
+        );
+    }
+
+    #[test]
+    fn test_include_and_exclude_scope_json() {
+        assert_json_round_trip(
+            Scope::include_and_exclude(vec![field_path("a")], vec![field_path("b")]),
+            json!({"include": {"only": [field_path_json("a")]}, "exclude": [field_path_json("b")]}),
+        );
+    }
+
+    #[test]
+    fn test_missing_scope_fields_default_to_all() {
+        assert_eq!(
+            serde_json::from_value::<Scope>(json!({})).unwrap(),
+            Scope::all()
+        );
+    }
+
+    // Old-format JSON must fail loudly: with defaulted fields it would otherwise
+    // parse as "scan everything".
+    #[test]
+    fn test_old_scope_json_format_is_rejected() {
+        assert!(serde_json::from_value::<Scope>(json!({"type": "Exclude", "paths": []})).is_err());
+        assert!(
+            serde_json::from_value::<Scope>(
+                json!({"type": "Include", "paths": {"include": [], "exclude": []}})
+            )
+            .is_err()
+        );
+    }
+}
