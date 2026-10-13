@@ -803,6 +803,100 @@ mod test {
         );
     }
 
+    fn visited_path(path: Path<'static>, content: &str, rules: &[(usize, bool)]) -> VisitedPath {
+        VisitedPath {
+            path,
+            content: content.into(),
+            rules: rules
+                .iter()
+                .map(|&(rule_index, is_excluded)| VisitedRule {
+                    rule_index,
+                    is_excluded,
+                })
+                .collect(),
+        }
+    }
+
+    fn event_with_fields_a_and_b_c() -> SimpleEvent {
+        SimpleEvent::Map(
+            [
+                ("a".into(), SimpleEvent::String("value-a".into())),
+                (
+                    "b".into(),
+                    SimpleEvent::Map(
+                        [("c".into(), SimpleEvent::String("value-b-c".into()))].into(),
+                    ),
+                ),
+            ]
+            .into(),
+        )
+    }
+
+    #[test]
+    fn test_exclude_root_marks_every_field_excluded() {
+        let ruleset = ScopedRuleSet::new(&[Scope::exclude(vec![Path::root()])]);
+
+        let paths = visit_event(&mut event_with_fields_a_and_b_c(), &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![
+                    visited_path(Path::from(vec!["a".into()]), "value-a", &[(0, true)]),
+                    visited_path(
+                        Path::from(vec!["b".into(), "c".into()]),
+                        "value-b-c",
+                        &[(0, true)]
+                    ),
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_include_and_exclude_same_path_marks_it_excluded() {
+        let a = Path::from(vec!["a".into()]);
+        let ruleset =
+            ScopedRuleSet::new(&[Scope::include_and_exclude(vec![a.clone()], vec![a.clone()])]);
+
+        let paths = visit_event(&mut event_with_fields_a_and_b_c(), &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![
+                    visited_path(a, "value-a", &[(0, true)]),
+                    visited_path(Path::from(vec!["b".into(), "c".into()]), "value-b-c", &[]),
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_exclude_and_include_scopes_on_same_path_are_independent_per_rule() {
+        let a = Path::from(vec!["a".into()]);
+        let ruleset = ScopedRuleSet::new(&[
+            Scope::exclude(vec![a.clone()]),
+            Scope::include(vec![a.clone()]),
+        ]);
+
+        let paths = visit_event(&mut event_with_fields_a_and_b_c(), &ruleset);
+
+        assert_eq!(
+            paths,
+            Visited {
+                paths: vec![
+                    visited_path(a, "value-a", &[(0, true), (1, false)]),
+                    visited_path(
+                        Path::from(vec!["b".into(), "c".into()]),
+                        "value-b-c",
+                        &[(0, false)]
+                    ),
+                ],
+            }
+        );
+    }
+
     #[test]
     fn test_include_same_change_multiple_times() {
         // If multiple "include" scopes cover the same field, it should only be returned once.
