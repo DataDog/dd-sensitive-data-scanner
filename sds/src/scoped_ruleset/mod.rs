@@ -1,7 +1,7 @@
 mod bool_set;
 
 use crate::event::{EventVisitor, VisitStringResult};
-use crate::scanner::scope::Scope;
+use crate::scanner::scope::{ScanArea, Scope};
 use crate::scoped_ruleset::bool_set::BoolSet;
 use crate::{Event, Path, PathSegment, ScannerError};
 use ahash::AHashMap;
@@ -22,22 +22,16 @@ impl ScopedRuleSet {
         let mut tree = RuleTree::new();
 
         for (rule_index, scope) in rules_scopes.iter().enumerate() {
-            match scope {
-                Scope::Include { include, exclude } => {
-                    for path in exclude {
-                        tree.insert_rule_removal(path, rule_index);
-                    }
-
-                    for path in include {
+            match &scope.include {
+                ScanArea::Everything => tree.insert_rule_add(&Path::root(), rule_index),
+                ScanArea::Only(paths) => {
+                    for path in paths {
                         tree.insert_rule_add(path, rule_index);
                     }
                 }
-                Scope::Exclude(paths) => {
-                    tree.insert_rule_add(&Path::root(), rule_index);
-                    for path in paths {
-                        tree.insert_rule_removal(path, rule_index);
-                    }
-                }
+            }
+            for path in &scope.exclude {
+                tree.insert_rule_removal(path, rule_index);
             }
         }
         Self {

@@ -16,7 +16,7 @@ pub fn scoped_ruleset(c: &mut Criterion) {
         )]));
     }
     let scope = Scope::include(paths.clone());
-    let exclude_scope = Scope::Exclude(paths);
+    let exclude_scope = Scope::exclude(paths);
 
     let mut event_map = BTreeMap::new();
 
