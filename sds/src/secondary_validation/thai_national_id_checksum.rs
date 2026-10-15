@@ -18,6 +18,7 @@ mod test {
     use super::*;
     use crate::SecondaryValidator;
 
+    // https://alltool.io/id-generator/thailand/
     #[test]
     fn accepts_valid_checksums() {
         for id in ["8-2941-04903-80-2", "4375905538549", "5 3801 56807 75 9"] {
