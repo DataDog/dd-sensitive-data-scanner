@@ -561,7 +561,7 @@ mod tests {
     }
 
     fn config_from_yaml(config_yaml: &str) -> CustomHttpConfigV2 {
-        serde_yaml::from_str(config_yaml).unwrap()
+        yaml_serde::from_str(config_yaml).unwrap()
     }
 
     #[test]
@@ -1217,7 +1217,7 @@ calls:
               type: ExactMatch
               config: success
         "#;
-        let config: CustomHttpConfigV2 = serde_yaml::from_str(config_str).unwrap();
+        let config: CustomHttpConfigV2 = yaml_serde::from_str(config_str).unwrap();
         assert_eq!(config.calls.len(), 1);
         assert_eq!(
             config.calls[0].request.endpoint.to_string(),
@@ -1251,7 +1251,7 @@ calls:
     response:
       conditions: []
         "#;
-        let config: CustomHttpConfigV2 = serde_yaml::from_str(config_str).unwrap();
+        let config: CustomHttpConfigV2 = yaml_serde::from_str(config_str).unwrap();
         assert_eq!(
             config.calls[0].request.hosts,
             vec![
