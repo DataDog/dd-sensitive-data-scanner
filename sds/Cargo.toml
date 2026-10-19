@@ -80,7 +80,7 @@ hyperscan = { version = "0.3.2", features = ["static"], optional = true }
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
 serde_json = "1.0.114"
-serde_yaml = "0.9.34"
+yaml_serde = "0.10.7"
 serde_test = "1.0.176"
 httpmock = "0.7.0"
 dd-sds = { package = "dd-sensitive-data-scanner", path = ".", features = ["bench"] }
