@@ -760,7 +760,7 @@ mod tests {
 
     #[test]
     fn test_custom_http_v2_config_with_provides() {
-        let config: CustomHttpConfigV2 = serde_yaml::from_str(
+        let config: CustomHttpConfigV2 = yaml_serde::from_str(
             r#"
 provides:
   - kind: "vendor_xyz"
