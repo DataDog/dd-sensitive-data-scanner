@@ -12,12 +12,16 @@ pub(crate) enum ScanArea {
 
 /// Which fields of an event a rule looks at.
 ///
+/// A scope starts with the `include` fields (either everything or a list of specific paths), then
+/// `exclude` prevents some of those from being scanned. `exclude` is useful when scanning
+/// everything except a few fields, or when including some fields but not some of their children.
+///
 /// A path covers itself and all of its children. When a field is covered by both `include`
 /// and `exclude`, `exclude` wins, even if the `include` path is more specific.
 ///
-/// Excluded fields are not always skipped. Regex rules still scan them and don't report those
-/// matches, and with multipass V0 enabled, the same value matched elsewhere in the event is
-/// dropped as well. Other rules skip excluded fields.
+/// Excluded fields never produce a match. Regex rules may still scan them internally for
+/// multipass V0, which uses the values found there to drop identical matches elsewhere in the
+/// event as false positives.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 // Rejecting unknown fields makes a scope in an older JSON format fail loudly instead of
 // parsing as "scan everything".
@@ -25,8 +29,7 @@ pub(crate) enum ScanArea {
 pub struct Scope {
     #[serde(default)]
     pub(crate) include: ScanArea,
-    /// Matches in these fields are not reported (see the type docs for what regex rules still
-    /// do with them).
+    /// These fields never produce a match (see the type docs for multipass V0).
     #[serde(default)]
     pub(crate) exclude: Vec<Path<'static>>,
 }
