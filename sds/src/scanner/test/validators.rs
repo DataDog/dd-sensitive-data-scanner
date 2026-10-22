@@ -1,7 +1,9 @@
 use crate::SecondaryValidator::{
     ChineseIdChecksum, GithubTokenChecksum, IbanChecker, JwtExpirationChecker, NhsCheckDigit,
-    NonHexChecker, NonHexPlusTokenEfficiencyChecker, TokenEfficiencyCheck,
+    NonHexChecker,
 };
+#[cfg(feature = "token-efficiency-checker")]
+use crate::SecondaryValidator::{NonHexPlusTokenEfficiencyChecker, TokenEfficiencyCheck};
 use crate::scanner::RootRuleConfig;
 use crate::{MatchAction, RegexRuleConfig, ScannerBuilder, SecondaryValidator};
 use chrono::Utc;
@@ -201,6 +203,7 @@ fn test_non_hex_checker_filters_pure_hex() {
     assert_eq!(with_prefix, "[token]");
 }
 
+#[cfg(feature = "token-efficiency-checker")]
 #[test]
 fn test_token_efficiency_check_filters_identifiers() {
     let rule = RegexRuleConfig::new("[A-Za-z0-9]{16,}");
@@ -232,6 +235,7 @@ fn test_token_efficiency_check_filters_identifiers() {
     assert_eq!(content, "[secret] LibraryWebpageUploadUr1RowStatus");
 }
 
+#[cfg(feature = "token-efficiency-checker")]
 #[test]
 fn test_non_hex_plus_token_efficiency_checker_filters_hex_and_identifiers() {
     let rule = RegexRuleConfig::new("[A-Za-z0-9]{16,}");

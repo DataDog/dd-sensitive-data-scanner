@@ -10,6 +10,10 @@ Use `make` to see available commands for building, testing, and formatting.
 `make check-rust` requires `cargo-hack` 0.6.45. The Rust check and test targets require the
 Hyperscan development library so they can check every Cargo feature.
 
+Optional heavy dependencies are behind default-on Cargo features. Build with `--no-default-features`
+to drop them: `third-party-active-checkers` (reqwest, aws-sign-v4) and `token-efficiency-checker`
+(tiktoken-rs and its BPE vocabulary; gates `TokenEfficiencyCheck` and `NonHexPlusTokenEfficiencyChecker`).
+
 ## Publishing
 
 - `.github/workflows/publish-crate.yml` publishes the crate on pushes to `main` and supports manual publication or a dry run.

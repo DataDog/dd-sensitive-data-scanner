@@ -39,6 +39,7 @@ mod monero_address;
 mod nhs_check_digit;
 mod nir_checksum;
 mod non_hex_checker;
+#[cfg(feature = "token-efficiency-checker")]
 mod non_hex_plus_token_efficiency_checker;
 mod polish_national_id_checksum;
 mod polish_nip_checksum;
@@ -51,6 +52,8 @@ mod slovenian_pin_checksum;
 mod spain_dni_checksum;
 mod spanish_nuss_checksum;
 mod sweden_pin_checksum;
+mod thai_national_id_checksum;
+#[cfg(feature = "token-efficiency-checker")]
 mod token_efficiency;
 mod uk_nino_format_check;
 mod uk_trn_checksum;
@@ -107,6 +110,7 @@ pub use crate::secondary_validation::monero_address::MoneroAddress;
 pub use crate::secondary_validation::nhs_check_digit::NhsCheckDigit;
 pub use crate::secondary_validation::nir_checksum::NirChecksum;
 pub use crate::secondary_validation::non_hex_checker::NonHexChecker;
+#[cfg(feature = "token-efficiency-checker")]
 pub use crate::secondary_validation::non_hex_plus_token_efficiency_checker::NonHexPlusTokenEfficiencyChecker;
 pub use crate::secondary_validation::polish_national_id_checksum::PolishNationalIdChecksum;
 pub use crate::secondary_validation::polish_nip_checksum::PolishNipChecksum;
@@ -119,6 +123,8 @@ pub use crate::secondary_validation::slovenian_pin_checksum::SlovenianPINChecksu
 pub use crate::secondary_validation::spain_dni_checksum::SpanishDniChecksum;
 pub use crate::secondary_validation::spanish_nuss_checksum::SpanishNussChecksum;
 pub use crate::secondary_validation::sweden_pin_checksum::SwedenPINChecksum;
+pub use crate::secondary_validation::thai_national_id_checksum::ThaiNationalIdChecksum;
+#[cfg(feature = "token-efficiency-checker")]
 pub use crate::secondary_validation::token_efficiency::TokenEfficiencyCheck;
 pub use crate::secondary_validation::uk_nino_format_check::UkNinoFormatCheck;
 pub use crate::secondary_validation::uk_trn_checksum::UkTrnChecksum;
@@ -265,6 +271,7 @@ impl SecondaryValidator {
             SecondaryValidator::NhsCheckDigit => Arc::new(NhsCheckDigit),
             SecondaryValidator::NirChecksum => Arc::new(NirChecksum),
             SecondaryValidator::NonHexChecker => Arc::new(NonHexChecker),
+            #[cfg(feature = "token-efficiency-checker")]
             SecondaryValidator::NonHexPlusTokenEfficiencyChecker => {
                 Arc::new(NonHexPlusTokenEfficiencyChecker::new())
             }
@@ -281,6 +288,8 @@ impl SecondaryValidator {
             SecondaryValidator::SpanishDniChecksum => Arc::new(SpanishDniChecksum),
             SecondaryValidator::SpanishNussChecksum => Arc::new(SpanishNussChecksum),
             SecondaryValidator::SwedenPINChecksum => Arc::new(SwedenPINChecksum),
+            SecondaryValidator::ThaiNationalIdChecksum => Arc::new(ThaiNationalIdChecksum),
+            #[cfg(feature = "token-efficiency-checker")]
             SecondaryValidator::TokenEfficiencyCheck => Arc::new(TokenEfficiencyCheck::new()),
             SecondaryValidator::UkNinoFormatCheck => Arc::new(UkNinoFormatCheck),
             SecondaryValidator::UkTrnChecksum => Arc::new(UkTrnChecksum),
