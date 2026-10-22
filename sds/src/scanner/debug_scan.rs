@@ -1,5 +1,6 @@
 use crate::scanner::regex_rule::access_regex_caches;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
+use crate::scanner::scope::ScanArea;
 use crate::{
     CreateScannerError, Event, MatchAction, ProximityKeywordsConfig, RegexRuleConfig,
     RootRuleConfig, RuleConfig, RuleMatch, Scanner, ScannerError, Scope,
@@ -371,7 +372,7 @@ fn included_scope_probe<E: Event>(
     root_rule: &RootRuleConfig<Arc<dyn RuleConfig>>,
     relaxed_rule: &RootRuleConfig<Arc<dyn RuleConfig>>,
 ) -> Result<Option<ConditionProbe>, DebugScanError> {
-    let Scope::Include { include, .. } = &root_rule.scope else {
+    let ScanArea::Only(include) = &root_rule.scope.include else {
         return Ok(None);
     };
 
@@ -386,7 +387,7 @@ fn excluded_scope_probe<E: Event>(
     root_rule: &RootRuleConfig<Arc<dyn RuleConfig>>,
     relaxed_rule: &RootRuleConfig<Arc<dyn RuleConfig>>,
 ) -> Result<Option<ConditionProbe>, DebugScanError> {
-    let (Scope::Include { exclude, .. } | Scope::Exclude(exclude)) = &root_rule.scope;
+    let exclude = &root_rule.scope.exclude;
     if exclude.is_empty() {
         return Ok(None);
     }
