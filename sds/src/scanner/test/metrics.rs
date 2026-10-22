@@ -1,7 +1,7 @@
 use crate::match_action::MatchAction;
 use crate::scanner::regex_rule::config::{ProximityKeywordsConfig, RegexRuleConfig};
 use crate::scanner::scope::Scope;
-use crate::scanner::{RootRuleConfig, ScannerBuilder};
+use crate::scanner::{RootRuleConfig, ScanOptions, ScannerBuilder};
 use crate::{Path, PathSegment, simple_event::SimpleEvent};
 use metrics::{Key, Label};
 use metrics_util::CompositeKey;
@@ -51,6 +51,12 @@ fn should_submit_scanning_metrics() {
         .expect("metric not found");
     assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
 
+    let metric_name = "scanning.scanned_bytes";
+    let metric_value = snapshot
+        .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
+        .expect("metric not found");
+    assert_eq!(metric_value, &(None, None, DebugValue::Counter(13)));
+
     let metric_name = "scanning.cpu_duration";
     let metric_value = snapshot
         .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
@@ -58,6 +64,111 @@ fn should_submit_scanning_metrics() {
     match metric_value.2 {
         DebugValue::Counter(val) => assert!(val > 0),
         _ => assert!(false),
+    }
+}
+
+#[test]
+fn should_count_scanned_bytes_once_when_multiple_rules_scan_the_same_string() {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("secret").build())
+            .match_action(MatchAction::None);
+        let rule_1 = RootRuleConfig::new(RegexRuleConfig::new("foo").build())
+            .match_action(MatchAction::None);
+
+        let scanner = ScannerBuilder::new(&[rule_0, rule_1]).build().unwrap();
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
+            "key1".to_string(),
+            SimpleEvent::String("secret".to_string()),
+        )]));
+
+        scanner.scan(&mut content).unwrap();
+    });
+
+    let snapshot = snapshotter.snapshot().into_hashmap();
+
+    let metric_name = "scanning.scanned_bytes";
+    let metric_value = snapshot
+        .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
+        .expect("metric not found");
+    assert_eq!(metric_value, &(None, None, DebugValue::Counter(6)));
+}
+
+#[test]
+fn should_count_scanned_bytes_only_for_included_fields() {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("secret").build())
+            .scope(Scope::include(vec![Path::from(vec!["key1".into()])]))
+            .match_action(MatchAction::None);
+
+        let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
+        let mut content = SimpleEvent::Map(BTreeMap::from([
+            (
+                "key1".to_string(),
+                SimpleEvent::String("secret".to_string()),
+            ),
+            (
+                "key2".to_string(),
+                SimpleEvent::String("secret-other".to_string()),
+            ),
+        ]));
+
+        scanner.scan(&mut content).unwrap();
+    });
+
+    let snapshot = snapshotter.snapshot().into_hashmap();
+
+    let metric_name = "scanning.scanned_bytes";
+    let metric_value = snapshot
+        .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
+        .expect("metric not found");
+    assert_eq!(metric_value, &(None, None, DebugValue::Counter(6)));
+}
+
+#[test]
+fn should_not_count_scanned_bytes_when_every_rule_is_blocked() {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let rule_0 = RootRuleConfig::new(RegexRuleConfig::new("secret").build())
+            .match_action(MatchAction::None);
+
+        let scanner = ScannerBuilder::new(&[rule_0]).build().unwrap();
+        let mut content = SimpleEvent::Map(BTreeMap::from([(
+            "key1".to_string(),
+            SimpleEvent::String("secret".to_string()),
+        )]));
+
+        scanner
+            .scan_with_options(
+                &mut content,
+                ScanOptions {
+                    blocked_rules_idx: vec![0],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    });
+
+    let snapshot = snapshotter.snapshot().into_hashmap();
+
+    let metric_name = "scanned_events";
+    let metric_value = snapshot
+        .get(&CompositeKey::new(Counter, Key::from_name(metric_name)))
+        .expect("metric not found");
+    assert_eq!(metric_value, &(None, None, DebugValue::Counter(1)));
+
+    let metric_name = "scanning.scanned_bytes";
+    match snapshot.get(&CompositeKey::new(Counter, Key::from_name(metric_name))) {
+        None => {}
+        Some((_, _, DebugValue::Counter(0))) => {}
+        Some(other) => panic!("expected scanning.scanned_bytes to be absent or 0, got {other:?}"),
     }
 }
 
