@@ -248,7 +248,9 @@ pub enum SecondaryValidator {
     IbanChecker,
     IrishPpsChecksum,
     ItalianNationalIdChecksum,
-    JwtClaimsValidator { config: JwtClaimsValidatorConfig },
+    JwtClaimsValidator {
+        config: JwtClaimsValidatorConfig,
+    },
     JwtExpirationChecker,
     LatviaNationalIdChecksum,
     LithuanianPersonalIdentificationNumberChecksum,
@@ -266,6 +268,7 @@ pub enum SecondaryValidator {
     NhsCheckDigit,
     NirChecksum,
     NonHexChecker,
+    #[cfg(feature = "token-efficiency-checker")]
     NonHexPlusTokenEfficiencyChecker,
     PolishNationalIdChecksum,
     PolishNipChecksum,
@@ -279,6 +282,7 @@ pub enum SecondaryValidator {
     SpanishNussChecksum,
     SwedenPINChecksum,
     ThaiNationalIdChecksum,
+    #[cfg(feature = "token-efficiency-checker")]
     TokenEfficiencyCheck,
     UkNinoFormatCheck,
     UkTrnChecksum,

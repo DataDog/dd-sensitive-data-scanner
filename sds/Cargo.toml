@@ -12,13 +12,17 @@ name = "dd_sds"
 crate-type = ["staticlib", "cdylib", "lib"]
 
 [features]
-default = ["dd-sds", "third-party-active-checkers"]
+default = ["dd-sds", "third-party-active-checkers", "token-efficiency-checker"]
 dd-sds = []
 # Enables third-party active checkers (HTTP and AWS match validation) and their
 # associated network dependencies (reqwest, aws-sign-v4). Enabled by default.
 # Build with `--no-default-features` (plus the features you need) to produce a
 # scanner without these dependencies.
 third-party-active-checkers = ["dep:reqwest", "dep:aws-sign-v4", "dep:rayon"]
+# Enables the TokenEfficiencyCheck and NonHexPlusTokenEfficiencyChecker validators, which pull in
+# tiktoken-rs and its embedded ~100k-entry BPE vocabulary. Enabled by default. Build with
+# `--no-default-features` (plus the features you need) to produce a smaller scanner without them.
+token-efficiency-checker = ["dep:tiktoken-rs"]
 sds-bindings-utils = ["dd-sds"]
 dd_sds_go = ["dd-sds", "sds-bindings-utils", "dep:serde_path_to_error"]
 sds-fuzz = ["dd-sds", "dep:afl", "dep:rand"]
@@ -72,7 +76,7 @@ rand = { version = "0.8.5", optional = true }
 slab = "0.4.11"
 farmhash2 = "1.1.5"
 regex-pool = "0.1.1"
-tiktoken-rs = "0.11.0"
+tiktoken-rs = { version = "0.11.0", optional = true }
 
 # Optional fuzzing dependency.
 hyperscan = { version = "0.3.2", features = ["static"], optional = true }

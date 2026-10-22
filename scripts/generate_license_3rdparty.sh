@@ -30,8 +30,8 @@ import sys
 
 path = pathlib.Path(sys.argv[1])
 contents = path.read_text()
-default_features = 'default = ["dd-sds", "third-party-active-checkers"]'
-license_features = 'default = ["dd-sds", "third-party-active-checkers", "sds-bindings-utils", "dd_sds_go", "sds-fuzz", "hyperscan", "manual_test"]'
+default_features = 'default = ["dd-sds", "third-party-active-checkers", "token-efficiency-checker"]'
+license_features = 'default = ["dd-sds", "third-party-active-checkers", "token-efficiency-checker", "sds-bindings-utils", "dd_sds_go", "sds-fuzz", "hyperscan", "manual_test"]'
 
 if default_features not in contents:
     raise SystemExit(f"Unable to find expected default feature line in {path}")
