@@ -1238,7 +1238,9 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         let mut per_string_data = SharedData::new();
         let wildcard_indices_per_path = self.wildcarded_indexes.get(path);
 
-        rule_visitor.visit_rule_indices(|rule_index| {
+        // Count each string once. Rule fan-out is already scanning.cpu_duration.
+        let mut did_scan = false;
+        let visit_result = rule_visitor.visit_rule_indices(|rule_index| {
             if self.blocked_rules.contains(&rule_index) {
                 return Ok(());
             }
@@ -1284,6 +1286,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                     scan_metadata: self.scan_metadata,
                 };
 
+                did_scan = true;
                 let async_status = rule.get_string_matches(content, path, &mut ctx)?;
 
                 match async_status {
@@ -1299,7 +1302,15 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 }
             }
             Ok(())
-        })?;
+        });
+
+        if did_scan {
+            self.scanner
+                .metrics
+                .scanned_bytes
+                .increment(content.len() as u64);
+        }
+        visit_result?;
 
         // If there are any matches, the string will need to be accessed to check for false positives from
         // excluded matches, any to potentially mutate the string.
