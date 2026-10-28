@@ -248,6 +248,7 @@ pub enum SecondaryValidator {
     IbanChecker,
     IrishPpsChecksum,
     ItalianNationalIdChecksum,
+    JapanMyNumberChecksum,
     JwtClaimsValidator {
         config: JwtClaimsValidatorConfig,
     },
