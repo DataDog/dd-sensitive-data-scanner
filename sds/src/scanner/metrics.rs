@@ -49,6 +49,7 @@ impl RuleMetrics {
  * match_count: Number of matches found
  * suppressed_match_count: Number of matches suppressed
  * cpu_duration: Time spent in CPU operations
+ * scanned_bytes: Bytes fed to at least one rule
  *
  * In case of too high cardinality, please refer to https://github.com/DataDog/logs-backend/blob/prod/domains/commons/shared/libs/telemetry/src/main/java/com/dd/metrics/RegistryCacheTags.java
  */
@@ -57,6 +58,7 @@ pub struct ScannerMetrics {
     pub match_count: Counter,
     pub suppressed_match_count: Counter,
     pub cpu_duration: Counter,
+    pub scanned_bytes: Counter,
 }
 
 impl ScannerMetrics {
@@ -66,6 +68,7 @@ impl ScannerMetrics {
             match_count: counter!("scanning.match_count", labels.clone()),
             suppressed_match_count: counter!("scanning.suppressed_match_count", labels.clone()),
             cpu_duration: counter!("scanning.cpu_duration", labels.clone()),
+            scanned_bytes: counter!("scanning.scanned_bytes", labels.clone()),
         }
     }
 }
