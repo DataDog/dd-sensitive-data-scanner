@@ -31,6 +31,7 @@ mod iso_7064_checksum;
 mod italian_national_id_checksum;
 mod japan_corporate_number_checksum;
 mod japan_driving_license_checksum;
+mod japan_my_number_checksum;
 pub mod jwt_claims_validator;
 mod jwt_expiration_checker;
 mod latvia_national_id_checksum;
@@ -104,6 +105,7 @@ pub use crate::secondary_validation::iso_7064_checksum::{
 pub use crate::secondary_validation::italian_national_id_checksum::ItalianNationalIdChecksum;
 pub use crate::secondary_validation::japan_corporate_number_checksum::JapanCorporateNumberChecksum;
 pub use crate::secondary_validation::japan_driving_license_checksum::JapanDrivingLicenseChecksum;
+pub use crate::secondary_validation::japan_my_number_checksum::JapanMyNumberChecksum;
 pub use crate::secondary_validation::jwt_claims_validator::JwtClaimsValidator;
 pub use crate::secondary_validation::jwt_expiration_checker::JwtExpirationChecker;
 pub use crate::secondary_validation::latvia_national_id_checksum::LatviaNationalIdChecksum;
@@ -251,6 +253,7 @@ impl SecondaryValidator {
             SecondaryValidator::IbanChecker => Arc::new(IbanChecker),
             SecondaryValidator::IrishPpsChecksum => Arc::new(IrishPpsChecksum),
             SecondaryValidator::ItalianNationalIdChecksum => Arc::new(ItalianNationalIdChecksum),
+            SecondaryValidator::JapanMyNumberChecksum => Arc::new(JapanMyNumberChecksum),
             SecondaryValidator::JapanCorporateNumberChecksum => {
                 Arc::new(JapanCorporateNumberChecksum)
             }
