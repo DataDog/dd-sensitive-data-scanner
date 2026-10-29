@@ -79,7 +79,7 @@ fn validate_suppressions_list(suppressions: &[String]) -> Result<(), Suppression
         return Err(SuppressionValidationError::DuplicateSuppression);
     }
     for suppression in suppressions {
-        if suppression.len() > MAX_SUPPRESSION_LENGTH {
+        if suppression.chars().count() > MAX_SUPPRESSION_LENGTH {
             return Err(SuppressionValidationError::SuppressionTooLong);
         }
         if suppression.is_empty() {
@@ -164,6 +164,69 @@ fn suppression_ast(suppression: &str, start_anchor: bool, end_anchor: bool) -> A
 mod test {
 
     use super::*;
+
+    fn suppression_configs(value: &str) -> [Suppressions; 3] {
+        [
+            Suppressions {
+                starts_with: vec![value.to_string()],
+                ..Default::default()
+            },
+            Suppressions {
+                ends_with: vec![value.to_string()],
+                ..Default::default()
+            },
+            Suppressions {
+                exact_match: vec![value.to_string()],
+                ..Default::default()
+            },
+        ]
+    }
+
+    #[test]
+    fn test_suppression_length_counts_unicode_characters() {
+        for character in ['a', 'é', '界', '😀'] {
+            for length in [MAX_SUPPRESSION_LENGTH - 1, MAX_SUPPRESSION_LENGTH] {
+                let value = character.to_string().repeat(length);
+                assert_eq!(validate_suppressions_list(&[value]), Ok(()));
+            }
+            let value = character.to_string().repeat(MAX_SUPPRESSION_LENGTH + 1);
+            for config in suppression_configs(&value) {
+                assert!(matches!(
+                    config.compile(),
+                    Err(SuppressionValidationError::SuppressionTooLong)
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn test_suppression_length_counts_combining_marks_separately() {
+        let value = "e\u{301}".repeat(MAX_SUPPRESSION_LENGTH / 2);
+        assert_eq!(validate_suppressions_list(&[value.clone()]), Ok(()));
+        assert_eq!(
+            validate_suppressions_list(&[format!("{value}\u{301}")]),
+            Err(SuppressionValidationError::SuppressionTooLong)
+        );
+    }
+
+    #[test]
+    fn test_maximum_length_unicode_suppressions_compile_and_match() {
+        let value = "😀".repeat(MAX_SUPPRESSION_LENGTH);
+        for config in suppression_configs(&value) {
+            let compiled = config.compile().unwrap().unwrap();
+            let mut caches = RegexCaches::new();
+            assert!(compiled.should_match_be_suppressed(&value, &mut caches));
+            assert!(!compiled.should_match_be_suppressed("secret", &mut caches));
+            assert_eq!(
+                compiled.should_match_be_suppressed(&format!("{value}secret"), &mut caches),
+                !config.starts_with.is_empty()
+            );
+            assert_eq!(
+                compiled.should_match_be_suppressed(&format!("secret{value}"), &mut caches),
+                !config.ends_with.is_empty()
+            );
+        }
+    }
 
     #[test]
     fn test_suppression_correctly_suppresses_correctly() {
