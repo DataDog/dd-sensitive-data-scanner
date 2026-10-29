@@ -253,6 +253,7 @@ impl SecondaryValidator {
             SecondaryValidator::ItalianNationalIdChecksum => Arc::new(ItalianNationalIdChecksum),
             SecondaryValidator::JapanCorporateNumberChecksum => {
                 Arc::new(JapanCorporateNumberChecksum)
+            }
             SecondaryValidator::JapanDrivingLicenseChecksum => {
                 Arc::new(JapanDrivingLicenseChecksum)
             }
