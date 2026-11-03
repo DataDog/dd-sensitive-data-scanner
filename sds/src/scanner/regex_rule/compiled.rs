@@ -162,9 +162,13 @@ impl RegexCompiledRule {
             break;
         }
 
-        if !contains_keyword_in_path(&path.sanitize(), &included_keywords.keywords_pattern) {
+        // Plain-string events have no path, so the path keyword fallback below can never match.
+        // Skip its whole-content regex probe.
+        if path.is_empty() {
             return;
         }
+
+        let mut has_verified_kws_in_path: Option<bool> = None;
 
         {
             let input = Input::new(content);
@@ -172,10 +176,19 @@ impl RegexCompiledRule {
             if self
                 .regex
                 .search_half_with(&mut cache_value.cache, &input)
-                .is_none()
+                .is_some()
             {
-                return;
+                has_verified_kws_in_path = Some(contains_keyword_in_path(
+                    &path.sanitize(),
+                    &included_keywords.keywords_pattern,
+                ))
             }
+        };
+
+        if has_verified_kws_in_path.is_none() || has_verified_kws_in_path.is_some_and(|x| !x) {
+            // We don't deal with true positives is in this case, because keywords don't match the path.
+            // Return early.
+            return;
         }
 
         let cache_value = ctx.regex_caches.get(&self.regex);
