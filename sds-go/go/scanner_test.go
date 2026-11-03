@@ -578,6 +578,63 @@ func TestAustrianChecksumSecondaryValidator(t *testing.T) {
 	runTest(t, scannerWithChecksum, testData, false)
 }
 
+func TestVinChecksumSecondaryValidator(t *testing.T) {
+	scannerWithoutChecksum, err := CreateScanner([]RuleConfig{
+		RegexRuleConfig{Id: "vin_rule", Pattern: `[A-Za-z0-9]{17}`, MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[redacted]"}},
+	})
+	if err != nil {
+		t.Fatal("failed to create the scanner wo checksum:", err.Error())
+	}
+	defer scannerWithoutChecksum.Delete()
+	scannerWithChecksum, err := CreateScanner([]RuleConfig{
+		RegexRuleConfig{Id: "vin_rule", Pattern: `[A-Za-z0-9]{17}`, MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[redacted]"}, SecondaryValidator: NewSecondaryValidator("VinChecksum")},
+	})
+	if err != nil {
+		t.Fatal("failed to create the scanner with checksum:", err.Error())
+	}
+	defer scannerWithChecksum.Delete()
+
+	testData := map[string]testResult{
+		"5YJ3E1EAXHF000316 3D7KA28693G723011": {
+			mutated: true,
+			str:     "[redacted] [redacted]",
+			rules: []RuleMatch{
+				{
+					RuleIdx:           0,
+					StartIndex:        0,
+					ReplacementType:   ReplacementTypePlaceholder,
+					EndIndexExclusive: 10,
+					ShiftOffset:       -7,
+				}, {
+					RuleIdx:           0,
+					StartIndex:        11,
+					ReplacementType:   ReplacementTypePlaceholder,
+					EndIndexExclusive: 21,
+					ShiftOffset:       -14,
+				},
+			},
+		},
+	}
+	runTest(t, scannerWithoutChecksum, testData, false)
+
+	testData = map[string]testResult{
+		"5YJ3E1EAXHF000316 3D7KA28693G723011": {
+			mutated: true,
+			str:     "[redacted] 3D7KA28693G723011",
+			rules: []RuleMatch{
+				{
+					RuleIdx:           0,
+					StartIndex:        0,
+					ReplacementType:   ReplacementTypePlaceholder,
+					EndIndexExclusive: 10,
+					ShiftOffset:       -7,
+				},
+			},
+		},
+	}
+	runTest(t, scannerWithChecksum, testData, false)
+}
+
 func TestJWTSecondaryValidator(t *testing.T) {
 	scannerWithoutChecksum, err := CreateScanner([]RuleConfig{
 		RegexRuleConfig{Id: "rule_oauth_test", Pattern: `ey[\w=-]+\.ey[\w=-]+\.[\w-]+`, MatchAction: MatchAction{Type: MatchActionRedact, RedactionValue: "[redacted]"}},
