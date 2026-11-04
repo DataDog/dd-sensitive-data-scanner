@@ -356,6 +356,12 @@ pub trait CompiledRule: Send + Sync {
         // by default, no per-event data is initialized
     }
 
+    /// Called once per unblocked rule after successful traversal, before awaiting pending jobs.
+    /// This also runs when the rule had no eligible strings, so its state may be absent.
+    /// Rules can publish event-wide state here to jobs waiting for all strings to be visited.
+    /// This is not called when traversal fails; dropping per-event state must release any waiters.
+    fn finish_per_event_data(&self, _per_event_data: &mut SharedData) {}
+
     fn get_string_matches(
         &self,
         content: &str,
@@ -726,6 +732,7 @@ impl Scanner {
         let mut rule_matches = InternalRuleMatchSet::new();
         let mut excluded_matches = AHashMap::new();
         let mut async_jobs = vec![];
+        let mut per_event_data = SharedData::new();
 
         access_regex_caches(|regex_caches| {
             self.scoped_ruleset.visit_string_rule_combinations(
@@ -736,7 +743,7 @@ impl Scanner {
                     rule_matches: &mut rule_matches,
                     blocked_rules: &options.blocked_rules_idx,
                     excluded_matches: &mut excluded_matches,
-                    per_event_data: SharedData::new(),
+                    per_event_data: &mut per_event_data,
                     wildcarded_indexes: &options.wildcarded_indices,
                     async_jobs: &mut async_jobs,
                     event_id: event.get_id().map(|s| s.to_string()),
@@ -744,6 +751,14 @@ impl Scanner {
                 },
             )
         })?;
+
+        for (rule_index, rule) in self.rules.iter().enumerate() {
+            if !options.blocked_rules_idx.contains(&rule_index) {
+                rule.finish_per_event_data(&mut per_event_data);
+            }
+        }
+        // Release completion senders before awaiting jobs, including unused per-event state.
+        drop(per_event_data);
 
         // The async jobs were already spawned on the tokio runtime, so the
         // results just need to be collected
@@ -1216,7 +1231,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     // This list shall be small (<10), so a linear search is acceptable
     blocked_rules: &'a Vec<usize>,
     excluded_matches: &'a mut AHashMap<String, String>,
-    per_event_data: SharedData,
+    per_event_data: &'a mut SharedData,
     wildcarded_indexes: &'a AHashMap<Path<'static>, Vec<(usize, usize)>>,
     async_jobs: &'a mut Vec<PendingRuleJob>,
     event_id: Option<String>,
@@ -1264,7 +1279,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 rule.init_per_string_data(&self.scanner.labels, &mut per_string_data);
 
                 // TODO: move this somewhere higher?
-                rule.init_per_event_data(&mut self.per_event_data);
+                rule.init_per_event_data(self.per_event_data);
 
                 let mut ctx = StringMatchesCtx {
                     rule_index,
@@ -1279,7 +1294,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                         .enable_debug_observability,
                     per_string_data: &mut per_string_data,
                     per_scanner_data: &self.scanner.per_scanner_data,
-                    per_event_data: &mut self.per_event_data,
+                    per_event_data: self.per_event_data,
                     event_id: self.event_id.as_deref(),
                     scan_metadata: self.scan_metadata,
                 };
