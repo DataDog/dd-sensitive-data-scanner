@@ -1,4 +1,5 @@
 mod async_rule;
+mod event_lifecycle;
 mod included_keywords;
 mod match_validation;
 mod metrics;
