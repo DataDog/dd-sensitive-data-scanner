@@ -3,6 +3,109 @@ use crate::scanner::test::build_test_scanner;
 use crate::{MatchAction, ProximityKeywordsConfig, RegexRuleConfig, ScannerBuilder, SimpleEvent};
 use std::collections::BTreeMap;
 
+fn build_keyword_fallback_scanner() -> crate::Scanner {
+    ScannerBuilder::new(&[RootRuleConfig::new(
+        RegexRuleConfig::new("secret")
+            .with_proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["token".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )])
+    .build()
+    .unwrap()
+}
+
+#[test]
+fn empty_path_preserves_content_keyword_matches() {
+    let scanner = build_keyword_fallback_scanner();
+    let mut content = "token secret secret".to_string();
+
+    let matches = scanner.scan(&mut content).unwrap();
+
+    assert_eq!(matches.len(), 2);
+    assert_eq!(matches[0].rule_index, 0);
+    assert_eq!(matches[0].start_index, 6);
+    assert_eq!(matches[0].end_index_exclusive, 12);
+    assert_eq!(matches[1].start_index, 13);
+    assert_eq!(matches[1].end_index_exclusive, 19);
+    assert_eq!(content, "token secret secret");
+}
+
+#[test]
+fn empty_path_without_content_keyword_has_no_matches() {
+    let scanner = build_keyword_fallback_scanner();
+    let mut content = "secret".to_string();
+
+    let matches = scanner.scan(&mut content).unwrap();
+
+    assert_eq!(matches.len(), 0);
+    assert_eq!(content, "secret");
+}
+
+#[test]
+fn unrelated_path_preserves_content_keyword_match() {
+    let scanner = build_keyword_fallback_scanner();
+    let mut event = SimpleEvent::Map(BTreeMap::from([(
+        "message".to_string(),
+        SimpleEvent::String("token secret".to_string()),
+    )]));
+
+    let matches = scanner.scan(&mut event).unwrap();
+
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].start_index, 6);
+    assert_eq!(matches[0].end_index_exclusive, 12);
+}
+
+#[test]
+fn keyword_path_without_regex_match_has_no_matches() {
+    let scanner = build_keyword_fallback_scanner();
+    let mut event = SimpleEvent::Map(BTreeMap::from([(
+        "token".to_string(),
+        SimpleEvent::String("nothing here".to_string()),
+    )]));
+
+    let matches = scanner.scan(&mut event).unwrap();
+
+    assert_eq!(matches.len(), 0);
+}
+
+#[test]
+fn keyword_path_preserves_multiple_matches() {
+    let scanner = build_keyword_fallback_scanner();
+    let mut event = SimpleEvent::Map(BTreeMap::from([(
+        "token".to_string(),
+        SimpleEvent::String("secret secret".to_string()),
+    )]));
+
+    let matches = scanner.scan(&mut event).unwrap();
+
+    assert_eq!(matches.len(), 2);
+    assert_eq!(matches[0].start_index, 0);
+    assert_eq!(matches[0].end_index_exclusive, 6);
+    assert_eq!(matches[1].start_index, 7);
+    assert_eq!(matches[1].end_index_exclusive, 13);
+}
+
+#[test]
+fn keyword_path_does_not_duplicate_content_keyword_matches() {
+    let scanner = build_keyword_fallback_scanner();
+    let mut event = SimpleEvent::Map(BTreeMap::from([(
+        "token".to_string(),
+        SimpleEvent::String("token secret secret".to_string()),
+    )]));
+
+    let matches = scanner.scan(&mut event).unwrap();
+
+    assert_eq!(matches.len(), 2);
+    assert_eq!(matches[0].start_index, 6);
+    assert_eq!(matches[0].end_index_exclusive, 12);
+    assert_eq!(matches[1].start_index, 13);
+    assert_eq!(matches[1].end_index_exclusive, 19);
+}
+
 #[test]
 fn test_included_keywords_match_content() {
     let redact_test_rule = RootRuleConfig::new(

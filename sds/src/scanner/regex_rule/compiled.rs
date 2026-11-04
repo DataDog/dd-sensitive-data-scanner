@@ -162,6 +162,12 @@ impl RegexCompiledRule {
             break;
         }
 
+        // Plain-string events have no path, so the path keyword fallback below can never match.
+        // Skip its whole-content regex probe.
+        if path.is_empty() {
+            return;
+        }
+
         let mut has_verified_kws_in_path: Option<bool> = None;
 
         {
