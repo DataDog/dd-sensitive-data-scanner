@@ -35,6 +35,12 @@ pub struct Scope {
 }
 
 impl Scope {
+    /// Whether the rule is visited for every field, including fields that are excluded (these
+    /// never produce a match, but regex rules still scan them for multipass V0).
+    pub(crate) fn covers_all_paths(&self) -> bool {
+        matches!(self.include, ScanArea::Everything)
+    }
+
     /// Covers every field of the event.
     pub fn all() -> Self {
         Self {

@@ -1,6 +1,7 @@
 use crate::proximity_keywords::compile_keywords_proximity_config;
 use crate::scanner::config::RuleConfig;
 use crate::scanner::metrics::RuleMetrics;
+use crate::scanner::prefilter::RulePrefilterSpec;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::regex_store::get_memoized_regex;
 use crate::validation::{
@@ -192,6 +193,10 @@ impl RuleConfig for RegexRuleConfig {
             validator: self.validator.clone().map(|x| x.compile()),
             metrics: RuleMetrics::new(&rule_labels),
             pattern_capture_groups: self.pattern_capture_groups.clone(),
+            prefilter_spec: RulePrefilterSpec::from_regex_rule(
+                &self.pattern,
+                self.proximity_keywords.as_ref(),
+            ),
         }))
     }
 

@@ -3,6 +3,7 @@ use crate::proximity_keywords::{
     get_prefix_start, is_index_within_prefix,
 };
 use crate::scanner::metrics::RuleMetrics;
+use crate::scanner::prefilter::RulePrefilterSpec;
 use crate::scanner::regex_rule::regex_cache_store::RegexCacheValue;
 use crate::scanner::regex_rule::regex_store::SharedRegex;
 use crate::scanner::{
@@ -27,6 +28,7 @@ pub struct RegexCompiledRule {
     pub validator: Option<Arc<dyn Validator>>,
     pub metrics: RuleMetrics,
     pub pattern_capture_groups: Option<Vec<String>>,
+    pub prefilter_spec: Option<RulePrefilterSpec>,
 }
 
 impl CompiledRule for RegexCompiledRule {
@@ -97,6 +99,10 @@ impl CompiledRule for RegexCompiledRule {
 
     fn as_regex_rule_mut(&mut self) -> Option<&mut RegexCompiledRule> {
         Some(self)
+    }
+
+    fn prefilter_spec(&self) -> Option<&RulePrefilterSpec> {
+        self.prefilter_spec.as_ref()
     }
 }
 

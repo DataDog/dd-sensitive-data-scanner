@@ -801,6 +801,7 @@ version = "0.0.0"
 dependencies = [
  "afl",
  "ahash",
+ "aho-corasick",
  "aws-sign-v4",
  "base62",
  "base64 0.22.1",
@@ -830,6 +831,7 @@ dependencies = [
  "regex-automata",
  "regex-pool",
  "regex-syntax 0.7.5",
+ "regex-syntax 0.8.10",
  "reqwest",
  "serde",
  "serde_json",

@@ -43,6 +43,7 @@ pub mod config;
 pub mod debug_scan;
 pub mod error;
 pub mod metrics;
+pub mod prefilter;
 pub mod regex_rule;
 pub mod scope;
 pub mod shared_data;
@@ -396,6 +397,13 @@ pub trait CompiledRule: Send + Sync {
     fn allow_scanner_to_exclude_namespace(&self) -> bool {
         true
     }
+
+    /// Necessary conditions for a match, which let the scanner skip this rule for a string. When
+    /// a condition fails, `get_string_matches` must produce nothing and must have no other effect.
+    /// The default is to have no conditions, so that the rule always runs.
+    fn prefilter_spec(&self) -> Option<&prefilter::RulePrefilterSpec> {
+        None
+    }
 }
 
 impl<T> RuleConfig for Box<T>
@@ -417,6 +425,7 @@ struct ScannerFeatures {
     pub multipass_v0_enabled: bool,
     pub return_matches: bool,
     pub enable_debug_observability: bool,
+    pub prefilter_enabled: bool,
 }
 
 impl Default for ScannerFeatures {
@@ -426,6 +435,7 @@ impl Default for ScannerFeatures {
             multipass_v0_enabled: true,
             return_matches: false,
             enable_debug_observability: false,
+            prefilter_enabled: true,
         }
     }
 }
@@ -518,6 +528,7 @@ pub struct Scanner {
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
     per_scanner_data: SharedData,
     async_scan_timeout: Duration,
+    prefilter: prefilter::ScanPrefilter,
 }
 
 impl Scanner {
@@ -735,11 +746,12 @@ impl Scanner {
         let mut per_event_data = SharedData::new();
 
         access_regex_caches(|regex_caches| {
-            self.scoped_ruleset.visit_string_rule_combinations(
+            let mut prefilter_scratch = std::mem::take(&mut regex_caches.prefilter_scratch);
+            let result = self.scoped_ruleset.visit_string_rule_combinations(
                 event,
                 ScannerContentVisitor {
                     scanner: self,
-                    regex_caches,
+                    regex_caches: &mut *regex_caches,
                     rule_matches: &mut rule_matches,
                     blocked_rules: &options.blocked_rules_idx,
                     excluded_matches: &mut excluded_matches,
@@ -748,8 +760,11 @@ impl Scanner {
                     async_jobs: &mut async_jobs,
                     event_id: event.get_id().map(|s| s.to_string()),
                     scan_metadata: &options.scan_metadata,
+                    prefilter_scratch: &mut prefilter_scratch,
                 },
-            )
+            );
+            regex_caches.prefilter_scratch = prefilter_scratch;
+            result
         })?;
 
         for (rule_index, rule) in self.rules.iter().enumerate() {
@@ -1138,6 +1153,13 @@ impl ScannerBuilder<'_> {
         self
     }
 
+    /// Enables/Disables skipping rules that cannot match a string. This defaults to TRUE. It does
+    /// not change the matches, only the time a scan takes.
+    pub fn with_prefilter(mut self, value: bool) -> Self {
+        self.scanner_features.prefilter_enabled = value;
+        self
+    }
+
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
         // When third-party active checkers are compiled out, no validators are ever
         // created; the map stays empty and `mut` would be unused.
@@ -1190,6 +1212,20 @@ impl ScannerBuilder<'_> {
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;
 
+        let prefilter = if self.scanner_features.prefilter_enabled {
+            prefilter::ScanPrefilter::new(
+                &compiled_rules
+                    .iter()
+                    .map(|rule| rule.inner.prefilter_spec())
+                    .collect::<Vec<_>>(),
+                compiled_rules
+                    .iter()
+                    .all(|rule| rule.scope.covers_all_paths()),
+            )
+        } else {
+            prefilter::ScanPrefilter::new(&vec![None; compiled_rules.len()], false)
+        };
+
         let mut per_scanner_data = SharedData::new();
 
         compiled_rules.iter().for_each(|rule| {
@@ -1219,6 +1255,7 @@ impl ScannerBuilder<'_> {
             labels: self.labels,
             per_scanner_data,
             async_scan_timeout: self.async_scan_timeout,
+            prefilter,
         })
     }
 }
@@ -1236,6 +1273,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     async_jobs: &'a mut Vec<PendingRuleJob>,
     event_id: Option<String>,
     scan_metadata: &'a AHashMap<String, String>,
+    prefilter_scratch: &'a mut prefilter::PrefilterScratch,
 }
 
 impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
@@ -1246,6 +1284,24 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         mut rule_visitor: crate::scoped_ruleset::RuleIndexVisitor,
         exclusion_check: ExclusionCheck<'b>,
     ) -> Result<bool, ScannerError> {
+        // Without a rule in scope for this string, the passes cannot remove anything.
+        if self.scanner.scanner_features.prefilter_enabled
+            && !self.scanner.prefilter.visits_survivors_only()
+            && !rule_visitor.has_rules()
+        {
+            return Ok(!self.async_jobs.is_empty());
+        }
+
+        self.scanner
+            .prefilter
+            .check_string(self.prefilter_scratch, path, content);
+        let scratch = &*self.prefilter_scratch;
+
+        // No rule can match, so none of the per-string work below is needed.
+        if scratch.survivors().iter().all(|word| *word == 0) {
+            return Ok(!self.async_jobs.is_empty());
+        }
+
         // matches for a single path
         let mut path_rules_matches = vec![];
 
@@ -1253,7 +1309,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         let mut per_string_data = SharedData::new();
         let wildcard_indices_per_path = self.wildcarded_indexes.get(path);
 
-        rule_visitor.visit_rule_indices(|rule_index| {
+        let mut run_rule = |rule_index: usize| -> Result<(), ScannerError> {
             if self.blocked_rules.contains(&rule_index) {
                 return Ok(());
             }
@@ -1314,7 +1370,25 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 }
             }
             Ok(())
-        })?;
+        };
+
+        if self.scanner.prefilter.visits_survivors_only() {
+            for (word_index, word) in scratch.survivors().iter().enumerate() {
+                let mut bits = *word;
+                while bits != 0 {
+                    run_rule(word_index * 64 + bits.trailing_zeros() as usize)?;
+                    bits &= bits - 1;
+                }
+            }
+        } else {
+            rule_visitor.visit_rule_indices(|rule_index| {
+                if scratch.is_survivor(rule_index) {
+                    run_rule(rule_index)
+                } else {
+                    Ok(())
+                }
+            })?;
+        }
 
         // If there are any matches, the string will need to be accessed to check for false positives from
         // excluded matches, any to potentially mutate the string.

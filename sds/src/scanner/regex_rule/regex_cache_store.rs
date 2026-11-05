@@ -1,4 +1,5 @@
 use crate::SharedPool;
+use crate::scanner::prefilter::PrefilterScratch;
 use crate::scanner::regex_rule::regex_store::{RegexCacheKey, SharedRegex, gc_regex_store};
 use lazy_static::lazy_static;
 use regex_automata::meta::Regex as MetaRegex;
@@ -42,6 +43,8 @@ pub fn clear_all_caches() {
 
 pub struct RegexCaches {
     map: SecondaryMap<RegexCacheKey, RegexCacheValue>,
+    /// Kept here so that a scan reuses the buffers of the previous scan on this thread.
+    pub(crate) prefilter_scratch: PrefilterScratch,
 }
 
 pub struct RegexCacheValue {
@@ -53,6 +56,7 @@ impl RegexCaches {
     pub fn new() -> Self {
         Self {
             map: SecondaryMap::new(),
+            prefilter_scratch: PrefilterScratch::default(),
         }
     }
 
