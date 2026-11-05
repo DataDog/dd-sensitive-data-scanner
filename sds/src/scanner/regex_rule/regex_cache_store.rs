@@ -34,11 +34,12 @@ pub fn reset_regex_caches() {
     *REGEX_CACHE_STORE.write().unwrap() = new_regex_cache_pool();
 }
 
-/// Clears both scanning caches: per-thread scratch (`reset_regex_caches`) and unreferenced
-/// compiled regexes (`gc_regex_store`). Call when idle to drop dd-sds to a near-zero footprint.
+/// Clears per-thread scratch, unreferenced compiled regexes, and cached prefilter facts.
+/// Call when idle to release scanner cache memory.
 pub fn clear_all_caches() {
     reset_regex_caches();
     gc_regex_store();
+    crate::scanner::prefilter::clear_regex_facts();
 }
 
 pub struct RegexCaches {

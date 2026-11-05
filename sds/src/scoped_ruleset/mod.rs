@@ -224,18 +224,6 @@ pub struct RuleIndexVisitor<'a> {
 }
 
 impl RuleIndexVisitor<'_> {
-    /// Whether any rule is in scope for the current string.
-    pub fn has_rules(&self) -> bool {
-        self.tree_nodes.iter().any(|node| {
-            !node.index_wildcard_match
-                && node
-                    .rule_tree
-                    .rule_changes
-                    .iter()
-                    .any(|change| matches!(change, RuleChange::Add(_)))
-        })
-    }
-
     /// Visits all rules associated with the current string. This may
     /// potentially return no rule indices at all.
     pub fn visit_rule_indices(

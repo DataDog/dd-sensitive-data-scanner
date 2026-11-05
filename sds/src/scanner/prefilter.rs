@@ -8,9 +8,8 @@
 
 use crate::normalization::rust_regex_adapter::convert_to_rust_regex;
 use crate::proximity_keywords::{MULTI_WORD_KEYWORDS_LINK_CHARS, standardize_path_chars};
-use crate::{Path, PathSegment, ProximityKeywordsConfig};
-use aho_corasick::automaton::Automaton;
-use aho_corasick::{Anchored, MatchKind, dfa, nfa};
+use crate::{Path, PathSegment, ProximityKeywordsConfig, RootRuleConfig, RuleConfig};
+use aho_corasick::{AhoCorasick, AhoCorasickKind};
 use moka::sync::Cache;
 use once_cell::sync::Lazy;
 use regex_syntax_08::hir::literal::Extractor;
@@ -45,8 +44,6 @@ const RUN_CLASS_CHARS: [&[u8]; RUN_CLASSES] = [
 ];
 /// Literals are cut to this length in the automaton.
 const MAX_LITERAL_LEN: usize = 6;
-/// Literal sets up to this size use a DFA.
-const MAX_DFA_LITERALS: usize = 2000;
 /// A shorter run than this is too common to remove a rule.
 const MIN_USEFUL_RUN: u32 = 4;
 
@@ -73,6 +70,11 @@ pub struct RegexFacts {
 
 static REGEX_FACTS: Lazy<Cache<String, Option<Arc<RegexFacts>>>> = Lazy::new(|| Cache::new(10_000));
 
+pub(super) fn clear_regex_facts() {
+    REGEX_FACTS.invalidate_all();
+    REGEX_FACTS.run_pending_tasks();
+}
+
 /// The necessary conditions for a match of one rule.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RulePrefilterSpec {
@@ -93,10 +95,9 @@ impl RegexFacts {
     /// regex. Returns `None` when the pattern cannot be analyzed.
     fn from_pattern(pattern: &str) -> Option<Self> {
         let converted = convert_to_rust_regex(pattern).ok()?;
-        let syntax = regex_automata::util::syntax::Config::default()
-            .dot_matches_new_line(false)
-            .unicode(true);
-        let hir = regex_automata::util::syntax::parse_with(&converted, &syntax).ok()?;
+        let hir =
+            regex_automata::util::syntax::parse_with(&converted, &crate::validation::rule_syntax())
+                .ok()?;
         let mut min_runs = [0; RUN_CLASSES];
         for (class, min_run) in min_runs.iter_mut().enumerate() {
             let run = class_run(&hir, class);
@@ -239,7 +240,7 @@ fn is_better(new: &[Vec<u8>], old: &[Vec<u8>]) -> bool {
 /// Byte strings of which at least one is in every match of `hir`. `None` when nothing is known.
 fn required_literals(hir: &Hir) -> Option<Vec<Vec<u8>>> {
     let lits = match hir.kind() {
-        HirKind::Literal(lit) => vec![lit.0.to_vec()],
+        HirKind::Literal(lit) => vec![lit.0[..lit.0.len().min(MAX_LITERAL_LEN)].to_vec()],
         HirKind::Capture(capture) => return required_literals(&capture.sub),
         HirKind::Repetition(rep) if rep.min >= 1 => return required_literals(&rep.sub),
         HirKind::Concat(subs) => {
@@ -253,13 +254,17 @@ fn required_literals(hir: &Hir) -> Option<Vec<Vec<u8>>> {
                 if let Some(lits) = required_literals(sub) {
                     consider(lits);
                 }
-                // Prefixes of the remaining concat. This finds case-insensitive words, which
-                // are a concat of small classes and not literals. A run needs one attempt, at
-                // its start, because a later start only gives shorter literals.
+                // Small classes can spell a case-insensitive word. Each atom consumes at least
+                // one byte, so the automaton needs at most MAX_LITERAL_LEN atoms from this run.
                 let starts_run = is_small_atom(sub) && (i == 0 || !is_small_atom(&subs[i - 1]));
                 if starts_run {
-                    let suffix = Hir::concat(subs[i..].to_vec());
-                    if let Some(lits) = prefix_literals(&suffix) {
+                    let atoms = subs[i..]
+                        .iter()
+                        .take(MAX_LITERAL_LEN)
+                        .take_while(|atom| is_small_atom(atom))
+                        .cloned()
+                        .collect();
+                    if let Some(lits) = prefix_literals(&Hir::concat(atoms)) {
                         consider(lits);
                     }
                 }
@@ -308,6 +313,7 @@ fn prefix_literals(hir: &Hir) -> Option<Vec<Vec<u8>>> {
     let seq = Extractor::new()
         .limit_class(MAX_EXPANDED_CLASS)
         .limit_total(MAX_EXPANDED_LITERALS)
+        .limit_literal_len(MAX_LITERAL_LEN)
         .extract(hir);
     let lits = seq.literals()?;
     let shortest = lits.iter().map(|lit| lit.len()).min()?;
@@ -328,13 +334,8 @@ fn keyword_literals(keywords: &[String]) -> Option<KeywordLiterals> {
     for keyword in keywords {
         let keyword = keyword.trim();
         if !keyword.is_ascii() {
-            // Case folding maps only these two non-ASCII characters to ASCII letters.
-            if keyword.contains(['\u{212A}', '\u{17F}']) {
-                return None;
-            }
-            // Every other non-ASCII character needs non-ASCII text, and the pass does not use
-            // keyword conditions for non-ASCII text. So this keyword needs no literal.
-            continue;
+            // The keyword regex uses Unicode case folding. Defer the whole set of alternatives.
+            return None;
         }
         // Link characters are optional between words, so only a run between them is required.
         let content = keyword
@@ -422,11 +423,10 @@ static RUN_MASKS: [[u8; RUN_CLASSES]; 256] = run_masks();
 
 /// The longest run per class, with a cap of 255. A threshold above that is capped too.
 pub(crate) fn longest_runs(content: &[u8]) -> [u8; RUN_CLASSES] {
-    #[cfg(target_arch = "aarch64")]
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
     {
         use std::arch::aarch64::*;
-        // SAFETY: NEON is part of the aarch64 baseline, and each load and store uses 8 bytes of
-        // an array of 8 bytes.
+        // SAFETY: This target enables NEON. Each load and store uses an eight-byte array.
         unsafe {
             let one = vdup_n_u8(1);
             let mut current = vdup_n_u8(0);
@@ -441,11 +441,10 @@ pub(crate) fn longest_runs(content: &[u8]) -> [u8; RUN_CLASSES] {
             out
         }
     }
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
     {
         use std::arch::x86_64::*;
-        // SAFETY: SSE2 is part of the x86_64 baseline, and each load and store uses 8 bytes of an
-        // array of 8 bytes.
+        // SAFETY: This target enables SSE2. Each load and store uses an eight-byte array.
         unsafe {
             let one = _mm_set1_epi8(1);
             let mut current = _mm_setzero_si128();
@@ -460,13 +459,22 @@ pub(crate) fn longest_runs(content: &[u8]) -> [u8; RUN_CLASSES] {
             out
         }
     }
-    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    #[cfg(not(any(
+        all(target_arch = "aarch64", target_feature = "neon"),
+        all(target_arch = "x86_64", target_feature = "sse2"),
+    )))]
     {
         longest_runs_portable(content)
     }
 }
 
-#[cfg(any(test, not(any(target_arch = "aarch64", target_arch = "x86_64"))))]
+#[cfg(any(
+    test,
+    not(any(
+        all(target_arch = "aarch64", target_feature = "neon"),
+        all(target_arch = "x86_64", target_feature = "sse2"),
+    ))
+))]
 pub(crate) fn longest_runs_portable(content: &[u8]) -> [u8; RUN_CLASSES] {
     let mut current = [0u8; RUN_CLASSES];
     let mut longest = [0u8; RUN_CLASSES];
@@ -478,56 +486,6 @@ pub(crate) fn longest_runs_portable(content: &[u8]) -> [u8; RUN_CLASSES] {
         }
     }
     longest
-}
-
-/// An automaton over all literals. A larger literal set uses the smaller and slower form.
-enum LiteralAutomaton {
-    Dfa(dfa::DFA),
-    Nfa(nfa::contiguous::NFA),
-}
-
-impl LiteralAutomaton {
-    fn new(literals: &[Vec<u8>]) -> Option<Self> {
-        if literals.len() <= MAX_DFA_LITERALS {
-            let built = dfa::DFA::builder()
-                .match_kind(MatchKind::Standard)
-                .ascii_case_insensitive(true)
-                .start_kind(aho_corasick::StartKind::Unanchored)
-                .build(literals);
-            built.ok().map(Self::Dfa)
-        } else {
-            let built = nfa::contiguous::NFA::builder()
-                .match_kind(MatchKind::Standard)
-                .ascii_case_insensitive(true)
-                .build(literals);
-            built.ok().map(Self::Nfa)
-        }
-    }
-
-    /// Calls `found` for each occurrence of each literal, including overlapping ones.
-    #[inline(always)]
-    fn for_each_match(&self, haystack: &[u8], found: impl FnMut(usize)) {
-        match self {
-            Self::Dfa(automaton) => walk(automaton, haystack, found),
-            Self::Nfa(automaton) => walk(automaton, haystack, found),
-        }
-    }
-}
-
-#[inline(always)]
-fn walk<A: Automaton>(automaton: &A, haystack: &[u8], mut found: impl FnMut(usize)) {
-    // An unanchored start state always exists, because the builders above create it.
-    let Ok(mut state) = automaton.start_state(Anchored::No) else {
-        return;
-    };
-    for byte in haystack {
-        state = automaton.next_state(Anchored::No, state, *byte);
-        if automaton.is_match(state) {
-            for index in 0..automaton.match_len(state) {
-                found(automaton.match_pattern(state, index).as_usize());
-            }
-        }
-    }
 }
 
 /// What a single literal means for each rule.
@@ -551,7 +509,7 @@ pub struct ScanPrefilter {
     needs_regex_literal: Box<[u64]>,
     /// The rules with a keyword condition.
     needs_keyword: Box<[u64]>,
-    literals: Option<LiteralAutomaton>,
+    literals: Option<AhoCorasick>,
     uses: Box<[LiteralUse]>,
     /// When every rule covers all paths, visiting the set bits in order is the same as visiting
     /// the rule tree of the scoped rule set.
@@ -563,6 +521,8 @@ pub struct ScanPrefilter {
 /// Bits of a per-string pass. It is reused between the strings of one scan.
 #[derive(Default)]
 pub struct PrefilterScratch {
+    /// Scoped rules must run in the order supplied by the rule tree.
+    pub(super) scoped_rules: Vec<usize>,
     regex_hits: Vec<u64>,
     keyword_hits: Vec<u64>,
     literal_seen: Vec<u64>,
@@ -585,8 +545,20 @@ fn reset(bits: &mut Vec<u64>, words: usize) {
 }
 
 impl ScanPrefilter {
-    /// `specs` holds one entry per rule, in rule index order. A rule without a spec always runs.
-    pub fn new(specs: &[Option<&RulePrefilterSpec>], every_rule_covers_all_paths: bool) -> Self {
+    pub fn new(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> Option<Self> {
+        let specs: Vec<_> = rules
+            .iter()
+            .map(|rule| {
+                let config = rule.inner.regex_config_for_prefilter()?;
+                RulePrefilterSpec::from_regex_rule(
+                    &config.pattern,
+                    config.proximity_keywords.as_ref(),
+                )
+            })
+            .collect();
+        if specs.iter().all(Option::is_none) {
+            return None;
+        }
         let words = specs.len().div_ceil(64);
         let mut needs_regex_literal = vec![0u64; words];
         let mut needs_keyword = vec![0u64; words];
@@ -600,7 +572,7 @@ impl ScanPrefilter {
         let mut uses: Vec<(Vec<u32>, Vec<u32>, Vec<u32>)> = vec![];
         let mut index = ahash::AHashMap::<Vec<u8>, usize>::new();
         let mut slot = |literal: &[u8]| -> usize {
-            // A prefix of a required literal is required too, and fewer bytes make a smaller DFA.
+            // A prefix is still necessary and costs less memory in each scanner.
             let key = literal[..literal.len().min(MAX_LITERAL_LEN)].to_ascii_lowercase();
             *index.entry(key.clone()).or_insert_with(|| {
                 literals.push(key);
@@ -643,7 +615,11 @@ impl ScanPrefilter {
         let automaton = if literals.is_empty() {
             None
         } else {
-            let built = LiteralAutomaton::new(&literals);
+            let built = AhoCorasick::builder()
+                .kind(Some(AhoCorasickKind::ContiguousNFA))
+                .ascii_case_insensitive(true)
+                .build(&literals)
+                .ok();
             if built.is_none() {
                 // Without an automaton no literal condition can be answered.
                 needs_regex_literal.fill(0);
@@ -654,10 +630,13 @@ impl ScanPrefilter {
 
         let min_lens: Vec<u32> = specs
             .iter()
-            .map(|spec| spec.map_or(0, |s| s.regex.min_len.min(u32::MAX as usize) as u32))
+            .map(|spec| {
+                spec.as_ref()
+                    .map_or(0, |s| s.regex.min_len.min(u32::MAX as usize) as u32)
+            })
             .collect();
-        let min_run = |spec: &Option<&RulePrefilterSpec>, class: usize| {
-            spec.map_or(0, |s| s.regex.min_runs[class])
+        let min_run = |spec: &Option<RulePrefilterSpec>, class: usize| {
+            spec.as_ref().map_or(0, |s| s.regex.min_runs[class])
         };
         let mut needs_run = vec![0u64; words];
         let mut run_rules = 0;
@@ -679,29 +658,17 @@ impl ScanPrefilter {
             needs_run.fill(0);
         }
 
-        let mut literal_rule_count = 0;
-        let mut other_rule_count = 0;
-        for (rule, spec) in specs.iter().enumerate() {
-            if get_bit(&needs_regex_literal, rule) {
-                literal_rule_count += 1;
-            } else if spec.is_some() && (get_bit(&needs_keyword, rule) || get_bit(&needs_run, rule))
-            {
-                other_rule_count += 1;
-            }
-        }
-        let rule_cost_per_byte = literal_rule_count * LITERAL_RULE_COST_PER_BYTE
-            + other_rule_count * OTHER_RULE_COST_PER_BYTE;
-        let max_len_for_passes = match PASSES_COST_PER_BYTE.checked_sub(rule_cost_per_byte) {
-            None | Some(0) => usize::MAX,
-            Some(extra_cost_per_byte) => {
-                (literal_rule_count + other_rule_count) * RULE_COST / extra_cost_per_byte
-            }
-        };
-
-        Self {
+        let len_table = ThresholdTable::new(&min_lens, words);
+        let max_len_for_passes = pass_length_limit(
+            len_table.row(usize::MAX),
+            &needs_regex_literal,
+            &needs_keyword,
+            &needs_run,
+        );
+        Some(Self {
             words,
             max_len_for_passes,
-            len_table: ThresholdTable::new(&min_lens, words),
+            len_table,
             run_tables,
             needs_run: needs_run.into_boxed_slice(),
             needs_regex_literal: needs_regex_literal.into_boxed_slice(),
@@ -715,8 +682,8 @@ impl ScanPrefilter {
                 })
                 .collect(),
             literals: automaton,
-            every_rule_covers_all_paths,
-        }
+            every_rule_covers_all_paths: rules.iter().all(|rule| rule.scope.covers_all_paths()),
+        })
     }
 
     /// Whether a rule visit can be replaced by a visit of the set bits.
@@ -726,14 +693,42 @@ impl ScanPrefilter {
     }
 
     /// Runs the pass over one string. On return `scratch.survivors()` holds the rules to run.
-    pub fn check_string(&self, scratch: &mut PrefilterScratch, path: &Path, content: &str) {
+    pub fn check_string(
+        &self,
+        scratch: &mut PrefilterScratch,
+        path: &Path,
+        content: &str,
+        blocked: &[usize],
+    ) {
         let words = self.words;
-        scratch.survivors.clear();
-        scratch
-            .survivors
-            .extend_from_slice(self.len_table.row(content.len()));
-
-        if content.len() > self.max_len_for_passes {
+        let len_row = self.len_table.row(content.len());
+        if self.every_rule_covers_all_paths {
+            scratch.survivors.clear();
+            scratch.survivors.extend_from_slice(len_row);
+        } else {
+            reset(&mut scratch.survivors, words);
+            for &rule in &scratch.scoped_rules {
+                if get_bit(len_row, rule) {
+                    set_bit(&mut scratch.survivors, rule);
+                }
+            }
+        }
+        for &rule in blocked {
+            if let Some(word) = scratch.survivors.get_mut(rule / 64) {
+                *word &= !(1 << (rule % 64));
+            }
+        }
+        let pass_limit = if self.every_rule_covers_all_paths && blocked.is_empty() {
+            self.max_len_for_passes
+        } else {
+            pass_length_limit(
+                &scratch.survivors,
+                &self.needs_regex_literal,
+                &self.needs_keyword,
+                &self.needs_run,
+            )
+        };
+        if content.len() > pass_limit {
             return;
         }
 
@@ -773,38 +768,32 @@ impl ScanPrefilter {
         reset(&mut scratch.regex_hits, words);
         reset(&mut scratch.keyword_hits, words);
         reset(&mut scratch.literal_seen, self.uses.len().div_ceil(64));
-        {
-            let PrefilterScratch {
-                regex_hits,
-                keyword_hits,
-                literal_seen,
-                ..
-            } = scratch;
-            automaton.for_each_match(content.as_bytes(), |literal| {
-                if get_bit(literal_seen, literal) {
-                    return;
-                }
-                set_bit(literal_seen, literal);
-                let literal_use = &self.uses[literal];
-                for rule in &literal_use.regex_rules {
-                    set_bit(regex_hits, *rule as usize);
-                }
-                for rule in &literal_use.content_keyword_rules {
-                    set_bit(keyword_hits, *rule as usize);
-                }
-            });
+        for hit in automaton.find_overlapping_iter(content) {
+            let literal = hit.pattern().as_usize();
+            if get_bit(&scratch.literal_seen, literal) {
+                continue;
+            }
+            set_bit(&mut scratch.literal_seen, literal);
+            let literal_use = &self.uses[literal];
+            for rule in &literal_use.regex_rules {
+                set_bit(&mut scratch.regex_hits, *rule as usize);
+            }
+            for rule in &literal_use.content_keyword_rules {
+                set_bit(&mut scratch.keyword_hits, *rule as usize);
+            }
         }
 
-        // The regex literals are exact, so they apply to any text.
-        let mut keyword_gap = 0;
+        // The extracted alternatives include all Unicode case variants of the regex.
+        let mut missing_keywords = 0;
         for i in 0..words {
             let survivors =
                 scratch.survivors[i] & (!self.needs_regex_literal[i] | scratch.regex_hits[i]);
             scratch.survivors[i] = survivors;
-            keyword_gap |= survivors & self.needs_keyword[i] & !scratch.keyword_hits[i];
+            missing_keywords += (survivors & self.needs_keyword[i] & !scratch.keyword_hits[i])
+                .count_ones() as usize;
         }
         // Without a rule that still waits for a keyword there is nothing to learn from the path.
-        if keyword_gap == 0 {
+        if missing_keywords == 0 {
             return;
         }
         // Unicode case folding maps non-ASCII characters to ASCII letters (the Kelvin sign to
@@ -812,21 +801,63 @@ impl ScanPrefilter {
         if !content.is_ascii() {
             return;
         }
+        // A short value can have a very long path. Once probing costs more than dispatching the
+        // remaining rules, let their normal keyword search decide.
+        let path_budget = missing_keywords.saturating_mul(RULE_COST / PASSES_COST_PER_BYTE);
+        let Some(mut remaining) = path_budget.checked_sub(path.len()) else {
+            return;
+        };
+        scratch.literal_seen.fill(0);
         for segment in &path.segments {
             if let PathSegment::Field(field) = segment {
+                let Some(next) = remaining.checked_sub(field.len()) else {
+                    return;
+                };
+                remaining = next;
                 if !field.is_ascii() {
                     return;
                 }
-                automaton.for_each_match(field.as_bytes(), |literal| {
+                for hit in automaton.find_overlapping_iter(field.as_bytes()) {
+                    let literal = hit.pattern().as_usize();
+                    if get_bit(&scratch.literal_seen, literal) {
+                        continue;
+                    }
+                    set_bit(&mut scratch.literal_seen, literal);
                     for rule in &self.uses[literal].path_keyword_rules {
                         set_bit(&mut scratch.keyword_hits, *rule as usize);
                     }
-                });
+                }
             }
         }
         for i in 0..words {
             scratch.survivors[i] &= !self.needs_keyword[i] | scratch.keyword_hits[i];
         }
+    }
+}
+
+fn pass_length_limit(
+    eligible: &[u64],
+    regex_literals: &[u64],
+    keywords: &[u64],
+    runs: &[u64],
+) -> usize {
+    let mut literal_count = 0;
+    let mut other_count = 0;
+    for (i, &rules) in eligible.iter().enumerate() {
+        literal_count += (rules & regex_literals[i]).count_ones() as usize;
+        let other = rules & !regex_literals[i] & (keywords[i] | runs[i]);
+        other_count += other.count_ones() as usize;
+    }
+    let count = literal_count + other_count;
+    if count < MIN_LITERAL_RULES {
+        return 0;
+    }
+    let rule_cost =
+        literal_count * LITERAL_RULE_COST_PER_BYTE + other_count * OTHER_RULE_COST_PER_BYTE;
+    if rule_cost >= PASSES_COST_PER_BYTE {
+        usize::MAX
+    } else {
+        count * RULE_COST / (PASSES_COST_PER_BYTE - rule_cost)
     }
 }
 

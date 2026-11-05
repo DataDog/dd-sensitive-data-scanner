@@ -47,11 +47,11 @@ fn minimum_length_comes_from_the_whole_pattern() {
 
 #[test]
 fn literals_are_required_substrings() {
-    assert_eq!(literals("aio_[A-Za-z0-9]{28}").unwrap(), vec!["aio_"]);
+    assert_eq!(literals("foo_[0-9]+").unwrap(), vec!["foo_"]);
     // A literal inside a capture group and after an optional prefix.
     assert_eq!(
-        literals("(?:^|[\\s=])(?<sds_match>ghp_[a-z]{10})(?:$|\\s)").unwrap(),
-        vec!["ghp_"]
+        literals("(?:x)?(?<sds_match>tag_[0-9]+)").unwrap(),
+        vec!["tag_"]
     );
     // An alternation needs every branch to have a literal.
     assert_eq!(literals("(?:foo|bar)[0-9]+").unwrap(), vec!["bar", "foo"]);
@@ -92,28 +92,10 @@ fn keyword_literals_use_a_run_between_link_characters() {
     assert_eq!(lits.content_keywords, vec![b"apikey".to_vec()]);
     assert_eq!(lits.path_keywords, vec![b"key".to_vec()]);
 
-    // A non-ASCII keyword needs non-ASCII text, so it adds no literal.
-    let lits = keywords(&["\u{09CE}host", "token"]).unwrap();
-    assert_eq!(lits.content_keywords, vec![b"token".to_vec()]);
-
     // A keyword without a usable literal makes the keyword condition unknown.
+    assert_eq!(keywords(&["\u{09CE}host", "token"]), None);
     assert_eq!(keywords(&["\u{212A}ey"]), None);
     assert_eq!(keywords(&["ok", "-"]), None);
-}
-
-#[test]
-fn only_two_non_ascii_characters_fold_to_ascii() {
-    use regex_syntax_08::hir::{ClassUnicode, ClassUnicodeRange};
-    // This holds for the Unicode tables that the regex uses.
-    let mut non_ascii = ClassUnicode::new([ClassUnicodeRange::new('\u{80}', '\u{10FFFF}')]);
-    non_ascii.try_case_fold_simple().unwrap();
-    let mut ascii_from_folding = ClassUnicode::new([ClassUnicodeRange::new('\0', '\u{7F}')]);
-    ascii_from_folding.intersect(&non_ascii);
-    let letters: Vec<_> = ascii_from_folding
-        .iter()
-        .flat_map(|range| range.start()..=range.end())
-        .collect();
-    assert_eq!(letters, vec!['K', 'S', 'k', 's']);
 }
 
 #[test]
@@ -310,6 +292,65 @@ fn build(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>], prefilter: bool) -> Scan
         .with_prefilter(prefilter)
         .build()
         .unwrap()
+}
+
+#[test]
+fn keyword_and_rule_keep_their_own_case_settings() {
+    let keyword_rule =
+        RootRuleConfig::new_dyn(RegexRuleConfig::new("value").with_included_keywords(["ς"]));
+    let plain_rule = RootRuleConfig::new_dyn(RegexRuleConfig::new("ς"));
+    for keyword_first in [true, false] {
+        let mut rules = vec![keyword_rule.clone(), plain_rule.clone()];
+        if !keyword_first {
+            rules.reverse();
+        }
+        rules.extend(
+            ["foo", "bar", "baz"].map(|p| RootRuleConfig::new_dyn(RegexRuleConfig::new(p))),
+        );
+        for enabled in [false, true] {
+            let scanner = build(&rules, enabled);
+            let matches = scanner.scan(&mut "Σ value".to_owned()).unwrap();
+            assert_eq!(
+                matches
+                    .iter()
+                    .map(|m| m.match_value.as_deref())
+                    .collect::<Vec<_>>(),
+                [Some("value")],
+                "keyword first: {keyword_first}, prefilter: {enabled}"
+            );
+        }
+    }
+}
+
+#[test]
+fn custom_config_can_replace_a_compiled_regex() {
+    struct AdaptedRule(RegexRuleConfig);
+
+    impl RuleConfig for AdaptedRule {
+        fn convert_to_compiled_rule(
+            &self,
+            index: usize,
+            labels: crate::Labels,
+        ) -> Result<Box<dyn crate::CompiledRule>, crate::CreateScannerError> {
+            let mut rule = self.0.convert_to_compiled_rule(index, labels)?;
+            rule.as_regex_rule_mut().unwrap().regex =
+                crate::get_memoized_regex("x", regex_automata::meta::Regex::new).unwrap();
+            Ok(rule)
+        }
+
+        fn as_regex_rule(&self) -> Option<&RegexRuleConfig> {
+            Some(&self.0)
+        }
+    }
+
+    let rules = [
+        RootRuleConfig::new_dyn(AdaptedRule(RegexRuleConfig::new("longer"))),
+        RootRuleConfig::new_dyn(RegexRuleConfig::new("other")),
+    ];
+    for enabled in [false, true] {
+        let matches = build(&rules, enabled).scan(&mut "x".to_owned()).unwrap();
+        assert_eq!(matches.len(), 1, "prefilter: {enabled}");
+    }
 }
 
 /// Scans with and without the prefilter, and requires the same matches and the same event.

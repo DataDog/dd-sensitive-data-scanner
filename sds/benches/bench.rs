@@ -348,6 +348,56 @@ pub fn multipass_excluded_scan(c: &mut Criterion) {
     });
 }
 
+fn rule_prefilter(c: &mut Criterion) {
+    let mut group = c.benchmark_group("rule_prefilter");
+    let rules: Vec<_> = (0..77)
+        .map(|i| RootRuleConfig::new_dyn(RegexRuleConfig::new(&format!("r{i:03}_[0-9]+"))))
+        .collect();
+    let fields = (0..64)
+        .map(|i| {
+            let value = if i == 0 {
+                "r042_123"
+            } else {
+                "request completed"
+            };
+            (format!("field{i}"), SimpleEvent::String(value.into()))
+        })
+        .collect();
+    let keyword_rules =
+        vec![
+            RootRuleConfig::new_dyn(RegexRuleConfig::new("secret").with_included_keywords(["a"]));
+            4
+        ];
+    let long_field = SimpleEvent::Map(BTreeMap::from([(
+        "a".repeat(65_536),
+        SimpleEvent::String("SECRET".into()),
+    )]));
+    let mut scoped_rules = rules.clone();
+    for rule in &mut scoped_rules[1..] {
+        rule.scope = Scope::include(vec![Path::from(vec!["other".into()])]);
+    }
+    let long_value = SimpleEvent::String("x".repeat(76 * 1024));
+    let all_hit = SimpleEvent::String((0..77).map(|i| format!("r{i:03}_123 ")).collect());
+
+    for (name, rules, mut event) in [
+        ("sparse", &rules, SimpleEvent::Map(fields)),
+        ("all_hit", &rules, all_hit),
+        ("long_field", &keyword_rules, long_field),
+        ("one_in_scope", &scoped_rules, long_value),
+    ] {
+        for (mode, enabled) in [("off", false), ("on", true)] {
+            let scanner = Scanner::builder(rules)
+                .with_prefilter(enabled)
+                .build()
+                .unwrap();
+            group.bench_function(format!("{name}/{mode}"), |b| {
+                b.iter(|| scanner.scan(&mut event).unwrap())
+            });
+        }
+    }
+    group.finish();
+}
+
 criterion::criterion_group!(
     benches,
     scoped_ruleset,
@@ -355,7 +405,8 @@ criterion::criterion_group!(
     token_efficiency_vs_entropy,
     included_keywords,
     included_keywords_on_path,
-    multipass_excluded_scan
+    multipass_excluded_scan,
+    rule_prefilter
 );
 
 criterion::criterion_main!(benches);
