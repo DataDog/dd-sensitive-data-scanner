@@ -10,7 +10,7 @@ use crate::{
     Scanner, ScannerBuilder, StatusCodeMatcher, UnknownResponseTypeInfo, ValidationError,
 };
 use httpmock::Method::{GET, POST};
-use httpmock::{MockServer, Regex};
+use httpmock::MockServer;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::time::Duration;
@@ -792,7 +792,7 @@ fn test_match_pairing_incomplete_missing_paired_secret() {
     // (not the literal "$CLIENT_SUBDOMAIN" string)
     let _mock = server.mock(|when, then| {
         when.method(GET)
-            .path_matches(Regex::new(r"^/api/[a-z_]+_corp/validate$").unwrap())
+            .path_matches(r"^/api/[a-z_]+_corp/validate$")
             .query_param("secret", "api_key_abc123");
         then.status(200).body(r#"{"status": "valid"}"#);
     });
@@ -883,7 +883,7 @@ fn test_match_pairing_incomplete_missing_paired_secret() {
         ));
 
         // The mock should NOT have been called (since the path didn't match the pattern)
-        _mock.assert_hits(0);
+        _mock.assert_calls(0);
     }
     {
         // Content contains only the paired secret, missing the main secret
@@ -899,7 +899,7 @@ fn test_match_pairing_incomplete_missing_paired_secret() {
         assert!(matches!(main_match.match_status, MatchStatus::NotChecked));
 
         // The mock should NOT have been called (since the path didn't match the pattern)
-        _mock.assert_hits(0);
+        _mock.assert_calls(0);
     }
 }
 
@@ -1062,8 +1062,8 @@ fn test_match_pairing_rule_can_consume_and_provide() {
 
         assert_eq!(get_status_by_rule_idx(&matches, 1), MatchStatus::Valid);
         assert_eq!(get_status_by_rule_idx(&matches, 2), MatchStatus::Valid);
-        mock_api_key_valid.assert_hits(1);
-        mock_app_key_valid.assert_hits(1);
+        mock_api_key_valid.assert_calls(1);
+        mock_app_key_valid.assert_calls(1);
     }
 
     {
@@ -1073,8 +1073,8 @@ fn test_match_pairing_rule_can_consume_and_provide() {
             get_status_by_rule_idx(&matches, 1),
             MatchStatus::MissingDependentMatch
         );
-        mock_api_key_valid.assert_hits(1);
-        mock_app_key_valid.assert_hits(1);
+        mock_api_key_valid.assert_calls(1);
+        mock_app_key_valid.assert_calls(1);
     }
 
     {
@@ -1084,8 +1084,8 @@ fn test_match_pairing_rule_can_consume_and_provide() {
             get_status_by_rule_idx(&matches, 2),
             MatchStatus::MissingDependentMatch
         );
-        mock_api_key_valid.assert_hits(1);
-        mock_app_key_valid.assert_hits(1);
+        mock_api_key_valid.assert_calls(1);
+        mock_app_key_valid.assert_calls(1);
     }
 }
 
@@ -1326,9 +1326,9 @@ fn test_match_pairing_vendor_isolation() {
         );
 
         assert_eq!(status_for_rule(&matches, 2), MatchStatus::Valid);
-        mock_aws_valid.assert_hits(1);
+        mock_aws_valid.assert_calls(1);
         // The azure resource must never have been substituted into the aws endpoint.
-        mock_azure_leak.assert_hits(0);
+        mock_azure_leak.assert_calls(0);
     }
 
     {
@@ -1340,7 +1340,7 @@ fn test_match_pairing_vendor_isolation() {
             MatchStatus::MissingDependentMatch
         );
         // Cumulative counts: no new calls from this scenario (still 1 from above, never 1 for azure).
-        mock_aws_valid.assert_hits(1);
-        mock_azure_leak.assert_hits(0);
+        mock_aws_valid.assert_calls(1);
+        mock_azure_leak.assert_calls(0);
     }
 }
