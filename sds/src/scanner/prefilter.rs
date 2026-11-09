@@ -2,18 +2,18 @@
 //!
 //! Each rule can give necessary conditions for a match: a minimum length, a minimum run of bytes
 //! from a character class, a set of literals of which one must be in the content, and a set of
-//! keyword literals of which one must be in the content or in the path. One pass over the string
-//! then answers these conditions for all rules at once. A condition only removes a rule when the
-//! rule cannot produce a match, so the output of a scan does not change.
+//! keyword literals of which one must be in the content or in the path. The scanner checks
+//! these conditions across rules. An incomplete check leaves the remaining rules eligible.
 
 use crate::normalization::rust_regex_adapter::convert_to_rust_regex;
 use crate::proximity_keywords::{MULTI_WORD_KEYWORDS_LINK_CHARS, standardize_path_chars};
-use crate::{Path, PathSegment, ProximityKeywordsConfig, RootRuleConfig, RuleConfig};
+use crate::scoped_ruleset::RuleIndexVisitor;
+use crate::{Path, PathSegment, ProximityKeywordsConfig, RootRuleConfig, RuleConfig, ScannerError};
 use aho_corasick::{AhoCorasick, AhoCorasickKind};
 use moka::sync::Cache;
 use once_cell::sync::Lazy;
 use regex_syntax_08::hir::literal::Extractor;
-use regex_syntax_08::hir::{Class, Hir, HirKind};
+use regex_syntax_08::hir::{Class, Hir, HirKind, Look};
 use std::sync::Arc;
 
 /// A rule set with fewer literal rules than this does not get a literal pass. The cost of the
@@ -44,6 +44,9 @@ const RUN_CLASS_CHARS: [&[u8]; RUN_CLASSES] = [
 ];
 /// Literals are cut to this length in the automaton.
 const MAX_LITERAL_LEN: usize = 6;
+/// Allow repeated hits on short fields. Beyond this allowance, dispatch can cost less than
+/// enumerating overlapping occurrences of a common literal.
+const EXTRA_LITERAL_HITS: usize = 64;
 /// A shorter run than this is too common to remove a rule.
 const MIN_USEFUL_RUN: u32 = 4;
 
@@ -62,6 +65,8 @@ const PASSES_COST_PER_BYTE: usize = 32;
 pub struct RegexFacts {
     /// A string shorter than this (in bytes) cannot match.
     pub min_len: usize,
+    /// The regex engine can reject a mismatch at this anchor without scanning the whole field.
+    anchored: bool,
     /// When present, a match needs one of these byte strings in the content.
     pub literals: Option<Vec<Vec<u8>>>,
     /// A match needs a run of at least this many bytes from each class of `RUN_CLASS_CHARS`.
@@ -106,6 +111,8 @@ impl RegexFacts {
         }
         Some(Self {
             min_len: hir.properties().minimum_len()?,
+            anchored: hir.properties().look_set_prefix().contains(Look::Start)
+                || hir.properties().look_set_suffix().contains(Look::End),
             literals: required_literals(&hir).filter(|lits| !lits.is_empty()),
             min_runs,
         })
@@ -509,6 +516,7 @@ pub struct ScanPrefilter {
     needs_regex_literal: Box<[u64]>,
     /// The rules with a keyword condition.
     needs_keyword: Box<[u64]>,
+    anchored: Box<[u64]>,
     literals: Option<AhoCorasick>,
     uses: Box<[LiteralUse]>,
     /// When every rule covers all paths, visiting the set bits in order is the same as visiting
@@ -522,7 +530,7 @@ pub struct ScanPrefilter {
 #[derive(Default)]
 pub struct PrefilterScratch {
     /// Scoped rules must run in the order supplied by the rule tree.
-    pub(super) scoped_rules: Vec<usize>,
+    scoped_rules: Vec<usize>,
     regex_hits: Vec<u64>,
     keyword_hits: Vec<u64>,
     literal_seen: Vec<u64>,
@@ -560,6 +568,7 @@ impl ScanPrefilter {
             return None;
         }
         let words = specs.len().div_ceil(64);
+        let mut anchored = vec![0u64; words];
         let mut needs_regex_literal = vec![0u64; words];
         let mut needs_keyword = vec![0u64; words];
         let literal_rules = specs
@@ -641,6 +650,9 @@ impl ScanPrefilter {
         let mut needs_run = vec![0u64; words];
         let mut run_rules = 0;
         for (rule, spec) in specs.iter().enumerate() {
+            if spec.as_ref().is_some_and(|s| s.regex.anchored) {
+                set_bit(&mut anchored, rule);
+            }
             if (0..RUN_CLASSES).any(|class| min_run(spec, class) > 0) {
                 set_bit(&mut needs_run, rule);
                 run_rules += 1;
@@ -664,6 +676,7 @@ impl ScanPrefilter {
             &needs_regex_literal,
             &needs_keyword,
             &needs_run,
+            &anchored,
         );
         Some(Self {
             words,
@@ -673,6 +686,7 @@ impl ScanPrefilter {
             needs_run: needs_run.into_boxed_slice(),
             needs_regex_literal: needs_regex_literal.into_boxed_slice(),
             needs_keyword: needs_keyword.into_boxed_slice(),
+            anchored: anchored.into_boxed_slice(),
             uses: uses
                 .into_iter()
                 .map(|(a, b, c)| LiteralUse {
@@ -686,14 +700,43 @@ impl ScanPrefilter {
         })
     }
 
-    /// Whether a rule visit can be replaced by a visit of the set bits.
-    #[inline(always)]
-    pub fn visits_survivors_only(&self) -> bool {
-        self.every_rule_covers_all_paths
+    pub(super) fn candidates<'a>(
+        &self,
+        scratch: &'a mut PrefilterScratch,
+        visitor: &mut RuleIndexVisitor,
+        path: &Path,
+        content: &str,
+        blocked: &[usize],
+    ) -> Result<Candidates<'a>, ScannerError> {
+        if !self.every_rule_covers_all_paths {
+            scratch.scoped_rules.clear();
+            visitor.visit_rule_indices(|index| {
+                scratch.scoped_rules.push(index);
+                Ok(())
+            })?;
+            // Clearing scanner-wide bit sets costs more than visiting a few rules directly.
+            if scratch.scoped_rules.len() < MIN_LITERAL_RULES
+                || (content.len() < LEN_TABLE_SIZE && scratch.scoped_rules.len() < self.words)
+            {
+                let allowed = self.len_table.row(content.len());
+                scratch
+                    .scoped_rules
+                    .retain(|&index| get_bit(allowed, index));
+                return Ok(Candidates::Scoped(&scratch.scoped_rules));
+            }
+        }
+        self.check_string(scratch, path, content, blocked);
+        if self.every_rule_covers_all_paths {
+            Ok(Candidates::AllPaths(&scratch.survivors))
+        } else {
+            scratch
+                .scoped_rules
+                .retain(|&index| get_bit(&scratch.survivors, index));
+            Ok(Candidates::Scoped(&scratch.scoped_rules))
+        }
     }
 
-    /// Runs the pass over one string. On return `scratch.survivors()` holds the rules to run.
-    pub fn check_string(
+    fn check_string(
         &self,
         scratch: &mut PrefilterScratch,
         path: &Path,
@@ -726,49 +769,49 @@ impl ScanPrefilter {
                 &self.needs_regex_literal,
                 &self.needs_keyword,
                 &self.needs_run,
+                &self.anchored,
             )
         };
         if content.len() > pass_limit {
             return;
         }
 
-        if let Some(run_tables) = &self.run_tables {
-            let wants_runs = scratch
+        if let Some(tables) = &self.run_tables
+            && scratch
                 .survivors
                 .iter()
                 .zip(self.needs_run.iter())
-                .any(|(survivors, needs_run)| survivors & needs_run != 0);
-            if wants_runs {
-                let runs = longest_runs(content.as_bytes());
-                for class in 0..RUN_CLASSES {
-                    let row = run_tables[class].row(runs[class] as usize);
-                    for (survivors, allowed) in scratch.survivors.iter_mut().zip(row) {
-                        *survivors &= *allowed;
-                    }
-                }
-            }
+                .any(|(survivors, needs_run)| survivors & needs_run != 0)
+        {
+            check_runs(tables, &mut scratch.survivors, content.as_bytes());
         }
-
-        let Some(automaton) = &self.literals else {
-            return;
-        };
-        let wants_literals = scratch
-            .survivors
-            .iter()
-            .zip(
-                self.needs_regex_literal
-                    .iter()
-                    .zip(self.needs_keyword.iter()),
-            )
-            .any(|(survivors, (regex, keyword))| survivors & (regex | keyword) != 0);
-        if !wants_literals {
-            return;
+        if let Some(automaton) = &self.literals
+            && (0..words).any(|i| {
+                scratch.survivors[i] & (self.needs_regex_literal[i] | self.needs_keyword[i]) != 0
+            })
+            && self.check_content_literals(automaton, scratch, content)
+        {
+            self.check_path_keywords(automaton, scratch, content, path);
         }
+    }
 
+    /// Returns false if repeated hits exhaust the search budget. Only a complete search can
+    /// rule out a literal or keyword later in the field.
+    fn check_content_literals(
+        &self,
+        automaton: &AhoCorasick,
+        scratch: &mut PrefilterScratch,
+        content: &str,
+    ) -> bool {
+        let words = self.words;
         reset(&mut scratch.regex_hits, words);
         reset(&mut scratch.keyword_hits, words);
         reset(&mut scratch.literal_seen, self.uses.len().div_ceil(64));
-        for hit in automaton.find_overlapping_iter(content) {
+        let hit_budget = self.uses.len() + EXTRA_LITERAL_HITS;
+        for (i, hit) in automaton.find_overlapping_iter(content).enumerate() {
+            if i == hit_budget {
+                return false;
+            }
             let literal = hit.pattern().as_usize();
             if get_bit(&scratch.literal_seen, literal) {
                 continue;
@@ -784,14 +827,26 @@ impl ScanPrefilter {
         }
 
         // The extracted alternatives include all Unicode case variants of the regex.
-        let mut missing_keywords = 0;
         for i in 0..words {
-            let survivors =
-                scratch.survivors[i] & (!self.needs_regex_literal[i] | scratch.regex_hits[i]);
-            scratch.survivors[i] = survivors;
-            missing_keywords += (survivors & self.needs_keyword[i] & !scratch.keyword_hits[i])
-                .count_ones() as usize;
+            scratch.survivors[i] &= !self.needs_regex_literal[i] | scratch.regex_hits[i];
         }
+        true
+    }
+
+    fn check_path_keywords(
+        &self,
+        automaton: &AhoCorasick,
+        scratch: &mut PrefilterScratch,
+        content: &str,
+        path: &Path,
+    ) {
+        let words = self.words;
+        let missing_keywords: usize = (0..words)
+            .map(|i| {
+                (scratch.survivors[i] & self.needs_keyword[i] & !scratch.keyword_hits[i])
+                    .count_ones() as usize
+            })
+            .sum();
         // Without a rule that still waits for a keyword there is nothing to learn from the path.
         if missing_keywords == 0 {
             return;
@@ -835,20 +890,43 @@ impl ScanPrefilter {
     }
 }
 
+fn check_runs(tables: &[ThresholdTable; RUN_CLASSES], survivors: &mut [u64], content: &[u8]) {
+    // If the prefix satisfies even the largest thresholds, the rest of the field cannot
+    // eliminate a rule. A short run in the prefix alone never excludes a rule.
+    if content.len() > 2 * LEN_TABLE_SIZE {
+        let prefix_runs = longest_runs(&content[..LEN_TABLE_SIZE]);
+        if tables.iter().zip(prefix_runs).all(|(table, run)| {
+            table.row_of_value[run as usize] == table.row_of_value[LEN_TABLE_SIZE - 1]
+        }) {
+            return;
+        }
+    }
+    let runs = longest_runs(content);
+    for (table, run) in tables.iter().zip(runs) {
+        for (word, allowed) in survivors.iter_mut().zip(table.row(run as usize)) {
+            *word &= *allowed;
+        }
+    }
+}
+
 fn pass_length_limit(
     eligible: &[u64],
     regex_literals: &[u64],
     keywords: &[u64],
     runs: &[u64],
+    anchored: &[u64],
 ) -> usize {
+    let mut count = 0;
     let mut literal_count = 0;
     let mut other_count = 0;
     for (i, &rules) in eligible.iter().enumerate() {
-        literal_count += (rules & regex_literals[i]).count_ones() as usize;
+        let literal = rules & regex_literals[i];
         let other = rules & !regex_literals[i] & (keywords[i] | runs[i]);
-        other_count += other.count_ones() as usize;
+        count += (literal | other).count_ones() as usize;
+        // An absolute anchor can make a miss cost only a few bytes, even on a large field.
+        literal_count += (literal & !anchored[i]).count_ones() as usize;
+        other_count += (other & !anchored[i]).count_ones() as usize;
     }
-    let count = literal_count + other_count;
     if count < MIN_LITERAL_RULES {
         return 0;
     }
@@ -857,19 +935,43 @@ fn pass_length_limit(
     if rule_cost >= PASSES_COST_PER_BYTE {
         usize::MAX
     } else {
-        count * RULE_COST / (PASSES_COST_PER_BYTE - rule_cost)
+        count.saturating_mul(RULE_COST) / (PASSES_COST_PER_BYTE - rule_cost)
     }
 }
 
-impl PrefilterScratch {
-    /// The rules that can still match, as a bit set.
-    #[inline(always)]
-    pub fn survivors(&self) -> &[u64] {
-        &self.survivors
+pub(super) enum Candidates<'a> {
+    AllPaths(&'a [u64]),
+    Scoped(&'a [usize]),
+}
+
+impl Candidates<'_> {
+    pub(super) fn is_empty(&self) -> bool {
+        match self {
+            Self::AllPaths(words) => words.iter().all(|word| *word == 0),
+            Self::Scoped(indices) => indices.is_empty(),
+        }
     }
 
-    #[inline(always)]
-    pub fn is_survivor(&self, rule_index: usize) -> bool {
-        get_bit(&self.survivors, rule_index)
+    pub(super) fn visit(
+        &self,
+        mut run: impl FnMut(usize) -> Result<(), ScannerError>,
+    ) -> Result<(), ScannerError> {
+        match self {
+            Self::AllPaths(words) => {
+                for (word_index, &word) in words.iter().enumerate() {
+                    let mut bits = word;
+                    while bits != 0 {
+                        run(word_index * 64 + bits.trailing_zeros() as usize)?;
+                        bits &= bits - 1;
+                    }
+                }
+            }
+            Self::Scoped(indices) => {
+                for &index in *indices {
+                    run(index)?;
+                }
+            }
+        }
+        Ok(())
     }
 }

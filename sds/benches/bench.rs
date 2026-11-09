@@ -350,9 +350,14 @@ pub fn multipass_excluded_scan(c: &mut Criterion) {
 
 fn rule_prefilter(c: &mut Criterion) {
     let mut group = c.benchmark_group("rule_prefilter");
-    let rules: Vec<_> = (0..77)
-        .map(|i| RootRuleConfig::new_dyn(RegexRuleConfig::new(&format!("r{i:03}_[0-9]+"))))
-        .collect();
+    let numbered_rules = |prefix: &str| {
+        (0..77)
+            .map(|i| {
+                RootRuleConfig::new_dyn(RegexRuleConfig::new(&format!("{prefix}r{i:03}_[0-9]+")))
+            })
+            .collect::<Vec<_>>()
+    };
+    let rules = numbered_rules("");
     let fields = (0..64)
         .map(|i| {
             let value = if i == 0 {
@@ -378,18 +383,41 @@ fn rule_prefilter(c: &mut Criterion) {
     }
     let long_value = SimpleEvent::String("x".repeat(76 * 1024));
     let all_hit = SimpleEvent::String((0..77).map(|i| format!("r{i:03}_123 ")).collect());
+    let anchored = numbered_rules("^");
+    let anchored_miss = SimpleEvent::String("x".repeat(1 << 20));
+    let mut common_prefix = numbered_rules("aaaaaa!");
+    common_prefix.push(RootRuleConfig::new_dyn(
+        RegexRuleConfig::new("secret").with_included_keywords(["label"]),
+    ));
+    let late_match = SimpleEvent::String(format!("{} label secret", "a".repeat(1 << 20)));
+    let mut many_scoped_rules = scoped_rules.clone();
+    many_scoped_rules.resize(4096, scoped_rules[1].clone());
+    let short_fields = SimpleEvent::Map(
+        (0..256)
+            .map(|i| {
+                (
+                    format!("field{i}"),
+                    SimpleEvent::String("request completed".into()),
+                )
+            })
+            .collect(),
+    );
 
-    for (name, rules, mut event) in [
-        ("sparse", &rules, SimpleEvent::Map(fields)),
-        ("all_hit", &rules, all_hit),
-        ("long_field", &keyword_rules, long_field),
-        ("one_in_scope", &scoped_rules, long_value),
+    for (name, rules, mut event, expected_matches) in [
+        ("sparse", &rules, SimpleEvent::Map(fields), 1),
+        ("all_hit", &rules, all_hit, 77),
+        ("long_field", &keyword_rules, long_field, 0),
+        ("one_in_scope", &scoped_rules, long_value, 0),
+        ("anchored_miss", &anchored, anchored_miss, 0),
+        ("repeated_prefix", &common_prefix, late_match, 1),
+        ("many_out_of_scope", &many_scoped_rules, short_fields, 0),
     ] {
         for (mode, enabled) in [("off", false), ("on", true)] {
             let scanner = Scanner::builder(rules)
                 .with_prefilter(enabled)
                 .build()
                 .unwrap();
+            assert_eq!(scanner.scan(&mut event).unwrap().len(), expected_matches);
             group.bench_function(format!("{name}/{mode}"), |b| {
                 b.iter(|| scanner.scan(&mut event).unwrap())
             });

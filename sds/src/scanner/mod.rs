@@ -1273,23 +1273,21 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         mut rule_visitor: crate::scoped_ruleset::RuleIndexVisitor,
         exclusion_check: ExclusionCheck<'b>,
     ) -> Result<bool, ScannerError> {
-        let scratch = &mut *self.prefilter_scratch;
-        if let Some(prefilter) = &self.scanner.prefilter {
-            if !prefilter.visits_survivors_only() {
-                scratch.scoped_rules.clear();
-                rule_visitor.visit_rule_indices(|index| {
-                    scratch.scoped_rules.push(index);
-                    Ok(())
-                })?;
-                if scratch.scoped_rules.is_empty() {
-                    return Ok(!self.async_jobs.is_empty());
-                }
-            }
-            prefilter.check_string(scratch, path, content, self.blocked_rules);
-            if scratch.survivors().iter().all(|word| *word == 0) {
+        let candidates = if let Some(prefilter) = &self.scanner.prefilter {
+            let candidates = prefilter.candidates(
+                self.prefilter_scratch,
+                &mut rule_visitor,
+                path,
+                content,
+                self.blocked_rules,
+            )?;
+            if candidates.is_empty() {
                 return Ok(!self.async_jobs.is_empty());
             }
-        }
+            Some(candidates)
+        } else {
+            None
+        };
 
         // matches for a single path
         let mut path_rules_matches = vec![];
@@ -1298,7 +1296,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         let mut per_string_data = SharedData::new();
         let wildcard_indices_per_path = self.wildcarded_indexes.get(path);
 
-        let mut run_rule = |rule_index: usize| -> Result<(), ScannerError> {
+        let run_rule = |rule_index: usize| -> Result<(), ScannerError> {
             if self.blocked_rules.contains(&rule_index) {
                 return Ok(());
             }
@@ -1361,24 +1359,9 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
             Ok(())
         };
 
-        match &self.scanner.prefilter {
+        match candidates {
             None => rule_visitor.visit_rule_indices(run_rule)?,
-            Some(prefilter) if prefilter.visits_survivors_only() => {
-                for (word_index, word) in scratch.survivors().iter().enumerate() {
-                    let mut bits = *word;
-                    while bits != 0 {
-                        run_rule(word_index * 64 + bits.trailing_zeros() as usize)?;
-                        bits &= bits - 1;
-                    }
-                }
-            }
-            Some(_) => {
-                for &index in &scratch.scoped_rules {
-                    if scratch.is_survivor(index) {
-                        run_rule(index)?;
-                    }
-                }
-            }
+            Some(candidates) => candidates.visit(run_rule)?,
         }
 
         // If there are any matches, the string will need to be accessed to check for false positives from
