@@ -348,6 +348,104 @@ pub fn multipass_excluded_scan(c: &mut Criterion) {
     });
 }
 
+fn rule_prefilter(c: &mut Criterion) {
+    let mut group = c.benchmark_group("rule_prefilter");
+    let numbered_rules = |prefix: &str| {
+        (0..77)
+            .map(|i| {
+                RootRuleConfig::new_dyn(RegexRuleConfig::new(&format!("{prefix}r{i:03}_[0-9]+")))
+            })
+            .collect::<Vec<_>>()
+    };
+    let rules = numbered_rules("");
+    let fields = (0..64)
+        .map(|i| {
+            let value = if i == 0 {
+                "r042_123"
+            } else {
+                "request completed"
+            };
+            (format!("field{i}"), SimpleEvent::String(value.into()))
+        })
+        .collect();
+    let keyword_rules =
+        vec![
+            RootRuleConfig::new_dyn(RegexRuleConfig::new("secret").with_included_keywords(["a"]));
+            4
+        ];
+    let long_field = SimpleEvent::Map(BTreeMap::from([(
+        "a".repeat(65_536),
+        SimpleEvent::String("SECRET".into()),
+    )]));
+    let mut scoped_rules = rules.clone();
+    for rule in &mut scoped_rules[1..] {
+        rule.scope = Scope::include(vec![Path::from(vec!["other".into()])]);
+    }
+    let long_value = SimpleEvent::String("x".repeat(76 * 1024));
+    let all_hit = SimpleEvent::String((0..77).map(|i| format!("r{i:03}_123 ")).collect());
+    let anchored = numbered_rules("^");
+    let anchored_miss = SimpleEvent::String("x".repeat(1 << 20));
+    let mut common_prefix = numbered_rules("aaaaaa!");
+    common_prefix.push(RootRuleConfig::new_dyn(
+        RegexRuleConfig::new("secret").with_included_keywords(["label"]),
+    ));
+    let late_match = SimpleEvent::String(format!("{} label secret", "a".repeat(1 << 20)));
+    let mut many_scoped_rules = vec![RootRuleConfig::new_dyn(RegexRuleConfig::new("[0-9]{4}")); 8];
+    many_scoped_rules.push(RootRuleConfig::new_dyn(RegexRuleConfig::new("search")));
+    many_scoped_rules.resize(
+        4096,
+        RootRuleConfig::new_dyn(RegexRuleConfig::new("common-term"))
+            .scope(Scope::include(vec![Path::from(vec!["other".into()])])),
+    );
+    // Every field contains the prefix shared by the out-of-scope rules.
+    let fields_with_common_prefix = SimpleEvent::Map(
+        (0..64)
+            .map(|i| {
+                (
+                    format!("field{i}"),
+                    SimpleEvent::String("common ".repeat(40)),
+                )
+            })
+            .collect(),
+    );
+    let digit_rules = ["a", "b", "c", "d"].map(|keyword| {
+        RootRuleConfig::new_dyn(RegexRuleConfig::new("[0-9]{4}").with_included_keywords([keyword]))
+    });
+
+    for (name, rules, mut event, expected_matches) in [
+        ("sparse", rules.as_slice(), SimpleEvent::Map(fields), 1),
+        ("all_hit", &rules, all_hit, 77),
+        ("long_field", &keyword_rules, long_field, 0),
+        ("one_in_scope", &scoped_rules, long_value, 0),
+        ("anchored_miss", &anchored, anchored_miss, 0),
+        ("repeated_prefix", &common_prefix, late_match, 1),
+        (
+            "many_out_of_scope",
+            &many_scoped_rules,
+            fields_with_common_prefix,
+            0,
+        ),
+        (
+            "long_keyword_miss",
+            &digit_rules,
+            SimpleEvent::String("x".repeat(1 << 20)),
+            0,
+        ),
+    ] {
+        for (mode, enabled) in [("off", false), ("on", true)] {
+            let scanner = Scanner::builder(rules)
+                .with_prefilter(enabled)
+                .build()
+                .unwrap();
+            assert_eq!(scanner.scan(&mut event).unwrap().len(), expected_matches);
+            group.bench_function(format!("{name}/{mode}"), |b| {
+                b.iter(|| scanner.scan(&mut event).unwrap())
+            });
+        }
+    }
+    group.finish();
+}
+
 criterion::criterion_group!(
     benches,
     scoped_ruleset,
@@ -355,7 +453,8 @@ criterion::criterion_group!(
     token_efficiency_vs_entropy,
     included_keywords,
     included_keywords_on_path,
-    multipass_excluded_scan
+    multipass_excluded_scan,
+    rule_prefilter
 );
 
 criterion::criterion_main!(benches);

@@ -11,7 +11,7 @@ use crate::ast_utils::{
 use crate::proximity_keywords::ProximityKeywordsValidationError::{
     EmptyKeyword, InvalidLookAheadCharacterCount, KeywordTooLong, TooManyKeywords,
 };
-use crate::scanner::regex_rule::{SharedRegex, get_memoized_regex};
+use crate::scanner::regex_rule::{RegexCacheKind, SharedRegex};
 use crate::{Labels, ProximityKeywordsConfig};
 use metrics::counter;
 use regex_automata::{Input, meta};
@@ -228,9 +228,13 @@ fn compile_keywords(
 
     Ok(Some((
         #[allow(clippy::result_large_err)]
-        get_memoized_regex(&content_pattern, |p| regex_builder.build(p)).unwrap(),
+        RegexCacheKind::Keyword
+            .get_or_compile(&content_pattern, |p| regex_builder.build(p))
+            .unwrap(),
         #[allow(clippy::result_large_err)]
-        get_memoized_regex(&path_pattern, |p| regex_builder.build(p)).unwrap(),
+        RegexCacheKind::Keyword
+            .get_or_compile(&path_pattern, |p| regex_builder.build(p))
+            .unwrap(),
     )))
 }
 

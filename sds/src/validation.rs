@@ -203,6 +203,12 @@ fn is_regex_within_complexity_limit(
     }
 }
 
+pub(crate) fn rule_syntax() -> regex_automata::util::syntax::Config {
+    regex_automata::util::syntax::Config::default()
+        .dot_matches_new_line(false)
+        .unicode(true)
+}
+
 fn build_regex(
     converted_pattern: &str,
     complexity_limit: usize,
@@ -214,11 +220,7 @@ fn build_regex(
                 // This is purely a performance setting. This is the default, but it might be worth testing this in benchmarks for a better number
                 .hybrid_cache_capacity(2 * (1 << 20)),
         )
-        .syntax(
-            regex_automata::util::syntax::Config::default()
-                .dot_matches_new_line(false)
-                .unicode(true),
-        )
+        .syntax(rule_syntax())
         .build(converted_pattern)
         .map_err(|regex_err| {
             if regex_err.size_limit().is_some() {

@@ -43,6 +43,7 @@ pub mod config;
 pub mod debug_scan;
 pub mod error;
 pub mod metrics;
+mod prefilter;
 pub mod regex_rule;
 pub mod scope;
 pub mod shared_data;
@@ -409,6 +410,10 @@ where
     ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
         self.as_ref().convert_to_compiled_rule(rule_index, labels)
     }
+
+    fn regex_config_for_prefilter(&self) -> Option<&crate::RegexRuleConfig> {
+        self.as_ref().regex_config_for_prefilter()
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -417,6 +422,7 @@ struct ScannerFeatures {
     pub multipass_v0_enabled: bool,
     pub return_matches: bool,
     pub enable_debug_observability: bool,
+    pub prefilter_enabled: bool,
 }
 
 impl Default for ScannerFeatures {
@@ -426,6 +432,7 @@ impl Default for ScannerFeatures {
             multipass_v0_enabled: true,
             return_matches: false,
             enable_debug_observability: false,
+            prefilter_enabled: true,
         }
     }
 }
@@ -518,6 +525,7 @@ pub struct Scanner {
     match_validators_per_type: AHashMap<InternalMatchValidationType, Box<dyn MatchValidator>>,
     per_scanner_data: SharedData,
     async_scan_timeout: Duration,
+    prefilter: Option<prefilter::ScanPrefilter>,
 }
 
 impl Scanner {
@@ -735,11 +743,12 @@ impl Scanner {
         let mut per_event_data = SharedData::new();
 
         access_regex_caches(|regex_caches| {
-            self.scoped_ruleset.visit_string_rule_combinations(
+            let mut prefilter_scratch = std::mem::take(&mut regex_caches.prefilter_scratch);
+            let result = self.scoped_ruleset.visit_string_rule_combinations(
                 event,
                 ScannerContentVisitor {
                     scanner: self,
-                    regex_caches,
+                    regex_caches: &mut *regex_caches,
                     rule_matches: &mut rule_matches,
                     blocked_rules: &options.blocked_rules_idx,
                     excluded_matches: &mut excluded_matches,
@@ -748,8 +757,11 @@ impl Scanner {
                     async_jobs: &mut async_jobs,
                     event_id: event.get_id().map(|s| s.to_string()),
                     scan_metadata: &options.scan_metadata,
+                    prefilter_scratch: &mut prefilter_scratch,
                 },
-            )
+            );
+            regex_caches.prefilter_scratch = prefilter_scratch;
+            result
         })?;
 
         for (rule_index, rule) in self.rules.iter().enumerate() {
@@ -1138,6 +1150,13 @@ impl ScannerBuilder<'_> {
         self
     }
 
+    /// Enables the scanner to skip regex rules that cannot match a string. Enabled by default.
+    /// Disable this to skip building and running the prefilter.
+    pub fn with_prefilter(mut self, value: bool) -> Self {
+        self.scanner_features.prefilter_enabled = value;
+        self
+    }
+
     pub fn build(self) -> Result<Scanner, CreateScannerError> {
         // When third-party active checkers are compiled out, no validators are ever
         // created; the map stays empty and `mut` would be unused.
@@ -1190,6 +1209,12 @@ impl ScannerBuilder<'_> {
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;
 
+        let prefilter = if self.scanner_features.prefilter_enabled {
+            prefilter::ScanPrefilter::new(self.rules)
+        } else {
+            None
+        };
+
         let mut per_scanner_data = SharedData::new();
 
         compiled_rules.iter().for_each(|rule| {
@@ -1219,6 +1244,7 @@ impl ScannerBuilder<'_> {
             labels: self.labels,
             per_scanner_data,
             async_scan_timeout: self.async_scan_timeout,
+            prefilter,
         })
     }
 }
@@ -1236,6 +1262,7 @@ struct ScannerContentVisitor<'a, E: Encoding> {
     async_jobs: &'a mut Vec<PendingRuleJob>,
     event_id: Option<String>,
     scan_metadata: &'a AHashMap<String, String>,
+    prefilter_scratch: &'a mut prefilter::PrefilterScratch,
 }
 
 impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
@@ -1246,6 +1273,22 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         mut rule_visitor: crate::scoped_ruleset::RuleIndexVisitor,
         exclusion_check: ExclusionCheck<'b>,
     ) -> Result<bool, ScannerError> {
+        let candidates = if let Some(prefilter) = &self.scanner.prefilter {
+            let candidates = prefilter.candidates(
+                self.prefilter_scratch,
+                &mut rule_visitor,
+                path,
+                content,
+                self.blocked_rules,
+            )?;
+            if candidates.is_empty() {
+                return Ok(!self.async_jobs.is_empty());
+            }
+            Some(candidates)
+        } else {
+            None
+        };
+
         // matches for a single path
         let mut path_rules_matches = vec![];
 
@@ -1253,7 +1296,7 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         let mut per_string_data = SharedData::new();
         let wildcard_indices_per_path = self.wildcarded_indexes.get(path);
 
-        rule_visitor.visit_rule_indices(|rule_index| {
+        let run_rule = |rule_index: usize| -> Result<(), ScannerError> {
             if self.blocked_rules.contains(&rule_index) {
                 return Ok(());
             }
@@ -1314,7 +1357,12 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
                 }
             }
             Ok(())
-        })?;
+        };
+
+        match candidates {
+            None => rule_visitor.visit_rule_indices(run_rule)?,
+            Some(candidates) => candidates.visit(run_rule)?,
+        }
 
         // If there are any matches, the string will need to be accessed to check for false positives from
         // excluded matches, any to potentially mutate the string.

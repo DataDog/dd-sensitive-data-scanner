@@ -1,8 +1,8 @@
 use crate::proximity_keywords::compile_keywords_proximity_config;
 use crate::scanner::config::RuleConfig;
 use crate::scanner::metrics::RuleMetrics;
+use crate::scanner::regex_rule::RegexCacheKind;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
-use crate::scanner::regex_rule::regex_store::get_memoized_regex;
 use crate::validation::{
     RegexPatternCaptureGroupsValidationError, validate_and_create_regex,
     validate_named_capture_group_minimum_length,
@@ -168,7 +168,8 @@ impl RuleConfig for RegexRuleConfig {
         rule_index: usize,
         scanner_labels: Labels,
     ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
-        let regex = get_memoized_regex(&self.pattern, validate_and_create_regex)?;
+        let regex =
+            RegexCacheKind::Rule.get_or_compile(&self.pattern, validate_and_create_regex)?;
 
         let rule_labels = scanner_labels.clone_with_labels(self.labels.clone());
 
@@ -196,6 +197,10 @@ impl RuleConfig for RegexRuleConfig {
     }
 
     fn as_regex_rule(&self) -> Option<&RegexRuleConfig> {
+        Some(self)
+    }
+
+    fn regex_config_for_prefilter(&self) -> Option<&RegexRuleConfig> {
         Some(self)
     }
 }
@@ -543,7 +548,8 @@ mod test {
                 is_pattern_capture_groups_valid(
                     &rule_config.pattern,
                     &rule_config.pattern_capture_groups,
-                    &get_memoized_regex(pattern, validate_and_create_regex)
+                    &RegexCacheKind::Rule
+                        .get_or_compile(pattern, validate_and_create_regex)
                         .unwrap()
                         .group_info()
                 ),
