@@ -7,7 +7,9 @@
 
 use crate::normalization::rust_regex_adapter::convert_to_rust_regex;
 use crate::proximity_keywords::{MULTI_WORD_KEYWORDS_LINK_CHARS, standardize_path_chars};
+use crate::scanner::regex_rule::{RegexCacheKind, SharedRegex};
 use crate::scoped_ruleset::RuleIndexVisitor;
+use crate::validation::validate_and_create_regex;
 use crate::{Path, PathSegment, ProximityKeywordsConfig, RootRuleConfig, RuleConfig, ScannerError};
 use aho_corasick::{AhoCorasick, AhoCorasickKind};
 use moka::sync::Cache;
@@ -32,6 +34,7 @@ const LEN_TABLE_SIZE: usize = 256;
 /// Character classes for the run condition. These are the classes that secret and number
 /// patterns use, so a rule usually gets a tight bound from one of them.
 const RUN_CLASSES: usize = 8;
+const DIGIT_CLASS: usize = 0;
 const RUN_CLASS_CHARS: [&[u8]; RUN_CLASSES] = [
     b"0123456789",
     b"0123456789abcdefABCDEF*",
@@ -50,14 +53,11 @@ const EXTRA_LITERAL_HITS: usize = 64;
 /// A shorter run than this is too common to remove a rule.
 const MIN_USEFUL_RUN: u32 = 4;
 
-/// A cost model that decides when a string is too long for the passes. The unit is one eighth of a
-/// nanosecond, measured on Neoverse N1. A rule costs a fixed amount per string, and an amount per
-/// byte. A rule with a required literal has a fast search, so its cost per byte is low. The passes
-/// cost an amount per byte. With few rules that all have a required literal, the passes cost more
-/// than the rules on a long string.
+/// Estimated costs in eighths of a nanosecond on Neoverse N1. Even without an extracted
+/// literal, a regex or its included keyword can reject many bytes at once. An absolute
+/// anchor can reject a field at a fixed cost.
 const RULE_COST: usize = 800;
-const LITERAL_RULE_COST_PER_BYTE: usize = 1;
-const OTHER_RULE_COST_PER_BYTE: usize = 13;
+const RULE_COST_PER_BYTE: usize = 1;
 const PASSES_COST_PER_BYTE: usize = 32;
 
 /// The facts that come from a regex pattern alone. A scanner rebuild reuses them.
@@ -522,8 +522,10 @@ pub struct ScanPrefilter {
     /// When every rule covers all paths, visiting the set bits in order is the same as visiting
     /// the rule tree of the scoped rule set.
     every_rule_covers_all_paths: bool,
-    /// A longer string skips the passes and uses only the length condition.
+    /// A longer string skips the full run and literal checks.
     max_len_for_passes: usize,
+    /// One digit search can rule out every candidate before an expensive keyword search.
+    shared_digit_run: Option<SharedRegex>,
 }
 
 /// Bits of a per-string pass. It is reused between the strings of one scan.
@@ -678,6 +680,31 @@ impl ScanPrefilter {
             &needs_run,
             &anchored,
         );
+        let every_rule_covers_all_paths = rules.iter().all(|rule| rule.scope.covers_all_paths());
+        let min_digits = specs
+            .iter()
+            .map(|s| min_run(s, DIGIT_CLASS))
+            .min()
+            .unwrap_or(0);
+        // The regex engine can search for one digit run more cheaply than checking every
+        // run class. A rule without a digit requirement (including a custom rule) sets the
+        // shared minimum to zero. Anchored or literal searches can reject a field cheaply.
+        let shared_digit_run = if min_digits > 0
+            && (1..usize::MAX).contains(&max_len_for_passes)
+            && every_rule_covers_all_paths
+            && anchored.iter().all(|&word| word == 0)
+            && specs
+                .iter()
+                .flatten()
+                .any(|spec| spec.regex.literals.is_none())
+        {
+            let digits = min_digits.min((LEN_TABLE_SIZE - 1) as u32);
+            RegexCacheKind::Rule
+                .get_or_compile(&format!("[0-9]{{{digits}}}"), validate_and_create_regex)
+                .ok()
+        } else {
+            None
+        };
         Some(Self {
             words,
             max_len_for_passes,
@@ -696,7 +723,8 @@ impl ScanPrefilter {
                 })
                 .collect(),
             literals: automaton,
-            every_rule_covers_all_paths: rules.iter().all(|rule| rule.scope.covers_all_paths()),
+            every_rule_covers_all_paths,
+            shared_digit_run,
         })
     }
 
@@ -714,10 +742,9 @@ impl ScanPrefilter {
                 scratch.scoped_rules.push(index);
                 Ok(())
             })?;
-            // Clearing scanner-wide bit sets costs more than visiting a few rules directly.
-            if scratch.scoped_rules.len() < MIN_LITERAL_RULES
-                || (content.len() < LEN_TABLE_SIZE && scratch.scoped_rules.len() < self.words)
-            {
+            // Even one literal hit can visit rules across the entire scanner. Use direct
+            // dispatch when there are fewer scoped rules than words in a scanner-wide bit set.
+            if scratch.scoped_rules.len() < MIN_LITERAL_RULES.max(self.words) {
                 let allowed = self.len_table.row(content.len());
                 scratch
                     .scoped_rules
@@ -773,6 +800,12 @@ impl ScanPrefilter {
             )
         };
         if content.len() > pass_limit {
+            if let Some(digits) = &self.shared_digit_run
+                && blocked.is_empty()
+                && !digits.is_match(content)
+            {
+                scratch.survivors.fill(0);
+            }
             return;
         }
 
@@ -917,21 +950,16 @@ fn pass_length_limit(
     anchored: &[u64],
 ) -> usize {
     let mut count = 0;
-    let mut literal_count = 0;
-    let mut other_count = 0;
+    let mut unanchored_count = 0;
     for (i, &rules) in eligible.iter().enumerate() {
-        let literal = rules & regex_literals[i];
-        let other = rules & !regex_literals[i] & (keywords[i] | runs[i]);
-        count += (literal | other).count_ones() as usize;
-        // An absolute anchor can make a miss cost only a few bytes, even on a large field.
-        literal_count += (literal & !anchored[i]).count_ones() as usize;
-        other_count += (other & !anchored[i]).count_ones() as usize;
+        let candidates = rules & (regex_literals[i] | keywords[i] | runs[i]);
+        count += candidates.count_ones() as usize;
+        unanchored_count += (candidates & !anchored[i]).count_ones() as usize;
     }
     if count < MIN_LITERAL_RULES {
         return 0;
     }
-    let rule_cost =
-        literal_count * LITERAL_RULE_COST_PER_BYTE + other_count * OTHER_RULE_COST_PER_BYTE;
+    let rule_cost = unanchored_count * RULE_COST_PER_BYTE;
     if rule_cost >= PASSES_COST_PER_BYTE {
         usize::MAX
     } else {

@@ -456,22 +456,18 @@ fn prefilter_keeps_matches_with_few_rules() {
 
 #[test]
 fn long_strings_keep_matches_when_the_passes_are_skipped() {
-    // Four rules with required literals skip the passes on a long string.
-    let rules: Vec<_> = [
-        "aaa_[0-9]{4}",
-        "bbb_[0-9]{4}",
-        "ccc_[0-9]{4}",
-        "ddd_[0-9]{4}",
-    ]
-    .iter()
-    .map(|pattern| {
-        RootRuleConfig::new(Arc::new(RegexRuleConfig::new(pattern)) as Arc<dyn RuleConfig>)
-    })
-    .collect();
+    // These rules skip the full passes on long strings. Each one still needs four digits.
+    let rules: Vec<_> = ["[0-9]{5}", "bbb_[0-9]{4}", "ccc_[0-9]{4}", "ddd_[0-9]{4}"]
+        .iter()
+        .map(|pattern| {
+            RootRuleConfig::new(Arc::new(RegexRuleConfig::new(pattern)) as Arc<dyn RuleConfig>)
+        })
+        .collect();
     let with = build(&rules, true);
     let without = build(&rules, false);
+    // The five-digit rule must not exclude a four-digit match at the end of the field.
     for len in [10usize, 300, 400, 5_000, 80_000] {
-        let content = format!("{} ccc_1234 {} ddd_12", "x".repeat(len), "y".repeat(len));
+        let content = format!("{}ccc_1234", "x".repeat(len));
         let event = SimpleEvent::Map(BTreeMap::from([(
             "message".to_string(),
             SimpleEvent::String(content),
