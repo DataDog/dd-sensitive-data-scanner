@@ -5,7 +5,7 @@ use dd_sds::{
     ContentVisitor, ExclusionCheck, Path, PathSegment, ProximityKeywordsConfig, RegexRuleConfig,
     RootRuleConfig, RuleIndexVisitor, ScannerError, Scope, ScopedRuleSet,
 };
-use dd_sds::{EntropyCheck, LuhnChecksum, Validator};
+use dd_sds::{EntropyCheck, LuhnChecksum, SecondaryValidator, Validator};
 use dd_sds::{Scanner, SimpleEvent};
 use std::collections::BTreeMap;
 
@@ -348,6 +348,42 @@ pub fn multipass_excluded_scan(c: &mut Criterion) {
     });
 }
 
+/// Rules without capture groups used to scan forward twice per match (an existence check, then
+/// the full search). Rejected matches restart the search, so validator false positives amplify it.
+pub fn regex_rule_without_capture_groups(c: &mut Criterion) {
+    let matching_scanner = Scanner::builder(&[RootRuleConfig::new(
+        RegexRuleConfig::new("secret-[0-9]+").build(),
+    )])
+    .build()
+    .unwrap();
+    let matching_content = "some log text secret-12345 more text ".repeat(1_000);
+    c.bench_function("regex_rule_without_capture_groups_matching", |b| {
+        b.iter(|| {
+            let mut message = matching_content.clone();
+            let matches = matching_scanner.scan(&mut message).unwrap();
+            assert_eq!(matches.len(), 1_000);
+        })
+    });
+
+    let rejecting_scanner = Scanner::builder(&[RootRuleConfig::new(
+        RegexRuleConfig::new("[0-9]{16}")
+            .with_validator(Some(SecondaryValidator::LuhnChecksum))
+            .build(),
+    )])
+    .build()
+    .unwrap();
+    let mut rejected_content = "some log text 1234567812345678 more text ".repeat(1_000);
+    c.bench_function(
+        "regex_rule_without_capture_groups_validator_rejected",
+        |b| {
+            b.iter(|| {
+                let matches = rejecting_scanner.scan(&mut rejected_content).unwrap();
+                assert_eq!(matches.len(), 0);
+            })
+        },
+    );
+}
+
 criterion::criterion_group!(
     benches,
     scoped_ruleset,
@@ -355,7 +391,8 @@ criterion::criterion_group!(
     token_efficiency_vs_entropy,
     included_keywords,
     included_keywords_on_path,
-    multipass_excluded_scan
+    multipass_excluded_scan,
+    regex_rule_without_capture_groups
 );
 
 criterion::criterion_main!(benches);

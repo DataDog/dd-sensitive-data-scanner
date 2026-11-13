@@ -283,7 +283,12 @@ impl Iterator for TruePositiveSearch<'_> {
                 return None;
             }
             let input = Input::new(self.content).range(self.start..);
-            self.rule.regex.search_half_with(self.cache, &input)?;
+            // A capture search is much more expensive than a half search, so rule it out cheaply
+            // first. A plain search already starts with the same forward scan, so repeating it
+            // there would scan every match twice.
+            if self.rule.pattern_capture_groups.is_some() {
+                self.rule.regex.search_half_with(self.cache, &input)?;
+            }
 
             let regex_match_range = self.perform_regex_scan(&input)?;
             // this is only checking extra validators (e.g. checksums)
