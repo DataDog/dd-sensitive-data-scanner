@@ -7,6 +7,9 @@ ignore = [
   # async-std is only reachable through httpmock, a dev/test-only dependency,
   # so it never ships in the library. RUSTSEC-2025-0052 has no safe upgrade.
   { id = "RUSTSEC-2025-0052", reason = "async-std is unmaintained but only pulled in transitively by the httpmock dev-dependency" },
+  # pin-utils is only reachable through async-std (see above), so the same reasoning applies.
+  # RUSTSEC-2026-0441 has no safe upgrade.
+  { id = "RUSTSEC-2026-0441", reason = "pin-utils is unmaintained but only pulled in transitively by async-std via the httpmock dev-dependency" },
 ]
 
 [bans]
