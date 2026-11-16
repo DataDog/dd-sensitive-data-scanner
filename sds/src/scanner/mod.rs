@@ -43,6 +43,7 @@ pub mod config;
 pub mod debug_scan;
 pub mod error;
 pub mod metrics;
+mod prefilter;
 pub mod regex_rule;
 pub mod scope;
 pub mod shared_data;
@@ -409,6 +410,10 @@ where
     ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
         self.as_ref().convert_to_compiled_rule(rule_index, labels)
     }
+
+    fn pattern_for_prefilter(&self) -> Option<&str> {
+        self.as_ref().pattern_for_prefilter()
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -508,6 +513,7 @@ impl ScanOptionBuilder {
 
 pub struct Scanner {
     rules: Vec<RootCompiledRule>,
+    prefilter: Option<prefilter::ScanPrefilter>,
     scoped_ruleset: ScopedRuleSet,
     scanner_features: ScannerFeatures,
     metrics: ScannerMetrics,
@@ -1087,6 +1093,7 @@ impl Drop for Scanner {
 #[derive(Default)]
 pub struct ScannerBuilder<'a> {
     rules: &'a [RootRuleConfig<Arc<dyn RuleConfig>>],
+    prefilter_enabled: bool,
     labels: Labels,
     scanner_features: ScannerFeatures,
     async_scan_timeout: Duration,
@@ -1096,6 +1103,7 @@ impl ScannerBuilder<'_> {
     pub fn new(rules: &[RootRuleConfig<Arc<dyn RuleConfig>>]) -> ScannerBuilder<'_> {
         ScannerBuilder {
             rules,
+            prefilter_enabled: false,
             labels: Labels::empty(),
             scanner_features: ScannerFeatures::default(),
             async_scan_timeout: Duration::from_secs(60 * 5),
@@ -1135,6 +1143,13 @@ impl ScannerBuilder<'_> {
     /// to help debug the source of matches.
     pub fn with_debug_observability(mut self, value: bool) -> Self {
         self.scanner_features.enable_debug_observability = value;
+        self
+    }
+
+    /// Skips regex rules when a field is too short or lacks a required byte pair.
+    /// This is off by default. Enable it for workloads where most rules miss.
+    pub fn with_prefilter(mut self, enabled: bool) -> Self {
+        self.prefilter_enabled = enabled;
         self
     }
 
@@ -1211,6 +1226,11 @@ impl ScannerBuilder<'_> {
         }
 
         Ok(Scanner {
+            prefilter: if self.prefilter_enabled {
+                prefilter::ScanPrefilter::new(self.rules)
+            } else {
+                None
+            },
             rules: compiled_rules,
             scoped_ruleset,
             scanner_features: self.scanner_features,
@@ -1253,8 +1273,14 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         let mut per_string_data = SharedData::new();
         let wildcard_indices_per_path = self.wildcarded_indexes.get(path);
 
+        let mut field_pairs = None;
         rule_visitor.visit_rule_indices(|rule_index| {
             if self.blocked_rules.contains(&rule_index) {
+                return Ok(());
+            }
+            if let Some(filter) = &self.scanner.prefilter
+                && filter.can_skip(rule_index, content, &mut field_pairs)
+            {
                 return Ok(());
             }
             let rule = &self.scanner.rules[rule_index];

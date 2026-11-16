@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::{
     RegexCaches,
     ast_utils::{literal_ast, span},
-    scanner::regex_rule::{SharedRegex, get_memoized_regex},
+    scanner::regex_rule::{RegexCacheKind, SharedRegex},
 };
 
 const MAX_SUPPRESSIONS_COUNT: usize = 100;
@@ -101,8 +101,9 @@ impl Suppressions {
                 .syntax(regex_automata::util::syntax::Config::default().case_insensitive(true));
 
             #[allow(clippy::result_large_err)]
-            let suppressions_regex =
-                get_memoized_regex(&pattern, |p| regex_builder.build(p)).unwrap();
+            let suppressions_regex = RegexCacheKind::Suppression
+                .get_or_compile(&pattern, |p| regex_builder.build(p))
+                .unwrap();
             Ok(Some(CompiledSuppressions {
                 suppressions_pattern: Some(suppressions_regex),
             }))
