@@ -1,10 +1,9 @@
 use crate::{
     CompiledRule, CreateScannerError, Labels, MatchAction, Path, RegexRuleConfig, RootRuleConfig,
-    RuleConfig, ScanOptionBuilder, Scanner, Scope,
+    RuleConfig, RuleResult, RuleStatus, ScanOptionBuilder, Scanner, Scope, StringMatchesCtx,
 };
 use serde_json::json;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
 
 fn redact(pattern: &str) -> RootRuleConfig<Arc<dyn RuleConfig>> {
     RootRuleConfig::new_dyn(RegexRuleConfig::new(pattern)).match_action(MatchAction::Redact {
@@ -100,10 +99,7 @@ fn keyword_and_rule_keep_their_own_case_settings() {
 
 #[test]
 fn custom_rule_can_replace_its_compiled_regex_and_decline_the_prefilter() {
-    struct AdaptedRule {
-        config: RegexRuleConfig,
-        asked_for_prefilter: AtomicBool,
-    }
+    struct AdaptedRule(RegexRuleConfig);
 
     impl RuleConfig for AdaptedRule {
         fn convert_to_compiled_rule(
@@ -111,41 +107,68 @@ fn custom_rule_can_replace_its_compiled_regex_and_decline_the_prefilter() {
             index: usize,
             labels: Labels,
         ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
-            let mut compiled = self.config.convert_to_compiled_rule(index, labels)?;
+            let mut compiled = self.0.convert_to_compiled_rule(index, labels)?;
             compiled.as_regex_rule_mut().unwrap().regex =
                 crate::get_memoized_regex("x", regex_automata::meta::Regex::new).unwrap();
             Ok(compiled)
         }
 
         fn as_regex_rule(&self) -> Option<&RegexRuleConfig> {
-            Some(&self.config)
+            Some(&self.0)
+        }
+    }
+
+    let rules = [
+        RootRuleConfig::new_dyn(AdaptedRule(RegexRuleConfig::new("longer"))),
+        redact("other"),
+    ];
+    let matches = build(&rules, true).scan(&mut "x".to_owned()).unwrap();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].match_value.as_deref(), Some("x"));
+}
+
+#[test]
+fn opted_in_rule_only_visits_candidate_fields_when_prefilter_is_enabled() {
+    #[derive(Clone)]
+    struct RecordingRule(mpsc::Sender<String>);
+
+    impl RuleConfig for RecordingRule {
+        fn convert_to_compiled_rule(
+            &self,
+            _: usize,
+            _: Labels,
+        ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
+            Ok(Box::new(self.clone()))
         }
 
         fn pattern_for_prefilter(&self) -> Option<&str> {
-            self.asked_for_prefilter.store(true, Ordering::Relaxed);
-            None
+            Some("ab[0-9]{2}")
         }
     }
 
-    let adapted = Arc::new(AdaptedRule {
-        config: RegexRuleConfig::new("longer"),
-        asked_for_prefilter: AtomicBool::new(false),
-    });
-    let rules = [
-        RootRuleConfig::new(adapted.clone() as Arc<dyn RuleConfig>),
-        redact("other"),
-    ];
-    for setting in [None, Some(false), Some(true)] {
-        let mut builder = Scanner::builder(&rules).with_return_matches(true);
-        if let Some(enabled) = setting {
-            builder = builder.with_prefilter(enabled);
+    impl CompiledRule for RecordingRule {
+        fn get_string_matches(
+            &self,
+            content: &str,
+            _: &Path,
+            _: &mut StringMatchesCtx,
+        ) -> RuleResult {
+            self.0.send(content.to_owned()).unwrap();
+            Ok(RuleStatus::Done)
         }
-        let matches = builder.build().unwrap().scan(&mut "x".to_owned()).unwrap();
-        assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].match_value.as_deref(), Some("x"));
-        assert_eq!(
-            adapted.asked_for_prefilter.swap(false, Ordering::Relaxed),
-            setting == Some(true)
-        );
     }
+
+    let (sender, visits) = mpsc::channel();
+    let rules = [RootRuleConfig::new_dyn(RecordingRule(sender))];
+    let fields = ["ab", "xxxx", "ab12"];
+    let mut event = json!(fields);
+    Scanner::builder(&rules)
+        .build()
+        .unwrap()
+        .scan(&mut event)
+        .unwrap();
+    assert_eq!(visits.try_iter().collect::<Vec<_>>(), fields);
+
+    build(&rules, true).scan(&mut event).unwrap();
+    assert_eq!(visits.try_iter().collect::<Vec<_>>(), ["ab12"]);
 }
