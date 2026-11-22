@@ -1252,6 +1252,9 @@ impl<'a, E: Encoding> ContentVisitor<'a> for ScannerContentVisitor<'a, E> {
         // Create a map of per rule type data that can be shared between rules of the same type
         let mut per_string_data = SharedData::new();
         let wildcard_indices_per_path = self.wildcarded_indexes.get(path);
+        if !path.is_empty() {
+            self.regex_caches.reset_sanitized_path();
+        }
 
         rule_visitor.visit_rule_indices(|rule_index| {
             if self.blocked_rules.contains(&rule_index) {

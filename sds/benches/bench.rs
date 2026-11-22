@@ -348,6 +348,222 @@ pub fn multipass_excluded_scan(c: &mut Criterion) {
     });
 }
 
+fn sample_included_keyword_rules(
+    count: usize,
+) -> Vec<RootRuleConfig<std::sync::Arc<dyn dd_sds::RuleConfig>>> {
+    let patterns = [
+        (r"[a-z0-9]{32}", &["token", "password", "api_key"][..]),
+        (
+            r"[0-9]{3}-[0-9]{2}-[0-9]{4}",
+            &["ssn", "social security", "tax_id"][..],
+        ),
+        (
+            r"[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{4}",
+            &["credit card", "card_number", "cc"][..],
+        ),
+        (
+            r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
+            &["email", "contact", "mail"][..],
+        ),
+        (
+            r"[A-Z]{2}[0-9]{16}",
+            &["iban", "bank account", "routing"][..],
+        ),
+        (
+            r"[A-Za-z0-9_-]{28}",
+            &["secret", "auth_token", "bearer"][..],
+        ),
+        (
+            r"[0-9]{9}",
+            &["passport", "national_id", "driver_license"][..],
+        ),
+        (
+            r"[a-f0-9]{40}",
+            &["github_token", "access_key", "private_key"][..],
+        ),
+        (
+            r"[A-Z0-9]{20}",
+            &["aws_access_key", "aws_secret", "credential"][..],
+        ),
+        (r"[0-9]{10,12}", &["phone", "mobile", "telephone"][..]),
+    ];
+
+    (0..count)
+        .map(|i| {
+            let (pattern, keywords) = patterns[i % patterns.len()];
+            RootRuleConfig::new(
+                RegexRuleConfig::new(pattern)
+                    .with_proximity_keywords(ProximityKeywordsConfig {
+                        look_ahead_character_count: 30,
+                        included_keywords: keywords.iter().map(|k| (*k).to_string()).collect(),
+                        excluded_keywords: vec![
+                            "example".to_string(),
+                            "dummy".to_string(),
+                            "test-value".to_string(),
+                        ],
+                    })
+                    .build(),
+            )
+        })
+        .collect()
+}
+
+pub fn included_keywords_structured_workloads(c: &mut Criterion) {
+    let single_rule_scanner = Scanner::builder(&[RootRuleConfig::new(
+        RegexRuleConfig::new("[a-z0-9]{32}")
+            .with_proximity_keywords(ProximityKeywordsConfig {
+                look_ahead_character_count: 30,
+                included_keywords: vec!["token".to_string(), "password".to_string()],
+                excluded_keywords: vec![],
+            })
+            .build(),
+    )])
+    .build()
+    .unwrap();
+
+    let mut short_1k = BTreeMap::new();
+    for i in 0..10 {
+        let mut inner = BTreeMap::new();
+        for j in 0..100 {
+            inner.insert(
+                format!("attribute-name-{j}"),
+                SimpleEvent::String("short-val".to_string()),
+            );
+        }
+        short_1k.insert(format!("service-{i}"), SimpleEvent::Map(inner));
+    }
+    let mut short_1k_event = SimpleEvent::Map(short_1k);
+
+    c.bench_function("included_keywords_structured_1k_short_1_rule", |b| {
+        b.iter(|| {
+            let matches = single_rule_scanner.scan(&mut short_1k_event).unwrap();
+            assert_eq!(matches.len(), 0);
+        })
+    });
+
+    let long_value = "a normal log line with no secret values and no matching keywords ".repeat(19);
+    let mut long_1k = BTreeMap::new();
+    for i in 0..10 {
+        let mut inner = BTreeMap::new();
+        for j in 0..100 {
+            inner.insert(
+                format!("attribute-name-{j}"),
+                SimpleEvent::String(long_value.clone()),
+            );
+        }
+        long_1k.insert(format!("service-{i}"), SimpleEvent::Map(inner));
+    }
+    let mut long_1k_event = SimpleEvent::Map(long_1k);
+
+    c.bench_function("included_keywords_structured_1k_long_1_rule", |b| {
+        b.iter(|| {
+            let matches = single_rule_scanner.scan(&mut long_1k_event).unwrap();
+            assert_eq!(matches.len(), 0);
+        })
+    });
+
+    let multi_rule_scanner = Scanner::builder(&sample_included_keyword_rules(20))
+        .build()
+        .unwrap();
+
+    let mut short_100 = BTreeMap::new();
+    for i in 0..10 {
+        let mut inner = BTreeMap::new();
+        for j in 0..10 {
+            inner.insert(
+                format!("attribute-name-{j}"),
+                SimpleEvent::String("short-val".to_string()),
+            );
+        }
+        short_100.insert(format!("service-{i}"), SimpleEvent::Map(inner));
+    }
+    let mut short_100_event = SimpleEvent::Map(short_100);
+
+    c.bench_function("included_keywords_structured_100_short_20_rules", |b| {
+        b.iter(|| {
+            let matches = multi_rule_scanner.scan(&mut short_100_event).unwrap();
+            assert_eq!(matches.len(), 0);
+        })
+    });
+
+    let mut realistic_log = BTreeMap::new();
+    realistic_log.insert(
+        "service".to_string(),
+        SimpleEvent::String("checkout-api".to_string()),
+    );
+    realistic_log.insert("env".to_string(), SimpleEvent::String("prod".to_string()));
+    realistic_log.insert(
+        "host".to_string(),
+        SimpleEvent::String("ip-10-0-42-19".to_string()),
+    );
+    realistic_log.insert(
+        "status".to_string(),
+        SimpleEvent::String("info".to_string()),
+    );
+    realistic_log.insert(
+        "ddsource".to_string(),
+        SimpleEvent::String("java".to_string()),
+    );
+    realistic_log.insert(
+        "message".to_string(),
+        SimpleEvent::String(
+            "2026-11-22T12:00:00Z INFO RequestProcessor handled incoming order checkout request cleanly with latency 14ms status 200 region us-east-1 ".repeat(12),
+        ),
+    );
+    let mut http = BTreeMap::new();
+    http.insert(
+        "method".to_string(),
+        SimpleEvent::String("POST".to_string()),
+    );
+    http.insert(
+        "status_code".to_string(),
+        SimpleEvent::String("200".to_string()),
+    );
+    http.insert(
+        "url_details".to_string(),
+        SimpleEvent::Map(BTreeMap::from([
+            (
+                "path".to_string(),
+                SimpleEvent::String("/api/v2/orders/checkout/summary".to_string()),
+            ),
+            (
+                "host".to_string(),
+                SimpleEvent::String("api.example.com".to_string()),
+            ),
+        ])),
+    );
+    realistic_log.insert("http".to_string(), SimpleEvent::Map(http));
+    let mut k8s = BTreeMap::new();
+    for i in 0..10 {
+        k8s.insert(
+            format!("label-{i}"),
+            SimpleEvent::String(format!("val-{i}")),
+        );
+    }
+    realistic_log.insert("kube_metadata".to_string(), SimpleEvent::Map(k8s));
+    let mut realistic_log_event = SimpleEvent::Map(realistic_log);
+
+    c.bench_function("included_keywords_realistic_log_20_rules", |b| {
+        b.iter(|| {
+            let matches = multi_rule_scanner.scan(&mut realistic_log_event).unwrap();
+            assert_eq!(matches.len(), 0);
+        })
+    });
+}
+
+pub fn scanner_build_warm_keywords(c: &mut Criterion) {
+    let rules = sample_included_keyword_rules(30);
+    // Keep one scanner alive so REGEX_STORE stays warm across rebuilds.
+    let _warm = Scanner::builder(&rules).build().unwrap();
+
+    c.bench_function("scanner_build_warm_keywords_30_rules", |b| {
+        b.iter(|| {
+            let scanner = Scanner::builder(&rules).build().unwrap();
+            criterion::black_box(scanner);
+        })
+    });
+}
+
 criterion::criterion_group!(
     benches,
     scoped_ruleset,
@@ -355,7 +571,9 @@ criterion::criterion_group!(
     token_efficiency_vs_entropy,
     included_keywords,
     included_keywords_on_path,
-    multipass_excluded_scan
+    multipass_excluded_scan,
+    included_keywords_structured_workloads,
+    scanner_build_warm_keywords
 );
 
 criterion::criterion_main!(benches);

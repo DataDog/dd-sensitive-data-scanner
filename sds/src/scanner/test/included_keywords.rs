@@ -464,3 +464,243 @@ fn test_included_and_excluded_keyword() {
     let mut content = "hey, hello world".to_string();
     assert_eq!(scanner.scan(&mut content).unwrap().len(), 1);
 }
+
+#[test]
+fn multiple_rules_share_cached_sanitized_path_across_fields() {
+    let rules = vec![
+        RootRuleConfig::new(
+            RegexRuleConfig::new("secret")
+                .with_included_keywords(["api_token"])
+                .build(),
+        ),
+        RootRuleConfig::new(
+            RegexRuleConfig::new("secret")
+                .with_included_keywords(["password"])
+                .build(),
+        ),
+        RootRuleConfig::new(
+            RegexRuleConfig::new("secret")
+                .with_included_keywords(["credential"])
+                .build(),
+        ),
+    ];
+    let scanner = ScannerBuilder::new(&rules).build().unwrap();
+
+    // Mix single-segment clean paths, camelCase/dashed multi-segment paths, and index-only paths
+    // to exercise every SanitizedPathCache state transition and buffer reset.
+    let mut event = SimpleEvent::Map(BTreeMap::from([
+        (
+            "message".to_string(),
+            SimpleEvent::String("secret".to_string()),
+        ),
+        (
+            "apiToken".to_string(),
+            SimpleEvent::String("secret".to_string()),
+        ),
+        (
+            "user".to_string(),
+            SimpleEvent::Map(BTreeMap::from([
+                (
+                    "db-password".to_string(),
+                    SimpleEvent::String("secret".to_string()),
+                ),
+                (
+                    "other_field".to_string(),
+                    SimpleEvent::String("secret".to_string()),
+                ),
+            ])),
+        ),
+        (
+            "items".to_string(),
+            SimpleEvent::List(vec![SimpleEvent::Map(BTreeMap::from([(
+                "credential".to_string(),
+                SimpleEvent::String("secret".to_string()),
+            )]))]),
+        ),
+    ]));
+
+    let matches = scanner.scan(&mut event).unwrap();
+    assert_eq!(matches.len(), 3);
+    assert!(matches.iter().any(|m| m.rule_index == 0));
+    assert!(matches.iter().any(|m| m.rule_index == 1));
+    assert!(matches.iter().any(|m| m.rule_index == 2));
+}
+
+#[test]
+fn index_only_path_does_not_match_path_keywords_but_preserves_content_keywords() {
+    let scanner = build_keyword_fallback_scanner();
+    let mut event = SimpleEvent::List(vec![
+        SimpleEvent::String("secret".to_string()),
+        SimpleEvent::String("token secret".to_string()),
+    ]);
+
+    let matches = scanner.scan(&mut event).unwrap();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].start_index, 6);
+    assert_eq!(matches[0].end_index_exclusive, 12);
+}
+
+#[test]
+fn leading_index_path_still_matches_path_keywords() {
+    let scanner = build_keyword_fallback_scanner();
+    let mut event = SimpleEvent::List(vec![SimpleEvent::Map(BTreeMap::from([(
+        "token".to_string(),
+        SimpleEvent::String("secret".to_string()),
+    )]))]);
+
+    let matches = scanner.scan(&mut event).unwrap();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].start_index, 0);
+    assert_eq!(matches[0].end_index_exclusive, 6);
+}
+
+#[test]
+fn empty_content_with_matching_path_produces_no_matches() {
+    let scanner = build_keyword_fallback_scanner();
+    let mut event = SimpleEvent::Map(BTreeMap::from([(
+        "token".to_string(),
+        SimpleEvent::String(String::new()),
+    )]));
+
+    let matches = scanner.scan(&mut event).unwrap();
+    assert!(matches.is_empty());
+}
+
+#[test]
+fn multipass_excluded_scope_respects_path_keywords() {
+    use crate::{Path, Scope};
+
+    let rule = RootRuleConfig::new(
+        RegexRuleConfig::new("secret")
+            .with_included_keywords(["token"])
+            .build(),
+    )
+    .scope(Scope::exclude(vec![Path::from(vec!["excluded".into()])]));
+    let scanner = ScannerBuilder::new(&[rule]).build().unwrap();
+
+    // Excluded field's path contains "token" -> "secret" is recorded in excluded_matches ->
+    // included field's "secret" is filtered out by multipass v0.
+    let mut event = SimpleEvent::Map(BTreeMap::from([
+        (
+            "excluded".to_string(),
+            SimpleEvent::Map(BTreeMap::from([(
+                "token".to_string(),
+                SimpleEvent::String("secret".to_string()),
+            )])),
+        ),
+        (
+            "token".to_string(),
+            SimpleEvent::String("secret".to_string()),
+        ),
+    ]));
+    assert!(scanner.scan(&mut event).unwrap().is_empty());
+
+    // Excluded field's path does NOT contain "token" (nor content) -> NOT recorded in
+    // excluded_matches -> included field's "secret" still matches.
+    let mut event = SimpleEvent::Map(BTreeMap::from([
+        (
+            "excluded".to_string(),
+            SimpleEvent::Map(BTreeMap::from([(
+                "unrelated".to_string(),
+                SimpleEvent::String("secret".to_string()),
+            )])),
+        ),
+        (
+            "token".to_string(),
+            SimpleEvent::String("secret".to_string()),
+        ),
+    ]));
+    assert_eq!(scanner.scan(&mut event).unwrap().len(), 1);
+}
+
+#[test]
+fn path_keywords_preserve_capture_group_validator_and_suppression() {
+    use crate::{SecondaryValidator, Suppressions};
+
+    let rule = RootRuleConfig::new(
+        RegexRuleConfig::new("id=(?<sds_match>[0-9]{16})")
+            .with_pattern_capture_group("sds_match")
+            .with_included_keywords(["card"])
+            .with_validator(Some(SecondaryValidator::LuhnChecksum))
+            .build(),
+    )
+    .suppressions(Suppressions {
+        exact_match: vec!["4111111111111111".to_string()],
+        ..Default::default()
+    })
+    .match_action(MatchAction::redact("[REDACTED]"));
+    let scanner = ScannerBuilder::new(&[rule]).build().unwrap();
+
+    // Valid Luhn (4012888888881881), suppressed Luhn (4111111111111111), invalid Luhn (4012888888881882)
+    let mut event = SimpleEvent::Map(BTreeMap::from([
+        (
+            "card".to_string(),
+            SimpleEvent::String(
+                "id=4111111111111111 id=4012888888881882 id=4012888888881881".to_string(),
+            ),
+        ),
+        (
+            "unrelated".to_string(),
+            SimpleEvent::String("id=4012888888881881".to_string()),
+        ),
+    ]));
+
+    let matches = scanner.scan(&mut event).unwrap();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].start_index, 43);
+    assert_eq!(matches[0].end_index_exclusive, 53);
+    if let SimpleEvent::Map(map) = &event {
+        assert_eq!(
+            map.get("card"),
+            Some(&SimpleEvent::String(
+                "id=4111111111111111 id=4012888888881882 id=[REDACTED]".to_string()
+            ))
+        );
+        assert_eq!(
+            map.get("unrelated"),
+            Some(&SimpleEvent::String("id=4012888888881881".to_string()))
+        );
+    } else {
+        panic!("expected map event");
+    }
+}
+
+#[test]
+fn path_keyword_fallback_matches_across_short_and_long_value_and_path_lengths() {
+    let scanner = build_keyword_fallback_scanner();
+
+    // Exercise all combinations of content length (<=32 vs >32) and path length (<content vs >=content).
+    let short_val_32 = format!("{}secret", "a".repeat(26)); // len = 32
+    let long_val_33 = format!("{}secret", "a".repeat(27)); // len = 33
+    let very_long_val = format!("{}secret", "a".repeat(64)); // len = 70
+    let long_matching_path = format!("{}.token", "segment".repeat(6)); // len = 48
+    let long_unrelated_path = format!("{}.other", "segment".repeat(6)); // len = 48
+
+    let cases: &[(&str, &str, usize)] = &[
+        ("token", &short_val_32, 1),
+        ("other", &short_val_32, 0),
+        ("token", &long_val_33, 1),
+        ("other", &long_val_33, 0),
+        (&long_matching_path, &short_val_32, 1),
+        (&long_unrelated_path, &short_val_32, 0),
+        (&long_matching_path, &long_val_33, 1),
+        (&long_unrelated_path, &long_val_33, 0),
+        (&long_matching_path, &very_long_val, 1),
+        (&long_unrelated_path, &very_long_val, 0),
+    ];
+
+    for (path_key, value, expected_count) in cases {
+        let mut event = SimpleEvent::Map(BTreeMap::from([(
+            (*path_key).to_string(),
+            SimpleEvent::String((*value).to_string()),
+        )]));
+        let matches = scanner.scan(&mut event).unwrap();
+        assert_eq!(
+            matches.len(),
+            *expected_count,
+            "mismatch for path={path_key:?} (len={}) value len={}",
+            path_key.len(),
+            value.len()
+        );
+    }
+}

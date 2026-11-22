@@ -19,6 +19,15 @@ pub enum PathSegment<'a> {
     Index(usize),
 }
 
+#[inline]
+fn is_already_sanitized_segment(field: &str) -> bool {
+    // Only ASCII uppercase letters and non-dot link chars (`-`, `_`, ` `, `/`)
+    // can be rewritten or split by `standardize_path_chars` + ASCII lowercasing.
+    field
+        .bytes()
+        .all(|b| !matches!(b, b'A'..=b'Z' | b'-' | b'_' | b' ' | b'/'))
+}
+
 impl Path<'_> {
     /// An empty path - pointing to the root.
     pub fn root() -> Self {
@@ -55,7 +64,7 @@ impl Path<'_> {
         true
     }
 
-    fn size_segments_only(&self) -> usize {
+    pub(crate) fn size_segments_only(&self) -> usize {
         self.segments
             .iter()
             .map(|segment| {
@@ -67,25 +76,50 @@ impl Path<'_> {
             .sum()
     }
 
-    pub fn sanitize(&self) -> String {
-        let size_segments = self.size_segments_only();
-        let mut sanitized_path = String::with_capacity(size_segments + size_segments / 2);
-        self.segments.iter().enumerate().for_each(|(i, segment)| {
+    /// Returns the sanitized path without copying when the path is already in
+    /// sanitized form (empty, or a single already-sanitized field segment).
+    #[inline]
+    pub(crate) fn as_already_sanitized(&self) -> Option<&str> {
+        match self.segments.as_slice() {
+            [] => Some(""),
+            [PathSegment::Field(field)] if is_already_sanitized_segment(field) => {
+                Some(field.as_ref())
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn sanitize_into(&self, sanitized_path: &mut String) {
+        for (i, segment) in self.segments.iter().enumerate() {
             if let PathSegment::Field(field) = segment {
                 if i != 0 {
                     sanitized_path.push(UNIFIED_LINK_CHAR);
                 }
 
-                if should_bypass_standardize_path(field) != BypassStandardizePathResult::NoBypass {
-                    sanitized_path.push_str(field.to_ascii_lowercase().as_str())
+                if is_already_sanitized_segment(field) {
+                    sanitized_path.push_str(field);
+                } else if should_bypass_standardize_path(field)
+                    != BypassStandardizePathResult::NoBypass
+                {
+                    // All characters are ASCII letters (all-lowercase already matched above),
+                    // so every byte lowers directly without a temporary String allocation.
+                    sanitized_path.reserve(field.len());
+                    for b in field.bytes() {
+                        sanitized_path.push(b.to_ascii_lowercase() as char);
+                    }
                 } else {
                     standardize_path_chars(field, |c| {
                         sanitized_path.push(c.to_ascii_lowercase());
                     });
                 }
             }
-        });
+        }
+    }
 
+    pub fn sanitize(&self) -> String {
+        let size_segments = self.size_segments_only();
+        let mut sanitized_path = String::with_capacity(size_segments + size_segments / 2);
+        self.sanitize_into(&mut sanitized_path);
         sanitized_path
     }
 }
@@ -112,6 +146,9 @@ impl<'a> PathSegment<'a> {
 
     pub fn sanitize(&self) -> Option<Cow<'a, str>> {
         if let PathSegment::Field(field) = self {
+            if is_already_sanitized_segment(field) {
+                return Some(field.clone());
+            }
             match should_bypass_standardize_path(field) {
                 BypassStandardizePathResult::BypassAndAllLowercase => Some(field.clone()),
                 BypassStandardizePathResult::BypassAndAllUppercase => {
@@ -281,5 +318,107 @@ mod test {
             Path::from(vec!["".into(), 0.into(), "path✅".into()]).size_segments_only(),
             7
         );
+    }
+
+    #[test]
+    fn test_sanitize_fast_paths_match_reference() {
+        fn reference_sanitize(path: &Path) -> String {
+            let mut out = String::new();
+            for (i, segment) in path.segments.iter().enumerate() {
+                if let PathSegment::Field(field) = segment {
+                    if i != 0 {
+                        out.push(UNIFIED_LINK_CHAR);
+                    }
+                    if should_bypass_standardize_path(field)
+                        != BypassStandardizePathResult::NoBypass
+                    {
+                        out.push_str(&field.to_ascii_lowercase());
+                    } else {
+                        standardize_path_chars(field, |c| {
+                            out.push(c.to_ascii_lowercase());
+                        });
+                    }
+                }
+            }
+            out
+        }
+
+        let cases: Vec<Path> = vec![
+            Path::root(),
+            Path::from(vec!["".into()]),
+            Path::from(vec!["message".into()]),
+            Path::from(vec!["field1".into()]),
+            Path::from(vec!["0".into()]),
+            Path::from(vec!["http.url".into()]),
+            Path::from(vec!["http..url".into()]),
+            Path::from(vec![".leading".into()]),
+            Path::from(vec!["trailing.".into()]),
+            Path::from(vec!["CHICKEN".into()]),
+            Path::from(vec!["helloChicken".into()]),
+            Path::from(vec!["hello-world".into()]),
+            Path::from(vec!["hello_world".into()]),
+            Path::from(vec!["hello world".into()]),
+            Path::from(vec!["hello/world".into()]),
+            Path::from(vec!["-".into()]),
+            Path::from(vec!["_".into()]),
+            Path::from(vec![".".into()]),
+            Path::from(vec!["A".into()]),
+            Path::from(vec!["café".into()]),
+            Path::from(vec!["path✅".into()]),
+            Path::from(vec!["caféCamel".into()]),
+            Path::from(vec![0.into()]),
+            Path::from(vec![0.into(), 1.into()]),
+            Path::from(vec![0.into(), "hello".into()]),
+            Path::from(vec!["hello".into(), 0.into()]),
+            Path::from(vec![
+                "service-7".into(),
+                0.into(),
+                "UPPER".into(),
+                "camelCase".into(),
+                "plain123".into(),
+            ]),
+        ];
+
+        let mut reusable_buf = String::from("stale-contents");
+        for path in &cases {
+            let expected = reference_sanitize(path);
+            assert_eq!(path.sanitize(), expected, "sanitize mismatch for {path:?}");
+
+            if let Some(borrowed) = path.as_already_sanitized() {
+                assert_eq!(
+                    borrowed, expected,
+                    "as_already_sanitized mismatch for {path:?}"
+                );
+            }
+
+            reusable_buf.clear();
+            path.sanitize_into(&mut reusable_buf);
+            assert_eq!(
+                reusable_buf, expected,
+                "sanitize_into mismatch for {path:?}"
+            );
+        }
+
+        // Single already-sanitized field segments should borrow without allocating.
+        assert_eq!(
+            Path::from(vec!["message".into()]).as_already_sanitized(),
+            Some("message")
+        );
+        assert_eq!(
+            Path::from(vec!["field1.sub".into()]).as_already_sanitized(),
+            Some("field1.sub")
+        );
+        assert_eq!(
+            Path::from(vec!["CHICKEN".into()]).as_already_sanitized(),
+            None
+        );
+        assert_eq!(
+            Path::from(vec![0.into(), "hello".into()]).as_already_sanitized(),
+            None
+        );
+        assert!(matches!(
+            PathSegment::from("field1").sanitize(),
+            Some(Cow::Borrowed("field1"))
+        ));
     }
 }
