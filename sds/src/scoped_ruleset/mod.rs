@@ -2508,6 +2508,7 @@ mod kani_proofs {
         } else {
             assert!(stack.as_slice().is_empty());
         }
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     #[kani::proof]
@@ -2540,6 +2541,7 @@ mod kani_proofs {
 
         assert_eq!(stack.pop(), Some(vals[INLINE_STACK_CAPACITY]));
         assert_eq!(stack.len(), INLINE_STACK_CAPACITY);
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     fn make_leaf_node(added_rules: Vec<usize>, removed_mask: u64) -> RuleTree {
@@ -2703,6 +2705,7 @@ mod kani_proofs {
         .unwrap();
         assert_eq!(seen[r], 1);
         assert!(visitor.bool_set.is_none());
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     /// Directly verifies `RuleIndexVisitor::visit_rule_indices` + `BoolSet` dedup/reset +
@@ -2785,5 +2788,6 @@ mod kani_proofs {
             .unwrap();
             assert_eq!(seen[probe], u8::from(probe == r0 || probe == r_shared));
         }
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 }

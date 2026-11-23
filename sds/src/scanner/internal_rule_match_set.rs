@@ -363,6 +363,7 @@ mod kani_proofs {
         assert_eq!(m1[0].utf8_end, e1);
 
         assert!(iter.next().is_none());
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     #[kani::proof]
@@ -398,5 +399,6 @@ mod kani_proofs {
         assert_eq!(ms0[0].utf8_start, start);
         assert_eq!(ms0[0].utf8_end, end);
         assert!(iter.next().is_none());
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 }

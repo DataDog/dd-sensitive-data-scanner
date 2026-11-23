@@ -457,6 +457,7 @@ mod kani_proofs {
             kani::assume(probe < num_rules);
             assert_eq!(set.as_mut_slice()[probe], oracle[probe]);
         }
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     #[kani::proof]
@@ -484,6 +485,7 @@ mod kani_proofs {
             set.as_mut_slice()[probe],
             probe == i0 || probe == i1 || probe == i2
         );
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     #[kani::proof]
@@ -520,6 +522,7 @@ mod kani_proofs {
         let probe: usize = kani::any();
         kani::assume(probe < n);
         assert!(!heap_set.as_mut_slice()[probe]);
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     #[kani::proof]
@@ -543,6 +546,7 @@ mod kani_proofs {
         clear_bit(&mut words, i0);
         assert!(words.is_empty());
         assert!(!contains_bit(&words, probe));
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     #[kani::proof]
@@ -575,6 +579,7 @@ mod kani_proofs {
             contains_bit(&words, probe_b),
             (lo_word & (1u64 << probe_b)) != 0
         );
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     #[kani::proof]
@@ -594,6 +599,7 @@ mod kani_proofs {
         assert!(matches!(buf, InlineBitBuffer::Inline { len: 4, .. }));
         let w0 = if probe_word < 2 { a0[probe_word] } else { 0 };
         assert_eq!(buf.as_slice()[probe_word], w0 | a1[probe_word]);
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     #[kani::proof]
@@ -618,6 +624,7 @@ mod kani_proofs {
             buf.as_slice().get(probe_word).copied().unwrap_or(0),
             expected_after_shrink
         );
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     #[kani::proof]
@@ -631,6 +638,7 @@ mod kani_proofs {
         let empty: [&[u64]; 0] = [];
         buf.set_union_of(&empty);
         assert!(buf.as_slice().is_empty());
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     #[kani::proof]
@@ -677,5 +685,6 @@ mod kani_proofs {
         let empty: [&[u64]; 0] = [];
         buf.set_union_of(&empty);
         assert!(buf.as_slice().is_empty());
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 }

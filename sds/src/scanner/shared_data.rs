@@ -808,6 +808,7 @@ mod kani_proofs {
         let probe: u8 = kani::any();
         kani::assume((probe as usize) < KEY_SPACE);
         assert_eq!(map.get(&probe).copied(), oracle[probe as usize]);
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     #[kani::proof]
@@ -859,6 +860,7 @@ mod kani_proofs {
         let probe: u8 = kani::any();
         kani::assume((probe as usize) < KEY_SPACE);
         assert_eq!(map.get(&probe).copied(), oracle[probe as usize]);
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 
     #[kani::proof]
@@ -906,5 +908,6 @@ mod kani_proofs {
         let probe: u8 = kani::any();
         kani::assume(probe < 3);
         assert_eq!(map.get(&probe).copied(), oracle[probe as usize]);
+        kani::cover!(true, "post-assertion conclusion reachable");
     }
 }

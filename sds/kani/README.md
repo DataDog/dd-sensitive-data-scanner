@@ -14,7 +14,7 @@ Because the proof harnesses live inside `#[cfg(kani)] mod kani_proofs` directly 
 
 ## Verified Proof Inventory (18 Harnesses)
 
-All 18 harnesses were verified with **Kani 0.68.0 (CBMC 6.11.0)** using `--no-default-features --features dd-sds` (`VERIFICATION:- SUCCESSFUL`, 0 failures):
+All 18 harnesses were verified with **Kani 0.68.0 (CBMC 6.11.0)** using `--no-default-features --features dd-sds` (`VERIFICATION:- SUCCESSFUL`, 0 failures, and **18/18 `1 of 1 cover properties satisfied`** via trailing `kani::cover!(true, "post-assertion conclusion reachable")` checks proving every harness's preconditions are satisfiable and zero proofs are vacuous; 0 `#[kani::stub]`, 0 `unsafe` blocks):
 
 | # | File | Harness | Invariant Proven |
 |---|---|---|---|
@@ -109,6 +109,8 @@ Formal proofs are only trustworthy if they actually fail when an invariant is vi
 | M4 | `src/scoped_ruleset/mod.rs` | `ScopedRuledSetEventVisitor::pop_segment` forgets `combined_exclusions_dirty = true` | `kani_scoped_visitor_pop_invalidation_and_exclusion_check` | `VERIFICATION:- FAILED` (`combined_exclusions_dirty == popped_had_removal`) |
 | M5 | `src/scoped_ruleset/mod.rs` | `RuleIndexVisitor::visit_rule_indices` drops `if !*slot` dedup check | `kani_rule_index_visitor_dedup_wildcard_skip_and_reset` | `VERIFICATION:- FAILED` (`seen[rule_index] == 1`) |
 | M6 | `src/scanner/internal_rule_match_set.rs` | `InternalRuleMatchSet::push_sync_matches` omits `if matches.is_empty()` guard | `kani_internal_rule_match_set_empty_and_sync_never_allocates_async` | `VERIFICATION:- FAILED` (`set.is_empty()`) |
+
+In addition to the 6 targeted mutations above, independent mechanical AST operator mutation (`<`/`<=`, `>`/`>=`, `==`/`!=`, `&&`/`||`, `<<`/`>>`, `+1`/`+2`, `-1`/`-2`) directly on all four verified production Rust files killed **21/24 valid compiling mutants** (**21/21 = 100% of non-equivalent mutants**, excluding 6 syntax/compile errors; the 3 survivors are mathematically equivalent: two `S::with_capacity(N + 1)` -> `N + 2` capacity hints in `shared_data.rs` and `if new_len < *len { *len = new_len; }` -> `<=` in `scoped_ruleset/mod.rs`).
 
 ## Verification Design Notes & Scope
 
