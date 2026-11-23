@@ -245,3 +245,97 @@ mod tests {
         }
     }
 }
+
+#[cfg(kani)]
+mod kani_proofs {
+    use super::*;
+    use crate::{StringMatch, Utf8Encoding};
+
+    fn make_match(rule_index: usize, start: usize, end: usize) -> InternalRuleMatch<Utf8Encoding> {
+        InternalRuleMatch::new(
+            rule_index,
+            StringMatch {
+                start,
+                end,
+                keyword: None,
+            },
+        )
+    }
+
+    #[kani::proof]
+    #[kani::unwind(4)]
+    fn kani_internal_rule_match_set_empty_and_sync_never_allocates_async() {
+        let mut set: InternalRuleMatchSet<Utf8Encoding> = InternalRuleMatchSet::new();
+        let root = Path::root();
+
+        let r0: usize = kani::any();
+        let r1: usize = kani::any();
+        let s0: usize = kani::any();
+        let e0: usize = kani::any();
+        let s1: usize = kani::any();
+        let e1: usize = kani::any();
+
+        // Empty sync and empty async batches must leave `set` empty and NEVER allocate `async_matches`.
+        set.push_sync_matches(&root, Vec::new());
+        set.push_async_matches(&root, std::iter::empty());
+        assert!(set.async_matches.is_none());
+        assert!(set.is_empty());
+
+        // Non-empty sync batches must also leave `async_matches == None` and preserve order/values.
+        set.push_sync_matches(&root, vec![make_match(r0, s0, e0)]);
+        set.push_async_matches(&root, std::iter::empty());
+        set.push_sync_matches(&root, vec![make_match(r1, s1, e1)]);
+        assert!(set.async_matches.is_none());
+        assert!(!set.is_empty());
+
+        let mut iter = set.into_iter();
+        let (_p0, m0) = iter.next().unwrap();
+        assert_eq!(m0.len(), 1);
+        assert_eq!(m0[0].rule_index, r0);
+        assert_eq!(m0[0].utf8_start, s0);
+        assert_eq!(m0[0].utf8_end, e0);
+
+        let (_p1, m1) = iter.next().unwrap();
+        assert_eq!(m1.len(), 1);
+        assert_eq!(m1[0].rule_index, r1);
+        assert_eq!(m1[0].utf8_start, s1);
+        assert_eq!(m1[0].utf8_end, e1);
+
+        assert!(iter.next().is_none());
+    }
+
+    #[kani::proof]
+    #[kani::unwind(4)]
+    fn kani_internal_rule_match_set_some_empty_async_map_equivalence() {
+        // Verify `is_empty()` and `into_iter()` treat `Some(empty_map)` identically to `None`:
+        // `is_empty()` returns true when sync is empty and false after a sync push, and
+        // `InternalRuleMatchSetIter::next()` drains sync entries then cleanly terminates on
+        // `Some(empty_async_iter)`.
+        let mut set: InternalRuleMatchSet<Utf8Encoding> = InternalRuleMatchSet {
+            sync_matches: Vec::with_capacity(1),
+            async_matches: Some(AHashMap::with_capacity_and_hasher(
+                0,
+                ahash::RandomState::with_seeds(1, 2, 3, 4),
+            )),
+        };
+        let path_a = Path::root();
+
+        assert!(set.is_empty());
+
+        let r_sync: usize = kani::any();
+        let start: usize = kani::any();
+        let end: usize = kani::any();
+        set.push_sync_matches(&path_a, vec![make_match(r_sync, start, end)]);
+        set.push_async_matches(&path_a, std::iter::empty());
+        assert!(!set.is_empty());
+
+        let mut iter = set.into_iter();
+        let (p0, ms0) = iter.next().unwrap();
+        assert!(p0 == path_a);
+        assert_eq!(ms0.len(), 1);
+        assert_eq!(ms0[0].rule_index, r_sync);
+        assert_eq!(ms0[0].utf8_start, start);
+        assert_eq!(ms0[0].utf8_end, end);
+        assert!(iter.next().is_none());
+    }
+}

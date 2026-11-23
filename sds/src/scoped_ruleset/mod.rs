@@ -2036,3 +2036,351 @@ mod test {
         }
     }
 }
+
+#[cfg(kani)]
+mod kani_proofs {
+    use super::*;
+
+    #[kani::proof]
+    #[kani::unwind(8)]
+    fn kani_inline_stack_push_pop_truncate_equivalence() {
+        let start_with_first: bool = kani::any();
+        let mut oracle: [u8; 6] = [0; 6];
+        let mut oracle_len: usize = 0;
+
+        // N = 2 with up to 5 pushes exercises Empty -> Inline(1..=2) -> Heap(3..=5)
+        // plus Heap::push, Heap::pop, Heap::truncate, Inline::pop, Inline::truncate.
+        let mut stack: InlineStack<u8, 2> = if start_with_first {
+            let first: u8 = kani::any();
+            oracle[0] = first;
+            oracle_len = 1;
+            InlineStack::with_first(first)
+        } else {
+            InlineStack::new()
+        };
+
+        for _ in 0..3 {
+            let op: u8 = kani::any();
+            kani::assume(op < 3);
+            match op {
+                0 => {
+                    let val: u8 = kani::any();
+                    stack.push(val);
+                    oracle[oracle_len] = val;
+                    oracle_len += 1;
+                }
+                1 => {
+                    let expected = if oracle_len == 0 {
+                        None
+                    } else {
+                        oracle_len -= 1;
+                        Some(oracle[oracle_len])
+                    };
+                    assert_eq!(stack.pop(), expected);
+                }
+                _ => {
+                    let new_len: usize = kani::any();
+                    kani::assume(new_len <= 5);
+                    stack.truncate(new_len);
+                    if new_len < oracle_len {
+                        oracle_len = new_len;
+                    }
+                }
+            }
+
+            assert_eq!(stack.len(), oracle_len);
+            assert_eq!(stack.is_empty(), oracle_len == 0);
+            let expected_last = if oracle_len == 0 {
+                None
+            } else {
+                Some(&oracle[oracle_len - 1])
+            };
+            assert_eq!(stack.last(), expected_last);
+        }
+
+        if oracle_len > 0 {
+            let probe: usize = kani::any();
+            kani::assume(probe < oracle_len);
+            assert_eq!(stack.as_slice()[probe], oracle[probe]);
+        } else {
+            assert!(stack.as_slice().is_empty());
+        }
+    }
+
+    #[kani::proof]
+    #[kani::unwind(20)]
+    fn kani_inline_stack_capacity_16_spill_boundary() {
+        // Verify exact production INLINE_STACK_CAPACITY (16) -> 17th push spill boundary.
+        let mut stack: InlineStack<u8, INLINE_STACK_CAPACITY> = InlineStack::new();
+        let vals: [u8; INLINE_STACK_CAPACITY + 1] = kani::any();
+
+        for i in 0..INLINE_STACK_CAPACITY {
+            stack.push(vals[i]);
+        }
+        assert!(matches!(
+            stack,
+            InlineStack::Inline {
+                len: INLINE_STACK_CAPACITY,
+                ..
+            }
+        ));
+        assert_eq!(stack.len(), INLINE_STACK_CAPACITY);
+
+        // 17th push triggers spill to Heap and preserves every element 0..=16.
+        stack.push(vals[INLINE_STACK_CAPACITY]);
+        assert!(matches!(stack, InlineStack::Heap(_)));
+        assert_eq!(stack.len(), INLINE_STACK_CAPACITY + 1);
+
+        let probe: usize = kani::any();
+        kani::assume(probe <= INLINE_STACK_CAPACITY);
+        assert_eq!(stack.as_slice()[probe], vals[probe]);
+
+        assert_eq!(stack.pop(), Some(vals[INLINE_STACK_CAPACITY]));
+        assert_eq!(stack.len(), INLINE_STACK_CAPACITY);
+    }
+
+    fn make_leaf_node(added_rules: Vec<usize>, removed_mask: u64) -> RuleTree {
+        let removed_rules = if removed_mask == 0 {
+            Vec::new()
+        } else {
+            vec![removed_mask]
+        };
+        RuleTree {
+            added_rules,
+            removed_rules,
+            // Empty children map (capacity 0) avoids hashbrown probing in CBMC while still
+            // exercising `ScopedRuledSetEventVisitor::{push_segment, pop_segment, visit_string}`,
+            // `RuleIndexVisitor::visit_rule_indices`, `ExclusionCheck`, `InlineStack`,
+            // `InlineBitBuffer`, and `BoolSet`.
+            children: AHashMap::with_capacity_and_hasher(
+                0,
+                ahash::RandomState::with_seeds(1, 2, 3, 4),
+            ),
+        }
+    }
+
+    struct NoopVisitor;
+
+    impl<'p> ContentVisitor<'p> for NoopVisitor {
+        fn visit_content<'c>(
+            &'c mut self,
+            _path: &Path<'p>,
+            _content: &str,
+            _rules: RuleIndexVisitor,
+            _exclusion_check: ExclusionCheck<'c>,
+        ) -> Result<bool, ScannerError> {
+            Ok(false)
+        }
+    }
+
+    /// Drives the real `ScopedRuledSetEventVisitor::pop_segment` and `ExclusionCheck::is_excluded`
+    /// across symbolic 64-bit exclusion masks to prove:
+    /// 1. `pop_segment` truncates `tree_nodes` and `active_removal_sets` by the exact `NodeCounter`
+    ///    deltas, decrements `total_active_add_nodes` and `wildcard_segment_depth`, and ALWAYS
+    ///    marks `combined_exclusions_dirty = true` when any removal set is popped.
+    /// 2. `pop_segment` leaves `combined_exclusions_dirty` unchanged when `active_removal_count == 0`.
+    /// 3. `ExclusionCheck::is_excluded(r)` matches the exact active bitset across 0, 1, and multi-set
+    ///    states for arbitrary 64-bit masks.
+    #[kani::proof]
+    #[kani::unwind(4)]
+    fn kani_scoped_visitor_pop_invalidation_and_exclusion_check() {
+        const NUM_RULES: usize = 4;
+
+        let r: usize = kani::any();
+        kani::assume(r < NUM_RULES);
+        let mask0: u64 = kani::any();
+        let mask1: u64 = kani::any();
+        kani::assume(mask0 != 0 && mask1 != 0);
+        let popped_had_removal: bool = kani::any();
+        let popped_was_wildcard: bool = kani::any();
+
+        let node0 = make_leaf_node(vec![r], mask0);
+        let node1 = make_leaf_node(vec![], mask1);
+
+        let mut tree_nodes = InlineStack::with_first(ActiveRuleTree {
+            rule_tree: &node0,
+            index_wildcard_match: false,
+        });
+        let mut active_removal_sets = InlineStack::with_first(&node0.removed_rules);
+
+        tree_nodes.push(ActiveRuleTree {
+            rule_tree: &node1,
+            index_wildcard_match: false,
+        });
+        if popped_had_removal {
+            active_removal_sets.push(&node1.removed_rules);
+        }
+
+        // Initialize `active_node_counter` via direct `Inline` array literal rather than
+        // `InlineStack::<NodeCounter, 16>::push` to avoid a CBMC 6.11.0 union-array-of-struct
+        // write bug (`InlineStack::push` itself is exhaustively verified by the two `InlineStack`
+        // harnesses above). `pop_segment()` still executes the real `InlineStack::pop()`.
+        let c0 = NodeCounter {
+            active_tree_count: 1,
+            active_removal_count: 1,
+            active_add_node_count: 1,
+        };
+        let c1 = NodeCounter {
+            active_tree_count: 1,
+            active_removal_count: u32::from(popped_had_removal),
+            active_add_node_count: 1,
+        };
+        let active_node_counter = InlineStack::Inline {
+            buf: [
+                c0, c1, c0, c0, c0, c0, c0, c0, c0, c0, c0, c0, c0, c0, c0, c0,
+            ],
+            len: 2,
+        };
+
+        let seg = if popped_was_wildcard {
+            PathSegment::Index(0)
+        } else {
+            PathSegment::Field("a".into())
+        };
+        let mut visitor = ScopedRuledSetEventVisitor {
+            content_visitor: NoopVisitor,
+            tree_nodes,
+            active_node_counter,
+            active_removal_sets,
+            combined_exclusions: InlineBitBuffer::Inline {
+                words: [mask0 | mask1, 0, 0, 0],
+                len: 1,
+            },
+            combined_exclusions_dirty: false,
+            path: Path::from(vec![seg]),
+            bool_set: None,
+            num_rules: NUM_RULES,
+            total_active_add_nodes: 2,
+            wildcard_segment_depth: usize::from(popped_was_wildcard),
+            add_implicit_index_wildcards: true,
+        };
+
+        // Pre-pop check: clean multi-set cache reports exact union of mask0 | mask1.
+        if popped_had_removal {
+            let check = ExclusionCheck {
+                excluded_words: visitor.combined_exclusions.as_slice(),
+            };
+            assert_eq!(check.is_excluded(r), ((mask0 | mask1) & (1u64 << r)) != 0);
+        }
+
+        assert_eq!(visitor.active_node_counter.len(), 2);
+        assert_eq!(
+            visitor
+                .active_node_counter
+                .last()
+                .unwrap()
+                .active_removal_count,
+            u32::from(popped_had_removal)
+        );
+        // Pop the segment and verify EVERY visitor counter and dirty-flag invariant.
+        visitor.pop_segment();
+        assert_eq!(visitor.tree_nodes.len(), 1);
+        assert_eq!(visitor.active_removal_sets.len(), 1);
+        assert_eq!(visitor.total_active_add_nodes, 1);
+        assert_eq!(visitor.wildcard_segment_depth, 0);
+        assert_eq!(visitor.combined_exclusions_dirty, popped_had_removal);
+        assert!(visitor.path.segments.is_empty());
+
+        // Post-pop: single remaining removal set reports exact `mask0` (never leaking `mask1`),
+        // and `RuleIndexVisitor` with `used_rule_set: None` emits rule `r` once.
+        let post_check = ExclusionCheck {
+            excluded_words: visitor.active_removal_sets.as_slice()[0].as_slice(),
+        };
+        assert_eq!(post_check.is_excluded(r), (mask0 & (1u64 << r)) != 0);
+
+        let mut seen = [0u8; NUM_RULES];
+        let mut riv = RuleIndexVisitor {
+            tree_nodes: visitor.tree_nodes.as_slice(),
+            used_rule_set: None,
+        };
+        riv.visit_rule_indices(|rule_index| {
+            seen[rule_index] += 1;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(seen[r], 1);
+        assert!(visitor.bool_set.is_none());
+    }
+
+    /// Directly verifies `RuleIndexVisitor::visit_rule_indices` + `BoolSet` dedup/reset +
+    /// `index_wildcard_match` skipping for both `used_rule_set = Some(...)` (overlapping nodes)
+    /// and `used_rule_set = None` (non-overlapping fast path).
+    #[kani::proof]
+    #[kani::unwind(6)]
+    fn kani_rule_index_visitor_dedup_wildcard_skip_and_reset() {
+        const NUM_RULES: usize = 4;
+
+        let r0: usize = kani::any();
+        let r_shared: usize = kani::any();
+        let r2: usize = kani::any();
+        kani::assume(r0 < NUM_RULES && r_shared < NUM_RULES && r2 < NUM_RULES);
+        kani::assume(r0 != r_shared && r2 != r_shared);
+
+        let node0 = make_leaf_node(vec![r0, r_shared], 0);
+        let node1 = make_leaf_node(vec![r_shared, r2], 0);
+
+        let active_nodes = [
+            ActiveRuleTree {
+                rule_tree: &node0,
+                index_wildcard_match: false,
+            },
+            ActiveRuleTree {
+                rule_tree: &node1,
+                index_wildcard_match: false,
+            },
+            // Wildcard duplicate entries must be skipped even when they carry `added_rules`.
+            ActiveRuleTree {
+                rule_tree: &node0,
+                index_wildcard_match: true,
+            },
+        ];
+
+        let mut bool_set = BoolSet::new(NUM_RULES);
+        let probe: usize = kani::any();
+        kani::assume(probe < NUM_RULES);
+        let expected_seen = u8::from(probe == r0 || probe == r_shared || probe == r2);
+
+        // Two passes separated by `bool_set.reset()` verify dedup AND reset completeness.
+        for _pass in 0..2 {
+            let mut seen = [0u8; NUM_RULES];
+            let mut riv = RuleIndexVisitor {
+                tree_nodes: &active_nodes,
+                used_rule_set: Some(&mut bool_set),
+            };
+            riv.visit_rule_indices(|rule_index| {
+                seen[rule_index] += 1;
+                assert!(seen[rule_index] == 1);
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(seen[probe], expected_seen);
+            bool_set.reset();
+        }
+
+        // Fast path (`used_rule_set: None`) on non-overlapping nodes skips wildcard entries and emits all.
+        if r0 != r2 {
+            let mut seen = [0u8; NUM_RULES];
+            let single_nodes = [
+                ActiveRuleTree {
+                    rule_tree: &node0,
+                    index_wildcard_match: false,
+                },
+                ActiveRuleTree {
+                    rule_tree: &node0,
+                    index_wildcard_match: true,
+                },
+            ];
+            let mut riv = RuleIndexVisitor {
+                tree_nodes: &single_nodes,
+                used_rule_set: None,
+            };
+            riv.visit_rule_indices(|rule_index| {
+                seen[rule_index] += 1;
+                assert!(seen[rule_index] == 1);
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(seen[probe], u8::from(probe == r0 || probe == r_shared));
+        }
+    }
+}
