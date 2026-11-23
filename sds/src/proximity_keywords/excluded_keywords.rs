@@ -1,6 +1,5 @@
-use crate::proximity_keywords::{
-    EXCLUDED_KEYWORDS_REMOVED_CHARS, ProximityKeywordsRegex, prev_char_with_index,
-};
+use crate::proximity_keywords::{EXCLUDED_KEYWORDS_REMOVED_CHARS, prev_char_with_index};
+use crate::scanner::regex_rule::SharedRegex;
 use metrics::Counter;
 use nom::AsChar;
 use regex_automata::{Input, Match};
@@ -8,7 +7,7 @@ use regex_automata::{Input, Match};
 #[derive(Clone)]
 pub struct CompiledExcludedProximityKeywords {
     pub look_ahead_character_count: usize,
-    pub keywords_pattern: ProximityKeywordsRegex,
+    pub content_regex: SharedRegex,
     pub false_positive_counter: Counter,
 }
 
@@ -25,7 +24,7 @@ impl CompiledExcludedProximityKeywords {
             content,
             match_start,
             self.look_ahead_character_count,
-            &self.keywords_pattern,
+            &self.content_regex,
         );
         if is_false_positive {
             self.false_positive_counter.increment(1);
@@ -38,7 +37,7 @@ impl CompiledExcludedProximityKeywords {
             content,
             match_start,
             self.look_ahead_character_count,
-            &self.keywords_pattern,
+            &self.content_regex,
         )
     }
 }
@@ -103,26 +102,26 @@ pub fn contains_excluded_keyword_match(
     content: &str,
     match_start: usize,
     look_ahead_char_count: usize,
-    regex: &ProximityKeywordsRegex,
+    content_regex: &SharedRegex,
 ) -> bool {
     let span_bounds = get_span_bounds_scan(content, match_start, look_ahead_char_count);
     let input = Input::new(&span_bounds.stripped_prefix)
         .earliest(true)
         .span(span_bounds.start..span_bounds.end);
-    regex.content_regex.search_half(&input).is_some()
+    content_regex.search_half(&input).is_some()
 }
 
 pub fn get_excluded_keyword_match(
     content: &str,
     match_start: usize,
     look_ahead_char_count: usize,
-    regex: &ProximityKeywordsRegex,
+    content_regex: &SharedRegex,
 ) -> Option<Match> {
     let span_bounds = get_span_bounds_scan(content, match_start, look_ahead_char_count);
     let input = Input::new(&span_bounds.stripped_prefix)
         .earliest(true)
         .span(span_bounds.start..span_bounds.end);
-    regex.content_regex.search(&input)
+    content_regex.search(&input)
 }
 
 #[cfg(test)]
