@@ -226,8 +226,31 @@ mod tests {
         }
     }
 
+    /// Verbatim `origin/main` `BoolSet` implementation used as the differential oracle.
+    struct MainBoolSet {
+        rule_used: Vec<bool>,
+    }
+
+    impl MainBoolSet {
+        fn new(num_rules: usize) -> Self {
+            Self {
+                rule_used: vec![false; num_rules],
+            }
+        }
+
+        fn get_and_set(&mut self, index: usize) -> bool {
+            let result = self.rule_used[index];
+            self.rule_used[index] = true;
+            result
+        }
+
+        fn reset(&mut self) {
+            self.rule_used.fill(false);
+        }
+    }
+
     #[test]
-    fn bool_set_differential_randomized() {
+    fn bool_set_differential_vs_verbatim_main_100k_ops() {
         let mut seed: u64 = 0x1234_5678_9abc_def0;
         let mut next_u64 = || {
             seed ^= seed << 13;
@@ -236,21 +259,25 @@ mod tests {
             seed
         };
 
-        for &num_rules in &[1usize, 63, 64, 65, 127, 128, 129, 255, 256, 257, 300, 512] {
-            let mut set = BoolSet::new(num_rules);
-            let mut oracle = vec![false; num_rules];
+        let sizes = [
+            1usize, 2, 16, 63, 64, 65, 127, 128, 129, 130, 255, 256, 257, 300, 512, 513,
+        ];
+        let ops_per_size = 100_000 / sizes.len() + 1;
 
-            for _ in 0..2000 {
-                if next_u64() % 50 == 0 {
+        for &num_rules in &sizes {
+            let mut set = BoolSet::new(num_rules);
+            let mut oracle = MainBoolSet::new(num_rules);
+
+            for _ in 0..ops_per_size {
+                if next_u64().is_multiple_of(40) {
                     set.reset();
-                    oracle.fill(false);
+                    oracle.reset();
                 } else {
                     let idx = (next_u64() as usize) % num_rules;
-                    let expected = oracle[idx];
-                    oracle[idx] = true;
-                    assert_eq!(set.get_and_set(idx), expected);
+                    assert_eq!(set.get_and_set(idx), oracle.get_and_set(idx));
                 }
             }
+            assert_eq!(set.as_mut_slice(), oracle.rule_used.as_slice());
         }
     }
 
@@ -336,7 +363,7 @@ mod tests {
     }
 
     #[test]
-    fn inline_bit_buffer_differential_randomized() {
+    fn inline_bit_buffer_and_bit_helpers_differential_50k_ops() {
         let mut seed: u64 = 0xabcd_ef01_2345_6789;
         let mut next_u64 = || {
             seed ^= seed << 13;
@@ -346,39 +373,50 @@ mod tests {
         };
 
         let mut buf = InlineBitBuffer::new();
-        for _ in 0..300 {
+        let mut total_ops = 0usize;
+
+        while total_ops < 50_000 {
+            let max_bit = match next_u64() % 4 {
+                0 => 64usize,
+                1 => 256usize,
+                2 => 260usize,
+                _ => 512usize,
+            };
             let num_sets = (next_u64() % 6) as usize;
             let mut sets: Vec<Vec<u64>> = Vec::with_capacity(num_sets);
-            let mut expected = [false; 384];
+            let mut expected = vec![false; max_bit];
+
             for _ in 0..num_sets {
                 let mut words = Vec::new();
-                let num_bits = (next_u64() % 12) as usize;
-                for _ in 0..num_bits {
-                    let bit = (next_u64() as usize) % expected.len();
-                    set_bit(&mut words, bit);
-                    expected[bit] = true;
+                let mut set_oracle = vec![false; max_bit];
+                let num_ops = (next_u64() % 20) as usize;
+                for _ in 0..num_ops {
+                    let bit = (next_u64() as usize) % max_bit;
+                    if next_u64().is_multiple_of(3) {
+                        clear_bit(&mut words, bit);
+                        set_oracle[bit] = false;
+                    } else {
+                        set_bit(&mut words, bit);
+                        set_oracle[bit] = true;
+                    }
+                    assert_eq!(contains_bit(&words, bit), set_oracle[bit]);
+                    assert!(words.last() != Some(&0));
+                    total_ops += 1;
                 }
-                // Randomly clear a couple bits to exercise trailing zero trimming.
-                if next_u64().is_multiple_of(3) {
-                    let bit = (next_u64() as usize) % expected.len();
-                    clear_bit(&mut words, bit);
-                }
-                // Recompute expected accurately after clears across all sets below.
-                sets.push(words);
-            }
-            expected.fill(false);
-            for s in &sets {
-                for (bit, slot) in expected.iter_mut().enumerate() {
-                    if contains_bit(s, bit) {
-                        *slot = true;
+                for (bit, &is_set) in set_oracle.iter().enumerate() {
+                    if is_set {
+                        expected[bit] = true;
                     }
                 }
+                sets.push(words);
             }
 
             buf.set_union_of(&sets);
+            total_ops += 1;
             for (bit, &exp) in expected.iter().enumerate() {
                 assert_eq!(contains_bit(buf.as_slice(), bit), exp, "bit {bit}");
             }
+            assert!(!contains_bit(buf.as_slice(), max_bit));
         }
     }
 }

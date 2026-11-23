@@ -288,7 +288,6 @@ impl SharedData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -458,8 +457,164 @@ mod tests {
         assert_eq!(data.get::<TypeE>(), Some(&TypeE(5)));
     }
 
+    #[derive(Debug, Default, PartialEq, Eq)]
+    struct TypeG(u64);
+    #[derive(Debug, Default, PartialEq, Eq)]
+    struct TypeH(u64);
+    #[derive(Debug, Default, PartialEq, Eq)]
+    struct TypeI(u64);
+    #[derive(Debug, Default, PartialEq, Eq)]
+    struct TypeJ(u64);
+    #[derive(Debug, Default, PartialEq, Eq)]
+    struct TypeK(u64);
+    #[derive(Debug, Default, PartialEq, Eq)]
+    struct TypeL(u64);
+
+    /// Verbatim `origin/main` `SharedData` implementation used as the differential oracle.
+    struct MainSharedData {
+        map: AHashMap<TypeId, Box<dyn Any + Send + Sync>>,
+    }
+
+    impl MainSharedData {
+        fn new() -> Self {
+            Self {
+                map: AHashMap::new(),
+            }
+        }
+
+        fn get_mut_or_default<T: Default + Send + Sync + 'static>(&mut self) -> &mut T {
+            let any = self
+                .map
+                .entry(TypeId::of::<T>())
+                .or_insert_with(|| Box::new(T::default()));
+            any.downcast_mut().unwrap()
+        }
+
+        fn get<T: Send + Sync + 'static>(&self) -> Option<&T> {
+            Some(self.map.get(&TypeId::of::<T>())?.downcast_ref().unwrap())
+        }
+
+        fn get_mut<T: Send + Sync + 'static>(&mut self) -> Option<&mut T> {
+            Some(
+                self.map
+                    .get_mut(&TypeId::of::<T>())?
+                    .downcast_mut()
+                    .unwrap(),
+            )
+        }
+
+        fn insert<T: Send + Sync + 'static>(&mut self, value: T) {
+            self.map.insert(TypeId::of::<T>(), Box::new(value));
+        }
+
+        fn insert_if_not_contains<T: Send + Sync + 'static>(
+            &mut self,
+            get_value: impl FnOnce() -> T,
+        ) {
+            self.map
+                .entry(TypeId::of::<T>())
+                .or_insert_with(|| Box::new(get_value()));
+        }
+    }
+
     #[test]
-    fn inline_slot_map_differential_randomized() {
+    fn shared_data_differential_vs_verbatim_main_50k_ops() {
+        macro_rules! apply_op_for_type {
+            ($ty:ident, $actual:expr, $oracle:expr, $op:expr, $val:expr) => {
+                match $op {
+                    0 => {
+                        $actual.insert($ty($val));
+                        $oracle.insert($ty($val));
+                    }
+                    1 => {
+                        let a = $actual.get_mut_or_default::<$ty>();
+                        let o = $oracle.get_mut_or_default::<$ty>();
+                        assert_eq!(a.0, o.0);
+                        a.0 = a.0.wrapping_add($val);
+                        o.0 = o.0.wrapping_add($val);
+                    }
+                    2 => {
+                        let mut called_a = false;
+                        $actual.insert_if_not_contains(|| {
+                            called_a = true;
+                            $ty($val)
+                        });
+                        let mut called_o = false;
+                        $oracle.insert_if_not_contains(|| {
+                            called_o = true;
+                            $ty($val)
+                        });
+                        assert_eq!(called_a, called_o);
+                    }
+                    3 => {
+                        assert_eq!($actual.get::<$ty>(), $oracle.get::<$ty>());
+                    }
+                    _ => {
+                        let a = $actual.get_mut::<$ty>();
+                        let o = $oracle.get_mut::<$ty>();
+                        assert_eq!(a.as_deref(), o.as_deref());
+                        if let (Some(av), Some(ov)) = (a, o) {
+                            av.0 = av.0.wrapping_add(13);
+                            ov.0 = ov.0.wrapping_add(13);
+                        }
+                    }
+                }
+            };
+        }
+
+        let mut seed: u64 = 0x517c_c1b7_2722_0a95;
+        let mut next_u64 = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+
+        let mut total_ops = 0usize;
+        while total_ops < 50_000 {
+            let mut actual = SharedData::new();
+            let mut oracle = MainSharedData::new();
+            let steps = 1 + (next_u64() as usize) % 32;
+            let num_types = 1 + (next_u64() as usize) % 12;
+
+            for _ in 0..steps {
+                let op = next_u64() % 5;
+                let ty_idx = (next_u64() as usize) % num_types;
+                let val = next_u64();
+                match ty_idx {
+                    0 => apply_op_for_type!(TypeA, actual, oracle, op, val),
+                    1 => apply_op_for_type!(TypeB, actual, oracle, op, val),
+                    2 => apply_op_for_type!(TypeC, actual, oracle, op, val),
+                    3 => apply_op_for_type!(TypeD, actual, oracle, op, val),
+                    4 => apply_op_for_type!(TypeE, actual, oracle, op, val),
+                    5 => apply_op_for_type!(TypeF, actual, oracle, op, val),
+                    6 => apply_op_for_type!(TypeG, actual, oracle, op, val),
+                    7 => apply_op_for_type!(TypeH, actual, oracle, op, val),
+                    8 => apply_op_for_type!(TypeI, actual, oracle, op, val),
+                    9 => apply_op_for_type!(TypeJ, actual, oracle, op, val),
+                    10 => apply_op_for_type!(TypeK, actual, oracle, op, val),
+                    _ => apply_op_for_type!(TypeL, actual, oracle, op, val),
+                }
+                total_ops += 1;
+            }
+
+            assert_eq!(actual.get::<TypeA>(), oracle.get::<TypeA>());
+            assert_eq!(actual.get::<TypeB>(), oracle.get::<TypeB>());
+            assert_eq!(actual.get::<TypeC>(), oracle.get::<TypeC>());
+            assert_eq!(actual.get::<TypeD>(), oracle.get::<TypeD>());
+            assert_eq!(actual.get::<TypeE>(), oracle.get::<TypeE>());
+            assert_eq!(actual.get::<TypeF>(), oracle.get::<TypeF>());
+            assert_eq!(actual.get::<TypeG>(), oracle.get::<TypeG>());
+            assert_eq!(actual.get::<TypeH>(), oracle.get::<TypeH>());
+            assert_eq!(actual.get::<TypeI>(), oracle.get::<TypeI>());
+            assert_eq!(actual.get::<TypeJ>(), oracle.get::<TypeJ>());
+            assert_eq!(actual.get::<TypeK>(), oracle.get::<TypeK>());
+            assert_eq!(actual.get::<TypeL>(), oracle.get::<TypeL>());
+        }
+    }
+
+    #[test]
+    fn inline_slot_map_differential_real_ahashmap_100k_ops() {
         let mut seed: u64 = 0x9e37_79b9_7f4a_7c15;
         let mut next_u64 = || {
             seed ^= seed << 13;
@@ -468,14 +623,22 @@ mod tests {
             seed
         };
 
-        for _trial in 0..200 {
-            let mut map: InlineSlotMap<u8, u32, 4> = InlineSlotMap::new();
-            let mut oracle: HashMap<u8, u32> = HashMap::new();
+        let mut total_ops = 0usize;
+        while total_ops < 100_000 {
+            let mut map: InlineSlotMap<u32, u64, 4, AHashMap<u32, u64>> = InlineSlotMap::new();
+            let mut oracle: AHashMap<u32, u64> = AHashMap::new();
+            let key_space = match next_u64() % 4 {
+                0 => 4u32,
+                1 => 6u32,
+                2 => 16u32,
+                _ => 64u32,
+            };
+            let steps = 1 + (next_u64() as usize) % 64;
 
-            for _step in 0..40 {
+            for _ in 0..steps {
                 let op = next_u64() % 5;
-                let key = (next_u64() % 12) as u8;
-                let val = (next_u64() % 1000) as u32;
+                let key = (next_u64() % u64::from(key_space)) as u32;
+                let val = next_u64();
 
                 match op {
                     0 => {
@@ -518,9 +681,11 @@ mod tests {
 
                 assert_eq!(map.len(), oracle.len());
                 assert_eq!(map.is_empty(), oracle.is_empty());
-                for k in 0..12u8 {
-                    assert_eq!(map.get(&k), oracle.get(&k));
-                }
+                assert_eq!(map.get(&key), oracle.get(&key));
+                total_ops += 1;
+            }
+            for k in 0..key_space {
+                assert_eq!(map.get(&k), oracle.get(&k));
             }
         }
     }
