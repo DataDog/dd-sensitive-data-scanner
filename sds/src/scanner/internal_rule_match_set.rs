@@ -176,8 +176,61 @@ mod tests {
         assert_eq!(collected.get(&path_of("async_only")), Some(&vec![3]));
     }
 
+    /// Verbatim `origin/main` eager-`AHashMap` implementation used as the differential oracle.
+    struct MainInternalRuleMatchSet<E: Encoding> {
+        sync_matches: Vec<(Path<'static>, Vec<InternalRuleMatch<E>>)>,
+        async_matches: AHashMap<Path<'static>, Vec<InternalRuleMatch<E>>>,
+    }
+
+    impl<E: Encoding> MainInternalRuleMatchSet<E> {
+        fn new() -> Self {
+            Self {
+                sync_matches: Vec::new(),
+                async_matches: AHashMap::new(),
+            }
+        }
+
+        fn push_sync_matches(&mut self, path: &Path, matches: Vec<InternalRuleMatch<E>>) {
+            if matches.is_empty() {
+                return;
+            }
+            self.sync_matches.push((path.into_static(), matches));
+        }
+
+        fn is_empty(&self) -> bool {
+            self.sync_matches.is_empty() && self.async_matches.is_empty()
+        }
+
+        fn push_async_matches(
+            &mut self,
+            path: &Path,
+            matches: impl IntoIterator<Item = InternalRuleMatch<E>>,
+        ) {
+            let mut matches = matches.into_iter().peekable();
+            if matches.peek().is_none() {
+                return;
+            }
+            self.async_matches
+                .entry(path.into_static())
+                .or_default()
+                .extend(matches);
+        }
+
+        fn into_iter(mut self) -> impl Iterator<Item = (Path<'static>, Vec<InternalRuleMatch<E>>)> {
+            if !self.async_matches.is_empty() {
+                for (path, matches) in &mut self.sync_matches {
+                    if let Some(async_matches) = self.async_matches.remove(path) {
+                        matches.extend(async_matches)
+                    }
+                }
+            }
+
+            self.sync_matches.into_iter().chain(self.async_matches)
+        }
+    }
+
     #[test]
-    fn differential_randomized_matches_eager_map_oracle() {
+    fn differential_randomized_matches_verbatim_main_50k_ops() {
         let mut seed: u64 = 0xfeed_face_cafe_1234;
         let mut next_u64 = || {
             seed ^= seed << 13;
@@ -186,61 +239,69 @@ mod tests {
             seed
         };
 
-        let paths: Vec<Path<'static>> = ["a", "b", "c", "d", "e"]
-            .iter()
-            .map(|f| path_of(f))
-            .collect();
+        let paths: Vec<Path<'static>> = (0..40).map(|i| path_of(&format!("field_{i}"))).collect();
+        let mut total_ops = 0usize;
 
-        for _trial in 0..300 {
-            let mut set: InternalRuleMatchSet<Utf8Encoding> = InternalRuleMatchSet::new();
-            let mut oracle_sync: Vec<(Path<'static>, Vec<usize>)> = Vec::new();
-            let mut oracle_async: AHashMap<Path<'static>, Vec<usize>> = AHashMap::new();
+        while total_ops < 50_000 {
+            let mut actual_set: InternalRuleMatchSet<Utf8Encoding> = InternalRuleMatchSet::new();
+            let mut main_set: MainInternalRuleMatchSet<Utf8Encoding> =
+                MainInternalRuleMatchSet::new();
 
-            let steps = (next_u64() % 16) as usize;
+            let path_pool = 1 + (next_u64() as usize) % paths.len();
+            let steps = (next_u64() % 32) as usize;
+            let mut sync_entries = 0usize;
+            let mut saw_non_empty_async = false;
+
             for step in 0..steps {
-                let p = &paths[(next_u64() as usize) % paths.len()];
-                let count = (next_u64() % 4) as usize;
-                let ids: Vec<usize> = (0..count).map(|k| step * 10 + k).collect();
-                let ms: Vec<InternalRuleMatch<Utf8Encoding>> =
-                    ids.iter().map(|&id| make_match(id, id, id + 1)).collect();
+                let p = &paths[(next_u64() as usize) % path_pool];
+                let count = (next_u64() % 5) as usize;
+                let ms_actual: Vec<InternalRuleMatch<Utf8Encoding>> = (0..count)
+                    .map(|k| {
+                        let id = step * 10 + k;
+                        make_match(id, id, id + 1)
+                    })
+                    .collect();
+                let ms_main: Vec<InternalRuleMatch<Utf8Encoding>> = (0..count)
+                    .map(|k| {
+                        let id = step * 10 + k;
+                        make_match(id, id, id + 1)
+                    })
+                    .collect();
 
                 if next_u64().is_multiple_of(2) {
-                    set.push_sync_matches(p, ms);
-                    if !ids.is_empty() {
-                        oracle_sync.push((p.into_static(), ids));
+                    actual_set.push_sync_matches(p, ms_actual);
+                    main_set.push_sync_matches(p, ms_main);
+                    if count > 0 {
+                        sync_entries += 1;
                     }
                 } else {
-                    set.push_async_matches(p, ms);
-                    if !ids.is_empty() {
-                        oracle_async.entry(p.into_static()).or_default().extend(ids);
+                    actual_set.push_async_matches(p, ms_actual);
+                    main_set.push_async_matches(p, ms_main);
+                    if count > 0 {
+                        saw_non_empty_async = true;
                     }
                 }
-                assert_eq!(
-                    set.is_empty(),
-                    oracle_sync.is_empty() && oracle_async.is_empty()
-                );
+                assert_eq!(actual_set.is_empty(), main_set.is_empty());
+                assert_eq!(actual_set.async_matches.is_some(), saw_non_empty_async);
+                total_ops += 1;
             }
 
-            if !oracle_async.is_empty() {
-                for (path, matches) in &mut oracle_sync {
-                    if let Some(am) = oracle_async.remove(path) {
-                        matches.extend(am);
-                    }
-                }
-            }
-
-            let actual: Vec<(Path<'static>, Vec<usize>)> = set
+            let actual: Vec<(Path<'static>, Vec<usize>)> = actual_set
+                .into_iter()
+                .map(|(p, ms)| (p, ms.into_iter().map(|m| m.rule_index).collect()))
+                .collect();
+            let expected: Vec<(Path<'static>, Vec<usize>)> = main_set
                 .into_iter()
                 .map(|(p, ms)| (p, ms.into_iter().map(|m| m.rule_index).collect()))
                 .collect();
 
             // Sync entries preserve exact order; remaining async-only entries match as a map.
-            let sync_len = oracle_sync.len();
-            assert_eq!(&actual[..sync_len], &oracle_sync[..]);
+            assert_eq!(actual.len(), expected.len());
+            assert_eq!(&actual[..sync_entries], &expected[..sync_entries]);
             let actual_async_tail: BTreeMap<Path<'static>, Vec<usize>> =
-                actual[sync_len..].iter().cloned().collect();
+                actual[sync_entries..].iter().cloned().collect();
             let expected_async_tail: BTreeMap<Path<'static>, Vec<usize>> =
-                oracle_async.into_iter().collect();
+                expected[sync_entries..].iter().cloned().collect();
             assert_eq!(actual_async_tail, expected_async_tail);
         }
     }

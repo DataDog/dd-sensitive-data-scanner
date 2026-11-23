@@ -2035,4 +2035,407 @@ mod test {
             }
         }
     }
+
+    /// Verbatim `origin/main` `ScopedRuleSet` implementation used as the end-to-end differential
+    /// oracle for `push_segment`, `pop_segment`, `active_node_counter`, `InlineBitBuffer`, and
+    /// lazy `BoolSet` deduplication.
+    mod main_reference {
+        use crate::event::{EventVisitor, VisitStringResult};
+        use crate::scanner::scope::{ScanArea, Scope};
+        use crate::{Event, Path, PathSegment, ScannerError};
+        use ahash::AHashMap;
+
+        struct MainBoolSet {
+            rule_used: Vec<bool>,
+        }
+
+        impl MainBoolSet {
+            fn new(num_rules: usize) -> Self {
+                Self {
+                    rule_used: vec![false; num_rules],
+                }
+            }
+
+            fn get_and_set(&mut self, index: usize) -> bool {
+                let result = self.rule_used[index];
+                self.rule_used[index] = true;
+                result
+            }
+
+            fn reset(&mut self) {
+                self.rule_used.fill(false);
+            }
+        }
+
+        pub(super) struct MainScopedRuleSet {
+            tree: RuleTree,
+            num_rules: usize,
+            add_implicit_index_wildcards: bool,
+        }
+
+        impl MainScopedRuleSet {
+            pub(super) fn new(rules_scopes: &[Scope]) -> Self {
+                let mut tree = RuleTree::new();
+
+                for (rule_index, scope) in rules_scopes.iter().enumerate() {
+                    match &scope.include {
+                        ScanArea::Everything => tree.insert_rule_add(&Path::root(), rule_index),
+                        ScanArea::Only(paths) => {
+                            for path in paths {
+                                tree.insert_rule_add(path, rule_index);
+                            }
+                        }
+                    }
+                    for path in &scope.exclude {
+                        tree.insert_rule_removal(path, rule_index);
+                    }
+                }
+                Self {
+                    tree,
+                    num_rules: rules_scopes.len(),
+                    add_implicit_index_wildcards: false,
+                }
+            }
+
+            pub(super) fn with_implicit_index_wildcards(mut self, value: bool) -> Self {
+                self.add_implicit_index_wildcards = value;
+                self
+            }
+
+            pub(super) fn visit_all(
+                &self,
+                event: &mut impl Event,
+            ) -> Vec<(Path<'static>, String, Vec<(usize, bool)>)> {
+                let bool_set = if self.add_implicit_index_wildcards {
+                    Some(MainBoolSet::new(self.num_rules))
+                } else {
+                    None
+                };
+                let mut out = Vec::new();
+                let mut visitor = MainVisitor {
+                    out: &mut out,
+                    tree_nodes: vec![ActiveRuleTree {
+                        rule_tree: &self.tree,
+                        index_wildcard_match: false,
+                    }],
+                    active_node_counter: vec![NodeCounter {
+                        active_tree_count: 1,
+                    }],
+                    path: Path::root(),
+                    bool_set,
+                    add_implicit_index_wildcards: self.add_implicit_index_wildcards,
+                };
+                event.visit_event(&mut visitor).unwrap();
+                out
+            }
+        }
+
+        struct ActiveRuleTree<'a> {
+            rule_tree: &'a RuleTree,
+            index_wildcard_match: bool,
+        }
+
+        struct NodeCounter {
+            active_tree_count: usize,
+        }
+
+        struct MainVisitor<'a> {
+            out: &'a mut Vec<(Path<'static>, String, Vec<(usize, bool)>)>,
+            tree_nodes: Vec<ActiveRuleTree<'a>>,
+            active_node_counter: Vec<NodeCounter>,
+            path: Path<'a>,
+            bool_set: Option<MainBoolSet>,
+            add_implicit_index_wildcards: bool,
+        }
+
+        impl<'path> EventVisitor<'path> for MainVisitor<'path> {
+            fn push_segment(&mut self, segment: PathSegment<'path>) {
+                let num_active_trees = self.active_node_counter.last().unwrap().active_tree_count;
+                let tree_nodes_len = self.tree_nodes.len();
+                let active_trees_range = tree_nodes_len - num_active_trees..tree_nodes_len;
+
+                for tree_index in active_trees_range {
+                    if (!self.tree_nodes[tree_index].index_wildcard_match || !segment.is_index())
+                        && let Some(child) =
+                            self.tree_nodes[tree_index].rule_tree.children.get(&segment)
+                    {
+                        self.tree_nodes.push(ActiveRuleTree {
+                            rule_tree: child,
+                            index_wildcard_match: false,
+                        });
+                    }
+
+                    if self.add_implicit_index_wildcards && segment.is_index() {
+                        self.tree_nodes.push(ActiveRuleTree {
+                            rule_tree: self.tree_nodes[tree_index].rule_tree,
+                            index_wildcard_match: true,
+                        });
+                    }
+                }
+
+                self.active_node_counter.push(NodeCounter {
+                    active_tree_count: self.tree_nodes.len() - tree_nodes_len,
+                });
+                self.path.segments.push(segment);
+            }
+
+            fn pop_segment(&mut self) {
+                let node_counter = self.active_node_counter.pop().unwrap();
+                for _ in 0..node_counter.active_tree_count {
+                    let _popped = self.tree_nodes.pop();
+                }
+                self.path.segments.pop();
+            }
+
+            fn visit_string<'s>(
+                &'s mut self,
+                value: &str,
+            ) -> Result<VisitStringResult<'s, 'path>, ScannerError> {
+                let mut rules = Vec::new();
+                for include_node in &self.tree_nodes {
+                    if include_node.index_wildcard_match {
+                        continue;
+                    }
+                    for change in &include_node.rule_tree.rule_changes {
+                        if let RuleChange::Add(rule_index) = change {
+                            let emit = if let Some(used_rule_set) = &mut self.bool_set {
+                                !used_rule_set.get_and_set(*rule_index)
+                            } else {
+                                true
+                            };
+                            if emit {
+                                let is_excluded = self.tree_nodes.iter().any(|n| {
+                                    n.rule_tree
+                                        .rule_changes
+                                        .contains(&RuleChange::Remove(*rule_index))
+                                });
+                                rules.push((*rule_index, is_excluded));
+                            }
+                        }
+                    }
+                }
+                if let Some(bool_set) = &mut self.bool_set {
+                    bool_set.reset();
+                }
+                self.out
+                    .push((self.path.into_static(), value.to_string(), rules));
+                Ok(VisitStringResult {
+                    might_mutate: false,
+                    path: &self.path,
+                })
+            }
+        }
+
+        #[derive(Clone, Copy, PartialEq, Debug)]
+        enum RuleChange {
+            Add(usize),
+            Remove(usize),
+        }
+
+        #[derive(Clone, Debug)]
+        struct RuleTree {
+            rule_changes: Vec<RuleChange>,
+            children: AHashMap<PathSegment<'static>, RuleTree>,
+        }
+
+        impl RuleTree {
+            fn new() -> Self {
+                Self {
+                    rule_changes: vec![],
+                    children: AHashMap::new(),
+                }
+            }
+
+            fn insert_rule_add(&mut self, path: &Path<'static>, rule_index: usize) {
+                self.insert_rule_inner(&path.segments, RuleChange::Add(rule_index));
+            }
+
+            fn insert_rule_removal(&mut self, path: &Path<'static>, rule_index: usize) {
+                self.insert_rule_inner(&path.segments, RuleChange::Remove(rule_index));
+            }
+
+            fn insert_rule_inner(
+                &mut self,
+                path: &[PathSegment<'static>],
+                rule_change: RuleChange,
+            ) {
+                if self.rule_changes.contains(&rule_change) {
+                    return;
+                }
+                if let Some((first, remaining)) = path.split_first() {
+                    let child_tree = self
+                        .children
+                        .entry(first.clone())
+                        .or_insert_with(RuleTree::new);
+                    child_tree.insert_rule_inner(remaining, rule_change);
+                } else {
+                    self.recursively_remove(rule_change);
+                    self.rule_changes.push(rule_change);
+                }
+            }
+
+            fn recursively_remove(&mut self, rule_change: RuleChange) {
+                self.rule_changes.retain(|x| *x != rule_change);
+                for child_tree in self.children.values_mut() {
+                    child_tree.recursively_remove(rule_change);
+                }
+            }
+        }
+    }
+
+    fn visit_event_exact_order(
+        event: &mut impl Event,
+        ruleset: &ScopedRuleSet,
+    ) -> Vec<(Path<'static>, String, Vec<(usize, bool)>)> {
+        let mut out = Vec::new();
+
+        struct ExactOrderVisitor<'a> {
+            out: &'a mut Vec<(Path<'static>, String, Vec<(usize, bool)>)>,
+        }
+
+        impl<'a> ContentVisitor<'a> for ExactOrderVisitor<'a> {
+            fn visit_content<'content_visitor>(
+                &'content_visitor mut self,
+                path: &Path<'a>,
+                content: &str,
+                mut rule_iter: RuleIndexVisitor,
+                exclusion_check: ExclusionCheck<'content_visitor>,
+            ) -> Result<bool, ScannerError> {
+                let mut rules = Vec::new();
+                rule_iter.visit_rule_indices(|rule_index| {
+                    rules.push((rule_index, exclusion_check.is_excluded(rule_index)));
+                    Ok(())
+                })?;
+                self.out
+                    .push((path.into_static(), content.to_string(), rules));
+                Ok(false)
+            }
+        }
+
+        ruleset
+            .visit_string_rule_combinations(event, ExactOrderVisitor { out: &mut out })
+            .unwrap();
+        out
+    }
+
+    fn build_random_event(
+        rng: &mut dyn FnMut() -> u64,
+        depth: usize,
+        max_depth: usize,
+        fields: &[&str],
+    ) -> SimpleEvent {
+        if depth >= max_depth || rng().is_multiple_of(5) {
+            return SimpleEvent::String(format!("v{}_{}", depth, rng() % 100));
+        }
+        if rng().is_multiple_of(3) {
+            let len = 1 + (rng() as usize) % 2;
+            let items = (0..len)
+                .map(|_| build_random_event(rng, depth + 1, max_depth, fields))
+                .collect();
+            SimpleEvent::List(items)
+        } else {
+            let len = 1 + (rng() as usize) % 2;
+            let mut map = std::collections::BTreeMap::new();
+            for _ in 0..len {
+                let key = fields[(rng() as usize) % fields.len()].to_string();
+                map.insert(key, build_random_event(rng, depth + 1, max_depth, fields));
+            }
+            SimpleEvent::Map(map)
+        }
+    }
+
+    #[test]
+    fn test_scoped_ruleset_differential_vs_verbatim_main_100k_evals() {
+        let mut seed: u64 = 0x2026_1123_cafe_feed;
+        let mut next_u64 = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+
+        let fields = ["a", "b", "c", "d"];
+        let rand_path = |max_len: usize, rng: &mut dyn FnMut() -> u64| -> Path<'static> {
+            let len = (rng() as usize) % (max_len + 1);
+            let mut segs = Vec::with_capacity(len);
+            for _ in 0..len {
+                if rng().is_multiple_of(3) {
+                    segs.push(PathSegment::Index((rng() % 2) as usize));
+                } else {
+                    segs.push(PathSegment::Field(
+                        fields[(rng() as usize) % fields.len()].into(),
+                    ));
+                }
+            }
+            Path::from(segs)
+        };
+
+        let rule_counts = [0usize, 1, 2, 16, 64, 128, 129, 256, 257, 300];
+        let mut total_rule_evals = 0usize;
+        let mut trial = 0usize;
+
+        while total_rule_evals < 120_000 {
+            let implicit_wildcards = trial % 2 == 1;
+            let num_rules = rule_counts[trial % rule_counts.len()];
+            // Periodically build deep paths (depth 20) to force InlineStack 16->17 spill across
+            // tree_nodes, active_node_counter, and active_removal_sets.
+            let deep_mode = trial % 7 == 0;
+            let max_depth = if deep_mode { 20 } else { 5 };
+
+            let mut scopes = Vec::with_capacity(num_rules);
+            for _ in 0..num_rules {
+                let excl_count = (next_u64() % 4) as usize;
+                let excludes: Vec<Path<'static>> = (0..excl_count)
+                    .map(|_| rand_path(if deep_mode { 20 } else { 5 }, &mut next_u64))
+                    .collect();
+                let scope = match next_u64() % 4 {
+                    0 => Scope::exclude(excludes),
+                    1 | 2 => {
+                        let incl_count = (next_u64() % 4) as usize;
+                        let includes = (0..incl_count)
+                            .map(|_| rand_path(if deep_mode { 20 } else { 5 }, &mut next_u64))
+                            .collect();
+                        Scope::include_and_exclude(includes, excludes)
+                    }
+                    _ => Scope::all(),
+                };
+                scopes.push(scope);
+            }
+
+            let actual_rs =
+                ScopedRuleSet::new(&scopes).with_implicit_index_wildcards(implicit_wildcards);
+            let main_rs = main_reference::MainScopedRuleSet::new(&scopes)
+                .with_implicit_index_wildcards(implicit_wildcards);
+
+            let mut event = if deep_mode {
+                let mut cur = SimpleEvent::String("deep-leaf".into());
+                for d in (0..20).rev() {
+                    if d % 5 == 0 {
+                        cur = SimpleEvent::List(vec![cur, SimpleEvent::String(format!("li-{d}"))]);
+                    } else {
+                        let mut m = std::collections::BTreeMap::new();
+                        m.insert(fields[d % fields.len()].to_string(), cur);
+                        m.insert("sib".to_string(), SimpleEvent::String(format!("s-{d}")));
+                        cur = SimpleEvent::Map(m);
+                    }
+                }
+                cur
+            } else {
+                build_random_event(&mut next_u64, 0, max_depth, &fields)
+            };
+
+            let actual = visit_event_exact_order(&mut event, &actual_rs);
+            let expected = main_rs.visit_all(&mut event);
+
+            assert_eq!(
+                actual, expected,
+                "exact-order mismatch on trial={trial} wildcards={implicit_wildcards} num_rules={num_rules} deep={deep_mode}"
+            );
+
+            for (_, _, rules) in &actual {
+                total_rule_evals += rules.len().max(1);
+            }
+            trial += 1;
+        }
+    }
 }
