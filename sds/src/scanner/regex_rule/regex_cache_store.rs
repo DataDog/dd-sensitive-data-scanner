@@ -1,6 +1,5 @@
-use crate::proximity_keywords::{ProximityKeywordsRegex, contains_keyword_in_path};
+use crate::SharedPool;
 use crate::scanner::regex_rule::regex_store::{RegexCacheKey, SharedRegex, gc_regex_store};
-use crate::{Path, PathSegment, SharedPool};
 use lazy_static::lazy_static;
 use regex_automata::meta::Regex as MetaRegex;
 use slotmap::SecondaryMap;
@@ -41,17 +40,8 @@ pub fn clear_all_caches() {
     gc_regex_store();
 }
 
-#[derive(Clone, Copy)]
-enum SanitizedPathState {
-    Uncomputed,
-    AlreadySanitized,
-    Buffered,
-}
-
 pub struct RegexCaches {
     map: SecondaryMap<RegexCacheKey, RegexCacheValue>,
-    sanitized_path_buf: String,
-    sanitized_path_state: SanitizedPathState,
 }
 
 pub struct RegexCacheValue {
@@ -63,59 +53,7 @@ impl RegexCaches {
     pub fn new() -> Self {
         Self {
             map: SecondaryMap::new(),
-            sanitized_path_buf: String::new(),
-            sanitized_path_state: SanitizedPathState::Uncomputed,
         }
-    }
-
-    #[inline]
-    pub(crate) fn reset_sanitized_path(&mut self) {
-        self.sanitized_path_state = SanitizedPathState::Uncomputed;
-    }
-
-    /// Lazily sanitizes `path` once per visited string (reusing a scratch buffer across scans
-    /// and borrowing single already-sanitized field segments directly) and checks whether
-    /// `keywords` match it using the pooled `path_regex` cache.
-    pub(crate) fn contains_keyword_in_path(
-        &mut self,
-        path: &Path,
-        keywords: &ProximityKeywordsRegex,
-    ) -> bool {
-        let sanitized = match self.sanitized_path_state {
-            SanitizedPathState::AlreadySanitized => {
-                if let [PathSegment::Field(field)] = path.segments.as_slice() {
-                    field.as_ref()
-                } else {
-                    ""
-                }
-            }
-            SanitizedPathState::Buffered => self.sanitized_path_buf.as_str(),
-            SanitizedPathState::Uncomputed => {
-                if let Some(borrowed) = path.as_already_sanitized() {
-                    self.sanitized_path_state = SanitizedPathState::AlreadySanitized;
-                    borrowed
-                } else {
-                    self.sanitized_path_buf.clear();
-                    path.sanitize_into(&mut self.sanitized_path_buf);
-                    self.sanitized_path_state = SanitizedPathState::Buffered;
-                    self.sanitized_path_buf.as_str()
-                }
-            }
-        };
-
-        if sanitized.is_empty() {
-            return false;
-        }
-
-        let cache_value = self
-            .map
-            .entry(keywords.path_regex.cache_key)
-            .unwrap()
-            .or_insert_with(|| RegexCacheValue {
-                cache: keywords.path_regex.regex.create_cache(),
-                captures: keywords.path_regex.regex.create_captures(),
-            });
-        contains_keyword_in_path(sanitized, keywords, &mut cache_value.cache)
     }
 
     pub fn get(&mut self, shared_regex: &SharedRegex) -> &mut RegexCacheValue {

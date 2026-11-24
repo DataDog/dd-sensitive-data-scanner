@@ -1,6 +1,6 @@
 use crate::proximity_keywords::{
-    CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords, get_prefix_start,
-    is_index_within_prefix,
+    CompiledExcludedProximityKeywords, CompiledIncludedProximityKeywords, contains_keyword_in_path,
+    get_prefix_start, is_index_within_prefix,
 };
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::regex_cache_store::RegexCacheValue;
@@ -40,12 +40,6 @@ impl CompiledRule for RegexCompiledRule {
         path: &Path,
         ctx: &mut StringMatchesCtx,
     ) -> RuleResult {
-        // Regex rules are validated to never match empty strings, so empty content
-        // cannot produce matches or excluded-scope entries.
-        if content.is_empty() {
-            return Ok(RuleStatus::Done);
-        }
-
         match self.included_keywords {
             Some(ref included_keywords) => {
                 self.get_string_matches_with_included_keywords(
@@ -169,39 +163,32 @@ impl RegexCompiledRule {
         }
 
         // Plain-string events have no path, so the path keyword fallback below can never match.
+        // Skip its whole-content regex probe.
         if path.is_empty() {
             return;
         }
 
-        // Choose the cheaper predicate first when computing `regex(content) && keyword(path)`:
-        // for very short values (at most 32 bytes, or no longer than the path itself), probing the
-        // rule regex directly avoids scanning a longer path when the regex fails quickly (e.g. via
-        // minimum match length); for longer values, checking the short cached path first skips
-        // running the full rule regex over the value.
-        let check_path_first = content.len() > 32 && content.len() > path.size_segments_only();
-        if check_path_first {
-            if !ctx
-                .regex_caches
-                .contains_keyword_in_path(path, &included_keywords.keywords_pattern)
-            {
-                return;
-            }
-        } else {
+        let mut has_verified_kws_in_path: Option<bool> = None;
+
+        {
             let input = Input::new(content);
             let cache_value = ctx.regex_caches.get(&self.regex);
             if self
                 .regex
                 .search_half_with(&mut cache_value.cache, &input)
-                .is_none()
+                .is_some()
             {
-                return;
+                has_verified_kws_in_path = Some(contains_keyword_in_path(
+                    &path.sanitize(),
+                    &included_keywords.keywords_pattern,
+                ))
             }
-            if !ctx
-                .regex_caches
-                .contains_keyword_in_path(path, &included_keywords.keywords_pattern)
-            {
-                return;
-            }
+        };
+
+        if has_verified_kws_in_path.is_none() || has_verified_kws_in_path.is_some_and(|x| !x) {
+            // We don't deal with true positives is in this case, because keywords don't match the path.
+            // Return early.
+            return;
         }
 
         let cache_value = ctx.regex_caches.get(&self.regex);
