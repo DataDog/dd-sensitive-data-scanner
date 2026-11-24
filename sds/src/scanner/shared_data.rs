@@ -690,3 +690,224 @@ mod tests {
         }
     }
 }
+
+#[cfg(kani)]
+mod kani_proofs {
+    use super::*;
+
+    /// Deterministic fixed-storage `SpillMap` used in Kani proofs so CBMC verifies every state
+    /// transition of the real `InlineSlotMap` without symbolic hasher or heap-realloc blowup.
+    struct LinearSpillMap<K, V> {
+        entries: [Option<(K, V)>; 8],
+        len: usize,
+    }
+
+    impl<K: PartialEq, V> SpillMap<K, V> for LinearSpillMap<K, V> {
+        fn with_capacity(_capacity: usize) -> Self {
+            Self {
+                entries: [const { None }; 8],
+                len: 0,
+            }
+        }
+
+        fn len(&self) -> usize {
+            self.len
+        }
+
+        fn get(&self, key: &K) -> Option<&V> {
+            for slot in &self.entries[..self.len] {
+                if let Some((k, v)) = slot
+                    && k == key
+                {
+                    return Some(v);
+                }
+            }
+            None
+        }
+
+        fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+            for slot in &mut self.entries[..self.len] {
+                if let Some((k, v)) = slot
+                    && k == key
+                {
+                    return Some(v);
+                }
+            }
+            None
+        }
+
+        fn insert(&mut self, key: K, value: V) {
+            for slot in &mut self.entries[..self.len] {
+                if let Some((k, v)) = slot
+                    && *k == key
+                {
+                    *v = value;
+                    return;
+                }
+            }
+            self.entries[self.len] = Some((key, value));
+            self.len += 1;
+        }
+
+        fn get_or_insert_with(&mut self, key: K, make_value: impl FnOnce() -> V) -> &mut V {
+            if let Some(pos) = self.entries[..self.len]
+                .iter()
+                .position(|slot| matches!(slot, Some((k, _)) if *k == key))
+            {
+                return &mut self.entries[pos].as_mut().unwrap().1;
+            }
+            let val = make_value();
+            let idx = self.len;
+            self.entries[idx] = Some((key, val));
+            self.len += 1;
+            &mut self.entries[idx].as_mut().unwrap().1
+        }
+    }
+
+    const KEY_SPACE: usize = 6;
+
+    #[kani::proof]
+    #[kani::unwind(10)]
+    fn kani_inline_slot_map_insert_get_overwrite_and_spill() {
+        let mut map: InlineSlotMap<u8, u16, INLINE_CAPACITY, LinearSpillMap<u8, u16>> =
+            InlineSlotMap::new();
+        let mut oracle: [Option<u16>; KEY_SPACE] = [None; KEY_SPACE];
+        let mut oracle_len: usize = 0;
+
+        // 5 symbolic inserts/overwrites + get_mut crosses Empty -> Inline(1..=4) -> Spilled(5).
+        for _ in 0..5 {
+            let key: u8 = kani::any();
+            kani::assume((key as usize) < KEY_SPACE);
+            let val: u16 = kani::any();
+            let op: u8 = kani::any();
+            kani::assume(op < 2);
+
+            if op == 0 {
+                map.insert(key, val);
+                if oracle[key as usize].is_none() {
+                    oracle_len += 1;
+                }
+                oracle[key as usize] = Some(val);
+            } else {
+                let delta: u16 = kani::any();
+                match (map.get_mut(&key), &mut oracle[key as usize]) {
+                    (Some(mv), Some(ov)) => {
+                        assert_eq!(*mv, *ov);
+                        *mv = mv.wrapping_add(delta);
+                        *ov = ov.wrapping_add(delta);
+                    }
+                    (None, None) => {}
+                    _ => panic!("get_mut presence mismatch"),
+                }
+            }
+
+            assert_eq!(map.len(), oracle_len);
+            assert_eq!(map.is_empty(), oracle_len == 0);
+        }
+
+        let probe: u8 = kani::any();
+        kani::assume((probe as usize) < KEY_SPACE);
+        assert_eq!(map.get(&probe).copied(), oracle[probe as usize]);
+        kani::cover!(true, "post-assertion conclusion reachable");
+    }
+
+    #[kani::proof]
+    #[kani::unwind(10)]
+    fn kani_inline_slot_map_get_or_insert_with_and_closure_skip() {
+        let mut map: InlineSlotMap<u8, u16, INLINE_CAPACITY, LinearSpillMap<u8, u16>> =
+            InlineSlotMap::new();
+        let mut oracle: [Option<u16>; KEY_SPACE] = [None; KEY_SPACE];
+        let mut oracle_len: usize = 0;
+
+        for _ in 0..5 {
+            let key: u8 = kani::any();
+            kani::assume((key as usize) < KEY_SPACE);
+            let val: u16 = kani::any();
+            let use_if_not_contains: bool = kani::any();
+
+            let mut called = false;
+            if use_if_not_contains {
+                map.insert_if_not_contains(key, || {
+                    called = true;
+                    val
+                });
+                let expected_called = oracle[key as usize].is_none();
+                assert_eq!(called, expected_called);
+                if expected_called {
+                    oracle[key as usize] = Some(val);
+                    oracle_len += 1;
+                }
+            } else {
+                let delta: u16 = kani::any();
+                let slot = map.get_or_insert_with(key, || {
+                    called = true;
+                    val
+                });
+                let expected_called = oracle[key as usize].is_none();
+                assert_eq!(called, expected_called);
+                if expected_called {
+                    oracle[key as usize] = Some(val);
+                    oracle_len += 1;
+                }
+                assert_eq!(*slot, oracle[key as usize].unwrap());
+                *slot = slot.wrapping_add(delta);
+                oracle[key as usize] = Some(oracle[key as usize].unwrap().wrapping_add(delta));
+            }
+
+            assert_eq!(map.len(), oracle_len);
+        }
+
+        let probe: u8 = kani::any();
+        kani::assume((probe as usize) < KEY_SPACE);
+        assert_eq!(map.get(&probe).copied(), oracle[probe as usize]);
+        kani::cover!(true, "post-assertion conclusion reachable");
+    }
+
+    #[kani::proof]
+    #[kani::unwind(8)]
+    fn kani_inline_slot_map_capacity_one_spill_boundary() {
+        let mut map: InlineSlotMap<u8, u16, 1, LinearSpillMap<u8, u16>> = InlineSlotMap::new();
+        let mut oracle: [Option<u16>; 3] = [None; 3];
+        let mut oracle_len: usize = 0;
+
+        for _ in 0..3 {
+            let key: u8 = kani::any();
+            kani::assume(key < 3);
+            let val: u16 = kani::any();
+            let use_entry: bool = kani::any();
+
+            if use_entry {
+                let mut called = false;
+                let slot = map.get_or_insert_with(key, || {
+                    called = true;
+                    val
+                });
+                let absent = oracle[key as usize].is_none();
+                assert_eq!(called, absent);
+                if absent {
+                    oracle[key as usize] = Some(val);
+                    oracle_len += 1;
+                }
+                assert_eq!(*slot, oracle[key as usize].unwrap());
+            } else {
+                map.insert(key, val);
+                if oracle[key as usize].is_none() {
+                    oracle_len += 1;
+                }
+                oracle[key as usize] = Some(val);
+            }
+
+            if oracle_len == 1 {
+                assert!(matches!(map, InlineSlotMap::Inline { len: 1, .. }));
+            } else if oracle_len > 1 {
+                assert!(matches!(map, InlineSlotMap::Spilled(_)));
+            }
+            assert_eq!(map.len(), oracle_len);
+        }
+
+        let probe: u8 = kani::any();
+        kani::assume(probe < 3);
+        assert_eq!(map.get(&probe).copied(), oracle[probe as usize]);
+        kani::cover!(true, "post-assertion conclusion reachable");
+    }
+}

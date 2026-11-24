@@ -102,3 +102,6 @@ harness = false
 name = "fuzz"
 path = "tools/fuzz/src/main.rs"
 required-features = ["sds-fuzz"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
