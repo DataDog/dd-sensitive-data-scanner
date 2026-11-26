@@ -225,8 +225,69 @@ pub struct ProximityKeywordsConfig {
     pub excluded_keywords: Vec<String>,
 }
 
+/// A secondary validator together with the result to use when this runtime cannot evaluate it.
+///
+/// `default_response` is a sibling of `type` on the wire (`{"type": ..., "default_response": ...}`)
+/// so that it stays readable even when `type` is unknown to this runtime.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct ValidatorConfig {
+    #[serde(flatten)]
+    pub validator: ValidatorKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_response: Option<DefaultResponse>,
+}
+
+impl ValidatorConfig {
+    pub fn new(validator: SecondaryValidator, default_response: Option<DefaultResponse>) -> Self {
+        Self {
+            validator: ValidatorKind::Known(validator),
+            default_response,
+        }
+    }
+}
+
+impl From<SecondaryValidator> for ValidatorConfig {
+    fn from(validator: SecondaryValidator) -> Self {
+        Self::new(validator, None)
+    }
+}
+
+/// Keeps validators this runtime can't load out of `SecondaryValidator`, so that a rule written for
+/// a newer library version degrades to its `default_response` instead of failing to deserialize
+/// (which fails the whole rule and, through the Go bindings, the whole scanner).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(untagged)]
+pub enum ValidatorKind {
+    Known(SecondaryValidator),
+    /// The `type` is unknown to this runtime, or its `config` uses values this runtime doesn't
+    /// know. Kept verbatim so that re-serializing the rule is lossless.
+    Unsupported {
+        #[serde(rename = "type")]
+        type_name: serde_json::Value,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        config: Option<serde_json::Value>,
+    },
+}
+
+/// Result a validator resolves to when it cannot be evaluated by this runtime.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DefaultResponse {
+    /// Keep the match, as if there was no validator.
+    Pass,
+    /// Drop the match.
+    Fail,
+}
+
+impl DefaultResponse {
+    pub fn is_valid_match(&self) -> bool {
+        matches!(self, DefaultResponse::Pass)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumIter, AsRefStr)]
 #[serde(tag = "type")]
+#[non_exhaustive]
 pub enum SecondaryValidator {
     AbaRtnChecksum,
     AtlassianTokenChecksum,
@@ -561,5 +622,73 @@ mod test {
                 expected_result
             );
         }
+    }
+
+    fn parse_validator_config(validator: serde_json::Value) -> ValidatorConfig {
+        serde_json::from_value(validator).unwrap()
+    }
+
+    #[test]
+    fn test_unsupported_validator_round_trips_losslessly() {
+        let json = serde_json::json!({
+            "type": "FutureValidator",
+            "default_response": "pass",
+            "config": {"key": "value"},
+        });
+        let config = parse_validator_config(json.clone());
+        assert_eq!(serde_json::to_value(&config).unwrap(), json);
+    }
+
+    #[test]
+    fn test_default_response_is_read_beside_a_configured_validator() {
+        let config = parse_validator_config(serde_json::json!({
+            "type": "JwtClaimsValidator",
+            "default_response": "pass",
+            "config": {"required_claims": {}},
+        }));
+        assert!(matches!(
+            config.validator,
+            ValidatorKind::Known(SecondaryValidator::JwtClaimsValidator { .. })
+        ));
+        assert_eq!(config.default_response, Some(DefaultResponse::Pass));
+    }
+
+    #[test]
+    fn test_default_response_rejects_other_values() {
+        for value in [
+            serde_json::json!("skip"),
+            serde_json::json!("Pass"),
+            serde_json::json!(1),
+            serde_json::json!(["pass"]),
+        ] {
+            let result = serde_json::from_value::<ValidatorConfig>(serde_json::json!({
+                "type": "LuhnChecksum",
+                "default_response": value,
+            }));
+            assert!(result.is_err(), "{value}");
+        }
+    }
+
+    #[test]
+    fn test_default_response_round_trips() {
+        let config = ValidatorConfig::new(
+            SecondaryValidator::LuhnChecksum,
+            Some(DefaultResponse::Pass),
+        );
+        let json = serde_json::to_value(&config).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "LuhnChecksum", "default_response": "pass"})
+        );
+        assert_eq!(parse_validator_config(json), config);
+    }
+
+    #[test]
+    fn test_absent_default_response_is_not_serialized() {
+        let config = ValidatorConfig::from(SecondaryValidator::LuhnChecksum);
+        assert_eq!(
+            serde_json::to_value(&config).unwrap(),
+            serde_json::json!({"type": "LuhnChecksum"})
+        );
     }
 }
