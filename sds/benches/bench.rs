@@ -348,6 +348,48 @@ pub fn multipass_excluded_scan(c: &mut Criterion) {
     });
 }
 
+fn rule_prefilter(c: &mut Criterion) {
+    let rules: Vec<_> = (0..77)
+        .map(|i| RootRuleConfig::new_dyn(RegexRuleConfig::new(&format!("r{i:03}_[0-9]+"))))
+        .collect();
+    let sparse = SimpleEvent::Map(
+        (0..64)
+            .map(|i| {
+                let value = if i == 0 {
+                    "r042_123"
+                } else {
+                    "request completed"
+                };
+                (format!("field{i}"), SimpleEvent::String(value.into()))
+            })
+            .collect(),
+    );
+    let long_all_hit = SimpleEvent::String((0..77).map(|i| format!("r{i:03}_123 ")).collect());
+    let short_rules: Vec<_> = (0..77)
+        .map(|i| RootRuleConfig::new_dyn(RegexRuleConfig::new(&format!("{i:02}"))))
+        .collect();
+    let short_all_hit = SimpleEvent::String((0..77).map(|i| format!("{i:02} ")).collect());
+
+    let mut group = c.benchmark_group("rule_prefilter");
+    for (name, rules, mut event, expected_matches) in [
+        ("sparse", &rules, sparse, 1),
+        ("short_all_hit", &short_rules, short_all_hit, 77),
+        ("long_all_hit", &rules, long_all_hit, 77),
+    ] {
+        for (mode, enabled) in [("off", false), ("on", true)] {
+            let scanner = Scanner::builder(rules)
+                .with_prefilter(enabled)
+                .build()
+                .unwrap();
+            assert_eq!(scanner.scan(&mut event).unwrap().len(), expected_matches);
+            group.bench_function(format!("{name}/{mode}"), |b| {
+                b.iter(|| scanner.scan(&mut event).unwrap())
+            });
+        }
+    }
+    group.finish();
+}
+
 criterion::criterion_group!(
     benches,
     scoped_ruleset,
@@ -355,7 +397,8 @@ criterion::criterion_group!(
     token_efficiency_vs_entropy,
     included_keywords,
     included_keywords_on_path,
-    multipass_excluded_scan
+    multipass_excluded_scan,
+    rule_prefilter
 );
 
 criterion::criterion_main!(benches);

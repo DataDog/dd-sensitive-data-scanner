@@ -3,6 +3,7 @@ use ahash::AHashMap;
 use lazy_static::lazy_static;
 use regex_automata::meta::{Cache, Regex as MetaRegex};
 use slotmap::{SlotMap, new_key_type};
+use std::borrow::Cow;
 use std::ops::Deref;
 use std::sync::Weak;
 use std::sync::{Arc, Mutex};
@@ -31,7 +32,26 @@ pub fn get_memoized_regex<T>(
     pattern: &str,
     regex_factory: impl FnOnce(&str) -> Result<regex_automata::meta::Regex, T>,
 ) -> Result<SharedRegex, T> {
-    get_memoized_regex_with_custom_store(pattern, regex_factory, &REGEX_STORE)
+    RegexCacheKind::Custom.get_or_compile(pattern, regex_factory)
+}
+
+// The same pattern text can compile to different regexes with different factories.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum RegexCacheKind {
+    Rule,
+    Keyword,
+    Suppression,
+    Custom,
+}
+
+impl RegexCacheKind {
+    pub(crate) fn get_or_compile<E>(
+        self,
+        pattern: &str,
+        compile: impl FnOnce(&str) -> Result<MetaRegex, E>,
+    ) -> Result<SharedRegex, E> {
+        get_memoized_regex_with_custom_store(self, pattern, compile, &REGEX_STORE)
+    }
 }
 
 /// Drops store bookkeeping for regexes no longer referenced by any scanner (otherwise
@@ -41,14 +61,15 @@ pub fn gc_regex_store() {
 }
 
 fn get_memoized_regex_with_custom_store<T>(
+    kind: RegexCacheKind,
     pattern: &str,
     regex_factory: impl FnOnce(&str) -> Result<regex_automata::meta::Regex, T>,
     store: &Mutex<RegexStore>,
 ) -> Result<SharedRegex, T> {
     {
         let regex_store = store.lock().unwrap();
-        if let Some(exiting_regex) = regex_store.get(pattern) {
-            return Ok(exiting_regex);
+        if let Some(existing_regex) = regex_store.get(kind, pattern) {
+            return Ok(existing_regex);
         }
     }
 
@@ -56,7 +77,7 @@ fn get_memoized_regex_with_custom_store<T>(
     let regex = regex_factory(pattern)?;
 
     let mut regex_store = store.lock().unwrap();
-    Ok(regex_store.insert(pattern, regex))
+    Ok(regex_store.insert(kind, pattern, regex))
 }
 
 // A GC of the regex store happens every N insertions
@@ -69,7 +90,7 @@ lazy_static! {
 new_key_type! { pub struct RegexCacheKey; }
 
 struct RegexStore {
-    pattern_index: AHashMap<String, RegexCacheKey>,
+    pattern_index: AHashMap<(RegexCacheKind, Cow<'static, str>), RegexCacheKey>,
     key_map: SlotMap<RegexCacheKey, WeakSharedRegex>,
     // used to decide when to GC. Counts up to `GC_FREQUENCY` and is reset to 0 when a GC happens
     gc_counter: u64,
@@ -101,16 +122,10 @@ impl RegexStore {
     }
 
     /// Check if a regex for this pattern already exists, and returns a copy if it does
-    pub fn get(&self, pattern: &str) -> Option<SharedRegex> {
-        self.pattern_index.get(pattern).and_then(|cache_key| {
-            self.key_map
-                .get(*cache_key)
-                .and_then(|x| x.regex.upgrade())
-                .map(|regex| SharedRegex {
-                    regex,
-                    cache_key: *cache_key,
-                })
-        })
+    pub fn get(&self, kind: RegexCacheKind, pattern: &str) -> Option<SharedRegex> {
+        let cache_key = *self.pattern_index.get(&(kind, Cow::Borrowed(pattern)))?;
+        let regex = self.key_map.get(cache_key)?.regex.upgrade()?;
+        Some(SharedRegex { regex, cache_key })
     }
 
     #[cfg(test)]
@@ -122,12 +137,12 @@ impl RegexStore {
     /// Inserts a new rule into the cache. The "memoized" rule is returned and should be
     /// used instead of the one passed in. This ensures that if there were duplicates of
     /// a rule being created at the same time, only one is kept.
-    pub fn insert(&mut self, pattern: &str, regex: MetaRegex) -> SharedRegex {
+    pub fn insert(&mut self, kind: RegexCacheKind, pattern: &str, regex: MetaRegex) -> SharedRegex {
         self.gc_counter += 1;
         if self.gc_counter >= GC_FREQUENCY {
             self.gc();
         }
-        match self.get(pattern) {
+        match self.get(kind, pattern) {
             Some(existing_regex) => existing_regex,
             _ => {
                 let shared_regex = Arc::new(regex);
@@ -139,8 +154,9 @@ impl RegexStore {
                     cache_size,
                 });
                 GLOBAL_STATS.add_total_regex_cache(cache_size as i64);
-                if let Some(old_cache_key) =
-                    self.pattern_index.insert(pattern.to_owned(), cache_key)
+                if let Some(old_cache_key) = self
+                    .pattern_index
+                    .insert((kind, Cow::Owned(pattern.to_owned())), cache_key)
                 {
                     // cleanup old value (which must be a "dead" reference since `get` returned None)
                     if let Some(weak_ref) = self.key_map.remove(old_cache_key) {
@@ -163,7 +179,7 @@ impl RegexStore {
 #[cfg(test)]
 mod test {
     use crate::scanner::regex_rule::regex_store::{
-        GC_FREQUENCY, RegexStore, get_memoized_regex_with_custom_store,
+        GC_FREQUENCY, RegexCacheKind, RegexStore, get_memoized_regex_with_custom_store,
     };
     use regex_automata::meta::Regex;
     use std::sync::Mutex;
@@ -172,7 +188,13 @@ mod test {
     fn dropped_regexes_should_be_removed_from_global_store() {
         let store = Mutex::new(RegexStore::new());
 
-        let regex = get_memoized_regex_with_custom_store("test", Regex::new, &store).unwrap();
+        let regex = get_memoized_regex_with_custom_store(
+            RegexCacheKind::Custom,
+            "test",
+            Regex::new,
+            &store,
+        )
+        .unwrap();
 
         assert_eq!(store.lock().unwrap().len(), 1);
 
@@ -188,14 +210,24 @@ mod test {
     fn test_automatic_gc() {
         let store = Mutex::new(RegexStore::new());
 
-        let regex = get_memoized_regex_with_custom_store("test", Regex::new, &store).unwrap();
+        let regex = get_memoized_regex_with_custom_store(
+            RegexCacheKind::Custom,
+            "test",
+            Regex::new,
+            &store,
+        )
+        .unwrap();
         drop(regex);
 
         // insert enough new patterns to trigger a GC
         for i in 0..(GC_FREQUENCY - 1) {
-            let regex =
-                get_memoized_regex_with_custom_store(&format!("test-{i}"), Regex::new, &store)
-                    .unwrap();
+            let regex = get_memoized_regex_with_custom_store(
+                RegexCacheKind::Custom,
+                &format!("test-{i}"),
+                Regex::new,
+                &store,
+            )
+            .unwrap();
             drop(regex)
         }
         // The insertion that triggered the GC is itself not cleaned up yet, but everything else is
