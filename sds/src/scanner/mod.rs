@@ -41,6 +41,7 @@ use tokio::time::timeout;
 
 pub mod config;
 pub mod debug_scan;
+pub mod disabled_rule;
 pub mod error;
 pub mod metrics;
 pub mod regex_rule;
@@ -395,6 +396,11 @@ pub trait CompiledRule: Send + Sync {
 
     fn allow_scanner_to_exclude_namespace(&self) -> bool {
         true
+    }
+
+    /// Whether the rule couldn't be loaded and was replaced by a rule that never matches.
+    fn is_disabled(&self) -> bool {
+        false
     }
 }
 
@@ -1189,6 +1195,23 @@ impl ScannerBuilder<'_> {
                 })
             })
             .collect::<Result<Vec<RootCompiledRule>, CreateScannerError>>()?;
+
+        for rule in compiled_rules
+            .iter()
+            .filter(|rule| rule.inner.is_disabled())
+        {
+            // A disabled rule never matches, which existing match metrics can't tell apart from a
+            // rule that saw no sensitive data. Only secondary validators can disable a rule today.
+            let mut labels = vec![("reason".to_string(), "secondary_validator".to_string())];
+            if let Some(sds_rule_name) = &rule.sds_rule_name {
+                labels.push(("sds_rule_name".to_string(), sds_rule_name.clone()));
+            }
+            counter!(
+                "scanner.disabled_rule",
+                self.labels.clone_with_labels(Labels::new(&labels))
+            )
+            .increment(1);
+        }
 
         let mut per_scanner_data = SharedData::new();
 

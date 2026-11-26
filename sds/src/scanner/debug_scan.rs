@@ -48,6 +48,11 @@ pub enum DebugScanError {
     InvalidConfig(CreateScannerError),
     #[error(transparent)]
     ScanError(ScannerError),
+    /// The rule couldn't be loaded, so no condition was evaluated. Probing it with relaxed
+    /// conditions would report misleading partial matches (or fail on syntax only a newer
+    /// runtime accepts).
+    #[error("the rule is disabled")]
+    RuleDisabled,
 }
 
 impl From<CreateScannerError> for DebugScanError {
@@ -78,6 +83,9 @@ pub fn debug_scan<E: Event>(
     rule.match_action = MatchAction::None;
 
     let full_scanner = single_rule_scanner(rule.clone())?;
+    if full_scanner.rules[0].inner.is_disabled() {
+        return Err(DebugScanError::RuleDisabled);
+    }
     let full_matches = full_scanner.scan(event)?;
     let mut output =
         matched_debug_matches(event, full_matches, full_scanner.rules[0].as_regex_rule());
@@ -709,6 +717,25 @@ mod test {
             matches[0].statuses,
             vec![DebugRuleMatchStatus::InExcludedScope]
         );
+    }
+
+    fn rule_with_unknown_validator(pattern: &str) -> RootRuleConfig<Arc<dyn RuleConfig>> {
+        let validator: crate::ValidatorConfig =
+            serde_json::from_value(serde_json::json!({"type": "FutureValidator"})).unwrap();
+        RootRuleConfig::new(
+            RegexRuleConfig::new(pattern)
+                .with_validator_config(Some(validator))
+                .build(),
+        )
+    }
+
+    #[test]
+    fn test_disabled_rule_is_reported_instead_of_probed() {
+        // The invalid regex would fail the relaxed probe scanners if the rule were probed.
+        let mut event = "a secret".to_string();
+        let result = debug_scan(&mut event, rule_with_unknown_validator("(unclosed"));
+
+        assert!(matches!(result, Err(DebugScanError::RuleDisabled)));
     }
 
     #[test]

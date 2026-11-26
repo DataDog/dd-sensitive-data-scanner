@@ -1,5 +1,6 @@
 use crate::proximity_keywords::compile_keywords_proximity_config;
 use crate::scanner::config::RuleConfig;
+use crate::scanner::disabled_rule::DisabledCompiledRule;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::regex_store::get_memoized_regex;
@@ -22,7 +23,7 @@ pub const DEFAULT_KEYWORD_LOOKAHEAD: usize = 30;
 pub struct RegexRuleConfig {
     pub pattern: String,
     pub proximity_keywords: Option<ProximityKeywordsConfig>,
-    pub validator: Option<SecondaryValidator>,
+    pub validator: Option<ValidatorConfig>,
     #[serde_as(deserialize_as = "DefaultOnNull")]
     #[serde(default)]
     pub labels: Labels,
@@ -107,9 +108,11 @@ impl RegexRuleConfig {
     }
 
     pub fn with_validator(&self, validator: Option<SecondaryValidator>) -> Self {
-        let mut this = self.clone();
-        this.validator = validator;
-        this
+        self.with_validator_config(validator.map(ValidatorConfig::from))
+    }
+
+    pub fn with_validator_config(&self, validator: Option<ValidatorConfig>) -> Self {
+        self.mutate_clone(|x| x.validator = validator)
     }
 
     fn get_or_create_proximity_keywords_config(&self) -> ProximityKeywordsConfig {
@@ -168,9 +171,17 @@ impl RuleConfig for RegexRuleConfig {
         rule_index: usize,
         scanner_labels: Labels,
     ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
-        let regex = get_memoized_regex(&self.pattern, validate_and_create_regex)?;
-
         let rule_labels = scanner_labels.clone_with_labels(self.labels.clone());
+
+        // The validator is compiled before the regex: a rule written for a newer runtime may also
+        // use regex syntax this runtime rejects, and it must be disabled rather than fail the scanner.
+        let validator = match self.validator.as_ref().map(ValidatorConfig::compile) {
+            None => None,
+            Some(Some(validator)) => Some(validator),
+            Some(None) => return Ok(Box::new(DisabledCompiledRule)),
+        };
+
+        let regex = get_memoized_regex(&self.pattern, validate_and_create_regex)?;
 
         let (included_keywords, excluded_keywords) = self
             .proximity_keywords
@@ -189,7 +200,7 @@ impl RuleConfig for RegexRuleConfig {
             regex,
             included_keywords,
             excluded_keywords,
-            validator: self.validator.clone().map(|x| x.compile()),
+            validator,
             metrics: RuleMetrics::new(&rule_labels),
             pattern_capture_groups: self.pattern_capture_groups.clone(),
         }))

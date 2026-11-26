@@ -68,7 +68,7 @@ mod vin_checksum;
 #[cfg(test)]
 pub use jwt_expiration_checker::generate_jwt;
 
-use crate::scanner::regex_rule::config::SecondaryValidator;
+use crate::scanner::regex_rule::config::{SecondaryValidator, ValidatorConfig, ValidatorKind};
 pub use crate::secondary_validation::aba_rtn_checksum::AbaRtnChecksum;
 pub use crate::secondary_validation::atlassian_token_checksum::AtlassianTokenChecksum;
 pub use crate::secondary_validation::australian_medicare_checksum::AustralianMedicareChecksum;
@@ -208,6 +208,27 @@ where
     match edge_case_handler(remainder) {
         Some(expected_checksum) => expected_checksum == actual_checksum,
         None => false,
+    }
+}
+
+struct ConstantValidator(bool);
+
+impl Validator for ConstantValidator {
+    fn is_valid_match(&self, _regex_match: &str) -> bool {
+        self.0
+    }
+}
+
+impl ValidatorConfig {
+    /// `None` when this runtime can't evaluate the validator and there is no `default_response` to
+    /// stand in for it: the rule must then be disabled.
+    pub fn compile(&self) -> Option<Arc<dyn Validator>> {
+        match &self.validator {
+            ValidatorKind::Known(validator) => Some(validator.compile()),
+            ValidatorKind::Unsupported { .. } => self.default_response.map(|default_response| {
+                Arc::new(ConstantValidator(default_response.is_valid_match())) as Arc<dyn Validator>
+            }),
+        }
     }
 }
 

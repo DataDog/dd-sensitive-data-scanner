@@ -6,6 +6,7 @@ mod metrics;
 mod overlapping_matches;
 mod parallel_scan;
 mod supporting_rule;
+mod unknown_validator;
 mod validators;
 mod vin_checksum;
 
