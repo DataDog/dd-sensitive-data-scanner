@@ -55,10 +55,28 @@ const (
 	JwtValidatorType  = SecondaryValidatorType("JwtClaimsValidator")
 )
 
+// DefaultResponse is the result a secondary validator resolves to when the library can't
+// evaluate it (e.g. a validator type unknown to this library version).
+type DefaultResponse string
+
+const (
+	// DefaultResponsePass keeps the match, as if there was no validator.
+	DefaultResponsePass = DefaultResponse("pass")
+	// DefaultResponseFail drops the match.
+	DefaultResponseFail = DefaultResponse("fail")
+)
+
 // SecondaryValidator represents a secondary validator that can optionally have configuration
 type SecondaryValidator struct {
-	Type   SecondaryValidatorType `json:"type"`
-	Config interface{}            `json:"config,omitempty"`
+	Type            SecondaryValidatorType `json:"type"`
+	Config          interface{}            `json:"config,omitempty"`
+	DefaultResponse DefaultResponse        `json:"default_response,omitempty"`
+}
+
+// WithDefaultResponse returns a copy of the validator with the given default response.
+func (v SecondaryValidator) WithDefaultResponse(response DefaultResponse) *SecondaryValidator {
+	v.DefaultResponse = response
+	return &v
 }
 
 // NewSecondaryValidator creates a simple validator without configuration
@@ -81,19 +99,22 @@ func (v *SecondaryValidator) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &str); err == nil {
 		v.Type = SecondaryValidatorType(str)
 		v.Config = nil
+		v.DefaultResponse = ""
 		return nil
 	}
 
 	// Unmarshal as object using structured approach
 	var rawMap struct {
-		Type   string          `json:"type"`
-		Config json.RawMessage `json:"config"`
+		Type            string          `json:"type"`
+		Config          json.RawMessage `json:"config"`
+		DefaultResponse DefaultResponse `json:"default_response"`
 	}
 	if err := json.Unmarshal(data, &rawMap); err != nil {
 		return fmt.Errorf("validator must be either a string or object: %v", err)
 	}
 
 	v.Type = SecondaryValidatorType(rawMap.Type)
+	v.DefaultResponse = rawMap.DefaultResponse
 
 	// Handle configuration if present
 	if len(rawMap.Config) > 0 {
