@@ -107,8 +107,8 @@ pub use scanner::{
     config::RuleConfig,
     error::{CreateScannerError, ScannerError},
     regex_rule::config::{
-        ClaimRequirement, JwtClaimsValidatorConfig, ProximityKeywordsConfig, RegexRuleConfig,
-        SecondaryValidator,
+        ClaimRequirement, DefaultResponse, JwtClaimsValidatorConfig, ProximityKeywordsConfig,
+        RegexRuleConfig, SecondaryValidator, ValidatorConfig, ValidatorKind,
     },
     regex_rule::{
         RegexCacheKey, RegexCacheValue, RegexCaches, SharedRegex, clear_all_caches, gc_regex_store,

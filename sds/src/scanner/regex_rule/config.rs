@@ -1,5 +1,6 @@
 use crate::proximity_keywords::compile_keywords_proximity_config;
 use crate::scanner::config::RuleConfig;
+use crate::scanner::disabled_rule::DisabledCompiledRule;
 use crate::scanner::metrics::RuleMetrics;
 use crate::scanner::regex_rule::compiled::RegexCompiledRule;
 use crate::scanner::regex_rule::regex_store::get_memoized_regex;
@@ -22,7 +23,7 @@ pub const DEFAULT_KEYWORD_LOOKAHEAD: usize = 30;
 pub struct RegexRuleConfig {
     pub pattern: String,
     pub proximity_keywords: Option<ProximityKeywordsConfig>,
-    pub validator: Option<SecondaryValidator>,
+    pub validator: Option<ValidatorConfig>,
     #[serde_as(deserialize_as = "DefaultOnNull")]
     #[serde(default)]
     pub labels: Labels,
@@ -107,9 +108,11 @@ impl RegexRuleConfig {
     }
 
     pub fn with_validator(&self, validator: Option<SecondaryValidator>) -> Self {
-        let mut this = self.clone();
-        this.validator = validator;
-        this
+        self.with_validator_config(validator.map(ValidatorConfig::from))
+    }
+
+    pub fn with_validator_config(&self, validator: Option<ValidatorConfig>) -> Self {
+        self.mutate_clone(|x| x.validator = validator)
     }
 
     fn get_or_create_proximity_keywords_config(&self) -> ProximityKeywordsConfig {
@@ -168,9 +171,17 @@ impl RuleConfig for RegexRuleConfig {
         rule_index: usize,
         scanner_labels: Labels,
     ) -> Result<Box<dyn CompiledRule>, CreateScannerError> {
-        let regex = get_memoized_regex(&self.pattern, validate_and_create_regex)?;
-
         let rule_labels = scanner_labels.clone_with_labels(self.labels.clone());
+
+        // The validator is compiled before the regex: a rule written for a newer runtime may also
+        // use regex syntax this runtime rejects, and it must be disabled rather than fail the scanner.
+        let validator = match self.validator.as_ref().map(ValidatorConfig::compile) {
+            None => None,
+            Some(Some(validator)) => Some(validator),
+            Some(None) => return Ok(Box::new(DisabledCompiledRule)),
+        };
+
+        let regex = get_memoized_regex(&self.pattern, validate_and_create_regex)?;
 
         let (included_keywords, excluded_keywords) = self
             .proximity_keywords
@@ -189,7 +200,7 @@ impl RuleConfig for RegexRuleConfig {
             regex,
             included_keywords,
             excluded_keywords,
-            validator: self.validator.clone().map(|x| x.compile()),
+            validator,
             metrics: RuleMetrics::new(&rule_labels),
             pattern_capture_groups: self.pattern_capture_groups.clone(),
         }))
@@ -214,8 +225,69 @@ pub struct ProximityKeywordsConfig {
     pub excluded_keywords: Vec<String>,
 }
 
+/// A secondary validator together with the result to use when this runtime cannot evaluate it.
+///
+/// `default_response` is a sibling of `type` on the wire (`{"type": ..., "default_response": ...}`)
+/// so that it stays readable even when `type` is unknown to this runtime.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct ValidatorConfig {
+    #[serde(flatten)]
+    pub validator: ValidatorKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_response: Option<DefaultResponse>,
+}
+
+impl ValidatorConfig {
+    pub fn new(validator: SecondaryValidator, default_response: Option<DefaultResponse>) -> Self {
+        Self {
+            validator: ValidatorKind::Known(validator),
+            default_response,
+        }
+    }
+}
+
+impl From<SecondaryValidator> for ValidatorConfig {
+    fn from(validator: SecondaryValidator) -> Self {
+        Self::new(validator, None)
+    }
+}
+
+/// Keeps validators this runtime can't load out of `SecondaryValidator`, so that a rule written for
+/// a newer library version degrades to its `default_response` instead of failing to deserialize
+/// (which fails the whole rule and, through the Go bindings, the whole scanner).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(untagged)]
+pub enum ValidatorKind {
+    Known(SecondaryValidator),
+    /// The `type` is unknown to this runtime, or its `config` uses values this runtime doesn't
+    /// know. Kept verbatim so that re-serializing the rule is lossless.
+    Unsupported {
+        #[serde(rename = "type")]
+        type_name: serde_json::Value,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        config: Option<serde_json::Value>,
+    },
+}
+
+/// Result a validator resolves to when it cannot be evaluated by this runtime.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DefaultResponse {
+    /// Keep the match, as if there was no validator.
+    Pass,
+    /// Drop the match.
+    Fail,
+}
+
+impl DefaultResponse {
+    pub fn is_valid_match(&self) -> bool {
+        matches!(self, DefaultResponse::Pass)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, EnumIter, AsRefStr)]
 #[serde(tag = "type")]
+#[non_exhaustive]
 pub enum SecondaryValidator {
     AbaRtnChecksum,
     AtlassianTokenChecksum,
@@ -550,5 +622,73 @@ mod test {
                 expected_result
             );
         }
+    }
+
+    fn parse_validator_config(validator: serde_json::Value) -> ValidatorConfig {
+        serde_json::from_value(validator).unwrap()
+    }
+
+    #[test]
+    fn test_unsupported_validator_round_trips_losslessly() {
+        let json = serde_json::json!({
+            "type": "FutureValidator",
+            "default_response": "pass",
+            "config": {"key": "value"},
+        });
+        let config = parse_validator_config(json.clone());
+        assert_eq!(serde_json::to_value(&config).unwrap(), json);
+    }
+
+    #[test]
+    fn test_default_response_is_read_beside_a_configured_validator() {
+        let config = parse_validator_config(serde_json::json!({
+            "type": "JwtClaimsValidator",
+            "default_response": "pass",
+            "config": {"required_claims": {}},
+        }));
+        assert!(matches!(
+            config.validator,
+            ValidatorKind::Known(SecondaryValidator::JwtClaimsValidator { .. })
+        ));
+        assert_eq!(config.default_response, Some(DefaultResponse::Pass));
+    }
+
+    #[test]
+    fn test_default_response_rejects_other_values() {
+        for value in [
+            serde_json::json!("skip"),
+            serde_json::json!("Pass"),
+            serde_json::json!(1),
+            serde_json::json!(["pass"]),
+        ] {
+            let result = serde_json::from_value::<ValidatorConfig>(serde_json::json!({
+                "type": "LuhnChecksum",
+                "default_response": value,
+            }));
+            assert!(result.is_err(), "{value}");
+        }
+    }
+
+    #[test]
+    fn test_default_response_round_trips() {
+        let config = ValidatorConfig::new(
+            SecondaryValidator::LuhnChecksum,
+            Some(DefaultResponse::Pass),
+        );
+        let json = serde_json::to_value(&config).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "LuhnChecksum", "default_response": "pass"})
+        );
+        assert_eq!(parse_validator_config(json), config);
+    }
+
+    #[test]
+    fn test_absent_default_response_is_not_serialized() {
+        let config = ValidatorConfig::from(SecondaryValidator::LuhnChecksum);
+        assert_eq!(
+            serde_json::to_value(&config).unwrap(),
+            serde_json::json!({"type": "LuhnChecksum"})
+        );
     }
 }
