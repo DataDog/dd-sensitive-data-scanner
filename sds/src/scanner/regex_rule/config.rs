@@ -299,6 +299,12 @@ pub enum SecondaryValidator {
     BrazilianCpfChecksum,
     BtcChecksum,
     BulgarianEGNChecksum,
+    ChainedStepValidator {
+        // Kept as raw JSON so that no config shape fails deserialization: an unparseable chain
+        // must resolve to its `default_response`, not fail the whole scanner.
+        #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+        config: serde_json::Value,
+    },
     ChineseIdChecksum,
     CoordinationNumberChecksum,
     CzechPersonalIdentificationNumberChecksum,

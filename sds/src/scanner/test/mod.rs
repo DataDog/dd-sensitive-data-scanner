@@ -1,4 +1,5 @@
 mod async_rule;
+mod chained_step_validator;
 mod event_lifecycle;
 mod included_keywords;
 mod match_validation;
@@ -7,6 +8,7 @@ mod overlapping_matches;
 mod parallel_scan;
 mod supporting_rule;
 mod unknown_validator;
+mod validator_rules;
 mod validators;
 mod vin_checksum;
 
