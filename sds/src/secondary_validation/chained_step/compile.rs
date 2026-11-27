@@ -648,6 +648,21 @@ impl<'a> StepInputs<'a> {
             .map_or_else(|| missing(key), Ok)
     }
 
+    pub fn required_integer(&self, key: &str) -> CompileResult<i64> {
+        let Some(value) = self.raw(key) else {
+            return missing(key);
+        };
+        value.as_i64().map_or_else(
+            || {
+                fail(
+                    FallbackReason::InvalidValue,
+                    format!("input `{key}` must be an integer, got {}", json_kind(value)),
+                )
+            },
+            Ok,
+        )
+    }
+
     pub fn unsigned(&self, key: &str) -> CompileResult<Option<u64>> {
         match self.raw(key) {
             None => Ok(None),
