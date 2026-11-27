@@ -61,6 +61,8 @@ pub enum ChainOutcome {
 pub(crate) enum FailureClass {
     Negative,
     Error,
+    /// The rule asked to keep the match when this failure happens (e.g. Decode `on_failure: pass`).
+    Pass,
 }
 
 impl From<FailureClass> for ChainOutcome {
@@ -68,6 +70,7 @@ impl From<FailureClass> for ChainOutcome {
         match class {
             FailureClass::Negative => ChainOutcome::Invalid,
             FailureClass::Error => ChainOutcome::Error,
+            FailureClass::Pass => ChainOutcome::Valid,
         }
     }
 }
