@@ -1,0 +1,2112 @@
+[
+  {
+    "id": "box_api_access_token",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9]{32})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "box api",
+      "box.com"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid token matched without keyword check",
+        "input_base64": "Ym94X2FwaT1aaUwweDdmRmxDUTljcHl0QTFBdGRaeWc2UEJQYnJ0bw==",
+        "output": "box_api=[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid token with box keyword present",
+        "input_base64": "Ym94LmNvbT11THM1VWxKMHRqazNrU2FQV1k2R3ZBM05DaTJnSHBYaA==",
+        "output": "box.com=[REDACTED]",
+        "use_included_keywords": true
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid - contains non-alphanumeric character",
+        "input_base64": "Ym94X3Rva2VuOiBaaUwweDdmRmxDUTljcHl0QTFBdGRaeWc2UEJQYnItbw==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - no right boundary (followed by alphanumeric char)",
+        "input_base64": "Ym94X3Rva2VuOiBaaUwweDdmRmxDUTljcHl0QTFBdGRaeWc2UEJQYnJ0b3g=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - too short (31 chars)",
+        "input_base64": "Ym94X3Rva2VuOiBaaUwweDdmRmxDUTljcHl0QTFBdGRaeWc2UEJQYnJ0",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "pattern matches but no keyword present",
+        "input_base64": "YWNjZXNzX3Rva2VuPWpqaDE4d1h6Q0oyd0N5cUlMdG5RUGZiRE9NZm44RG15",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "buildkite_unclustered_agent_token",
+    "pattern": "(?:^|\\\\[rn]|\\bBearer\\s|[=:(\\[{\"'<])(?<sds_match>[0-9a-zA-Z]{40})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "buildkite"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid BuildKite Agent Token ignoring keyword",
+        "input_base64": "YjhjN2Q2ZTVmNGczaDJpMWowazlsOG03bjZvNXA0cTNyMnMxdDB1OQ==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid BuildKite Agent Token with Bearer and space before token",
+        "input_base64": "QXV0aG9yaXphdGlvbjogQmVhcmVyIGQ3ZTFmNWc5aDNpOGoyazZsMG00bjlvM3A4cTJyN3MxdDZ1NXY0dzA=",
+        "output": "Authorization: Bearer [REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid BuildKite Agent Token with keyword buildkite",
+        "input_base64": "ZXhwb3J0IEJVSUxES0lURV9BR0VOVF9UT0tFTj1kN2UxZjVnOWgzaThqMms2bDBtNG45bzNwOHEycjdzMXQ2dTV2NHcw",
+        "output": "export BUILDKITE_AGENT_TOKEN=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid BuildKite Agent Token with keyword in config",
+        "input_base64": "YnVpbGRraXRlX2FnZW50X3Rva2VuPSJkN2UxZjVnOWgzaThqMms2bDBtNG45bzNwOHEycjdzMXQ2dTV2NHcwIiAjIGJ1aWxka2l0ZSBhZ2VudCB0b2tlbg==",
+        "output": "buildkite_agent_token=\"[REDACTED]\" # buildkite agent token",
+        "use_included_keywords": true
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid BuildKite Agent Token - pure hex characters",
+        "input_base64": "MDhkNDA5MzQ3YTNkNDNiYzIxYWZlZDc5NWU1YmNhMDVmMmU5M2M5NQ==",
+        "rejected_by": "validator",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern for BuildKite Agent Token - non-hex characters",
+        "input_base64": "YnVpbGRraXRlX2FnZW50X3Rva2VuOmI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN242bzVwNHEzcjJzMXQwdTla",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern for BuildKite Agent Token - too short",
+        "input_base64": "YnVpbGRraXRlX2FnZW50X3Rva2VuOmI4YzdkNmU1ZjRnM2gyaTFqMGs5bDhtN242bzVwNHEzcjJzMXQwdQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid BuildKite Agent Token with a space before token",
+        "input_base64": "QXV0aG9yaXphdGlvbjogZDdlMWY1ZzloM2k4ajJrNmwwbTRuOW8zcDhxMnI3czF0NnU1djR3MA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "civo_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9]{50})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "civo"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid API key with CIVO_TOKEN env var keyword present",
+        "input_base64": "Q0lWT19UT0tFTj1iRzM5S0xuNlRKWjhJRjRkaG5aZnIxRjJyOGtmUVVHQjg5QldFakZFVFFuMWg0T25VYQ==",
+        "output": "CIVO_TOKEN=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid API key with civo keyword present",
+        "input_base64": "Y2l2byBhcGkga2V5OiAyTXE2WEdZZmFjUVRudE5ERERNMVVwRGtxRjVXWTNRNzY4U0xYa3RFSGdENWMzN0lYbQ==",
+        "output": "civo api key: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid API key without keyword check",
+        "input_base64": "ckdxWGU2V1BrYkc2ZmNoMThnc05rVWlzVTZZdDZaVlVtVDZFN2M4UllBOGdQMkVhRm8=",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "API key not matched when no keyword is present",
+        "input_base64": "Mk1xNlhHWWZhY1FUbnRORERETTFVcERrcUY1V1kzUTc2OFNMWGt0RUhnRDVjMzdJWG0=",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      },
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC8yTXE2WEdZZmFjUVRudE5ERERNMVVwRGtxRjVXWTNRNzY4U0xYa3RFSGdENWMzN0lYbQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — forbidden character (underscore) breaks the alphanumeric charset",
+        "input_base64": "Mk1xNlhHWWZhY1FUbnRORERETTFVcERrcUY1V1kzUTc2OFNMWGt0RUhnRDVjMzdJWF8=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — too long (51 chars)",
+        "input_base64": "Mk1xNlhHWWZhY1FUbnRORERETTFVcERrcUY1V1kzUTc2OFNMWGt0RUhnRDVjMzdJWG1h",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — too short (49 chars, truncated real sample)",
+        "input_base64": "Mk1xNlhHWWZhY1FUbnRORERETTFVcERrcUY1V1kzUTc2OFNMWGt0RUhnRDVjMzdJWA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "clickhouse_cloud_api_secret_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>4b1d[A-Za-z0-9]{38})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid key secret is redacted",
+        "input_base64": "Y2xpY2tob3VzZSBzZWNyZXQ6IDRiMWRYYU1QTEVleGFtcGxlRVhBTVBMRTAxMjM0NTY3ODlhYmNkV1hZWg==",
+        "output": "clickhouse secret: [REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid key secret on its own line",
+        "input_base64": "NGIxZFhhTVBMRWV4YW1wbGVFWEFNUExFMDEyMzQ1Njc4OWFiY2RXWFla",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "forbidden character in body is not matched",
+        "input_base64": "NGIxZFhhTVBMRWV4YW1wbGVFWEFNUExFMDEyMzQ1Njc4OWFiY2RXWFkr",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC80YjFkWGFNUExFZXhhbXBsZUVYQU1QTEUwMTIzNDU2Nzg5YWJjZFdYWVo=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "truncated body is not matched",
+        "input_base64": "NGIxZFhhTVBMRWV4YW1wbGVFWEFNUExFMDEyMzQ1Njc4OWFiY2Q=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "wrong prefix is not matched",
+        "input_base64": "NGIyZFhhTVBMRWV4YW1wbGVFWEFNUExFMDEyMzQ1Njc4OWFiY2RXWFla",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "cloudinary_api_secret",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9_-]{27})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "cloudinary api",
+      "cloudinary private",
+      "cloudinary secret"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid secret with cloudinary api secret keyword present",
+        "input_base64": "Y2xvdWRpbmFyeV9hcGlfc2VjcmV0PU1sR3I0NGlpVUQ5SjV3ZTRuU2JLak5Vb2U4dw==",
+        "output": "cloudinary_api_secret=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid secret with cloudinary secret keyword present",
+        "input_base64": "Y2xvdWRpbmFyeSBzZWNyZXQ6IG1pTHNKdk90dlVCVkxiLWhyYUo5bFNlQ0hwQQ==",
+        "output": "cloudinary secret: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid secret with cloudinary_api keyword present",
+        "input_base64": "Y2xvdWRpbmFyeV9hcGk6IDlrWjRVdGFwNzU5ZGVmSGZ5Sy10YmtYNWo1MA==",
+        "output": "cloudinary_api: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid secret without keyword check",
+        "input_base64": "bWlMc0p2T3R2VUJWTGItaHJhSjlsU2VDSHBB",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC9taUxzSnZPdHZVQlZMYi1ocmFKOWxTZUNIcEE=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — contains a forbidden character (plus sign)",
+        "input_base64": "bWlMc0p2T3R2VUJWTGIraHJhSjlsU2VDSHBB",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — too long (28 chars)",
+        "input_base64": "bWlMc0p2T3R2VUJWTGItaHJhSjlsU2VDSHBBeA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — too short (26 chars)",
+        "input_base64": "bWlMc0p2T3R2VUJWTGItaHJhSjlsU2VDSHA=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "secret not matched when no keyword is present",
+        "input_base64": "bWlMc0p2T3R2VUJWTGItaHJhSjlsU2VDSHBB",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "cohere_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[a-zA-Z0-9]{40})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "cohere"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Cohere API Key in Python code",
+        "input_base64": "aW1wb3J0IGNvaGVyZQoKY28gPSBjb2hlcmUuQ2xpZW50VjIoCiAgICBhcGlfa2V5PSI0a1h3VGhZOEtRQzlXMkNyYUI4c2JieTFnNVVYallLS21zUUhCVVJTIiwKKQ==",
+        "output": "import cohere\n\nco = cohere.ClientV2(\n    api_key=\"[REDACTED]\",\n)",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid Cohere API Key with keyword cohere",
+        "input_base64": "Y29oZXJlX2FwaV9rZXk6IERKR2NqT0lzbzJQM1ZrUVc0VDlYMTdNQmpvek5ncjRuWGRqQ3AyVmg=",
+        "output": "cohere_api_key: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid Cohere API Key with keyword in curl command",
+        "input_base64": "Y29oZXJlX2FwaV9rZXk9dzFEaWQ2bEM3S01OSnRhRk1sbENCTlJrenFpeUY4TGtQd2M5MUx2Sg==",
+        "output": "cohere_api_key=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid Cohere API Key without keywords",
+        "input_base64": "dG9rZW46IERKR2NqT0lzbzJQM1ZrUVc0VDlYMTdNQmpvek5ncjRuWGRqQ3AyVmg=",
+        "output": "token: [REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "Cohere API Key without keyword should not match",
+        "input_base64": "c29tZV9yYW5kb21fa2V5OiB3MURpZDZsQzdLTU5KdGFGTWxsQ0JOUmt6cWl5RjhMa1B3YzkxTHZK",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      },
+      {
+        "description": "invalid pattern - contains special characters",
+        "input_base64": "Y29oZXJlX2FwaV9rZXk6IERKR2NqT0lzbzJQM1ZrUVc0VDlYMTdNQmpvek5ncjRuX2RqQ3AyVg==",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      },
+      {
+        "description": "invalid pattern - too long",
+        "input_base64": "Y29oZXJlX2FwaV9rZXk6IERKR2NqT0lzbzJQM1ZrUVc0VDlYMTdNQmpvek5ncjRuWGRqQ3AyVmh4",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      },
+      {
+        "description": "invalid pattern - too short",
+        "input_base64": "Y29oZXJlX2FwaV9rZXk6IERKR2NqT0lzbzJQM1ZrUVc0VDlYMTdNQmpvek5ncjRuWGRq",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "data_gov_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9]{40})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "data gov"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid key matched with data.gov keyword present",
+        "input_base64": "ZGF0YS5nb3YgYXBpIGtleTogYUIzZEU2Zkc5aEoya0w1bU44cFExclM0dFU3dlcweFkzekE2YkM5ZA==",
+        "output": "data.gov api key: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid key matched without keyword check",
+        "input_base64": "YUIzZEU2Zkc5aEoya0w1bU44cFExclM0dFU3dlcweFkzekE2YkM5ZA==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — all-hex 40-char string rejected by NonHexChecker",
+        "input_base64": "YXBpX2tleT0yZWQ0MzNiN2E2OTVlZGM3OTMwMjg4YjU3YTQ5YjE1YTJlZDQzM2I3",
+        "rejected_by": "validator",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC9hQjNkRTZmRzloSjJrTDVtTjhwUTFyUzR0VTd2VzB4WTN6QTZiQzlk",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — forbidden character (dash) breaks the 40-char alphanumeric run",
+        "input_base64": "YXBpX2tleT1hQjNkRTZmRzloSjJrTDVtTjhwUTFyUzR0VTd2VzB4WTN6QTZiLTlk",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — too long (41 chars)",
+        "input_base64": "YXBpX2tleT1hQjNkRTZmRzloSjJrTDVtTjhwUTFyUzR0VTd2VzB4WTN6QTZiQzlkZA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — too short (39 chars, truncated sample)",
+        "input_base64": "YXBpX2tleT1hQjNkRTZmRzloSjJrTDVtTjhwUTFyUzR0VTd2VzB4WTN6QTZiQzk=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "key not matched when no keyword is present",
+        "input_base64": "YUIzZEU2Zkc5aEoya0w1bU44cFExclM0dFU3dlcweFkzekE2YkM5ZA==",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "disqus_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9]{64})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "disqus"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid key with disqus keyword present",
+        "input_base64": "ZGlzcXVzIGFwaV9rZXk6IGVoT3M5Y3J1T3pzUTlYaDBXbVBoWm40bE5PNmZDa2ppTEVhcHNTRVVFYTNNMk5UR0hETGYxUDBpTlF4MGNpVWM=",
+        "output": "disqus api_key: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid second real sample with disqus keyword present",
+        "input_base64": "ZGlzcXVzX2FwaV9rZXk9YmozbE1mYTNPR21lUUxKeTZTcVBPak03dWxuOFpPZEZVMHRuZnNNSlk0WmJ4MDJhUDRMWGhTUG5Xa0xBenpkcQ==",
+        "output": "disqus_api_key=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid third real sample without keyword check",
+        "input_base64": "S0JVUWFrUHI2MVk2UVg4NFhrc3RPcUR0ek91VFA0UFRNU3BYR2NGWVN6WFNGbUlqZ1V4ekNpVVVrTDJxUWoxQg==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC9laE9zOWNydU96c1E5WGgwV21QaFpuNGxOTzZmQ2tqaUxFYXBzU0VVRWEzTTJOVEdIRExmMVAwaU5ReDBjaVVj",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — forbidden character (underscore) inside the body",
+        "input_base64": "ZGlzcXVzIGFwaSBrZXk6IGVoT3M5Y3J1T3pzUTlYaDBXbVBoWm40bE5PNmZDa2ppTEVhcHNTRVVFYTNNMk5UR0hETGYxUDBpTlF4MGNpX2M=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — too short (63 chars, truncated)",
+        "input_base64": "ZGlzcXVzIGFwaSBrZXk6IGVoT3M5Y3J1T3pzUTlYaDBXbVBoWm40bE5PNmZDa2ppTEVhcHNTRVVFYTNNMk5UR0hETGYxUDBpTlF4MGNpVQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid key not matched when no keyword is present",
+        "input_base64": "ZWhPczljcnVPenNROVhoMFdtUGhabjRsTk82ZkNramlMRWFwc1NFVUVhM00yTlRHSERMZjFQMGlOUXgwY2lVYw==",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "droneci_access_token",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9]{32})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "drone",
+      "drone.io",
+      "droneci"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid droneci access token ignoring keyword",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIGpQbDB2bHpTWGYxdzg0aVZ5ZzA4WlI1U1BPNWtDdll6",
+        "output": "hello world, connected with [REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid droneci access token with keyword drone present",
+        "input_base64": "ZHJvbmUgdG9rZW46IFBER0pPV3I1VnA1SEZpMEN2cUZwekFCM3dPcDZPejVK",
+        "output": "drone token: [REDACTED]",
+        "use_included_keywords": true
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern, token contains a non-alphanumeric character",
+        "input_base64": "RFJPTkVfVE9LRU49alBsMHZselNYZjF3ODRpVnlnMDhaUjVTUE81a0N2WSE=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern, token truncated to 31 characters",
+        "input_base64": "RFJPTkVfVE9LRU49alBsMHZselNYZjF3ODRpVnlnMDhaUjVTUE81a0N2WQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid pattern but missing required keyword, not redacted",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIGpQbDB2bHpTWGYxdzg0aVZ5ZzA4WlI1U1BPNWtDdll6",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "elastic_stack_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9]{26}[AEIMQUYcgkosw048]6[A-Za-z0-9]{30}==)(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "apikey",
+      "elastic",
+      "elasticsearch"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Elastic Stack API key with keyword \"apikey\"",
+        "input_base64": "ZWxhc3RpY3NlYXJjaCBhcGlrZXk9ZVRkVFNHOWhSVUpzUTJoMlMxZEJTM04yVDNBNlNqQmlSVWQyTVVNM1RuUlFkVEZ4Wm5ZeVFrNURVUT09",
+        "output": "elasticsearch apikey=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid Elastic Stack API key with keyword \"elastic\" in an Authorization header",
+        "input_base64": "Y3VybCAtSCAiQXV0aG9yaXphdGlvbjogQXBpS2V5IGVUZFRTRzloUlVKc1EyaDJTMWRCUzNOMlQzQTZTakJpUlVkMk1VTTNUblJRZFRGeFpuWXlRazVEVVE9PSIgaHR0cHM6Ly9teS1lbGFzdGljLWNsdXN0ZXIuZXMuaW8vX3NlY3VyaXR5L19hdXRoZW50aWNhdGU=",
+        "output": "curl -H \"Authorization: ApiKey [REDACTED]\" https://my-elastic-cluster.es.io/_security/_authenticate",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid Elastic Stack API key with keyword \"elasticsearch\" surrounded by quotes",
+        "input_base64": "ZWxhc3RpY3NlYXJjaCBrZXk6ICJlVGRUU0c5aFJVSnNRMmgyUzFkQlMzTjJUM0E2U2pCaVJVZDJNVU0zVG5SUWRURnhabll5UWs1RFVRPT0i",
+        "output": "elasticsearch key: \"[REDACTED]\"",
+        "use_included_keywords": true
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — 58 alphanumeric characters followed by \"==\" that do not encode an identifier, a colon, and a secret",
+        "input_base64": "ZWxhc3RpY3NlYXJjaCBhcGlrZXk9VkdWaGJTMHRMVGhtTVRSbE5EVm1MV05sWldFdE5EWTNaaTFoTUdVMkxUTm1NV0V5WWpOak5HUTFaUT09",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — keyword present but the value does not encode an identifier, a colon, and a secret",
+        "input_base64": "cHJlc2lkaW8tZWxhc3RpYyBkZXBsb3kgdGVhbXM6IFZHVmhiUzB0TFRobU1UUmxORFZtTFdObFpXRXRORFkzWmkxaE1HVTJMVE5tTVdFeVlqTmpOR1ExWlE9PQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      },
+      {
+        "description": "invalid — missing required \"==\" padding",
+        "input_base64": "ZWxhc3RpY3NlYXJjaCBhcGlrZXk9ZVRkVFNHOWhSVUpzUTJoMlMxZEJTM04yVDNBNlNqQmlSVWQyTVVNM1RuUlFkVEZ4Wm5ZeVFrNURVUUFB",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — not preceded by a keyword, even though the pattern matches",
+        "input_base64": "SGVsbG8gd29ybGQsIHRva2VuIGVUZFRTRzloUlVKc1EyaDJTMWRCUzNOMlQzQTZTakJpUlVkMk1VTTNUblJRZFRGeFpuWXlRazVEVVE9PQ==",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      },
+      {
+        "description": "invalid — truncated body (57 chars before padding)",
+        "input_base64": "ZWxhc3RpY3NlYXJjaCBhcGlrZXk9VGRUU0c5aFJVSnNRMmgyUzFkQlMzTjJUM0E2U2pCaVJVZDJNVU0zVG5SUWRURnhabll5UWs1RFVRPT0=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — wrong charset character (hyphen not in confirmed charset)",
+        "input_base64": "ZWxhc3RpY3NlYXJjaCBhcGlrZXk9ZVRkVFNHOWhSVUpzUTJoMlMxZEJTM04yVDNBNlNqQmlSVWQyTVVNM1RuUlFkVEZ4Wm5ZeVFrNUQtUT09",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "exoscale_api_secret",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9_]{43})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "exoscale"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Exoscale API secret with exoscale keyword present (revoked sample 1)",
+        "input_base64": "ZXhvc2NhbGUgc2VjcmV0IGlzIF9DMUdfVEFBblRUOWZaSXRUbGRyMHVkNERJdDY5OHRsRFNqVXdmVzJjUDQ=",
+        "output": "exoscale secret is [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid Exoscale API secret without keyword check (revoked sample 2)",
+        "input_base64": "RVhPU0NBTEVfQVBJX1NFQ1JFVD01MUVVTVRPQmZpWXZFeGw5SUxqM191QTI2dzYxbXVjN2tCa3VpTXhIRlhn",
+        "output": "EXOSCALE_API_SECRET=[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid - all-hex string rejected by NonHexChecker",
+        "input_base64": "ZXhvc2NhbGUgc2VjcmV0IGlzIGFhYmJjY2RkZWVmZjAwMTEyMjMzNDQ1NTY2Nzc4ODk5YWFiYmNjZGRlZQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "ZXhvc2NhbGUgc2VjcmV0IGlzIHBhdGgvX0MxR19UQUFuVFQ5ZlpJdFRsZHIwdWQ0REl0Njk4dGxEU2pVd2ZXMmNQNA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - contains a dash, which is not in the confirmed charset",
+        "input_base64": "ZXhvc2NhbGUgc2VjcmV0IGlzIF9DMUctVEFBblRUOWZaSXRUbGRyMHVkNERJdDY5OHRsRFNqVXdmVzJjUDQ=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - too long (44 chars)",
+        "input_base64": "ZXhvc2NhbGUgc2VjcmV0IGlzIF9DMUdfVEFBblRUOWZaSXRUbGRyMHVkNERJdDY5OHRsRFNqVXdmVzJjUDRh",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - too short (42 chars)",
+        "input_base64": "ZXhvc2NhbGUgc2VjcmV0IGlzIF9DMUdfVEFBblRUOWZaSXRUbGRyMHVkNERJdDY5OHRsRFNqVXdmVzJjUA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "secret not matched when no keyword is present",
+        "input_base64": "X0MxR19UQUFuVFQ5ZlpJdFRsZHIwdWQ0REl0Njk4dGxEU2pVd2ZXMmNQNA==",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "finicity_api_token",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9]{20})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "finicity api",
+      "finicity app",
+      "finicity token"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid token with finicity app token keyword present",
+        "input_base64": "ZmluaWNpdHktYXBwLXRva2VuPXhiZFRQYU13a1lRR0QxSnlkR1JN",
+        "output": "finicity-app-token=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid token with finicity keyword present",
+        "input_base64": "ZmluaWNpdHkgdG9rZW46IDFDYTBhTUs3VkxnVERHZ0lGT2d5",
+        "output": "finicity token: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid token without keyword check",
+        "input_base64": "MUNhMGFNSzdWTGdUREdnSUZPZ3k=",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC8xQ2EwYU1LN1ZMZ1RER2dJRk9neQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — contains a forbidden character (dash)",
+        "input_base64": "MUNhMGFNSzdWTGctVERHZ0lGT2d5",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — too long (21 chars)",
+        "input_base64": "MUNhMGFNSzdWTGdUREdnSUZPZ3lY",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — too short (19 chars, truncated)",
+        "input_base64": "MUNhMGFNSzdWTGdUREdnSUZPZw==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "token not matched when no keyword is present",
+        "input_base64": "MUNhMGFNSzdWTGdUREdnSUZPZ3k=",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "finicity_client_secret",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9!@#$%&*+_-]{12,25})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "finicity client",
+      "finicity partner"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid token with finicity keyword present",
+        "input_base64": "ZmluaWNpdHkgcGFydG5lciBzZWNyZXQ6IEJxNSZZbjhDdDJSZjRYdzFLdTYq",
+        "output": "finicity partner secret: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid token without keyword check",
+        "input_base64": "dmJkTWp1TmNOWUxTYnY1dDhiOFc=",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC92YmRNanVOY05ZTFNidjV0OGI4Vw==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — contains a forbidden character (caret)",
+        "input_base64": "dmJkTWp1TmNOWUxTYnY1dDhiOFde",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — contains a forbidden character not in the charset (tilde)",
+        "input_base64": "QnE1JlluOEN0MlJmNFh3MUt1Nn4=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — too short (11 chars, below minimum length)",
+        "input_base64": "VHI5ayRRbTN4THA=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "token not matched when no keyword is present",
+        "input_base64": "dmJkTWp1TmNOWUxTYnY1dDhiOFc=",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "finnhub_access_token",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[0-9a-z]{40})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "finnhub"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid with X-Finnhub-Token header-style keyword present",
+        "input_base64": "WC1GaW5uaHViLVRva2VuOiBkOWgza285cjAxcWh2MDBra2F1Z2Q5aDNrbzlyMDFxaHYwMGtrYXYw",
+        "output": "X-Finnhub-Token: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid with finnhub keyword present",
+        "input_base64": "Zmlubmh1Yl90b2tlbj1kOWgzbG85cjAxcWh2MDBra2YzMGQ5aDNsbzlyMDFxaHYwMGtrZjNn",
+        "output": "finnhub_token=[REDACTED]",
+        "use_included_keywords": true
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC9kOWgza285cjAxcWh2MDBra2F1Z2Q5aDNrbzlyMDFxaHYwMGtrYXYw",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — forbidden character (uppercase letter) inside the body",
+        "input_base64": "Zmlubmh1YiB0b2tlbjogZDloM2tvOXIwMXFodjAwa2thdWdkOWgza285cjAxcWh2MDBra2FWMA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — too short (39 chars, truncated)",
+        "input_base64": "Zmlubmh1YiB0b2tlbjogZDloM2tvOXIwMXFodjAwa2thdWdkOWgza285cjAxcWh2MDBra2F2",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid-shaped token not matched when no keyword is present",
+        "input_base64": "ZDloM2xvOXIwMXFodjAwa2tmMzBkOWgzbG85cjAxcWh2MDBra2YzZw==",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "google_cloud_storage_access_key_secret",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9+/]{40})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "gcloud",
+      "google cloud"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "Valid 40-character secret with keyword",
+        "input_base64": "Z2Nsb3VkX3N0b3JhZ2Vfa2V5X3NlY3JldCA9IGJHb2ErVjdnL3lxRFh2S1JxcStKVEZuNHVRWmJQaVFKbzRwZjlSeko=",
+        "output": "gcloud_storage_key_secret = [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "Valid secret in a JSON context with keyword",
+        "input_base64": "eyJnb29nbGVfY2xvdWRfYWNjZXNzX2tleSI6ICJhQjFjRDJlZkczaEk0aks1bE02bk83cFE4clM5dFUwdlcxeFkyekFiIn0=",
+        "output": "{\"google_cloud_access_key\": \"[REDACTED]\"}",
+        "use_included_keywords": true
+      }
+    ],
+    "negative": [
+      {
+        "description": "Too long Base64 string should not match",
+        "input_base64": "Z3Nfc2VjcmV0X2FjY2Vzc19rZXkgPSBiR29hK1Y3Zy95cURYdktScXErSlRGbjR1UVpiUGlRSm80cGY5UnpKRXh0cmE=",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      },
+      {
+        "description": "Valid secret should not match without keyword proximity",
+        "input_base64": "c29tZV92YWx1ZSA9IGJHb2ErVjdnL3lxRFh2S1JxcStKVEZuNHVRWmJQaVFKbzRwZjlSeko=",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "influxdb_api_token",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9_-]{86}==)(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "influx",
+      "influxdb"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid token with influx keyword present",
+        "input_base64": "aW5mbHV4IHRva2VuOiAwRmdpc3RTZHNCT0RIYzYyenZ2c3BnQU9ZOF9BaXBpMnMyYmpnZEpNWHlGT2hRQnppRjFCdm5DLUlrNThIYmIzX0EtNHo2VE9oM19VOVBaM0N2M1hGUT09",
+        "output": "influx token: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid token with influxdb keyword present",
+        "input_base64": "aW5mbHV4ZGItdG9rZW49emRaSHJ2LW5hbDlSNDZ6UEJHZFF1Rk5pamM3dlpleVRZbUNhdml6ZE5KV3dqMWd6N2c1SWxrYVdBQmZRM0dxbHFaak90Z3lGWUtTT2QyU1k1LV9RZmc9PQ==",
+        "output": "influxdb-token=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid token without keyword check",
+        "input_base64": "Rk1GVDZ4VzZoS3pXUFRGdEhxcWZOTnNCMzJOek1WNlFLcDRLWHE1SlBzLVA3eFhuQmF5cFBhYXJvWDVhUHdDaHVxalBFWi1ZZTRwSklFRl90dXBfZUE9PQ==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — body truncated to 85 characters",
+        "input_base64": "aW5mbHV4IHRva2VuOiAwRmdpc3RTZHNCT0RIYzYyenZ2c3BnQU9ZOF9BaXBpMnMyYmpnZEpNWHlGT2hRQnppRjFCdm5DLUlrNThIYmIzX0EtNHo2VE9oM19VOVBaM0N2M1hGPT0=",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      },
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC8wRmdpc3RTZHNCT0RIYzYyenZ2c3BnQU9ZOF9BaXBpMnMyYmpnZEpNWHlGT2hRQnppRjFCdm5DLUlrNThIYmIzX0EtNHo2VE9oM19VOVBaM0N2M1hGUT09",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — forbidden character (plus sign) in the body",
+        "input_base64": "aW5mbHV4IHRva2VuOiAwRmdpc3RTZHNCT0RIYzYyenZ2c3BnQU9ZOCtBaXBpMnMyYmpnZEpNWHlGT2hRQnppRjFCdm5DLUlrNThIYmIzX0EtNHo2VE9oM19VOVBaM0N2M1hGUT09",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      },
+      {
+        "description": "invalid — missing \"==\" padding suffix",
+        "input_base64": "aW5mbHV4IHRva2VuOiAwRmdpc3RTZHNCT0RIYzYyenZ2c3BnQU9ZOF9BaXBpMnMyYmpnZEpNWHlGT2hRQnppRjFCdm5DLUlrNThIYmIzX0EtNHo2VE9oM19VOVBaM0N2M1hGUQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      },
+      {
+        "description": "token not matched when no keyword is present",
+        "input_base64": "MEZnaXN0U2RzQk9ESGM2Mnp2dnNwZ0FPWThfQWlwaTJzMmJqZ2RKTVh5Rk9oUUJ6aUYxQnZuQy1JazU4SGJiM19BLTR6NlRPaDNfVTlQWjNDdjNYRlE9PQ==",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "kimi_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>sk-[A-Za-z0-9]{48})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "kimi",
+      "moonshot"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Kimi API key with kimi keyword present",
+        "input_base64": "a2ltaSBhcGkga2V5OiBzay0zYWRDZnRjckFkZjRWelhrR0M2dkFHeEZ6dWxxWEh0UGIzaTRlOTY1Tm5pbWltSVA=",
+        "output": "kimi api key: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid Kimi API key with moonshot keyword present",
+        "input_base64": "TU9PTlNIT1RfQVBJX0tFWT1zay0zYWRDZnRjckFkZjRWelhrR0M2dkFHeEZ6dWxxWEh0UGIzaTRlOTY1Tm5pbWltSVA=",
+        "output": "MOONSHOT_API_KEY=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid Kimi API key without keyword check",
+        "input_base64": "c2stM2FkQ2Z0Y3JBZGY0VnpYa0dDNnZBR3hGenVscVhIdFBiM2k0ZTk2NU5uaW1pbUlQ",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "a2V5c2stM2FkQ2Z0Y3JBZGY0VnpYa0dDNnZBR3hGenVscVhIdFBiM2k0ZTk2NU5uaW1pbUlQ",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — forbidden character (dash) breaking the alphanumeric body",
+        "input_base64": "YXBpIGtleTogc2stM2FkQ2Z0Y3JBZGY0VnpYa0dDNnZBR3hGenVscVhIdFBiLTNpNGU5NjVObmltaW1JUA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — truncated body (47 alphanumeric characters instead of 48)",
+        "input_base64": "YXBpIGtleTogc2stM2FkQ2Z0Y3JBZGY0VnpYa0dDNnZBR3hGenVscVhIdFBiM2k0ZTk2NU5uaW1pbUk=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — wrong static prefix (sx- instead of sk-)",
+        "input_base64": "YXBpIGtleTogc3gtM2FkQ2Z0Y3JBZGY0VnpYa0dDNnZBR3hGenVscVhIdFBiM2k0ZTk2NU5uaW1pbUlQ",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "not matched when no keyword is present",
+        "input_base64": "c2stM2FkQ2Z0Y3JBZGY0VnpYa0dDNnZBR3hGenVscVhIdFBiM2k0ZTk2NU5uaW1pbUlQ",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "lark_feishu_app_secret",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9]{32})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "app secret",
+      "feishu",
+      "lark",
+      "larksuite"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Lark App Secret ignoring keyword",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIHY0STlCZlZDdm9aZVhobk1lN3dFM2VTUWl4ODVVTkVX",
+        "output": "hello world, connected with [REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Lark App Secret with keyword app_secret",
+        "input_base64": "YXBwX3NlY3JldD1IcENIZVBDMEd3ZHFxQzlPWHg1dXhiU1V2WkRVcVkyQw==",
+        "output": "app_secret=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid Lark App Secret with keyword lark",
+        "input_base64": "Y3VybCAiaHR0cHM6Ly9vcGVuLmxhcmtzdWl0ZS5jb20vb3Blbi1hcGlzL2F1dGgvdjMvdGVuYW50X2FjY2Vzc190b2tlbi9pbnRlcm5hbCIgLWQgJ3siYXBwX2lkIjoiY2xpX2E5NjI0Yzc2YTRmODllMTUiLCJhcHBfc2VjcmV0IjoiZVJBMEtUQ1pKNFNvR2FvRGF0eU0xejZNVDhpcjZCU3QifSc=",
+        "output": "curl \"https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal\" -d '{\"app_id\":\"cli_a9624c76a4f89e15\",\"app_secret\":\"[REDACTED]\"}'",
+        "use_included_keywords": true
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern for Lark App Secret - contains non-alphanumeric",
+        "input_base64": "bGFya19hcHBfc2VjcmV0OiB2NEk5QmZWQ3ZvWmVYaG5NZTd3RTNlU1FpeDg1VU5FLQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern for Lark App Secret - too short",
+        "input_base64": "bGFya19hcHBfc2VjcmV0OiB2NEk5QmZWQ3ZvWmVYaG5NZTd3RTNlU1FpeDg1VU5F",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "pattern matches but no keyword present",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIHY0STlCZlZDdm9aZVhobk1lN3dFM2VTUWl4ODVVTkVX",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "minimax_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>sk-api-[A-Za-z0-9_-]{119})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid MiniMax API key in an Authorization header",
+        "input_base64": "QXV0aG9yaXphdGlvbjogQmVhcmVyIHNrLWFwaS1rcDh5ME9BekpyUUpxYS00MjVwU2hSYjJpTlpBU1FDQ0ltbDNhR1hxelFDQ1pFQ0pTNUpWbmFTYm41UE9BcjVEakV2bEx4MGdadTcyUXhueDREcDVHVnpZRGFYX2N5YUZPMklvYm93TktTUmNYOW16a0xmclBQYw==",
+        "output": "Authorization: Bearer [REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid MiniMax API key matched without keyword check",
+        "input_base64": "c2stYXBpLW05dGUxVnNRV0UyV3JrSENvOE1wZ1JpY25CYnktc1dUTVpyaDFlLWFQTG5JOWRyMTlibkpBYVVGS3FjNTBIcnFTU1dPcjlteUI2c1lqSnZhZTZSNEZCQ0hpTTRTYjdHR3FuR0xfVnpfZXRYbmlNX0lTUUc1NFJN",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid third sample MiniMax API key",
+        "input_base64": "c2stYXBpLTBNVmpqc1RSMVZ0THNLNlB0VUR6a3JZVXNLU0o2cUhfcFRzZ0hoRm4zOXpfRmdYSGtxMDNxQWZDamZwZ2U4YUJWNXdsQlk1YkV4WEtwenY2NVVGTjYtY3hWMjBDSkZYWDhjY01WbHVsc09HQTNYNjRvdkxYM053",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — forbidden character in body",
+        "input_base64": "c2stYXBpLW05dGUxVnNRV0UyV3JrSENvOE1wZ1JpY25CYnktc1dUTVpyaDFlLWFQTG5JOWRyMTlibkpBYVVGS3FjNTBIcnFTU1dPcjlteUI2c1lqSnZhZTZSNEZCQ0hpTTRTYjdHR3FuR0wvVnovZXRYbmlNL0lTUUc1NFJN",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — prefix glued to a preceding word character, accepted by \\b but rejected by the restrictive prefix boundary",
+        "input_base64": "eHNrLWFwaS1tOXRlMVZzUVdFMldya0hDbzhNcGdSaWNuQmJ5LXNXVE1acmgxZS1hUExuSTlkcjE5Ym5KQWFVRktxYzUwSHJxU1NXT3I5bXlCNnNZakp2YWU2UjRGQkNIaU00U2I3R0dxbkdMX1Z6X2V0WG5pTV9JU1FHNTRSTQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — token glued to a trailing word character, accepted by \\b but rejected by the restrictive suffix boundary",
+        "input_base64": "c2stYXBpLW05dGUxVnNRV0UyV3JrSENvOE1wZ1JpY25CYnktc1dUTVpyaDFlLWFQTG5JOWRyMTlibkpBYVVGS3FjNTBIcnFTU1dPcjlteUI2c1lqSnZhZTZSNEZCQ0hpTTRTYjdHR3FuR0xfVnpfZXRYbmlNX0lTUUc1NFJNeA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — truncated body (too short)",
+        "input_base64": "c2stYXBpLW05dGUxVnNRV0UyV3JrSENvOE1wZ1JpY25CYnktc1dUTVpyaDFlLWFQTG5JOWRyMTlibkpBYVVGS3FjNTBIcnFTU1dPcjlteUI2c1lqSnZhZTZSNEZCQ0hpTTRTYjdHR3FuR0xfVnpfZXRYbmlNX0lTUUc1NA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — wrong static prefix",
+        "input_base64": "c2stbGl2ZS1tOXRlMVZzUVdFMldya0hDbzhNcGdSaWNuQmJ5LXNXVE1acmgxZS1hUExuSTlkcjE5Ym5KQWFVRktxYzUwSHJxU1NXT3I5bXlCNnNZakp2YWU2UjRGQkNIaU00U2I3R0dxbkdMX1Z6X2V0WG5pTV9JU1FHNTRS",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "naver_cloud_platform_access_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9]{20})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "naver cloud",
+      "ncloud"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid NCP access key in a signed request header",
+        "input_base64": "bmF2ZXIgY2xvdWQ6IEhJSmwzbFVvMEs5NTNrSHB0RGNp",
+        "output": "naver cloud: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid NCP access key in an ncloud configure file",
+        "input_base64": "bmNsb3VkX2FjY2Vzc19rZXlfaWQ9Qzl6eFF5QlFWcWNSTlFtY0FYS24=",
+        "output": "ncloud_access_key_id=[REDACTED]",
+        "use_included_keywords": true
+      }
+    ],
+    "negative": [
+      {
+        "description": "NCP access key without any keyword should not match",
+        "input_base64": "dG9rZW4gPSBDOXp4UXlCUVZxY1JOUW1jQVhLbg==",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      },
+      {
+        "description": "contains a non-alphanumeric character",
+        "input_base64": "bmNsb3VkX2FjY2Vzc19rZXlfaWQ9Qzl6eFF5QlFWcWMtTlFtY0FYS24=",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      },
+      {
+        "description": "too long to be a valid NCP access key",
+        "input_base64": "bmNsb3VkX2FjY2Vzc19rZXlfaWQ9Qzl6eFF5QlFWcWNSTlFtY0FYS25FWFRSQQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      },
+      {
+        "description": "too short to be a valid NCP access key",
+        "input_base64": "bmNsb3VkX2FjY2Vzc19rZXlfaWQ9QUJDMTIz",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "naver_cloud_platform_access_key_secret",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9]{40})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "naver cloud",
+      "ncloud"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid NCP access key secret in an env var",
+        "input_base64": "TkNMT1VEX1NFQ1JFVF9LRVk9TkRnU2Rzc1hnNFJpTU1OMWY1ZHFJZTc3NUdKWHpTZThoV3BkMlgzZw==",
+        "output": "NCLOUD_SECRET_KEY=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid NCP access key secret in an ncloud configure file",
+        "input_base64": "bmNsb3VkX3NlY3JldF9hY2Nlc3Nfa2V5PU5EZ1Nkc3NYZzRSaU1NTjFmNWRxSWU3NzVHSlh6U2U4aFdwZDJYM2c=",
+        "output": "ncloud_secret_access_key=[REDACTED]",
+        "use_included_keywords": true
+      }
+    ],
+    "negative": [
+      {
+        "description": "NCP access key secret without any keyword should not match",
+        "input_base64": "dG9rZW4gPSBORGdTZHNzWGc0UmlNTU4xZjVkcUllNzc1R0pYelNlOGhXcGQyWDNn",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      },
+      {
+        "description": "contains a non-alphanumeric character",
+        "input_base64": "bmNsb3VkX3NlY3JldF9hY2Nlc3Nfa2V5PU5EZ1Nkc3NYZzRSaU1NTjFmNWRxSWU3NzVHSlh6U2U4aFdwZDJYMys=",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      },
+      {
+        "description": "hex-only 40-char string should be filtered by NonHexChecker",
+        "input_base64": "bmNsb3VkX3NlY3JldF9hY2Nlc3Nfa2V5PWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
+        "rejected_by": "validator",
+        "use_included_keywords": true
+      },
+      {
+        "description": "too short to be a valid NCP access key secret",
+        "input_base64": "bmNsb3VkX3NlY3JldF9hY2Nlc3Nfa2V5PU5EZ1Nkc3NYZzRSaU1NTjFmNWRxSWU3NzVHSlh6U2U4",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "neon_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>napi_[a-z0-9]{64})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Neon API key",
+        "input_base64": "TkVPTl9BUElfS0VZPW5hcGlfdjViaHF3a2RwbTQ1Zmc2a3E1ZnVuMjAzczJ3bDNzdmh6YnRldGRiZWU4M3EzdjZ6NHIzd3VrN3piZTUyZngxeg==",
+        "output": "NEON_API_KEY=[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Neon API key in quotes",
+        "input_base64": "dG9rZW46ICJuYXBpX2hlbDNmZHExMGN0MzhqYnd5ejluYm9hMWdzMG52Nmw4NTJxNXljeTlmbXp5cnJxZHVhNmxieG0yOXRtaDQwMGIi",
+        "output": "token: \"[REDACTED]\"",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid body longer than 64 characters",
+        "input_base64": "TkVPTl9BUElfS0VZPW5hcGlfdjViaHF3a2RwbTQ1Zmc2a3E1ZnVuMjAzczJ3bDNzdmh6YnRldGRiZWU4M3EzdjZ6NHIzd3VrN3piZTUyZngxeno=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid truncated body",
+        "input_base64": "TkVPTl9BUElfS0VZPW5hcGlfdjViaHF3a2RwbTQ1Zmc2a3E1ZnVuMjAzczJ3bDNzdmh6YnRldGRiZWU4M3EzdjZ6NHIzd3VrN3piZTUyZng=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid uppercase character in body",
+        "input_base64": "TkVPTl9BUElfS0VZPW5hcGlfVjViaHF3a2RwbTQ1Zmc2a3E1ZnVuMjAzczJ3bDNzdmh6YnRldGRiZWU4M3EzdjZ6NHIzd3VrN3piZTUyZngxeg==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid wrong prefix",
+        "input_base64": "TkVPTl9BUElfS0VZPW5hcHhfdjViaHF3a2RwbTQ1Zmc2a3E1ZnVuMjAzczJ3bDNzdmh6YnRldGRiZWU4M3EzdjZ6NHIzd3VrN3piZTUyZngxeg==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "oracle_auth_token",
+    "pattern": "(?:^|\\\\[rn]|[=\"'])(?<sds_match>[-A-Za-z0-9\\.:;+\\[\\]<>()#]{20})(?:$|[\"'&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "oci authentication",
+      "oci token",
+      "oracle auth",
+      "oracle authentication",
+      "oracle cloud auth",
+      "oracle cloud authentication",
+      "oracle cloud token",
+      "oracle token"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Oracle Auth Token",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoPUNDLm5rbDhpTittNEZ5cHp0RCNM",
+        "output": "hello world, connected with=[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Oracle Auth Token with keyword oracle_auth_token",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIG9yYWNsZV9hdXRoX3Rva2VuPUNDLm5rbDhpTittNEZ5cHp0RCNM",
+        "output": "hello world, connected with oracle_auth_token=[REDACTED]",
+        "use_included_keywords": true
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern for Oracle Auth Token",
+        "input_base64": "Y3VybCAiaHR0cHM6Ly9hcGkub3JhY2xlLmNvbS9tZSIgLUggIk9yYWNsZS1BdXRoLVRva2VuOiA4JSMkYWVlNTJlNjJlZjk3OTI1YWJjNGZiZjBhYiI=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Oracle Auth Token with invalid keyword",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIGF6dXJlX2tleT1DQy5ua2w4aU4rbTRGeXB6dEQjTA==",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "travis_ci_access_token",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9_-]{22})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "ci token",
+      "travis ci",
+      "travis token"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Travis CI Access Token with travis keyword present",
+        "input_base64": "dHJhdmlzIGNpIHRva2VuOiBEMjhySVczMktzWGpWNGFad1VPTnhR",
+        "output": "travis ci token: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid Travis CI Access Token with travis_ci keyword present",
+        "input_base64": "dHJhdmlzX2NpX3Rva2VuPTZkNmlWUHV2ZlZ3dkdQSmY4VEFfWWc=",
+        "output": "travis_ci_token=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid Travis CI Access Token without keyword check",
+        "input_base64": "QXV0aG9yaXphdGlvbjogdG9rZW4gajNIclJVNHkteGdBOHNwWHhOT0M3UQ==",
+        "output": "Authorization: token [REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern - boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC9EMjhySVczMktzWGpWNGFad1VPTnhR",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern - forbidden character (space in place of a body character)",
+        "input_base64": "dG9rZW46IEQyOHJJVzMyS3NYalY0YVp3VU9OIFE=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern - too long (23 chars)",
+        "input_base64": "dG9rZW46IEQyOHJJVzMyS3NYalY0YVp3VU9OeFF6",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern - too short (21 chars)",
+        "input_base64": "dG9rZW46IEQyOHJJVzMyS3NYalY0YVp3VU9OeA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "token not matched when no travis keyword is present",
+        "input_base64": "dG9rZW46IEQyOHJJVzMyS3NYalY0YVp3VU9OeFE=",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "twitch_api_token",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[a-z0-9]{30})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "twitch"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid app access token with twitch keyword present",
+        "input_base64": "dHdpdGNoIHRva2VuOiBrbXRqY2ppMWpmNjhrYnFsanY5ZXpkZTJwYzZjMTg=",
+        "output": "twitch token: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid token without keyword check",
+        "input_base64": "a210amNqaTFqZjY4a2JxbGp2OWV6ZGUycGM2YzE4",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid - boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC9rbXRqY2ppMWpmNjhrYnFsanY5ZXpkZTJwYzZjMTg=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - contains an uppercase character",
+        "input_base64": "S210amNqaTFqZjY4a2JxbGp2OWV6ZGUycGM2YzE4",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - too long (31 chars)",
+        "input_base64": "a210amNqaTFqZjY4a2JxbGp2OWV6ZGUycGM2YzE4eA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - too short (29 chars)",
+        "input_base64": "a210amNqaTFqZjY4a2JxbGp2OWV6ZGUycGM2YzE=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "token not matched when twitch keyword is absent",
+        "input_base64": "dG9rZW46IGttdGpjamkxamY2OGticWxqdjllemRlMnBjNmMxOA==",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "twitter_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[0-9A-Za-z]{25})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "api key",
+      "consumer key",
+      "twitter"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid token with consumer key keyword present",
+        "input_base64": "Y29uc3VtZXJfa2V5PXQ0OXFxbjhZSmNjWWJCQk9acUJXRlpjdk4=",
+        "output": "consumer_key=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid token with twitter keyword present",
+        "input_base64": "dHdpdHRlciBhcGkga2V5OiB0NDlxcW44WUpjY1liQkJPWnFCV0ZaY3ZO",
+        "output": "twitter api key: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid token without keyword check",
+        "input_base64": "dDQ5cXFuOFlKY2NZYkJCT1pxQldGWmN2Tg==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC90NDlxcW44WUpjY1liQkJPWnFCV0ZaY3ZO",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — contains a forbidden character (dash)",
+        "input_base64": "dDQ5cXFuOFlKY2NZYkJCT1pxLVdGWmN2Tg==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — too long (26 chars)",
+        "input_base64": "dDQ5cXFuOFlKY2NZYkJCT1pxQldGWmN2Tlg=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — wrong length (24 chars, truncated)",
+        "input_base64": "dDQ5cXFuOFlKY2NZYkJCT1pxQldGWmN2",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "token not matched when no keyword is present",
+        "input_base64": "dDQ5cXFuOFlKY2NZYkJCT1pxQldGWmN2Tg==",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "twitter_api_key_secret",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[0-9A-Za-z]{50})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "api key secret",
+      "consumer secret",
+      "twitter"
+    ],
+    "hand_written_validator": {
+      "type": "NonHexChecker"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "fail",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "has_non_hex",
+            "op": "Charset",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "allowed": "0-9a-fA-F",
+              "mode": "any_outside"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid secret with consumer secret keyword present",
+        "input_base64": "Y29uc3VtZXJfc2VjcmV0PUxEa2J1SkF2aU5TOFFSS3Y1SzJQbVhSQkR1ZmJXcUh0N2hDMjBCSkxpQ2JYdTMwYUdi",
+        "output": "consumer_secret=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid secret with twitter keyword present",
+        "input_base64": "dHdpdHRlciBhcGkga2V5IHNlY3JldDogTERrYnVKQXZpTlM4UVJLdjVLMlBtWFJCRHVmYldxSHQ3aEMyMEJKTGlDYlh1MzBhR2I=",
+        "output": "twitter api key secret: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid secret without keyword check",
+        "input_base64": "TERrYnVKQXZpTlM4UVJLdjVLMlBtWFJCRHVmYldxSHQ3aEMyMEJKTGlDYlh1MzBhR2I=",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC9MRGtidUpBdmlOUzhRUkt2NUsyUG1YUkJEdWZiV3FIdDdoQzIwQkpMaUNiWHUzMGFHYg==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — contains a forbidden character (dash)",
+        "input_base64": "TERrYnVKQXZpTlM4UVJLdjVLMlBtWFJCRHVmYldxSHQ3aEMyMEJKTGlDYlh1MzAtR2I=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — too long (51 chars)",
+        "input_base64": "TERrYnVKQXZpTlM4UVJLdjVLMlBtWFJCRHVmYldxSHQ3aEMyMEJKTGlDYlh1MzBhR2JY",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — wrong length (49 chars, truncated)",
+        "input_base64": "TERrYnVKQXZpTlM4UVJLdjVLMlBtWFJCRHVmYldxSHQ3aEMyMEJKTGlDYlh1MzBhRw==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "secret not matched when no keyword is present",
+        "input_base64": "TERrYnVKQXZpTlM4UVJLdjVLMlBtWFJCRHVmYldxSHQ3aEMyMEJKTGlDYlh1MzBhR2I=",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  }
+]

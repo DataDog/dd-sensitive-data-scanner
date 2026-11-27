@@ -1,4 +1,5 @@
 mod async_rule;
+mod chained_rules;
 mod chained_step_validator;
 mod event_lifecycle;
 mod included_keywords;

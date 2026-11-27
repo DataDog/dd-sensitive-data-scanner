@@ -1,0 +1,76 @@
+[
+  {
+    "id": "atlassian_api_token",
+    "pattern": "\\bATATT3xFfGF0[A-Za-z0-9\\-_]{171}=[A-F0-9]{8}\\b",
+    "default_included_keywords": [],
+    "hand_written_validator": {
+      "type": "AtlassianTokenChecksum"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "prefix_and_suffix",
+            "comment": "AtlassianTokenChecksum requires a non-empty prefix; the CRC covers it, `=` included",
+            "op": "RegexMatch",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "pattern": "(?<prefix>[A-Za-z0-9_=-]+)(?<suffix>[0-9A-Fa-f]{8})"
+            },
+            "captures": {
+              "prefix": "prefix",
+              "suffix": "suffix"
+            }
+          },
+          {
+            "name": "verify",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$prefix",
+              "embedded": "$suffix",
+              "alg": "crc32",
+              "scheme": "hex"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Atlassian API Token ignoring keyword",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIEFUQVRUM3hGZkdGMFladWYtRUJtQUhzMUZ5aU5tazBjWVFLdEQ5engyTEl2OGRfekIteWs1WnA4bmt1ZzJScF9abllKd3E5eXMtbFMwUFJBWExTNHZMLWNyaDV0YkJiR1FJU3RleU9DcGdVR2dLamNrRDJNRjlBNkVaVkdkVFhpa2o1MlUyVkRTOEhlRGxVcTlHbXc4S1lzNUtiMGhTLUxabzRTYjJQTXBUMVp4ME1tVFhzX0V5QT1FMjgyNjYwNg==",
+        "output": "hello world, connected with [REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Atlassian API Token with keyword atlassian_api_token",
+        "input_base64": "Y3VybCAiaHR0cHM6Ly9hcGkuYXRsYXNzaWFuLm9yZy8yLjAvd29ya3NwYWNlcz9hdGxhc3NpYW5fYXBpX3Rva2VuPUFUQVRUM3hGZkdGMFladWYtRUJtQUhzMUZ5aU5tazBjWVFLdEQ5engyTEl2OGRfekIteWs1WnA4bmt1ZzJScF9abllKd3E5eXMtbFMwUFJBWExTNHZMLWNyaDV0YkJiR1FJU3RleU9DcGdVR2dLamNrRDJNRjlBNkVaVkdkVFhpa2o1MlUyVkRTOEhlRGxVcTlHbXc4S1lzNUtiMGhTLUxabzRTYjJQTXBUMVp4ME1tVFhzX0V5QT1FMjgyNjYwNiI=",
+        "output": "curl \"https://api.atlassian.org/2.0/workspaces?atlassian_api_token=[REDACTED]\"",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid Atlassian API Token with keyword atlassian_api_token",
+        "input_base64": "Y3VybCAiaHR0cHM6Ly9hcGkuYXRsYXNzaWFuLm9yZy8yLjAvd29ya3NwYWNlcyIgLUggImF0bGFzc2lhbl9hcGlfdG9rZW46IEFUQVRUM3hGZkdGMFladWYtRUJtQUhzMUZ5aU5tazBjWVFLdEQ5engyTEl2OGRfekIteWs1WnA4bmt1ZzJScF9abllKd3E5eXMtbFMwUFJBWExTNHZMLWNyaDV0YkJiR1FJU3RleU9DcGdVR2dLamNrRDJNRjlBNkVaVkdkVFhpa2o1MlUyVkRTOEhlRGxVcTlHbXc4S1lzNUtiMGhTLUxabzRTYjJQTXBUMVp4ME1tVFhzX0V5QT1FMjgyNjYwNiI=",
+        "output": "curl \"https://api.atlassian.org/2.0/workspaces\" -H \"atlassian_api_token: [REDACTED]\"",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid Atlassian API Token with missing keyword",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIEFUQVRUM3hGZkdGMFladWYtRUJtQUhzMUZ5aU5tazBjWVFLdEQ5engyTEl2OGRfekIteWs1WnA4bmt1ZzJScF9abllKd3E5eXMtbFMwUFJBWExTNHZMLWNyaDV0YkJiR1FJU3RleU9DcGdVR2dLamNrRDJNRjlBNkVaVkdkVFhpa2o1MlUyVkRTOEhlRGxVcTlHbXc4S1lzNUtiMGhTLUxabzRTYjJQTXBUMVp4ME1tVFhzX0V5QT1FMjgyNjYwNg==",
+        "output": "hello world, connected with [REDACTED]",
+        "use_included_keywords": true
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern for Atlassian API Token",
+        "input_base64": "Y3VybCAiaHR0cHM6Ly9hcGkuYXRsYXNzaWFuLm9yZy8yLjAvd29ya3NwYWNlcyIgLUggImF0bGFzc2lhbl9hcGlfdG9rZW46IDglIyRhZWU1MmU2MmVmOTc5MjVhYmM0ZmJmMGFiIg==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  }
+]

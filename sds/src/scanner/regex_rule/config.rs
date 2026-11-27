@@ -690,6 +690,32 @@ mod test {
     }
 
     #[test]
+    fn test_chained_step_validator_round_trips_arbitrary_config() {
+        let json = serde_json::json!({
+            "type": "ChainedStepValidator",
+            "default_response": "fail",
+            "config": {"version": 99, "steps": "not a list", "future": [1, null]},
+        });
+        let config = parse_validator_config(json.clone());
+        assert!(matches!(
+            config.validator,
+            ValidatorKind::Known(SecondaryValidator::ChainedStepValidator { .. })
+        ));
+        assert_eq!(serde_json::to_value(&config).unwrap(), json);
+    }
+
+    #[test]
+    fn test_default_chained_step_validator_serializes_without_config() {
+        let validator = SecondaryValidator::iter()
+            .find(|validator| matches!(validator, SecondaryValidator::ChainedStepValidator { .. }))
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(&validator).unwrap(),
+            serde_json::json!({"type": "ChainedStepValidator"})
+        );
+    }
+
+    #[test]
     fn test_absent_default_response_is_not_serialized() {
         let config = ValidatorConfig::from(SecondaryValidator::LuhnChecksum);
         assert_eq!(

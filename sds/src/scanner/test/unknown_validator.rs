@@ -1,36 +1,9 @@
-use crate::scanner::RootRuleConfig;
-use crate::{MatchAction, RegexRuleConfig, RuleMatch, Scanner, ScannerBuilder};
+use super::validator_rules::{build_scanner, plain_rule, rule_with_validator, scan};
 use metrics::{Key, Label};
 use metrics_util::CompositeKey;
 use metrics_util::MetricKind::Counter;
 use metrics_util::debugging::{DebugValue, DebuggingRecorder};
-use serde_json::{Value, json};
-
-fn rule_with_validator(pattern: &str, validator: Value) -> RootRuleConfig<RegexRuleConfig> {
-    serde_json::from_value(json!({
-        "pattern": pattern,
-        "validator": validator,
-        "match_action": {"type": "Redact", "replacement": "[REDACTED]"},
-    }))
-    .unwrap()
-}
-
-fn plain_rule(pattern: &str) -> RootRuleConfig<RegexRuleConfig> {
-    RootRuleConfig::new(RegexRuleConfig::new(pattern)).match_action(MatchAction::Redact {
-        replacement: "[REDACTED]".to_string(),
-    })
-}
-
-fn build_scanner(rules: Vec<RootRuleConfig<RegexRuleConfig>>) -> Scanner {
-    let rules: Vec<_> = rules.into_iter().map(RootRuleConfig::into_dyn).collect();
-    ScannerBuilder::new(&rules).build().unwrap()
-}
-
-fn scan(scanner: &Scanner, input: &str) -> (String, Vec<RuleMatch>) {
-    let mut content = input.to_string();
-    let matches = scanner.scan(&mut content).unwrap();
-    (content, matches)
-}
+use serde_json::json;
 
 #[test]
 fn unknown_validator_with_pass_default_response_keeps_matches() {

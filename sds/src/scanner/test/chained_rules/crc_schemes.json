@@ -1,0 +1,342 @@
+[
+  {
+    "id": "bitrise_access_token",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>bitpat_[A-Za-z0-9_-]{86}_[A-Za-z0-9]{6})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "payload_and_checksum",
+            "comment": "the CRC covers `bitpat_<body>`, without the `_` before the checksum",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "before": "payload",
+              "after": "embedded"
+            }
+          },
+          {
+            "name": "verify",
+            "comment": "base62 is compared by value; the rule regex pins the 6-character width",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$payload",
+              "embedded": "$embedded",
+              "alg": "crc32",
+              "scheme": "base62"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Bitrise Access Token ignoring keyword",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIGJpdHBhdF9ScjcwcnU4WGNieW1KSXdvcWNTSGd4VUdVRVZrVGFzWF9td1dJN0huWXM3eGZheER6M0FtY0tzaHV0Q09TX1F5am5XT2xqZG53UHlNLS1sYW9XQmNVd180WUNBVmU=",
+        "output": "hello world, connected with [REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Bitrise Access Token in curl command",
+        "input_base64": "Y3VybCAtSCAiQXV0aG9yaXphdGlvbiBiaXRwYXRfQ1FTOEhRUmZOaUlrRlh5YlJnNnR2RWQyNHJSY2lSR2paMTlrMm5ic1FqbWUzRERuQjJ5T1lrR0pXVm5HSkFqOUlqUnA4SWVWTmpPWVBSd0xCSWRmTVFfNERDMEs4IiBodHRwczovL2FwaS5iaXRyaXNlLmlvL3YwLjEvbWU=",
+        "output": "curl -H \"Authorization [REDACTED]\" https://api.bitrise.io/v0.1/me",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern for Bitrise Access Token (forbidden character in body)",
+        "input_base64": "Yml0cGF0X1JyNzBydThYY2J5bUpJd29xY1NIZ3hVR1VFVmtUYXNYX213V0k3SG5Zczd4ZmF4RHozQW1jS3NodXRDT1NfUXlqbldPbGpkbndQeU0tLWxhb1dCY1V3XzRZQ0FWIQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern for Bitrise Access Token (truncated body)",
+        "input_base64": "Yml0cGF0X1JyNzBydThYY2J5bUpJd29xY1NIZ3hVR1VFVmtUYXNYX213V0k3SG5Zczd4ZmF4RHozQW1jS3NodXRDT1NfUXlqbldPbGpkbndQeU0=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern for Bitrise Access Token (wrong prefix)",
+        "input_base64": "Yml0d3JvbmdfUnI3MHJ1OFhjYnltSkl3b3FjU0hneFVHVUVWa1Rhc1hfbXdXSTdIbllzN3hmYXhEejNBbWNLc2h1dENPU19ReWpuV09samRud1B5TS0tbGFvV0JjVXdfNFlDQVZl",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "zuplo_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>zpka_[a-f0-9]{32}_[a-f0-9A-F]{8})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "head_and_checksum",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "before": "head",
+              "after": "embedded"
+            }
+          },
+          {
+            "name": "body",
+            "comment": "the CRC covers the body only, not the `zpka_` prefix",
+            "op": "Split",
+            "input": {
+              "param": "$head",
+              "separator": "_",
+              "occurrence": 0
+            },
+            "output": {
+              "after": "body"
+            }
+          },
+          {
+            "name": "verify",
+            "comment": "hex decoding accepts the upper-case checksums the rule regex allows",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$embedded",
+              "alg": "crc32",
+              "scheme": "hex"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Zuplo API key 1",
+        "input_base64": "QXV0aG9yaXphdGlvbjogQmVhcmVyIHpwa2FfNDcyY2ZkYWUwNGM5NGVkMjkxYWRlZWFhOGJjZDAxMjFfNjY2MmI4OGE=",
+        "output": "Authorization: Bearer [REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Zuplo API key 2 in quotes",
+        "input_base64": "a2V5ID0gInpwa2FfN2UyYzE3ZTgzOGQ4NDYyYWI2NzEzMjBhNzI3ZGUyZTVfN2UwNGEyMzgi",
+        "output": "key = \"[REDACTED]\"",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Zuplo API key 3 alone",
+        "input_base64": "enBrYV9hZWRkMTFlZTEzMmM0ZWEzYjAyMDA2ZmQwYzE3ODM2OV9lNzY0ZWYxYg==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "forbidden non-hex character in body",
+        "input_base64": "enBrYV80NzJjZmRhZTA0Yzk0ZWQyOTFhZGVlYWE4YmNkMDEyZ182NjYyYjg4YQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "key embedded in a longer word is not matched",
+        "input_base64": "eHpwa2FfNDcyY2ZkYWUwNGM5NGVkMjkxYWRlZWFhOGJjZDAxMjFfNjY2MmI4OGE=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "truncated suffix",
+        "input_base64": "enBrYV80NzJjZmRhZTA0Yzk0ZWQyOTFhZGVlYWE4YmNkMDEyMV82NjYyYjg=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "wrong prefix",
+        "input_base64": "enBrYl80NzJjZmRhZTA0Yzk0ZWQyOTFhZGVlYWE4YmNkMDEyMV82NjYyYjg4YQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "grafana_service_account_token",
+    "pattern": "\\bgl[a-z]{2}_[0-9a-zA-Z]{32}_[0-9a-f]{8}\\b",
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "payload_and_checksum",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "before": "payload",
+              "after": "embedded"
+            }
+          },
+          {
+            "name": "verify",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$payload",
+              "embedded": "$embedded",
+              "alg": "crc32",
+              "scheme": "hex",
+              "endian": "little"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid oauth secret key",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIGdsc2FfWEJXM3c0MnN5Wm1kTmN6WHk3UnQ5d3pQdlNtemozY05fZjg3NTAxZGU=",
+        "output": "hello world, connected with [REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern for oauth secret key",
+        "input_base64": "Z2xzYV9YQlczdzQyc3labWROY3pYeTdSdDl3elB2U216ajNjTl9mODc1MDFk",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid oauth secret key with invalid separator",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIF9nbHNhX1hCVzN3NDJzeVptZE5jelh5N1J0OXd6UHZTbXpqM2NOX2Y4NzUwMWRlXw==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "confluent_api_secret",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>cflt[A-Za-z0-9+/]{60})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "body",
+            "op": "Extract",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "slice": "[4:58]"
+            },
+            "output": "body"
+          },
+          {
+            "name": "embedded",
+            "op": "Extract",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "slice": "[58:]"
+            },
+            "output": "embedded"
+          },
+          {
+            "name": "verify",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$embedded",
+              "alg": "crc32",
+              "scheme": "base64_nopad",
+              "endian": "little"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid access token containing a slash and a plus in its body",
+        "input_base64": "Y2ZsdHRXQWxkYy9kME9FQ3U1Nzd3NlhwVnFKdzB0aVN3M3lDL2k0bklxSUhLY1ZDSDZMK212SlpGMzc2RmJhQQ==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid access token in env var assignment",
+        "input_base64": "Q09ORkxVRU5UX0NMT1VEX0FQSV9TRUNSRVQ9Y2ZsdHZmeFdvdTQ0N1l4SXVnUVVsOFZ4dGIwNDcxMnFxUkowdzY1aExuMGh1aDFzc1dYOW9zejk4b1g4Vlp2UQ==",
+        "output": "CONFLUENT_CLOUD_API_SECRET=[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid access token standalone",
+        "input_base64": "Y2ZsdHZmeFdvdTQ0N1l4SXVnUVVsOFZ4dGIwNDcxMnFxUkowdzY1aExuMGh1aDFzc1dYOW9zejk4b1g4Vlp2UQ==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid access token used as Basic Auth password in a curl command",
+        "input_base64": "Y3VybCAtdSBEU1BQV1ZPSUpaVUVIQjI3OmNmbHR0V0FsZGMvZDBPRUN1NTc3dzZYcFZxSncwdGlTdzN5Qy9pNG5JcUlIS2NWQ0g2TCttdkpaRjM3NkZiYUEgaHR0cHM6Ly9hcGkuY29uZmx1ZW50LmNsb3VkL2lhbS92Mi9hcGkta2V5cw==",
+        "output": "curl -u DSPPWVOIJZUEHB27:[REDACTED] https://api.confluent.cloud/iam/v2/api-keys",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC9jZmx0dmZ4V291NDQ3WXhJdWdRVWw4Vnh0YjA0NzEycXFSSjB3NjVoTG4waHVoMXNzV1g5b3N6OThvWDhWWnZR",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — extra trailing character breaks the suffix boundary",
+        "input_base64": "Y2ZsdHZmeFdvdTQ0N1l4SXVnUVVsOFZ4dGIwNDcxMnFxUkowdzY1aExuMGh1aDFzc1dYOW9zejk4b1g4Vlp2UUE=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — forbidden character in body",
+        "input_base64": "Y2ZsdHZmeFdvdTQ0N1l4SXVnUVVsOFZ4dGIwNDcxMnFxUkowdzY1aExuMGh1aDFzc1dYOW9zejk4b1g4Vlp2IQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — truncated body (56 characters instead of 60)",
+        "input_base64": "Y2ZsdHZmeFdvdTQ0N1l4SXVnUVVsOFZ4dGIwNDcxMnFxUkowdzY1aExuMGh1aDFzc1dYOW9zejk4b1g4",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — wrong static prefix",
+        "input_base64": "eGZsdHZmeFdvdTQ0N1l4SXVnUVVsOFZ4dGIwNDcxMnFxUkowdzY1aExuMGh1aDFzc1dYOW9zejk4b1g4Vlp2UQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  }
+]
