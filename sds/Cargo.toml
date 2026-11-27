@@ -59,6 +59,7 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 aws-sign-v4 = { version = "0.3.0", optional = true }
 chrono = { version = "0.4", features = ["serde"] }
 slotmap = "1.0.7"
+smallvec = "1.15.1"
 base64 = "0.22.1"
 serde_json = "1.0.114"
 rayon = { version = "1.10.0", optional = true }
