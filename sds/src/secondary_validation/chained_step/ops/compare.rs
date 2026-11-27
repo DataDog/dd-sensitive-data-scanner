@@ -1,7 +1,7 @@
 //! `Compare`: compares two values of the same kind.
 //!
-//! Inputs: `a`, `b` (variables or literals; literals are bytes), `config` (`=`, `!=`, or `=i` for
-//! ASCII case-insensitive equality). Both sides must be bytes or both ints (`malformed`
+//! Inputs: `a`, `b` (variables or literals; literals are bytes), `operator` (`=`, `!=`, or `=i`
+//! for ASCII case-insensitive equality). Both sides must be bytes or both ints (`malformed`
 //! otherwise). Int comparison compares values only and ignores `bits`, so a 32-bit CRC can be
 //! compared with a 64-bit decoded checksum. `=i` applies to bytes only (`malformed` on ints).
 //!
@@ -16,7 +16,7 @@ use crate::secondary_validation::chained_step::compile::{
 use crate::secondary_validation::chained_step::since::SinceTable;
 use crate::secondary_validation::chained_step::value::{Frame, FrameFailure, SlotType, Value};
 
-pub(crate) const INPUT_KEYS: SinceTable<()> = &[("a", (), 1), ("b", (), 1), ("config", (), 1)];
+pub(crate) const INPUT_KEYS: SinceTable<()> = &[("a", (), 1), ("b", (), 1), ("operator", (), 1)];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Comparison {
@@ -71,7 +71,7 @@ impl Compare {
     ) -> CompileResult<Self> {
         let a = inputs.required_operand("a", builder)?;
         let b = inputs.required_operand("b", builder)?;
-        let comparison = inputs.required_choice("config", COMPARISONS, builder)?;
+        let comparison = inputs.required_choice("operator", COMPARISONS, builder)?;
         if is_int(a.ty) != is_int(b.ty) {
             return fail(
                 FallbackReason::Malformed,
@@ -117,35 +117,33 @@ mod test {
     use super::*;
     use crate::secondary_validation::chained_step::ChainOutcome;
     use crate::secondary_validation::chained_step::test::{
-        assert_fallback, chain, evaluates_to, step,
+        assert_fallback, chain, check, evaluates_to, step,
     };
     use serde_json::json;
 
-    fn compare_with_literal(config: &str, literal: &str) -> serde_json::Value {
-        chain(vec![step(
+    fn compare_with_literal(operator: &str, literal: &str) -> serde_json::Value {
+        chain(vec![check(
             "Compare",
-            json!({"a": "$GLOBAL_MATCH", "b": literal, "config": config}),
-            json!({}),
+            json!({"a": "$GLOBAL_MATCH", "b": literal, "operator": operator}),
         )])
     }
 
     /// Compares CRC32(GLOBAL_MATCH) (32 bits) with a base62-decoded int (64 bits).
-    fn compare_crc_with_decoded(config: &str, encoded: &str) -> serde_json::Value {
+    fn compare_crc_with_decoded(operator: &str, encoded: &str) -> serde_json::Value {
         chain(vec![
             step(
                 "Checksum",
                 json!({"param": "$GLOBAL_MATCH", "alg": "crc32"}),
-                json!({"crc": "$OUTPUT"}),
+                json!("crc"),
             ),
             step(
                 "Decode",
                 json!({"param": encoded, "scheme": "base62", "as": "int"}),
-                json!({"decoded": "$OUTPUT"}),
+                json!("decoded"),
             ),
-            step(
+            check(
                 "Compare",
-                json!({"a": "$crc", "b": "$decoded", "config": config}),
-                json!({}),
+                json!({"a": "$crc", "b": "$decoded", "operator": operator}),
             ),
         ])
     }
@@ -192,13 +190,9 @@ mod test {
             step(
                 "Checksum",
                 json!({"param": "$GLOBAL_MATCH", "alg": "crc32"}),
-                json!({"crc": "$OUTPUT"}),
+                json!("crc"),
             ),
-            step(
-                "Compare",
-                json!({"a": "$crc", "b": "123", "config": "="}),
-                json!({}),
-            ),
+            check("Compare", json!({"a": "$crc", "b": "123", "operator": "="})),
         ]);
         for config in [int_against_literal, compare_crc_with_decoded("=i", "abc")] {
             assert_fallback(&config, FallbackReason::Malformed);

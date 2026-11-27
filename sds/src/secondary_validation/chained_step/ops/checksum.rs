@@ -9,7 +9,7 @@
 use super::Operand;
 use crate::secondary_validation::chained_step::FailureClass;
 use crate::secondary_validation::chained_step::compile::{
-    ChainBuilder, CompileResult, OutputSlots, StepInputs, StepOutputs,
+    ChainBuilder, CompileResult, StepInputs, StepOutputs,
 };
 use crate::secondary_validation::chained_step::since::SinceTable;
 use crate::secondary_validation::chained_step::value::{Frame, FrameFailure, SlotType, Value};
@@ -17,20 +17,20 @@ use crate::secondary_validation::chained_step::value::{Frame, FrameFailure, Slot
 pub(crate) const INPUT_KEYS: SinceTable<()> = &[("param", (), 1), ("alg", (), 1)];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Algorithm {
+pub(super) enum Algorithm {
     Crc32,
 }
 
-const ALGORITHMS: SinceTable<Algorithm> = &[("crc32", Algorithm::Crc32, 1)];
+pub(super) const ALGORITHMS: SinceTable<Algorithm> = &[("crc32", Algorithm::Crc32, 1)];
 
 impl Algorithm {
-    fn bits(self) -> u8 {
+    pub(super) fn bits(self) -> u8 {
         match self {
             Algorithm::Crc32 => 32,
         }
     }
 
-    fn compute(self, bytes: &[u8]) -> u64 {
+    pub(super) fn compute(self, bytes: &[u8]) -> u64 {
         match self {
             Algorithm::Crc32 => u64::from(crc32fast::hash(bytes)),
         }
@@ -60,7 +60,7 @@ impl From<FrameFailure> for Failure {
 pub(crate) struct Checksum {
     param: Operand,
     algorithm: Algorithm,
-    outputs: OutputSlots,
+    output: Option<usize>,
 }
 
 impl Checksum {
@@ -71,7 +71,8 @@ impl Checksum {
     ) -> CompileResult<Self> {
         let param = inputs.required_bytes_operand("param", builder)?;
         let algorithm = inputs.required_choice("alg", ALGORITHMS, builder)?;
-        let outputs = outputs.single(
+        let output = outputs.single(
+            "Checksum",
             SlotType::Int {
                 bits: algorithm.bits(),
             },
@@ -80,14 +81,14 @@ impl Checksum {
         Ok(Self {
             param,
             algorithm,
-            outputs,
+            output,
         })
     }
 
     pub fn run(&self, frame: &mut Frame<'_>) -> Result<(), Failure> {
         let bytes = frame.bytes(self.param.load_span(frame)?)?;
         let checksum = self.algorithm.compute(bytes);
-        frame.store_all(&self.outputs, Value::Int(checksum))?;
+        frame.store(self.output, Value::Int(checksum))?;
         Ok(())
     }
 }
@@ -95,7 +96,7 @@ impl Checksum {
 #[cfg(test)]
 mod test {
     use crate::secondary_validation::chained_step::ChainOutcome;
-    use crate::secondary_validation::chained_step::test::{chain, evaluates_to, step};
+    use crate::secondary_validation::chained_step::test::{chain, check, evaluates_to, step};
     use serde_json::json;
 
     #[test]
@@ -105,17 +106,16 @@ mod test {
             step(
                 "Checksum",
                 json!({"param": "123456789", "alg": "crc32"}),
-                json!({"crc": "$OUTPUT"}),
+                json!("crc"),
             ),
             step(
                 "Encode",
                 json!({"param": "$crc", "scheme": "hex", "case": "upper"}),
-                json!({"crc_hex": "$OUTPUT"}),
+                json!("crc_hex"),
             ),
-            step(
+            check(
                 "Compare",
-                json!({"a": "$crc_hex", "b": "$GLOBAL_MATCH", "config": "="}),
-                json!({}),
+                json!({"a": "$crc_hex", "b": "$GLOBAL_MATCH", "operator": "="}),
             ),
         ]);
         evaluates_to(&config, "CBF43926", ChainOutcome::Valid);

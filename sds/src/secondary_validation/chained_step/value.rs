@@ -174,11 +174,12 @@ impl<'a> Frame<'a> {
         Ok(())
     }
 
-    pub fn store_all(&mut self, slots: &[usize], value: Value) -> Result<(), FrameFailure> {
-        for &slot in slots {
-            self.set(slot, value)?;
+    /// Stores the result of an op whose `output` is optional.
+    pub fn store(&mut self, slot: Option<usize>, value: Value) -> Result<(), FrameFailure> {
+        match slot {
+            Some(slot) => self.set(slot, value),
+            None => Ok(()),
         }
-        Ok(())
     }
 
     pub fn bytes(&self, span: Span) -> Result<&[u8], FrameFailure> {

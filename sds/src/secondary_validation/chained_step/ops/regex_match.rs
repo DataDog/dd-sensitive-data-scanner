@@ -1,20 +1,22 @@
 //! `RegexMatch`: full match of `param` against an SDS regex, optionally capturing named groups.
 //!
 //! Inputs: `param` (bytes), `pattern` (SDS regex syntax), `mode` (`match`, the default, or
-//! `not_match`). Outputs map new variables to named groups: `{"body": "$body"}`.
+//! `not_match`). The step-level `captures` maps new variables to named groups:
+//! `"captures": {"body": "body_group"}`. RegexMatch takes no `output` (`malformed`).
 //!
 //! The pattern is validated and built at compile time through `validate_and_create_regex`, so SDS
 //! complexity limits apply, the syntax is converted, and patterns that can match the empty string
 //! are rejected (`invalid_value`). It is compiled as `(?:pattern)\z` and searched with
 //! `Anchored::Yes`, so a match exists iff some way of matching covers the whole value; this is a
 //! true full match even for alternations such as `a|ab`, which a plain anchored leftmost-first
-//! search would stop short on. Only named groups can be output; an output naming a group the
-//! pattern lacks is `malformed`, and `not_match` cannot have outputs (`malformed`).
+//! search would stop short on. Only named groups can be captured; a capture naming a group the
+//! pattern lacks is `malformed`, and `not_match` cannot have captures (`malformed`).
 //!
 //! Runtime failures (see [`Failure::class`]):
 //! - `match` and the value does not fully match: **negative**;
 //! - `not_match` and the value fully matches: **negative**;
-//! - a captured group did not participate in the match: **error** (its output has no value);
+//! - a captured group did not participate in the match: **negative**. The value took a branch of
+//!   the pattern that lacks the part the chain needs, so it does not have the token's structure;
 //! - the thread-local regex cache could not be acquired: **error**.
 
 use super::Operand;
@@ -56,7 +58,7 @@ impl Failure {
         match self {
             Failure::NoMatch => FailureClass::Negative,
             Failure::UnexpectedMatch => FailureClass::Negative,
-            Failure::GroupDidNotParticipate => FailureClass::Error,
+            Failure::GroupDidNotParticipate => FailureClass::Negative,
             Failure::CacheUnavailable => FailureClass::Error,
             Failure::Frame(_) => FailureClass::Error,
         }
@@ -118,18 +120,19 @@ impl RegexMatch {
         };
         builder.register_regex()?;
         let group_info = regex.group_info();
-        if mode == Mode::NotMatch && !outputs.entries().is_empty() {
+        let requested = outputs.captures("RegexMatch")?;
+        if mode == Mode::NotMatch && !requested.is_empty() {
             return fail(
                 FallbackReason::Malformed,
-                "`not_match` produces no captures, so it cannot declare outputs",
+                "`not_match` produces no captures, so it cannot declare `captures`",
             );
         }
         let mut captures = SmallVec::new();
-        for &(name, group) in outputs.entries() {
+        for (name, group) in requested {
             let Some(group_index) = group_info.to_index(PatternID::ZERO, group) else {
                 return fail(
                     FallbackReason::Malformed,
-                    format!("output `{name}`: the pattern has no capture group named `{group}`"),
+                    format!("capture `{name}`: the pattern has no capture group named `{group}`"),
                 );
             };
             captures.push((group_index, builder.define(name, SlotType::Bytes)?));
@@ -199,29 +202,26 @@ mod test {
     use super::*;
     use crate::secondary_validation::chained_step::ChainOutcome;
     use crate::secondary_validation::chained_step::test::{
-        assert_fallback, chain, evaluates_to, step,
+        assert_fallback, chain, check, evaluates_to, regex_step, step,
     };
     use serde_json::json;
 
     fn regex_check(pattern: &str, mode: &str) -> serde_json::Value {
-        chain(vec![step(
+        chain(vec![check(
             "RegexMatch",
             json!({"param": "$GLOBAL_MATCH", "pattern": pattern, "mode": mode}),
-            json!({}),
         )])
     }
 
     fn capture_then_compare(pattern: &str, group: &str, expected: &str) -> serde_json::Value {
         chain(vec![
-            step(
-                "RegexMatch",
+            regex_step(
                 json!({"param": "$GLOBAL_MATCH", "pattern": pattern}),
-                json!({"captured": format!("${group}")}),
+                json!({"captured": group}),
             ),
-            step(
+            check(
                 "Compare",
-                json!({"a": "$captured", "b": expected, "config": "="}),
-                json!({}),
+                json!({"a": "$captured", "b": expected, "operator": "="}),
             ),
         ])
     }
@@ -254,11 +254,11 @@ mod test {
     }
 
     #[test]
-    fn non_participating_group_is_error() {
+    fn non_participating_group_is_negative() {
         evaluates_to(
             &capture_then_compare("(?<letters>[a-z]+)|[0-9]+", "letters", "abc"),
             "123",
-            ChainOutcome::Error,
+            ChainOutcome::Invalid,
         );
     }
 
@@ -269,13 +269,9 @@ mod test {
             step(
                 "Decode",
                 json!({"param": "$GLOBAL_MATCH", "scheme": "base64"}),
-                json!({"raw": "$OUTPUT"}),
+                json!("raw"),
             ),
-            step(
-                "RegexMatch",
-                json!({"param": "$raw", "pattern": "foo"}),
-                json!({}),
-            ),
+            check("RegexMatch", json!({"param": "$raw", "pattern": "foo"})),
         ]);
         evaluates_to(&config, "/w==", ChainOutcome::Invalid);
     }
@@ -285,18 +281,16 @@ mod test {
         let five_regexes = chain(
             (0..5)
                 .map(|index| {
-                    step(
+                    check(
                         "RegexMatch",
                         json!({"param": "$GLOBAL_MATCH", "pattern": format!("x{index}")}),
-                        json!({}),
                     )
                 })
                 .collect(),
         );
-        let not_match_with_output = chain(vec![step(
-            "RegexMatch",
+        let not_match_with_captures = chain(vec![regex_step(
             json!({"param": "$GLOBAL_MATCH", "pattern": "(?<body>foo)", "mode": "not_match"}),
-            json!({"body": "$body"}),
+            json!({"body": "body"}),
         )]);
         for (config, reason) in [
             (
@@ -311,7 +305,7 @@ mod test {
                 capture_then_compare("tkn_(?<body>[a-z]+)", "missing", "abc"),
                 FallbackReason::Malformed,
             ),
-            (not_match_with_output, FallbackReason::Malformed),
+            (not_match_with_captures, FallbackReason::Malformed),
         ] {
             assert_fallback(&config, reason);
         }

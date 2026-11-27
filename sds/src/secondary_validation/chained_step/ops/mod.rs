@@ -10,6 +10,7 @@ mod extract;
 mod format;
 mod regex_match;
 mod split;
+mod verify_checksum;
 
 use super::FailureClass;
 use super::compile::{ChainBuilder, CompileResult, StepInputs, StepOutputs};
@@ -78,6 +79,7 @@ pub(crate) enum CompiledOp {
     RegexMatch(regex_match::RegexMatch),
     Format(format::Format),
     Checksum(checksum::Checksum),
+    VerifyChecksum(verify_checksum::VerifyChecksum),
     Encode(codec::Encode),
     Decode(codec::Decode),
     Compare(compare::Compare),
@@ -92,6 +94,9 @@ impl CompiledOp {
             CompiledOp::RegexMatch(op) => op.run(frame).map_err(regex_match::Failure::class),
             CompiledOp::Format(op) => op.run(frame).map_err(format::Failure::class),
             CompiledOp::Checksum(op) => op.run(frame).map_err(checksum::Failure::class),
+            CompiledOp::VerifyChecksum(op) => {
+                op.run(frame).map_err(verify_checksum::Failure::class)
+            }
             CompiledOp::Encode(op) => op.run(frame).map_err(codec::EncodeFailure::class),
             CompiledOp::Decode(op) => op.run(frame).map_err(|failure| op.classify(failure)),
             CompiledOp::Compare(op) => op.run(frame).map_err(compare::Failure::class),
@@ -107,6 +112,7 @@ pub(crate) fn input_keys(kind: OpKind) -> SinceTable<()> {
         OpKind::RegexMatch => regex_match::INPUT_KEYS,
         OpKind::Format => format::INPUT_KEYS,
         OpKind::Checksum => checksum::INPUT_KEYS,
+        OpKind::VerifyChecksum => verify_checksum::INPUT_KEYS,
         OpKind::Encode => codec::ENCODE_INPUT_KEYS,
         OpKind::Decode => codec::DECODE_INPUT_KEYS,
         OpKind::Compare => compare::INPUT_KEYS,
@@ -134,6 +140,9 @@ pub(crate) fn compile_op(
         OpKind::Checksum => {
             CompiledOp::Checksum(checksum::Checksum::compile(inputs, outputs, builder)?)
         }
+        OpKind::VerifyChecksum => CompiledOp::VerifyChecksum(
+            verify_checksum::VerifyChecksum::compile(inputs, outputs, builder)?,
+        ),
         OpKind::Encode => CompiledOp::Encode(codec::Encode::compile(inputs, outputs, builder)?),
         OpKind::Decode => CompiledOp::Decode(codec::Decode::compile(inputs, outputs, builder)?),
         OpKind::Compare => {

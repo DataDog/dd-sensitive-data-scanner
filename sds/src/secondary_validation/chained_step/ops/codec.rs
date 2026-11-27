@@ -14,11 +14,10 @@
 //!   CRC32 always yields 8 hex digits (or 6 base64-nopad characters).
 //! - For base62, the numeric value is encoded.
 //! - `width` zero-pads on the left. It defaults to the minimum digit count that fits any value
-//!   of the int's `bits` (8 hex / 6 base62 digits for 32 bits). It must be in `1..=64` (`0` is
-//!   `invalid_value`, above 64 is `limit_exceeded`) and, for hex, at least the serialized width.
+//!   of the int's `bits` (8 hex / 6 base62 digits for 32 bits). It must be at least that count
+//!   (`invalid_value`), so every value fits, and at most 64 (`limit_exceeded`).
 //!
 //! Runtime failures (see [`EncodeFailure::class`]):
-//! - a base62 value needs more digits than `width`: **error**;
 //! - scratch budget exceeded: **error**.
 //!
 //! # Decode
@@ -28,25 +27,25 @@
 //! only decodes `as: int`. `as: int` produces an int with `bits = 64`. Hex accepts mixed case.
 //!
 //! `on_failure` lets the rule decide what any decoding failure below means, ending the chain:
-//! `pass` keeps the match, `fail` drops it. Without it, the classes below apply. Scratch budget
-//! failures are not decoding failures and stay **errors**.
+//! `pass` keeps the match, `fail` drops it. Every decoding failure is already negative, so `fail`
+//! only states the default explicitly. Scratch budget failures are not decoding failures and stay
+//! **errors** whatever `on_failure` says.
 //!
-//! Runtime failures (see [`DecodeFailure::class`]). Text that is not a valid encoding means the
-//! token is not genuine, so those failures are negative; failures to represent a valid encoding
-//! are errors:
+//! Runtime failures (see [`DecodeFailure::class`]). Text that does not decode, or decodes to
+//! something the chain cannot use, means the token is not genuine:
 //! - a character outside the alphabet: **negative**;
 //! - odd-length hex (hex is decoded byte-wise, also for `as: int`): **negative**;
 //! - base64 with invalid length, padding or trailing bits: **negative**;
 //! - empty input with `as: int`: **negative** (there is no number);
-//! - `as: int` overflow: **error**. The length is checked before the content: hex longer than 16
-//!   digits, base64 longer than 12 characters or decoding to more than 8 bytes, and base62 values
-//!   above `u64::MAX`;
+//! - `as: int` overflow: **negative**, since no checksum this engine computes is wider than 64
+//!   bits. The length is checked before the content: hex longer than 16 digits, base64 longer
+//!   than 12 characters or decoding to more than 8 bytes, and base62 values above `u64::MAX`;
 //! - scratch budget exceeded: **error**.
 
 use super::Operand;
 use crate::secondary_validation::chained_step::FailureClass;
 use crate::secondary_validation::chained_step::compile::{
-    ChainBuilder, CompileResult, FallbackReason, OutputSlots, StepInputs, StepOutputs, fail,
+    ChainBuilder, CompileResult, FallbackReason, StepInputs, StepOutputs, fail,
 };
 use crate::secondary_validation::chained_step::since::SinceTable;
 use crate::secondary_validation::chained_step::value::{Frame, FrameFailure, SlotType, Value};
@@ -74,14 +73,14 @@ pub(crate) const DECODE_INPUT_KEYS: SinceTable<()> = &[
 pub(crate) const MAX_WIDTH: u64 = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Scheme {
+pub(super) enum Scheme {
     Hex,
     Base62,
     Base64(Base64Variant),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Base64Variant {
+pub(super) enum Base64Variant {
     Standard,
     UrlSafe,
     StandardNoPad,
@@ -99,7 +98,7 @@ impl Base64Variant {
     }
 }
 
-const SCHEMES: SinceTable<Scheme> = &[
+pub(super) const SCHEMES: SinceTable<Scheme> = &[
     ("hex", Scheme::Hex, 1),
     ("base62", Scheme::Base62, 1),
     ("base64", Scheme::Base64(Base64Variant::Standard), 1),
@@ -125,12 +124,13 @@ enum Case {
 const CASES: SinceTable<Case> = &[("lower", Case::Lower, 1), ("upper", Case::Upper, 1)];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Endian {
+pub(super) enum Endian {
     Big,
     Little,
 }
 
-const ENDIANS: SinceTable<Endian> = &[("big", Endian::Big, 1), ("little", Endian::Little, 1)];
+pub(super) const ENDIANS: SinceTable<Endian> =
+    &[("big", Endian::Big, 1), ("little", Endian::Little, 1)];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DecodeAs {
@@ -153,14 +153,12 @@ const ON_FAILURE: SinceTable<OnFailure> =
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EncodeFailure {
-    WidthTooSmall,
     Frame(FrameFailure),
 }
 
 impl EncodeFailure {
     pub fn class(self) -> FailureClass {
         match self {
-            EncodeFailure::WidthTooSmall => FailureClass::Error,
             EncodeFailure::Frame(_) => FailureClass::Error,
         }
     }
@@ -189,7 +187,7 @@ impl DecodeFailure {
             DecodeFailure::OddLength => FailureClass::Negative,
             DecodeFailure::InvalidBase64 => FailureClass::Negative,
             DecodeFailure::EmptyInput => FailureClass::Negative,
-            DecodeFailure::Overflow => FailureClass::Error,
+            DecodeFailure::Overflow => FailureClass::Negative,
             DecodeFailure::Frame(_) => FailureClass::Error,
         }
     }
@@ -229,7 +227,7 @@ enum EncodeForm {
 pub(crate) struct Encode {
     param: Operand,
     form: EncodeForm,
-    outputs: OutputSlots,
+    output: Option<usize>,
 }
 
 impl Encode {
@@ -256,9 +254,6 @@ impl Encode {
                     FallbackReason::InvalidValue,
                     "`width` only applies to `hex` and `base62`",
                 );
-            }
-            if width == 0 {
-                return fail(FallbackReason::InvalidValue, "`width` must be at least 1");
             }
             if width > MAX_WIDTH {
                 return fail(
@@ -311,9 +306,17 @@ impl Encode {
                     "`base62` encodes ints only, but `param` is bytes",
                 );
             }
-            (Scheme::Base62, SlotType::Int { bits }) => EncodeForm::Base62Int {
-                width: width.unwrap_or_else(|| max_base62_digits(bits)),
-            },
+            (Scheme::Base62, SlotType::Int { bits }) => {
+                let natural_width = max_base62_digits(bits);
+                let width = width.unwrap_or(natural_width);
+                if width < natural_width {
+                    return fail(
+                        FallbackReason::InvalidValue,
+                        format!("`width` must be at least {natural_width} for a {bits}-bit int"),
+                    );
+                }
+                EncodeForm::Base62Int { width }
+            }
             (Scheme::Base64(variant), SlotType::Bytes) => EncodeForm::Base64Bytes { variant },
             (Scheme::Base64(variant), SlotType::Int { bits }) => EncodeForm::Base64Int {
                 variant,
@@ -321,11 +324,11 @@ impl Encode {
                 endian,
             },
         };
-        let outputs = outputs.single(SlotType::Bytes, builder)?;
+        let output = outputs.single("Encode", SlotType::Bytes, builder)?;
         Ok(Self {
             param,
             form,
-            outputs,
+            output,
         })
     }
 
@@ -364,15 +367,16 @@ impl Encode {
                 let mut digits = [0u8; 22];
                 let digit_count = base62::encode_bytes(self.param.load_int(frame)?, &mut digits)
                     .map_err(|_| FrameFailure::DanglingReference)?;
-                if digit_count > width {
-                    return Err(EncodeFailure::WidthTooSmall);
-                }
                 let digits = digits
                     .get(..digit_count)
                     .ok_or(FrameFailure::DanglingReference)?;
+                // Compile time guarantees `width` fits any value of the slot's `bits`.
+                let padding = width
+                    .checked_sub(digit_count)
+                    .ok_or(FrameFailure::DanglingReference)?;
                 frame.write_scratch(None, width, |_, out| {
                     let (pad, tail) = out
-                        .split_at_mut_checked(width - digit_count)
+                        .split_at_mut_checked(padding)
                         .ok_or(FrameFailure::DanglingReference)?;
                     pad.fill(b'0');
                     tail.copy_from_slice(digits);
@@ -394,7 +398,7 @@ impl Encode {
                 write_base64(frame, variant, None, bytes.len(), Some(bytes))?
             }
         };
-        frame.store_all(&self.outputs, Value::Bytes(span))?;
+        frame.store(self.output, Value::Bytes(span))?;
         Ok(())
     }
 }
@@ -463,7 +467,7 @@ fn int_to_bytes(
 }
 
 /// The number of base62 digits needed for the largest `bits`-bit value.
-fn max_base62_digits(bits: u8) -> usize {
+pub(super) fn max_base62_digits(bits: u8) -> usize {
     let mut remaining = if bits >= 64 {
         u64::MAX
     } else {
@@ -498,13 +502,13 @@ pub(crate) struct Decode {
     param: Operand,
     form: DecodeForm,
     on_failure: Option<OnFailure>,
-    outputs: OutputSlots,
+    output: Option<usize>,
 }
 
 /// 16 hex digits = 8 bytes = the largest int.
 const MAX_HEX_INT_DIGITS: usize = 16;
 /// 12 base64 characters decode to at most 9 bytes; anything longer certainly overflows.
-const MAX_BASE64_INT_CHARS: usize = 12;
+pub(super) const MAX_BASE64_INT_CHARS: usize = 12;
 
 impl Decode {
     pub fn compile(
@@ -548,12 +552,12 @@ impl Decode {
                 bits: DECODED_INT_BITS,
             },
         };
-        let outputs = outputs.single(output_type, builder)?;
+        let output = outputs.single("Decode", output_type, builder)?;
         Ok(Self {
             param,
             form,
             on_failure,
-            outputs,
+            output,
         })
     }
 
@@ -630,7 +634,7 @@ impl Decode {
                 Value::Int(bytes_to_int(bytes, endian))
             }
         };
-        frame.store_all(&self.outputs, value)?;
+        frame.store(self.output, value)?;
         Ok(())
     }
 }
@@ -645,7 +649,7 @@ fn hex_digit(byte: u8) -> Option<u8> {
 }
 
 /// Callers check that `text` has even length.
-fn decode_hex(text: &[u8], out: &mut [u8]) -> Result<usize, DecodeFailure> {
+pub(super) fn decode_hex(text: &[u8], out: &mut [u8]) -> Result<usize, DecodeFailure> {
     let decoded_len = text.len() / 2;
     if out.len() < decoded_len {
         return Err(FrameFailure::DanglingReference.into());
@@ -663,7 +667,7 @@ fn decode_hex(text: &[u8], out: &mut [u8]) -> Result<usize, DecodeFailure> {
     Ok(decoded_len)
 }
 
-fn decode_base64(
+pub(super) fn decode_base64(
     variant: Base64Variant,
     text: &[u8],
     out: &mut [u8],
@@ -679,7 +683,7 @@ fn decode_base64(
         })
 }
 
-fn bytes_to_int(bytes: &[u8], endian: Endian) -> u64 {
+pub(super) fn bytes_to_int(bytes: &[u8], endian: Endian) -> u64 {
     let fold = |value: u64, &byte: &u8| value << 8 | u64::from(byte);
     match endian {
         Endian::Big => bytes.iter().fold(0, fold),
@@ -692,7 +696,7 @@ mod test {
     use super::*;
     use crate::secondary_validation::chained_step::ChainOutcome;
     use crate::secondary_validation::chained_step::test::{
-        assert_fallback, chain, evaluates_to, step,
+        assert_fallback, chain, check, evaluates_to, step,
     };
     use serde_json::{Value as JsonValue, json};
 
@@ -704,11 +708,10 @@ mod test {
         }
         chain(vec![
             split_pipe(),
-            step("Encode", inputs, json!({"encoded": "$OUTPUT"})),
-            step(
+            step("Encode", inputs, json!("encoded")),
+            check(
                 "Compare",
-                json!({"a": "$encoded", "b": "$expected", "config": "="}),
-                json!({}),
+                json!({"a": "$encoded", "b": "$expected", "operator": "="}),
             ),
         ])
     }
@@ -724,13 +727,12 @@ mod test {
             step(
                 "Checksum",
                 json!({"param": "$text", "alg": "crc32"}),
-                json!({"crc": "$OUTPUT"}),
+                json!("crc"),
             ),
-            step("Encode", inputs, json!({"encoded": "$OUTPUT"})),
-            step(
+            step("Encode", inputs, json!("encoded")),
+            check(
                 "Compare",
-                json!({"a": "$encoded", "b": "$expected", "config": "="}),
-                json!({}),
+                json!({"a": "$encoded", "b": "$expected", "operator": "="}),
             ),
         ])
     }
@@ -743,38 +745,32 @@ mod test {
         if let Some(map) = inputs.as_object_mut() {
             map.insert("param".into(), json!("$text"));
         }
-        let mut steps = vec![
-            split_pipe(),
-            step("Decode", inputs, json!({"decoded": "$OUTPUT"})),
-        ];
+        let mut steps = vec![split_pipe(), step("Decode", inputs, json!("decoded"))];
         if as_int {
             steps.push(step(
                 "Format",
                 json!({"template": "{decoded}"}),
-                json!({"rendered": "$OUTPUT"}),
+                json!("rendered"),
             ));
-            steps.push(step(
+            steps.push(check(
                 "Compare",
-                json!({"a": "$rendered", "b": "$expected", "config": "="}),
-                json!({}),
+                json!({"a": "$rendered", "b": "$expected", "operator": "="}),
             ));
         } else {
-            steps.push(step(
+            steps.push(check(
                 "Compare",
-                json!({"a": "$decoded", "b": "$expected", "config": "="}),
-                json!({}),
+                json!({"a": "$decoded", "b": "$expected", "operator": "="}),
             ));
         }
         chain(steps)
     }
 
     fn split_pipe() -> JsonValue {
-        json!({
-            "name": "split",
-            "op": "RegexMatch",
-            "input": {"param": "$GLOBAL_MATCH", "pattern": "(?<text>[^|]*)\\|(?<expected>[^|]*)"},
-            "output": {"text": "$text", "expected": "$expected"}
-        })
+        step(
+            "Split",
+            json!({"param": "$GLOBAL_MATCH", "separator": "|", "occurrence": 0}),
+            json!({"before": "text", "after": "expected"}),
+        )
     }
 
     fn crc_of(text: &str) -> u32 {
@@ -836,16 +832,6 @@ mod test {
     }
 
     #[test]
-    fn encode_base62_value_wider_than_width_is_error() {
-        // CRC32("abcdef1234567890") = 0x62DB38FB needs 6 base62 digits.
-        evaluates_to(
-            &encode_crc_chain(json!({"scheme": "base62", "width": 3})),
-            "abcdef1234567890|x",
-            ChainOutcome::Error,
-        );
-    }
-
-    #[test]
     fn encode_bytes_base64_padded_and_unpadded() {
         for (scheme, input) in [("base64", "ab|YWI="), ("base64_nopad", "ab|YWI")] {
             evaluates_to(
@@ -863,27 +849,26 @@ mod test {
             step(
                 "Decode",
                 json!({"param": "-_8=", "scheme": "base64url"}),
-                json!({"raw": "$OUTPUT"}),
+                json!("raw"),
             ),
             step(
                 "Encode",
                 json!({"param": "$raw", "scheme": "base64"}),
-                json!({"standard": "$OUTPUT"}),
+                json!("standard"),
             ),
             step(
                 "Encode",
                 json!({"param": "$raw", "scheme": "base64url_nopad"}),
-                json!({"url": "$OUTPUT"}),
+                json!("url"),
             ),
             step(
                 "Format",
                 json!({"template": "{standard} {url}"}),
-                json!({"both": "$OUTPUT"}),
+                json!("both"),
             ),
-            step(
+            check(
                 "Compare",
-                json!({"a": "$both", "b": "$GLOBAL_MATCH", "config": "="}),
-                json!({}),
+                json!({"a": "$both", "b": "$GLOBAL_MATCH", "operator": "="}),
             ),
         ]);
         evaluates_to(&config, "+/8= -_8", ChainOutcome::Valid);
@@ -905,7 +890,7 @@ mod test {
                 FallbackReason::InvalidValue,
             ),
             (
-                encode_crc_chain(json!({"scheme": "base62", "width": 0})),
+                encode_crc_chain(json!({"scheme": "base62", "width": 5})),
                 FallbackReason::InvalidValue,
             ),
             (
@@ -1048,7 +1033,7 @@ mod test {
     }
 
     #[test]
-    fn decode_int_overflow_is_error() {
+    fn decode_int_overflow_is_negative() {
         for (inputs, encoded) in [
             (
                 json!({"scheme": "hex", "as": "int"}),
@@ -1073,7 +1058,7 @@ mod test {
             evaluates_to(
                 &decode_chain(inputs),
                 &format!("{encoded}|0"),
-                ChainOutcome::Error,
+                ChainOutcome::Invalid,
             );
         }
     }
@@ -1100,12 +1085,12 @@ mod test {
             step(
                 "Checksum",
                 json!({"param": "$GLOBAL_MATCH", "alg": "crc32"}),
-                json!({"crc": "$OUTPUT"}),
+                json!("crc"),
             ),
             step(
                 "Decode",
                 json!({"param": "$crc", "scheme": "hex"}),
-                json!({"decoded": "$OUTPUT"}),
+                json!("decoded"),
             ),
         ]);
         for (config, reason) in [
@@ -1133,17 +1118,16 @@ mod test {
             step(
                 "Encode",
                 json!({"param": "$GLOBAL_MATCH", "scheme": "hex"}),
-                json!({"encoded": "$OUTPUT"}),
+                json!("encoded"),
             ),
             step(
                 "Decode",
                 json!({"param": "$encoded", "scheme": "hex"}),
-                json!({"decoded": "$OUTPUT"}),
+                json!("decoded"),
             ),
-            step(
+            check(
                 "Compare",
-                json!({"a": "$decoded", "b": "$GLOBAL_MATCH", "config": "="}),
-                json!({}),
+                json!({"a": "$decoded", "b": "$GLOBAL_MATCH", "operator": "="}),
             ),
         ]);
         let all_ascii: String = (0u8..128).map(char::from).collect();
@@ -1151,27 +1135,23 @@ mod test {
     }
 
     #[test]
-    fn on_failure_overrides_the_class_of_decoding_failures() {
-        // Each row flips a failure away from its default class: an invalid character is
-        // negative by default, an int overflow is an error by default.
-        for (decode_inputs, input, expected) in [
-            (
-                json!({"param": "$GLOBAL_MATCH", "scheme": "hex", "on_failure": "pass"}),
-                "zz",
-                ChainOutcome::Valid,
-            ),
-            (
-                json!({"param": "$GLOBAL_MATCH", "scheme": "hex", "as": "int", "on_failure": "fail"}),
-                "00112233445566778",
-                ChainOutcome::Invalid,
-            ),
-        ] {
-            let config = chain(vec![step(
-                "Decode",
-                decode_inputs,
-                json!({"decoded": "$OUTPUT"}),
-            )]);
-            evaluates_to(&config, input, expected);
-        }
+    fn on_failure_pass_keeps_the_match_on_a_decoding_failure() {
+        let config = chain(vec![step(
+            "Decode",
+            json!({"param": "$GLOBAL_MATCH", "scheme": "hex", "on_failure": "pass"}),
+            json!("decoded"),
+        )]);
+        evaluates_to(&config, "zz", ChainOutcome::Valid);
+    }
+
+    #[test]
+    fn on_failure_does_not_override_budget_errors() {
+        // 6000 base64 characters decode to more than the 4 KiB per-value budget.
+        let config = chain(vec![step(
+            "Decode",
+            json!({"param": "$GLOBAL_MATCH", "scheme": "base64", "on_failure": "pass"}),
+            json!("decoded"),
+        )]);
+        evaluates_to(&config, &"A".repeat(6000), ChainOutcome::Error);
     }
 }

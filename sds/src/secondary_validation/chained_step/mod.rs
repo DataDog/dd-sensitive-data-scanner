@@ -13,13 +13,29 @@
 //!
 //! [`CompiledChain::evaluate`] then runs per match and returns:
 //! - [`ChainOutcome::Valid`] when every step succeeds;
-//! - [`ChainOutcome::Invalid`] when a step's check is negative (the token is not genuine);
-//! - [`ChainOutcome::Error`] when a step cannot be evaluated (the caller applies
-//!   `default_response`).
+//! - [`ChainOutcome::Invalid`] when a step fails because of the token;
+//! - [`ChainOutcome::Error`] when the engine cannot compute the result; the caller applies
+//!   `default_response`.
 //!
-//! Each op documents which of its runtime failures are negative and which are errors, and keeps
-//! that classification in a single `class()` match so it can be audited. That classification is
-//! part of the op's versioned contract.
+//! `default_response` only means "what to do when the token can't be computed". So any failure
+//! caused by the token's content, including a malformed token that breaks part of the computation
+//! (a slice past its end, a separator it lacks, text that does not decode, an int that overflows,
+//! a capture group its shape skips), fails the validator: it is negative and the match is dropped.
+//! Error is reserved for the engine itself: a scratch or per-value budget exceeded, thread-local
+//! state unavailable, or an internal inconsistency that compile-time checks should rule out.
+//!
+//! Each op documents its runtime failures and keeps their classification in a single `class()`
+//! match so it can be audited. That classification is part of the op's versioned contract.
+//!
+//! # Step syntax
+//!
+//! Inputs are `$name` variable references or literals (`$$` escapes a literal `$`). Results are
+//! named by plain identifiers (`[A-Za-z_][A-Za-z0-9_]*`; `GLOBAL_MATCH` is predefined and
+//! reserved), and each name is defined once:
+//! - single-result ops (Extract, Format, Checksum, Encode, Decode): `"output": "crc"`;
+//! - Split: `"output": {"before": "head", "after": "tail"}`, with at least one of the two;
+//! - RegexMatch: `"captures": {"body": "body_group"}`, mapping variables to named groups;
+//! - checks (Charset, Compare, VerifyChecksum): neither `output` nor `captures`.
 //!
 //! # Versioning
 //!

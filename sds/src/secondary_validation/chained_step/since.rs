@@ -1,7 +1,7 @@
 //! `since` tables: the chain version that introduced each feature a chain can reference.
 //!
 //! Bump policy: anything a release adds that a chain can reference (an op, an input key, an enum
-//! value, an output form, a raised limit) gets `since = CHAINED_STEP_VALIDATOR_VERSION + 1` and
+//! value, an output key, a raised limit) gets `since = CHAINED_STEP_VALIDATOR_VERSION + 1` and
 //! the constant is bumped. Op-specific input keys and enum values live next to their op, in tables
 //! of the same shape, and are looked up through [`lookup`].
 
@@ -16,6 +16,7 @@ pub(crate) const STEP_KEYS: SinceTable<()> = &[
     ("op", (), 1),
     ("input", (), 1),
     ("output", (), 1),
+    ("captures", (), 1),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +27,7 @@ pub(crate) enum OpKind {
     RegexMatch,
     Format,
     Checksum,
+    VerifyChecksum,
     Encode,
     Decode,
     Compare,
@@ -38,6 +40,7 @@ pub(crate) const OPS: SinceTable<OpKind> = &[
     ("RegexMatch", OpKind::RegexMatch, 1),
     ("Format", OpKind::Format, 1),
     ("Checksum", OpKind::Checksum, 1),
+    ("VerifyChecksum", OpKind::VerifyChecksum, 1),
     ("Encode", OpKind::Encode, 1),
     ("Decode", OpKind::Decode, 1),
     ("Compare", OpKind::Compare, 1),

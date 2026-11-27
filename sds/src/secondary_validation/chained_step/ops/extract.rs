@@ -1,25 +1,25 @@
 //! `Extract`: byte slice `[start:end]` of `param`.
 //!
-//! Inputs: `param` (bytes), `config` (`"[a:b]"`; either bound may be omitted; negative bounds
+//! Inputs: `param` (bytes), `slice` (`"[a:b]"`; either bound may be omitted; negative bounds
 //! count from the end). The result is a narrower span, so it never copies.
 //!
-//! Compile-time: a missing or unparsable `config`, a step (`[a:b:c]`) or a single index (`[a]`)
-//! is `invalid_value`.
+//! Compile-time: a missing `slice` is `malformed`; an unparsable one, a step (`[a:b:c]`) or a
+//! single index (`[a]`) is `invalid_value`.
 //!
-//! Runtime failures (see [`Failure::class`]):
-//! - a bound outside `0..=len` after resolving negatives: **error** (no clamping, the token does
-//!   not have the shape the chain expects, so it cannot be evaluated);
-//! - start after end: **error**, for the same reason.
+//! Runtime failures (see [`Failure::class`]). Bounds are not clamped: a value too short for the
+//! slice lacks the token's structure, like Split finding no separator.
+//! - a bound outside `0..=len` after resolving negatives: **negative**;
+//! - start after end: **negative**.
 
 use super::Operand;
 use crate::secondary_validation::chained_step::FailureClass;
 use crate::secondary_validation::chained_step::compile::{
-    ChainBuilder, CompileResult, FallbackReason, OutputSlots, StepInputs, StepOutputs, fail,
+    ChainBuilder, CompileResult, FallbackReason, StepInputs, StepOutputs, fail,
 };
 use crate::secondary_validation::chained_step::since::SinceTable;
 use crate::secondary_validation::chained_step::value::{Frame, FrameFailure, SlotType, Value};
 
-pub(crate) const INPUT_KEYS: SinceTable<()> = &[("param", (), 1), ("config", (), 1)];
+pub(crate) const INPUT_KEYS: SinceTable<()> = &[("param", (), 1), ("slice", (), 1)];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Failure {
@@ -31,8 +31,8 @@ pub(crate) enum Failure {
 impl Failure {
     pub fn class(self) -> FailureClass {
         match self {
-            Failure::BoundOutOfRange => FailureClass::Error,
-            Failure::StartAfterEnd => FailureClass::Error,
+            Failure::BoundOutOfRange => FailureClass::Negative,
+            Failure::StartAfterEnd => FailureClass::Negative,
             Failure::Frame(_) => FailureClass::Error,
         }
     }
@@ -54,7 +54,7 @@ pub(crate) struct SliceBounds {
 pub(crate) struct Extract {
     param: Operand,
     bounds: SliceBounds,
-    outputs: OutputSlots,
+    output: Option<usize>,
 }
 
 impl Extract {
@@ -64,12 +64,12 @@ impl Extract {
         builder: &mut ChainBuilder,
     ) -> CompileResult<Self> {
         let param = inputs.required_bytes_operand("param", builder)?;
-        let bounds = parse_slice(inputs.required_literal("config")?)?;
-        let outputs = outputs.single(SlotType::Bytes, builder)?;
+        let bounds = parse_slice(inputs.required_literal("slice")?)?;
+        let output = outputs.single("Extract", SlotType::Bytes, builder)?;
         Ok(Self {
             param,
             bounds,
-            outputs,
+            output,
         })
     }
 
@@ -79,19 +79,19 @@ impl Extract {
         let narrowed = span
             .narrow(start, end)
             .ok_or(Failure::Frame(FrameFailure::DanglingReference))?;
-        frame.store_all(&self.outputs, Value::Bytes(narrowed))?;
+        frame.store(self.output, Value::Bytes(narrowed))?;
         Ok(())
     }
 }
 
-pub(crate) fn parse_slice(config: &str) -> CompileResult<SliceBounds> {
+pub(crate) fn parse_slice(slice: &str) -> CompileResult<SliceBounds> {
     let invalid = || {
         fail(
             FallbackReason::InvalidValue,
-            format!("`config` must be a slice like `[a:b]`, got `{config}`"),
+            format!("`slice` must look like `[a:b]`, got `{slice}`"),
         )
     };
-    let Some(inner) = config
+    let Some(inner) = slice
         .strip_prefix('[')
         .and_then(|rest| rest.strip_suffix(']'))
     else {
@@ -143,7 +143,7 @@ mod test {
     use super::*;
     use crate::secondary_validation::chained_step::ChainOutcome;
     use crate::secondary_validation::chained_step::test::{
-        assert_fallback, chain, evaluates_to, step,
+        assert_fallback, chain, check, evaluates_to, step,
     };
     use serde_json::json;
 
@@ -151,13 +151,12 @@ mod test {
         chain(vec![
             step(
                 "Extract",
-                json!({"param": "$GLOBAL_MATCH", "config": slice}),
-                json!({"part": "$OUTPUT"}),
+                json!({"param": "$GLOBAL_MATCH", "slice": slice}),
+                json!("part"),
             ),
-            step(
+            check(
                 "Compare",
-                json!({"a": "$part", "b": expected, "config": "="}),
-                json!({}),
+                json!({"a": "$part", "b": expected, "operator": "="}),
             ),
         ])
     }
@@ -200,18 +199,18 @@ mod test {
     }
 
     #[test]
-    fn out_of_range_bounds_are_errors() {
+    fn out_of_range_bounds_are_negative() {
         for slice in ["[0:10]", "[-4:]", "[2:1]"] {
             evaluates_to(
                 &extract_then_compare(slice, "abc"),
                 "abc",
-                ChainOutcome::Error,
+                ChainOutcome::Invalid,
             );
         }
     }
 
     #[test]
-    fn i64_extreme_bounds_are_errors_without_overflow() {
+    fn i64_extreme_bounds_are_negative_without_overflow() {
         assert_eq!(
             resolve_bounds(bounds(Some(i64::MIN), None), 3),
             Err(Failure::BoundOutOfRange)
@@ -223,7 +222,7 @@ mod test {
         evaluates_to(
             &extract_then_compare("[-9223372036854775808:]", "abc"),
             "abc",
-            ChainOutcome::Error,
+            ChainOutcome::Invalid,
         );
     }
 
@@ -242,13 +241,12 @@ mod test {
         let config = chain(vec![
             step(
                 "Extract",
-                json!({"param": "literal", "config": "[0:3]"}),
-                json!({"part": "$OUTPUT"}),
+                json!({"param": "literal", "slice": "[0:3]"}),
+                json!("part"),
             ),
-            step(
+            check(
                 "Compare",
-                json!({"a": "$part", "b": "$GLOBAL_MATCH", "config": "="}),
-                json!({}),
+                json!({"a": "$part", "b": "$GLOBAL_MATCH", "operator": "="}),
             ),
         ]);
         evaluates_to(&config, "lit", ChainOutcome::Valid);

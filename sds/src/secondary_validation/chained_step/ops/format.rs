@@ -11,7 +11,7 @@
 
 use crate::secondary_validation::chained_step::FailureClass;
 use crate::secondary_validation::chained_step::compile::{
-    ChainBuilder, CompileResult, FallbackReason, OutputSlots, StepInputs, StepOutputs, fail,
+    ChainBuilder, CompileResult, FallbackReason, StepInputs, StepOutputs, fail,
     is_valid_variable_name,
 };
 use crate::secondary_validation::chained_step::since::SinceTable;
@@ -53,7 +53,7 @@ enum Piece {
 #[derive(Debug)]
 pub(crate) struct Format {
     pieces: Vec<Piece>,
-    outputs: OutputSlots,
+    output: Option<usize>,
 }
 
 impl Format {
@@ -64,8 +64,8 @@ impl Format {
     ) -> CompileResult<Self> {
         let template = inputs.required_literal("template")?;
         let pieces = parse_template(template, builder)?;
-        let outputs = outputs.single(SlotType::Bytes, builder)?;
-        Ok(Self { pieces, outputs })
+        let output = outputs.single("Format", SlotType::Bytes, builder)?;
+        Ok(Self { pieces, output })
     }
 
     pub fn run(&self, frame: &mut Frame<'_>) -> Result<(), Failure> {
@@ -84,7 +84,7 @@ impl Format {
             }
         }
         let span = frame.end_scratch_value(start)?;
-        frame.store_all(&self.outputs, Value::Bytes(span))?;
+        frame.store(self.output, Value::Bytes(span))?;
         Ok(())
     }
 }
@@ -166,7 +166,7 @@ mod test {
     use super::*;
     use crate::secondary_validation::chained_step::ChainOutcome;
     use crate::secondary_validation::chained_step::test::{
-        assert_fallback, chain, evaluates_to, step,
+        assert_fallback, chain, check, evaluates_to, step,
     };
     use serde_json::json;
 
@@ -174,18 +174,13 @@ mod test {
         chain(vec![
             step(
                 "Split",
-                json!({"param": "$GLOBAL_MATCH", "separator": "_", "occurrence": 0, "part": "after"}),
-                json!({"body": "$OUTPUT"}),
+                json!({"param": "$GLOBAL_MATCH", "separator": "_", "occurrence": 0}),
+                json!({"after": "body"}),
             ),
-            step(
-                "Format",
-                json!({"template": template}),
-                json!({"formatted": "$OUTPUT"}),
-            ),
-            step(
+            step("Format", json!({"template": template}), json!("formatted")),
+            check(
                 "Compare",
-                json!({"a": "$formatted", "b": expected, "config": "="}),
-                json!({}),
+                json!({"a": "$formatted", "b": expected, "operator": "="}),
             ),
         ])
     }
@@ -224,13 +219,13 @@ mod test {
         let mut steps = vec![step(
             "Format",
             json!({"template": "{GLOBAL_MATCH}{GLOBAL_MATCH}"}),
-            json!({"v0": "$OUTPUT"}),
+            json!("v0"),
         )];
         for index in 1..8 {
             steps.push(step(
                 "Format",
                 json!({"template": format!("{{v{}}}{{v{}}}", index - 1, index - 1)}),
-                json!({format!("v{index}"): "$OUTPUT"}),
+                json!(format!("v{index}")),
             ));
         }
         evaluates_to(&chain(steps), &"x".repeat(64), ChainOutcome::Error);
@@ -244,7 +239,7 @@ mod test {
                 step(
                     "Format",
                     json!({"template": "{GLOBAL_MATCH}"}),
-                    json!({format!("copy{index}"): "$OUTPUT"}),
+                    json!(format!("copy{index}")),
                 )
             })
             .collect();

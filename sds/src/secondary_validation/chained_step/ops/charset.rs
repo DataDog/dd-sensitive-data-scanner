@@ -177,15 +177,14 @@ mod test {
     use super::*;
     use crate::secondary_validation::chained_step::ChainOutcome;
     use crate::secondary_validation::chained_step::test::{
-        assert_fallback, chain, evaluates_to, step,
+        assert_fallback, chain, check, evaluates_to,
     };
     use serde_json::json;
 
     fn charset(allowed: &str, mode: &str) -> serde_json::Value {
-        chain(vec![step(
+        chain(vec![check(
             "Charset",
             json!({"param": "$GLOBAL_MATCH", "allowed": allowed, "mode": mode}),
-            json!({}),
         )])
     }
 
@@ -198,10 +197,9 @@ mod test {
 
     #[test]
     fn mode_outcomes() {
-        let default_mode = chain(vec![step(
+        let default_mode = chain(vec![check(
             "Charset",
             json!({"param": "$GLOBAL_MATCH", "allowed": "a-z"}),
-            json!({}),
         )]);
         for (config, input, outcome) in [
             (default_mode.clone(), "abc", ChainOutcome::Valid),
@@ -237,17 +235,5 @@ mod test {
         for allowed in ["a-z\u{e9}", "z-a", "", "a\\"] {
             assert_fallback(&charset(allowed, "all"), FallbackReason::InvalidValue);
         }
-    }
-
-    #[test]
-    fn declaring_an_output_on_a_check_is_malformed() {
-        assert_fallback(
-            &chain(vec![step(
-                "Charset",
-                json!({"param": "$GLOBAL_MATCH", "allowed": "a"}),
-                json!({"x": "$OUTPUT"}),
-            )]),
-            FallbackReason::Malformed,
-        );
     }
 }

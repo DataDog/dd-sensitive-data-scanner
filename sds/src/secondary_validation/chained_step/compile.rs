@@ -19,8 +19,6 @@ pub(crate) const MAX_REGEXES: usize = 4;
 const MAX_LITERAL_POOL_LEN: usize = 64 * 1024;
 
 pub(crate) const GLOBAL_MATCH: &str = "GLOBAL_MATCH";
-pub(crate) const OUTPUT: &str = "OUTPUT";
-const RESERVED_NAMES: [&str; 2] = [GLOBAL_MATCH, OUTPUT];
 
 /// Why a chain resolves to its `default_response` at build time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -30,7 +28,8 @@ pub enum FallbackReason {
     InvalidValue,
     LimitExceeded,
     /// Structurally wrong: missing required field, empty steps, read before write, reserved or
-    /// duplicate variable name, type mismatch, unknown placeholder or output source.
+    /// duplicate variable name, type mismatch, unknown placeholder, output key or capture group,
+    /// an output or captures on an op that has none.
     Malformed,
 }
 
@@ -325,7 +324,7 @@ fn compile_step(step: &JsonValue, builder: &mut ChainBuilder) -> CompileResult<o
         None => None,
     };
     let inputs = StepInputs::new(inputs, ops::input_keys(kind), op, builder)?;
-    let outputs = StepOutputs::parse(step.get("output"))?;
+    let outputs = StepOutputs::new(step.get("output"), step.get("captures"));
     ops::compile_op(kind, &inputs, outputs, builder)
 }
 
@@ -424,12 +423,6 @@ impl ChainBuilder {
     }
 
     pub fn variable(&self, name: &str) -> CompileResult<Operand> {
-        if name == OUTPUT {
-            return fail(
-                FallbackReason::Malformed,
-                "`$OUTPUT` is an output source and cannot be read",
-            );
-        }
         let Some(&slot) = self.variables.get(name) else {
             return fail(
                 FallbackReason::Malformed,
@@ -443,7 +436,7 @@ impl ChainBuilder {
     }
 
     pub fn define(&mut self, name: &str, ty: SlotType) -> CompileResult<usize> {
-        if RESERVED_NAMES.contains(&name) {
+        if name == GLOBAL_MATCH {
             return fail(
                 FallbackReason::Malformed,
                 format!("`{name}` is a reserved name and cannot be written"),
@@ -687,77 +680,147 @@ fn missing<T>(key: &str) -> CompileResult<T> {
     )
 }
 
-/// The `output` object of one step: new variable name -> `$source`.
+/// The `output` and `captures` fields of one step. Their shape depends on the op, so they are
+/// only read once the op is known, through the accessor matching its kind of result.
 pub(crate) struct StepOutputs<'a> {
-    entries: SmallVec<[(&'a str, &'a str); 4]>,
+    output: Option<&'a JsonValue>,
+    captures: Option<&'a JsonValue>,
 }
 
 impl<'a> StepOutputs<'a> {
-    fn parse(output: Option<&'a JsonValue>) -> CompileResult<Self> {
-        let mut entries = SmallVec::new();
-        let map = match output {
-            None => return Ok(Self { entries }),
-            Some(JsonValue::Object(map)) => map,
-            Some(other) => {
-                return fail(
-                    FallbackReason::InvalidValue,
-                    format!("`output` must be an object, got {}", json_kind(other)),
-                );
-            }
-        };
-        for (name, source) in map {
-            let JsonValue::String(source) = source else {
-                return fail(
-                    FallbackReason::InvalidValue,
-                    format!(
-                        "output `{name}` must be a `$source` string, got {}",
-                        json_kind(source)
-                    ),
-                );
-            };
-            let source = match parse_reference(source) {
-                Reference::Variable(source) if !source.is_empty() => source,
-                _ => {
-                    return fail(
-                        FallbackReason::InvalidValue,
-                        format!("output `{name}` must reference a `$source`, got `{source}`"),
-                    );
-                }
-            };
-            entries.push((name.as_str(), source));
-        }
-        Ok(Self { entries })
+    fn new(output: Option<&'a JsonValue>, captures: Option<&'a JsonValue>) -> Self {
+        Self { output, captures }
     }
 
-    pub fn entries(&self) -> &[(&'a str, &'a str)] {
-        &self.entries
-    }
-
-    /// For ops with no result (checks): any output is an error.
-    pub fn none(self, op: &str) -> CompileResult<()> {
-        match self.entries.first() {
+    fn reject_captures(&self, op: &str) -> CompileResult<()> {
+        match self.captures {
             None => Ok(()),
-            Some((name, _)) => fail(
+            Some(_) => fail(
                 FallbackReason::Malformed,
-                format!("op `{op}` produces no output, but `{name}` is declared"),
+                format!("op `{op}` has no capture groups, so it cannot declare `captures`"),
             ),
         }
     }
 
-    /// For ops with a single result: every output must read `$OUTPUT`.
-    pub fn single(self, ty: SlotType, builder: &mut ChainBuilder) -> CompileResult<OutputSlots> {
-        let mut slots = OutputSlots::new();
-        for (name, source) in self.entries {
-            if source != OUTPUT {
+    /// For ops with no result (checks): any `output` or `captures` is an error.
+    pub fn none(self, op: &str) -> CompileResult<()> {
+        self.reject_captures(op)?;
+        match self.output {
+            None => Ok(()),
+            Some(_) => fail(
+                FallbackReason::Malformed,
+                format!("op `{op}` produces no output, but `output` is declared"),
+            ),
+        }
+    }
+
+    /// For ops with a single result: `output` is the name of the variable it defines. Without
+    /// one the step is a pure check, e.g. an Extract that only requires a minimum length.
+    pub fn single(
+        self,
+        op: &str,
+        ty: SlotType,
+        builder: &mut ChainBuilder,
+    ) -> CompileResult<Option<usize>> {
+        self.reject_captures(op)?;
+        match self.output {
+            None => Ok(None),
+            Some(JsonValue::String(name)) => builder.define(name, ty).map(Some),
+            Some(other) => fail(
+                FallbackReason::InvalidValue,
+                format!(
+                    "`output` of op `{op}` must be a variable name, got {}",
+                    json_kind(other)
+                ),
+            ),
+        }
+    }
+
+    /// For ops with several named results (Split's `before` / `after`): `output` maps a key of
+    /// `parts` to the name of the variable it defines.
+    pub fn parts<T: Copy>(
+        self,
+        op: &str,
+        parts: SinceTable<T>,
+        ty: SlotType,
+        builder: &mut ChainBuilder,
+    ) -> CompileResult<SmallVec<[(T, usize); 2]>> {
+        self.reject_captures(op)?;
+        let mut slots = SmallVec::new();
+        let map = match self.output {
+            None => return Ok(slots),
+            Some(JsonValue::Object(map)) => map,
+            Some(other) => {
                 return fail(
-                    FallbackReason::Malformed,
-                    format!("output `{name}`: unknown source `${source}` (expected `$OUTPUT`)"),
+                    FallbackReason::InvalidValue,
+                    format!(
+                        "`output` of op `{op}` must be an object, got {}",
+                        json_kind(other)
+                    ),
                 );
             }
-            slots.push(builder.define(name, ty)?);
+        };
+        for (part, name) in map {
+            let Some((value, part_since)) = since::lookup(parts, part) else {
+                let expected: Vec<String> = parts
+                    .iter()
+                    .map(|(part, _, _)| format!("`{part}`"))
+                    .collect();
+                return fail(
+                    FallbackReason::Malformed,
+                    format!(
+                        "unknown `output` key `{part}` for op `{op}` (expected {})",
+                        expected.join(", ")
+                    ),
+                );
+            };
+            builder.require(part_since, || format!("output `{part}` of op `{op}`"));
+            let JsonValue::String(name) = name else {
+                return fail(
+                    FallbackReason::InvalidValue,
+                    format!(
+                        "output `{part}` must be a variable name, got {}",
+                        json_kind(name)
+                    ),
+                );
+            };
+            slots.push((value, builder.define(name, ty)?));
         }
         Ok(slots)
     }
-}
 
-pub(crate) type OutputSlots = SmallVec<[usize; 2]>;
+    /// For RegexMatch: `captures` maps new variable names to capture group names. Variables are
+    /// not defined here because the op first checks each group exists.
+    pub fn captures(self, op: &str) -> CompileResult<SmallVec<[(&'a str, &'a str); 2]>> {
+        if self.output.is_some() {
+            return fail(
+                FallbackReason::Malformed,
+                format!("op `{op}` outputs through `captures`, not `output`"),
+            );
+        }
+        let mut captures = SmallVec::new();
+        let map = match self.captures {
+            None => return Ok(captures),
+            Some(JsonValue::Object(map)) => map,
+            Some(other) => {
+                return fail(
+                    FallbackReason::InvalidValue,
+                    format!("`captures` must be an object, got {}", json_kind(other)),
+                );
+            }
+        };
+        for (name, group) in map {
+            let JsonValue::String(group) = group else {
+                return fail(
+                    FallbackReason::InvalidValue,
+                    format!(
+                        "capture `{name}` must name a capture group, got {}",
+                        json_kind(group)
+                    ),
+                );
+            };
+            captures.push((name.as_str(), group.as_str()));
+        }
+        Ok(captures)
+    }
+}
