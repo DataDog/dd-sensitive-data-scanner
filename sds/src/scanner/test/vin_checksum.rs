@@ -6,7 +6,7 @@ fn validator() -> SecondaryValidator {
 
 #[test]
 fn vin_checksum_accepts_independent_vectors_and_ascii_case() {
-    let validator = validator().compile();
+    let validator = validator().compile(None).unwrap();
     // GB 16735-2019 Appendix A (zero) and published VIN examples (numeric/X).
     for vin in [
         "LFWADRJF011002346",
@@ -23,7 +23,7 @@ fn vin_checksum_accepts_independent_vectors_and_ascii_case() {
 
 #[test]
 fn vin_checksum_rejects_historical_invalid_examples_and_malformed_input() {
-    let validator = validator().compile();
+    let validator = validator().compile(None).unwrap();
     for vin in [
         "L5BGA2V58NG590409",
         "3D7KA28693G723011",
@@ -56,7 +56,7 @@ fn vin_checksum_rejects_historical_invalid_examples_and_malformed_input() {
 
 #[test]
 fn vin_checksum_accepts_only_the_expected_ninth_character() {
-    let validator = validator().compile();
+    let validator = validator().compile(None).unwrap();
     for vin in ["LFWADRJF011002346", "5YJ3E1EAXHF000316"] {
         for character in b"0123456789ABCDEFGHJKLMNPRSTUVWXYZ" {
             let mut candidate = vin.as_bytes().to_vec();
@@ -73,7 +73,7 @@ fn vin_checksum_accepts_only_the_expected_ninth_character() {
 
 #[test]
 fn vin_checksum_transliterates_every_allowed_character() {
-    let validator = validator().compile();
+    let validator = validator().compile(None).unwrap();
     // With only position one nonzero, its weight of eight determines the check digit.
     for (characters, check_digit) in [
         ("0", b'0'),
@@ -107,7 +107,7 @@ fn vin_checksum_round_trips_configuration() {
 
 #[test]
 fn vin_checksum_checks_integrity_not_vehicle_issuance() {
-    let validator = validator().compile();
+    let validator = validator().compile(None).unwrap();
     for vin in ["00000000000000000", "11111111111111111"] {
         assert!(validator.is_valid_match(vin));
     }

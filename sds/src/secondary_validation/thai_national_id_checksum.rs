@@ -67,7 +67,7 @@ mod test {
     fn deserializes_and_compiles_validator() {
         let validator: SecondaryValidator =
             serde_json::from_str(r#"{"type":"ThaiNationalIdChecksum"}"#).unwrap();
-        let compiled = validator.compile();
+        let compiled = validator.compile(None).unwrap();
         assert!(compiled.is_valid_match("1234567890121"));
         assert!(!compiled.is_valid_match("1234567890123"));
     }

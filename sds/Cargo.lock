@@ -838,6 +838,7 @@ dependencies = [
  "serde_with",
  "slab",
  "slotmap",
+ "smallvec",
  "strum",
  "thiserror 1.0.69",
  "threadpool",

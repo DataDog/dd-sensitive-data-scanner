@@ -1,0 +1,408 @@
+[
+  {
+    "id": "twitter_oauth2_access_token",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9_-]{80}MToxOmF0OjE)(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "decoded",
+            "op": "Decode",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "scheme": "base64url_nopad"
+            },
+            "output": "decoded"
+          },
+          {
+            "name": "structure",
+            "op": "RegexMatch",
+            "input": {
+              "param": "$decoded",
+              "pattern": "[A-Za-z0-9_-]{45}:[0-9]{13}:1:1:at:1"
+            }
+          }
+        ]
+      }
+    },
+    "corrupt_at": 60,
+    "positive": [
+      {
+        "description": "valid access token in a JSON payload",
+        "input_base64": "eyJhY2Nlc3NfdG9rZW4iOiAiUkU0eFJWZHNNek15VEdsemVGZFZiVVYyVmxwSFQwUlRaM2xEYlZkUVZIbHJNRmhVU1VkWFQwVkZVRU5IT2pFM09EWTFNamN3TWpVeE1qRTZNVG94T21GME9qRSJ9",
+        "output": "{\"access_token\": \"[REDACTED]\"}",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid access token in an Authorization header",
+        "input_base64": "QXV0aG9yaXphdGlvbjogQmVhcmVyIFZXOXNRVmRwZG1SVmRrc3hUREUxVUZsRVdrcG1ibUZCV1VWRE1ITnVUM2RyVGxOTUxWZ3pSSE4wYWt4Zk9qRTNPRFkxTWpZNU9UTTBOamM2TVRveE9tRjBPakU=",
+        "output": "Authorization: Bearer [REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern - boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC9WVzlzUVZkcGRtUlZka3N4VERFMVVGbEVXa3BtYm1GQldVVkRNSE51VDNkclRsTk1MVmd6UkhOMGFreGZPakUzT0RZMU1qWTVPVE0wTmpjNk1Ub3hPbUYwT2pF",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern - forbidden character (dot) inside body",
+        "input_base64": "Vlc5c1FWZHBkbVJWZGtzeFRERTFVRmxFV2twbWJtRkJXVVZETUhOdVQzZHJUbE5NTFZnelJITjBha3guT2pFM09EWTFNalk1T1RNME5qYzZNVG94T21GME9qRQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern - refresh token suffix instead of access token suffix",
+        "input_base64": "Ym1aaE5qTkNNM3BCUmkxb05td3pPVkpIWmpobVZWQmtaelZDT1RJeWNWazVMVk0wWmxGaGJVeE9RME50T2pFM09EWTFNalk1T1RNME5qYzZNVG94T25KME9qRQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern - truncated to 90 characters",
+        "input_base64": "VzlzUVZkcGRtUlZka3N4VERFMVVGbEVXa3BtYm1GQldVVkRNSE51VDNkclRsTk1MVmd6UkhOMGFreGZPakUzT0RZMU1qWTVPVE0wTmpjNk1Ub3hPbUYwT2pF",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "twitter_oauth2_refresh_token",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9_-]{80}MToxOnJ0OjE)(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "refresh"
+    ],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "decoded",
+            "op": "Decode",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "scheme": "base64url_nopad"
+            },
+            "output": "decoded"
+          },
+          {
+            "name": "structure",
+            "op": "RegexMatch",
+            "input": {
+              "param": "$decoded",
+              "pattern": "[A-Za-z0-9_-]{45}:[0-9]{13}:1:1:rt:1"
+            }
+          }
+        ]
+      }
+    },
+    "corrupt_at": 60,
+    "positive": [
+      {
+        "description": "valid refresh token in a JSON payload",
+        "input_base64": "eyJyZWZyZXNoX3Rva2VuIjogImJtWmhOak5DTTNwQlJpMW9ObXd6T1ZKSFpqaG1WVkJrWnpWQ09USXljVms1TFZNMFpsRmhiVXhPUTBOdE9qRTNPRFkxTWpZNU9UTTBOamM2TVRveE9uSjBPakUifQ==",
+        "output": "{\"refresh_token\": \"[REDACTED]\"}",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid refresh token to be scrubbed",
+        "input_base64": "VFdJVFRFUl9SRUZSRVNIX1RPS0VOPWJWZEhMWEZ3V0MwdFYyZDZWWEJYV2xoR01ISjZiR0p3WXpaclNEaEhTV1kyUm5sRlRISlZkemhpU0V4TU9qRTNPRFkxTWpjd01qVXhNakU2TVRveE9uSjBPakU=",
+        "output": "TWITTER_REFRESH_TOKEN=[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern - access token suffix instead of refresh token suffix",
+        "input_base64": "Vlc5c1FWZHBkbVJWZGtzeFRERTFVRmxFV2twbWJtRkJXVVZETUhOdVQzZHJUbE5NTFZnelJITjBha3hmT2pFM09EWTFNalk1T1RNME5qYzZNVG94T21GME9qRQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern - boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC9ibVpoTmpOQ00zcEJSaTFvTm13ek9WSkhaamhtVlZCa1p6VkNPVEl5Y1ZrNUxWTTBabEZoYlV4T1EwTnRPakUzT0RZMU1qWTVPVE0wTmpjNk1Ub3hPbkowT2pF",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern - forbidden character (dot) inside body",
+        "input_base64": "Ym1aaE5qTkNNM3BCUmkxb05td3pPVkpIWmpobVZWQmtaelZDT1RJeWNWazVMVk0wWmxGaGJVeE9RMDR0T2pFM09EWTFNalk1T1RNME5qYzZNVG94T25KLk9qRQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern - truncated to 90 characters",
+        "input_base64": "bVpoTmpOQ00zcEJSaTFvTm13ek9WSkhaamhtVlZCa1p6VkNPVEl5Y1ZrNUxWTTBabEZoYlV4T1EwTnRPakUzT0RZMU1qWTVPVE0wTmpjNk1Ub3hPbkowT2pF",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "couchbase_capella_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>[A-Za-z0-9+/]{130}==)(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [
+      "capella",
+      "couchbase"
+    ],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "decoded",
+            "op": "Decode",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "scheme": "base64"
+            },
+            "output": "decoded"
+          },
+          {
+            "name": "structure",
+            "comment": "the secret is printable ASCII: the samples use `!`, which the rule comment's charset omits",
+            "op": "RegexMatch",
+            "input": {
+              "param": "$decoded",
+              "pattern": "[A-Za-z0-9]{32}:[!-~]{64}"
+            }
+          }
+        ]
+      }
+    },
+    "corrupt_at": 43,
+    "positive": [
+      {
+        "description": "valid token with capella keyword present",
+        "input_base64": "Y2FwZWxsYV90b2tlbj1Ra3R4VlV0RlUxZEtWMUZsTW14d2J6SkJZWGRuVFZsUmVtRlpkbFJEWlRnNmVGaDRkelU0SlVZamVrSlZZV1pQWTNscWRVd3dZa0pvVGpaU1RtbHpSV0ZJUkhGMGIxaDRhMDh5YXpCcFFqSjFibXMxT1c0eVRVaEFlblJpYjNJaFZRPT0=",
+        "output": "capella_token=[REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid token with couchbase keyword present",
+        "input_base64": "Y291Y2hiYXNlIGFwaSBrZXk6IFFrdHhWVXRGVTFkS1YxRmxNbXh3YnpKQllYZG5UVmxSZW1GWmRsUkRaVGc2ZUZoNGR6VTRKVVlqZWtKVllXWlBZM2xxZFV3d1lrSm9UalpTVG1selJXRklSSEYwYjFoNGEwOHlhekJwUWpKMWJtczFPVzR5VFVoQWVuUmliM0loVlE9PQ==",
+        "output": "couchbase api key: [REDACTED]",
+        "use_included_keywords": true
+      },
+      {
+        "description": "valid token without keyword check",
+        "input_base64": "UWt0eFZVdEZVMWRLVjFGbE1teHdiekpCWVhkblRWbFJlbUZaZGxSRFpUZzZlRmg0ZHpVNEpVWWpla0pWWVdaUFkzbHFkVXd3WWtKb1RqWlNUbWx6UldGSVJIRjBiMWg0YTA4eWF6QnBRakoxYm1zMU9XNHlUVWhBZW5SaWIzSWhWUT09",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid — boundary character not in allowed prefix set (accepted by \\b, rejected by restrictive boundary)",
+        "input_base64": "cGF0aC9Ra3R4VlV0RlUxZEtWMUZsTW14d2J6SkJZWGRuVFZsUmVtRlpkbFJEWlRnNmVGaDRkelU0SlVZamVrSlZZV1pQWTNscWRVd3dZa0pvVGpaU1RtbHpSV0ZJUkhGMGIxaDRhMDh5YXpCcFFqSjFibXMxT1c0eVRVaEFlblJpYjNJaFZRPT0=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — forbidden character (space) breaking the contiguous Base64 body",
+        "input_base64": "dG9rZW46IFFrdHhWVXRGVTFkS1YxRmxNbXh3YnpKQllYZG5UVmxSZW1GWmRsUkRaVGc2ZUZoNGR6VTRKVVlqZWtKVllXWlBZM2xxZFV3d1lrSm9UalpTVG1selJXRklSSEYwYjFoNGEwOHlhekJwUWpKMWJtczEgT1c0eVRVaEFlblJpYjNJaFZRPT0=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid — truncated (missing trailing padding)",
+        "input_base64": "dG9rZW46IFFrdHhWVXRGVTFkS1YxRmxNbXh3YnpKQllYZG5UVmxSZW1GWmRsUkRaVGc2ZUZoNGR6VTRKVVlqZWtKVllXWlBZM2xxZFV3d1lrSm9UalpTVG1selJXRklSSEYwYjFoNGEwOHlhekJwUWpKMWJtczFPVzR5VFVoQWVuUmliM0lo",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "token not matched when no keyword is present",
+        "input_base64": "UWt0eFZVdEZVMWRLVjFGbE1teHdiekpCWVhkblRWbFJlbUZaZGxSRFpUZzZlRmg0ZHpVNEpVWWpla0pWWVdaUFkzbHFkVXd3WWtKb1RqWlNUbWx6UldGSVJIRjBiMWg0YTA4eWF6QnBRakoxYm1zMU9XNHlUVWhBZW5SaWIzSWhWUT09",
+        "rejected_by": "keywords",
+        "use_included_keywords": true
+      }
+    ]
+  },
+  {
+    "id": "devin_personal_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>apk_user_[A-Za-z0-9]{130,160}={0,2})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "encoded",
+            "op": "Extract",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "slice": "[9:]"
+            },
+            "output": "encoded"
+          },
+          {
+            "name": "decoded",
+            "op": "Decode",
+            "input": {
+              "param": "$encoded",
+              "scheme": "base64"
+            },
+            "output": "decoded"
+          },
+          {
+            "name": "structure",
+            "op": "RegexMatch",
+            "input": {
+              "param": "$decoded",
+              "pattern": "user-[0-9a-f]{32}_org-[0-9a-f]{32}:[!-~]+"
+            }
+          }
+        ]
+      }
+    },
+    "corrupt_at": 108,
+    "positive": [
+      {
+        "description": "valid Devin Personal API Key assigned to a variable",
+        "input_base64": "REVWSU5fQVBJX0tFWT1hcGtfdXNlcl9kWE5sY2kxaU5EaG1OVEU0T1RVNVlqYzBNelkxWW1WbU5ERTNZamt4TXpOaE1EbGpabDl2Y21jdFl6WTFZbUU1WXpRM05UVXhOR0ZpWTJJNE5UTTFaR0k0Tmpnd01qRmtNVGs2TWpZNE9EQTVNalkxWXpGbU5HVXpZMkl5WVdVMk9Ea3dNVFl4WVRVNE1qWT0=",
+        "output": "DEVIN_API_KEY=[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Devin Personal API Key in Authorization header",
+        "input_base64": "QXV0aG9yaXphdGlvbjogQmVhcmVyIGFwa191c2VyX2RYTmxjaTFpTkRobU5URTRPVFU1WWpjME16WTFZbVZtTkRFM1lqa3hNek5oTURsalpsOXZjbWN0WXpZMVltRTVZelEzTlRVeE5HRmlZMkk0TlRNMVpHSTROamd3TWpGa01UazZaR0ZsTjJNME4yUXhabVE1TkdKa05qZ3pNV0ZpWVRka05UQXpZVFZsWlRZPQ==",
+        "output": "Authorization: Bearer [REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern - forbidden character in body",
+        "input_base64": "dG9rZW46IGFwa191c2VyX2RYTmxjaTFpTkRobU5URTRPVFU1WWpjME16WTFZbVZtTkRFM1lqa3hNek5oTURsalpsOXZjbWN0WXpZMVltRTVZelEzTlRVeE5HRmlZMkk0TlRNMVpHSTROamd3TWpGa01UazZaR0ZsTjJNME4yUXhabVE1TkdKa05qZ3pNV0ZpWVRka05UQXpZVFZsWlQuPQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern - suffix truncated below 164 characters",
+        "input_base64": "dG9rZW46IGFwa191c2VyX2RYTmxjaTFpTkRobU5URTRPVFU1WWpjME16WTFZbVZtTkRFM1lqa3hNek5oTURsalpsOXZjbWN0WWpreE16TmhNRGxqWmw5dmNtY3RZamt4TXpOaE1EbGpabDl2Y21jdFl6WTFZbUU1WXpRM05UVXhOR0ZpWTJJNE5UTTFaR0k0Tmpnd01qRmtNVGs2WkdGbE4yTTBOMlF4Wm1RNU5HSmtOamd6TVdGaVlUZGtOVEF6WVRWbFpUPQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern - wrong prefix",
+        "input_base64": "dG9rZW46IGFwa19vcmdfZFhObGNpMWlORGhtTlRFNE9UVTVZamMwTXpZMVltVm1OREUzWWpreE16TmhNRGxqWmw5dmNtY3RZelkxWW1FNVl6UTNOVFV4TkdGaVkySTROVE0xWkdJNE5qZ3dNakZrTVRrNlpHRmxOMk0wTjJReFptUTVOR0prTmpnek1XRmlZVGRrTlRBellUVmxaVFk9",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "aws_bedrock_long-term_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>ABSK[A-Za-z0-9+/]{120,}={0,2})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "encoded",
+            "op": "Extract",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "slice": "[4:]"
+            },
+            "output": "encoded"
+          },
+          {
+            "name": "decoded",
+            "op": "Decode",
+            "input": {
+              "param": "$encoded",
+              "scheme": "base64"
+            },
+            "output": "decoded"
+          },
+          {
+            "name": "structure",
+            "comment": "`<IAM user name>-at-<AWS account id>:<secret>`; IAM user names use `[A-Za-z0-9+=,.@_-]`",
+            "op": "RegexMatch",
+            "input": {
+              "param": "$decoded",
+              "pattern": "[A-Za-z0-9+=,.@_-]{1,64}-at-[0-9]{12}:[!-~]+"
+            }
+          }
+        ]
+      }
+    },
+    "corrupt_at": 4,
+    "positive": [
+      {
+        "description": "valid long-term Bedrock API key with double padding, embedding the second-key +1 marker",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIEFCU0tZbVZrY205amF5MXpaSE10YzJGdGNHeGxLekV0WVhRdE5qYzNNekF4TURNNE9Ea3pPbkZyUlVVNGNuWkJOR0ZWVnpaa2NGbzFjVlZqWW14NVNrSlZObEJGYjB3emNFNTRSa2RKTVdoa1RtTkJiRnBRVlV0emVYZE1Wblp4V2tnd1BRPT0=",
+        "output": "hello world, connected with [REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid long-term Bedrock API key with single padding character",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIEFCU0tZbVZrY205amF5MXpaSE10YzJGdGNHeGxMV0YwTFRZM056TXdNVEF6T0RnNU16cGxiMjVwZGs5UmQybHJiVEZIVUdoeE5sb3pOaXN4Y2xRMU9VUnVORzFhT1ZWclNFcEVOMnhoTkU0NFVUZFJRMHBzWkdwaVRWWjZPWE42YXowPQ==",
+        "output": "hello world, connected with [REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid long-term Bedrock API key wrapped in separators",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIChBQlNLWW1Wa2NtOWpheTF6WkhNdGMyRnRjR3hsTFdGMExUWTNOek13TVRBek9EZzVNenBWY1VwbmJYWlNWbmxVVEhkdGVqRXlURXhQVUVoR1pVMDNOa2huY0c5amVsWTJjVTVLV21wVFZYcFRNbFZuYWpVeVFUWmxaSEZwY1d0eFdUMD0p",
+        "output": "hello world, connected with ([REDACTED])",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern, forbidden character immediately after the static prefix",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIEFCU0shWW1Wa2NtOWpheTF6WkhNdGMyRnRjR3hsTFdGMExUWTNOek13TVRBek9EZzVNenBsYjI1cGRrOVJkMmxyYlRGSFVHaHhObG96TmlzeGNsUTFPVVJ1TkcxYU9WVnJTRXBFTjJ4aE5FNDRVVGRSUTBwc1pHcGlUVlo2T1hONmF6MD0=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern, incomplete static prefix",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIEFCU1ltVmtjbTlqYXkxelpITXRjMkZ0Y0d4bExXRjBMVFkzTnpNd01UQXpPRGc1TXpwbGIyNXBkazlSZDJscmJURkhVR2h4Tmxvek5pc3hjbFExT1VSdU5HMWFPVlZyU0VwRU4yeGhORTQ0VVRkUlEwcHNaR3BpVFZaNk9YTjZhejA9",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern, leading word character prevents boundary match",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIF9BQlNLWW1Wa2NtOWpheTF6WkhNdGMyRnRjR3hsTFdGMExUWTNOek13TVRBek9EZzVNenBsYjI1cGRrOVJkMmxyYlRGSFVHaHhObG96TmlzeGNsUTFPVVJ1TkcxYU9WVnJTRXBFTjJ4aE5FNDRVVGRSUTBwc1pHcGlUVlo2T1hONmF6MD0=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid pattern, wrong static prefix",
+        "input_base64": "aGVsbG8gd29ybGQsIGNvbm5lY3RlZCB3aXRoIEFCU1hZbVZrY205amF5MXpaSE10YzJGdGNHeGxMV0YwTFRZM056TXdNVEF6T0RnNU16cGxiMjVwZGs5UmQybHJiVEZIVUdoeE5sb3pOaXN4Y2xRMU9VUnVORzFhT1ZWclNFcEVOMnhoTkU0NFVUZFJRMHBzWkdwaVRWWjZPWE42YXowPQ==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  }
+]

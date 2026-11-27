@@ -1,0 +1,321 @@
+[
+  {
+    "id": "github_access_token",
+    "pattern": "\\bgh[opsu]_[0-9a-zA-Z]{36}\\b",
+    "default_included_keywords": [
+      "access",
+      "github",
+      "token"
+    ],
+    "hand_written_validator": {
+      "type": "GithubTokenChecksum"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "last_part",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "after": "last"
+            }
+          },
+          {
+            "name": "body_and_checksum",
+            "comment": "GithubTokenChecksum requires base62 only and more than 6 characters",
+            "op": "RegexMatch",
+            "input": {
+              "param": "$last",
+              "pattern": "(?<body>[A-Za-z0-9]+)(?<checksum>[A-Za-z0-9]{6})"
+            },
+            "captures": {
+              "body": "body",
+              "checksum": "checksum"
+            }
+          },
+          {
+            "name": "verify",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$checksum",
+              "alg": "crc32",
+              "scheme": "base62"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "Valid Github Access Token to be scrubbed",
+        "input_base64": "MjAyMi0wMi0yMiAxNDowOTowNyw3MDEgSU5GTyByZXF1ZXN0OiB7aWQ9MTIzLCBnaXRodWJfYWNjZXNzX3Rva2VuPWdocF95TFZleVBhbXR5NWRiNFpESFV6eVd1aGppSTBBZ2kzR1dUZmJ9",
+        "output": "2022-02-22 14:09:07,701 INFO request: {id=123, github_access_token=[REDACTED]}",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "Invalid Github Access Token - invalid checksum",
+        "input_base64": "MjAyMi0wMi0yMiAxNDowOTowNyw3MDEgSU5GTyByZXF1ZXN0OiB7aWQ9MTIzLCBnaXRodWJfYWNjZXNzX3Rva2VuPWdocF95TFZleVBhbXR5NWRiNFpESFV6eVd1aGppSTBBZ2kzR1dUZmN9",
+        "rejected_by": "validator",
+        "use_included_keywords": false
+      },
+      {
+        "description": "Invalid Github Access Token - missing prefix",
+        "input_base64": "MjAyMi0wMi0yMiAxNDowOTowNyw3MDEgSU5GTyByZXF1ZXN0OiB7aWQ9MTIzLCBnaXRodWJfYWNjZXNzX3Rva2VuPXJhbl95TFZleVBhbXR5NWRiNFpESFV6eVd1aGppSTBBZ2kzR1dUZmJ9",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "npm_access_token",
+    "pattern": "\\bnpm_[0-9a-zA-Z]{36}(?:\\b|$)",
+    "default_included_keywords": [],
+    "hand_written_validator": {
+      "type": "GithubTokenChecksum"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "last_part",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "after": "last"
+            }
+          },
+          {
+            "name": "body_and_checksum",
+            "comment": "GithubTokenChecksum requires base62 only and more than 6 characters",
+            "op": "RegexMatch",
+            "input": {
+              "param": "$last",
+              "pattern": "(?<body>[A-Za-z0-9]+)(?<checksum>[A-Za-z0-9]{6})"
+            },
+            "captures": {
+              "body": "body",
+              "checksum": "checksum"
+            }
+          },
+          {
+            "name": "verify",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$checksum",
+              "alg": "crc32",
+              "scheme": "base62"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "Valid NPM access token - Granular",
+        "input_base64": "bnBtX0JtQXdyOWt3VWk2dlRwYTVMYUN5NkZ0aFZ1VmtNaTRZT0FkaQ==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "Valid NPM access token - Legacy Automation",
+        "input_base64": "bnBtXzVsSTdUMkkxSVBUeDN2SkJ3SHVwM2x4UThlbE40SzFiZnVhaQ==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "Valid NPM access token - Legacy Publish",
+        "input_base64": "bnBtXzhCYXNlaE5Fdkc0WjNCSlNRUzdITHB4WXlOZVFlQzRObURyaA==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "Valid NPM access token - Legacy Read Only",
+        "input_base64": "bnBtX3pXQzF6UkxQRlFxQk50MzFxeGRhWTE5bW5rb09TRTAzek1nbA==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "Valid test case with access token keyword present",
+        "input_base64": "Q29uZmlndXJlIGFjY2VzcyB0b2tlbiBucG1fNjQzZTI4djNZaXU2T2x0ZmxlN2dmZXZzUnlXV3RlMDN5SlF1IGluIENJ",
+        "output": "Configure access token [REDACTED] in CI",
+        "use_included_keywords": true
+      },
+      {
+        "description": "Valid test case with npm keyword present",
+        "input_base64": "VXNpbmcgbnBtIHRva2VuOiBucG1fTkVyV0JjWVd1Z2gxcUpROUxoRDQxVkVvNURwZ0F3MlZQZm5JIGZvciBwdWJsaXNoaW5n",
+        "output": "Using npm token: [REDACTED] for publishing",
+        "use_included_keywords": true
+      }
+    ],
+    "negative": [
+      {
+        "description": "Invalid test case - contains invalid characters",
+        "input_base64": "bnBtXzhCYXNlaE5Fdkc0WjNCSlNRUzdITHB4WXlOZVFlQzQtbURyaA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "Invalid test case - keyword present but no valid token",
+        "input_base64": "VXNpbmcgTlBNIGJ1dCBubyB0b2tlbjogbnBtX2ludmFsaWRfZm9ybWF0",
+        "rejected_by": "pattern",
+        "use_included_keywords": true
+      },
+      {
+        "description": "Invalid test case - npm prefix without proper token format",
+        "input_base64": "bnBtXzEyM2FiYw==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "Invalid test case - token too long",
+        "input_base64": "bnBtXzhCYXNlaE5Fdkc0WjNCSlNRUzdITHB4WXlOZVFlQzRObURyaEV4dHJh",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "Invalid test case - token too short",
+        "input_base64": "bnBtXzhCYXNlaE5Fdkc0WjNCSlNRUzdITHB4WXlOZVFlQzQ=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "thunderstore_api_key",
+    "pattern": "(?:^|\\\\[rn]|[\\s=:(\\[{\"'<])(?<sds_match>tss_[A-Za-z0-9]{36})(?:$|[\\s)\\]}\"'>&]|\\\\[rn])",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "hand_written_validator": {
+      "type": "GithubTokenChecksum"
+    },
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "last_part",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "after": "last"
+            }
+          },
+          {
+            "name": "body_and_checksum",
+            "comment": "GithubTokenChecksum requires base62 only and more than 6 characters",
+            "op": "RegexMatch",
+            "input": {
+              "param": "$last",
+              "pattern": "(?<body>[A-Za-z0-9]+)(?<checksum>[A-Za-z0-9]{6})"
+            },
+            "captures": {
+              "body": "body",
+              "checksum": "checksum"
+            }
+          },
+          {
+            "name": "verify",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$checksum",
+              "alg": "crc32",
+              "scheme": "base62"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Thunderstore service account token",
+        "input_base64": "dHNzX3pHNkZ4RjNOTElUZm1LY01lNjhjTktEOU5iWmthQjBLb3lZRg==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Thunderstore service account token (second sample)",
+        "input_base64": "dHNzX2F6QUtOMFhtMmVMaUFoWlBJZ1FxTTZ1NkdKaElWMDRTamozNA==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Thunderstore service account token (third sample)",
+        "input_base64": "dHNzX29jSVFzc3lGZEhJeTdPYzRHVzVWalBPVXd1QUgyaTNodnVGNg==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Thunderstore service account token embedded in text",
+        "input_base64": "QXV0aG9yaXphdGlvbjogQmVhcmVyIHRzc196RzZGeEYzTkxJVGZtS2NNZTY4Y05LRDlOYlprYUIwS295WUY=",
+        "output": "Authorization: Bearer [REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid - body too long (37 characters)",
+        "input_base64": "dHNzX3pHNkZ4RjNOTElUZm1LY01lNjhjTktEOU5iWmthQjBLb3lZRkE=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - checksum mismatch (last character changed)",
+        "input_base64": "dHNzX3pHNkZ4RjNOTElUZm1LY01lNjhjTktEOU5iWmthQjBLb3lZRw==",
+        "rejected_by": "validator",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - forbidden character in body (hyphen)",
+        "input_base64": "dHNzX3pHNkZ4RjNOTElUZm1LY01lNjhjTktEOU5iWmthQjBLby1ZRg==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - token embedded in a longer identifier",
+        "input_base64": "bXl0c3Nfekc2RnhGM05MSVRmbUtjTWU2OGNOS0Q5TmJaa2FCMEtveVlG",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - truncated body (35 characters)",
+        "input_base64": "dHNzX3pHNkZ4RjNOTElUZm1LY01lNjhjTktEOU5iWmthQjBLb3lZ",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - wrong prefix (tsx_ instead of tss_)",
+        "input_base64": "dHN4X3pHNkZ4RjNOTElUZm1LY01lNjhjTktEOU5iWmthQjBLb3lZRg==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  }
+]

@@ -1,5 +1,6 @@
 use crate::SharedPool;
 use crate::scanner::regex_rule::regex_store::{RegexCacheKey, SharedRegex, gc_regex_store};
+use crate::secondary_validation::chained_step::clear_chain_caches;
 use lazy_static::lazy_static;
 use regex_automata::meta::Regex as MetaRegex;
 use slotmap::SecondaryMap;
@@ -33,11 +34,13 @@ pub fn reset_regex_caches() {
     *REGEX_CACHE_STORE.write().unwrap() = new_regex_cache_pool();
 }
 
-/// Clears both scanning caches: per-thread scratch (`reset_regex_caches`) and unreferenced
-/// compiled regexes (`gc_regex_store`). Call when idle to drop dd-sds to a near-zero footprint.
+/// Clears the scanning caches: per-thread scratch (`reset_regex_caches`), unreferenced compiled
+/// regexes (`gc_regex_store`) and the chained step validators' per-thread scratch. Call when idle
+/// to drop dd-sds to a near-zero footprint.
 pub fn clear_all_caches() {
     reset_regex_caches();
     gc_regex_store();
+    clear_chain_caches();
 }
 
 pub struct RegexCaches {

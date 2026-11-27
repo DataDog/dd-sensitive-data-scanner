@@ -8,6 +8,7 @@ mod brazilian_cnpj_checksum;
 mod brazilian_cpf_checksum;
 mod btc_checksum;
 mod bulgarian_egn_checksum;
+pub(crate) mod chained_step;
 mod chinese_id_checksum;
 mod coordination_number_checksum;
 mod czech_tin_checksum;
@@ -68,7 +69,9 @@ mod vin_checksum;
 #[cfg(test)]
 pub use jwt_expiration_checker::generate_jwt;
 
-use crate::scanner::regex_rule::config::{SecondaryValidator, ValidatorConfig, ValidatorKind};
+use crate::scanner::regex_rule::config::{
+    DefaultResponse, SecondaryValidator, ValidatorConfig, ValidatorKind,
+};
 pub use crate::secondary_validation::aba_rtn_checksum::AbaRtnChecksum;
 pub use crate::secondary_validation::atlassian_token_checksum::AtlassianTokenChecksum;
 pub use crate::secondary_validation::australian_medicare_checksum::AustralianMedicareChecksum;
@@ -79,6 +82,9 @@ pub use crate::secondary_validation::brazilian_cnpj_checksum::BrazilianCnpjCheck
 pub use crate::secondary_validation::brazilian_cpf_checksum::BrazilianCpfChecksum;
 pub use crate::secondary_validation::btc_checksum::BtcChecksum;
 pub use crate::secondary_validation::bulgarian_egn_checksum::BulgarianEGNChecksum;
+use crate::secondary_validation::chained_step::{
+    ChainCompileError, ChainOutcome, CompiledChain, compile_chain,
+};
 pub use crate::secondary_validation::chinese_id_checksum::ChineseIdChecksum;
 pub use crate::secondary_validation::coordination_number_checksum::CoordinationNumberChecksum;
 pub use crate::secondary_validation::czech_tin_checksum::CzechTaxIdentificationNumberChecksum;
@@ -219,22 +225,63 @@ impl Validator for ConstantValidator {
     }
 }
 
+fn constant_validator(default_response: DefaultResponse) -> Arc<dyn Validator> {
+    Arc::new(ConstantValidator(default_response.is_valid_match()))
+}
+
+struct ChainedStepValidator {
+    chain: CompiledChain,
+    default_response: DefaultResponse,
+}
+
+impl Validator for ChainedStepValidator {
+    fn is_valid_match(&self, regex_match: &str) -> bool {
+        match self.chain.evaluate(regex_match) {
+            ChainOutcome::Valid => true,
+            ChainOutcome::Invalid => false,
+            ChainOutcome::Error => self.default_response.is_valid_match(),
+        }
+    }
+}
+
+/// A chain is the only validator that can fail to parse, so it can't be loaded without a
+/// `default_response`. A version this runtime doesn't support disables the rule whatever the
+/// `default_response`, because the chain was written against semantics this runtime doesn't have.
+fn compile_chained_step_validator(
+    config: &serde_json::Value,
+    default_response: Option<DefaultResponse>,
+) -> Option<Arc<dyn Validator>> {
+    let default_response = default_response?;
+    match compile_chain(config) {
+        Ok(chain) => Some(Arc::new(ChainedStepValidator {
+            chain,
+            default_response,
+        })),
+        Err(ChainCompileError::Fallback { .. }) => Some(constant_validator(default_response)),
+        Err(
+            ChainCompileError::FutureVersion { .. }
+            | ChainCompileError::MissingVersion
+            | ChainCompileError::InvalidVersion,
+        ) => None,
+    }
+}
+
 impl ValidatorConfig {
     /// `None` when this runtime can't evaluate the validator and there is no `default_response` to
     /// stand in for it: the rule must then be disabled.
     pub fn compile(&self) -> Option<Arc<dyn Validator>> {
         match &self.validator {
-            ValidatorKind::Known(validator) => Some(validator.compile()),
-            ValidatorKind::Unsupported { .. } => self.default_response.map(|default_response| {
-                Arc::new(ConstantValidator(default_response.is_valid_match())) as Arc<dyn Validator>
-            }),
+            ValidatorKind::Known(validator) => validator.compile(self.default_response),
+            ValidatorKind::Unsupported { .. } => self.default_response.map(constant_validator),
         }
     }
 }
 
 impl SecondaryValidator {
-    pub fn compile(&self) -> Arc<dyn Validator> {
-        match self {
+    /// `default_response` is only consulted by validators that can fail to load (see
+    /// [`ValidatorConfig::compile`]); `None` means the rule must be disabled.
+    pub fn compile(&self, default_response: Option<DefaultResponse>) -> Option<Arc<dyn Validator>> {
+        let validator: Arc<dyn Validator> = match self {
             SecondaryValidator::AbaRtnChecksum => Arc::new(AbaRtnChecksum),
             SecondaryValidator::AtlassianTokenChecksum => Arc::new(AtlassianTokenChecksum),
             SecondaryValidator::AustralianMedicareChecksum => Arc::new(AustralianMedicareChecksum),
@@ -247,6 +294,9 @@ impl SecondaryValidator {
             SecondaryValidator::BrazilianCpfChecksum => Arc::new(BrazilianCpfChecksum),
             SecondaryValidator::BtcChecksum => Arc::new(BtcChecksum),
             SecondaryValidator::BulgarianEGNChecksum => Arc::new(BulgarianEGNChecksum),
+            SecondaryValidator::ChainedStepValidator { config } => {
+                return compile_chained_step_validator(config, default_response);
+            }
             SecondaryValidator::ChineseIdChecksum => Arc::new(ChineseIdChecksum),
             SecondaryValidator::CoordinationNumberChecksum => Arc::new(CoordinationNumberChecksum),
             SecondaryValidator::CzechPersonalIdentificationNumberChecksum => {
@@ -331,6 +381,7 @@ impl SecondaryValidator {
             SecondaryValidator::UsNpiChecksum => Arc::new(UsNpiChecksum),
             SecondaryValidator::VerhoeffChecksum => Arc::new(VerhoeffChecksum),
             SecondaryValidator::VinChecksum => Arc::new(VinChecksum),
-        }
+        };
+        Some(validator)
     }
 }

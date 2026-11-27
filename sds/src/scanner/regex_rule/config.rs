@@ -299,6 +299,12 @@ pub enum SecondaryValidator {
     BrazilianCpfChecksum,
     BtcChecksum,
     BulgarianEGNChecksum,
+    ChainedStepValidator {
+        // Kept as raw JSON so that no config shape fails deserialization: an unparseable chain
+        // must resolve to its `default_response`, not fail the whole scanner.
+        #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+        config: serde_json::Value,
+    },
     ChineseIdChecksum,
     CoordinationNumberChecksum,
     CzechPersonalIdentificationNumberChecksum,
@@ -681,6 +687,32 @@ mod test {
             serde_json::json!({"type": "LuhnChecksum", "default_response": "pass"})
         );
         assert_eq!(parse_validator_config(json), config);
+    }
+
+    #[test]
+    fn test_chained_step_validator_round_trips_arbitrary_config() {
+        let json = serde_json::json!({
+            "type": "ChainedStepValidator",
+            "default_response": "fail",
+            "config": {"version": 99, "steps": "not a list", "future": [1, null]},
+        });
+        let config = parse_validator_config(json.clone());
+        assert!(matches!(
+            config.validator,
+            ValidatorKind::Known(SecondaryValidator::ChainedStepValidator { .. })
+        ));
+        assert_eq!(serde_json::to_value(&config).unwrap(), json);
+    }
+
+    #[test]
+    fn test_default_chained_step_validator_serializes_without_config() {
+        let validator = SecondaryValidator::iter()
+            .find(|validator| matches!(validator, SecondaryValidator::ChainedStepValidator { .. }))
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(&validator).unwrap(),
+            serde_json::json!({"type": "ChainedStepValidator"})
+        );
     }
 
     #[test]

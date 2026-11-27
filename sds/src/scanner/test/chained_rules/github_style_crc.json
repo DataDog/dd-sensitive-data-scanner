@@ -1,0 +1,701 @@
+[
+  {
+    "id": "polar_authorization_code",
+    "pattern": "\\b(?<sds_match>polar_ac_[A-Za-z0-9]{43})\\b",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "last_part",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "after": "last"
+            }
+          },
+          {
+            "name": "body",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[:-6]"
+            },
+            "output": "body"
+          },
+          {
+            "name": "embedded",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[-6:]"
+            },
+            "output": "embedded"
+          },
+          {
+            "name": "verify",
+            "comment": "base62 is compared by value; the rule regex pins the 6-character width",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$embedded",
+              "alg": "crc32",
+              "scheme": "base62"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Polar authorization code",
+        "input_base64": "aHR0cHM6Ly9leGFtcGxlLmNvbS9jYj9jb2RlPXBvbGFyX2FjX0tXMlhQMVJwRXNDck9VdGQ1WjBjN2haMGdtY1Q4S3RRdWVTMmIySHJmM3Amc3RhdGU9eHl6",
+        "output": "https://example.com/cb?code=[REDACTED]&state=xyz",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern for Polar Authorization Code",
+        "input_base64": "cmVkaXJlY3RfdXJpP2NvZGU9cG9sYXJfYWNfc2hvcnQ=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "polar_client_registration_token",
+    "pattern": "\\b(?<sds_match>polar_crt_[A-Za-z0-9]{43})\\b",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "last_part",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "after": "last"
+            }
+          },
+          {
+            "name": "body",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[:-6]"
+            },
+            "output": "body"
+          },
+          {
+            "name": "embedded",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[-6:]"
+            },
+            "output": "embedded"
+          },
+          {
+            "name": "verify",
+            "comment": "base62 is compared by value; the rule regex pins the 6-character width",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$embedded",
+              "alg": "crc32",
+              "scheme": "base62"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Polar Client Registration Token",
+        "input_base64": "cmVnaXN0cmF0aW9uX2FjY2Vzc190b2tlbjogcG9sYXJfY3J0X2NVUjhOSVRkM2oxTzVEUm5vQlBnTk1DYVBEeDJkYm5EQTZUZEswaFoxblE=",
+        "output": "registration_access_token: [REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Polar Client Registration Token in URL",
+        "input_base64": "Y3VybCAiaHR0cHM6Ly9hcGkucG9sYXIuc2gvdjEvb2F1dGgyL3JlZ2lzdGVyL3BvbGFyX2NpX3h4eCIgLUggIkF1dGhvcml6YXRpb246IEJlYXJlciBwb2xhcl9jcnRfVGNFOXR5Y0FrYzNZZDVMTDV3V2NPWkRtUnFmbGEyUDRlUGc0QjRPdGJqMCI=",
+        "output": "curl \"https://api.polar.sh/v1/oauth2/register/polar_ci_xxx\" -H \"Authorization: Bearer [REDACTED]\"",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern for Polar Client Registration Token",
+        "input_base64": "cmVnaXN0cmF0aW9uX2FjY2Vzc190b2tlbjogcG9sYXJfY3J0X3Nob3J0",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "polar_client_secret",
+    "pattern": "\\b(?<sds_match>polar_cs_[A-Za-z0-9]{43})\\b",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "last_part",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "after": "last"
+            }
+          },
+          {
+            "name": "body",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[:-6]"
+            },
+            "output": "body"
+          },
+          {
+            "name": "embedded",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[-6:]"
+            },
+            "output": "embedded"
+          },
+          {
+            "name": "verify",
+            "comment": "base62 is compared by value; the rule regex pins the 6-character width",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$embedded",
+              "alg": "crc32",
+              "scheme": "base62"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Polar Client Secret",
+        "input_base64": "Y2xpZW50X3NlY3JldD1wb2xhcl9jc19WaGRCQU1SR0kyQjl0QWtiakJVUGFCTzFCendDdUw2Q3d6QmNFMDhiZlNk",
+        "output": "client_secret=[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern for Polar Client Secret",
+        "input_base64": "Y2xpZW50X3NlY3JldD1wb2xhcl9jc19zaG9ydA==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "polar_refresh_token",
+    "pattern": "\\b(?<sds_match>polar_rt_[uo]_[A-Za-z0-9]{43})\\b",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "last_part",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "after": "last"
+            }
+          },
+          {
+            "name": "body",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[:-6]"
+            },
+            "output": "body"
+          },
+          {
+            "name": "embedded",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[-6:]"
+            },
+            "output": "embedded"
+          },
+          {
+            "name": "verify",
+            "comment": "base62 is compared by value; the rule regex pins the 6-character width",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$embedded",
+              "alg": "crc32",
+              "scheme": "base62"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Polar organization refresh token",
+        "input_base64": "cmVmcmVzaF90b2tlbj1wb2xhcl9ydF9vX1lYTGJmWEhDelF5M0MxeTRVQ2xFUWFJTHJ4RXZTQWV6Q1NoVUMweHg3ckU=",
+        "output": "refresh_token=[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern for Polar Refresh Token",
+        "input_base64": "cmVmcmVzaF90b2tlbj1wb2xhcl9ydF91X3Nob3J0",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "polar_user_session_token",
+    "pattern": "\\b(?<sds_match>polar_us_[A-Za-z0-9]{43})\\b",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "last_part",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "after": "last"
+            }
+          },
+          {
+            "name": "body",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[:-6]"
+            },
+            "output": "body"
+          },
+          {
+            "name": "embedded",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[-6:]"
+            },
+            "output": "embedded"
+          },
+          {
+            "name": "verify",
+            "comment": "base62 is compared by value; the rule regex pins the 6-character width",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$embedded",
+              "alg": "crc32",
+              "scheme": "base62"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Polar User Session Token",
+        "input_base64": "Q29va2llOiBwb2xhcl9zZXNzaW9uPXBvbGFyX3VzX0tTUHF6VlBXaTVrQXVJUDRLRGdTNlV4SUZydjI1NmxQQmVNUUswWUk3SGc=",
+        "output": "Cookie: polar_session=[REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid pattern for Polar User Session Token",
+        "input_base64": "Q29va2llOiBwb2xhcl9zZXNzaW9uPXBvbGFyX3VzX3Nob3J0",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "vercel_app_access_token",
+    "pattern": "\\bvca_[A-Za-z0-9]{56}\\b",
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "last_part",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "after": "last"
+            }
+          },
+          {
+            "name": "body",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[:-6]"
+            },
+            "output": "body"
+          },
+          {
+            "name": "embedded",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[-6:]"
+            },
+            "output": "embedded"
+          },
+          {
+            "name": "verify",
+            "comment": "base62 is compared by value; the rule regex pins the 6-character width",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$embedded",
+              "alg": "crc32",
+              "scheme": "base62"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "Valid Vercel App Access Token to be scrubbed",
+        "input_base64": "SGVsbG8gd29ybGQsIGNvbm5lY3RlZCB0byBWZXJjZWwgd2l0aCB2Y2FfMjZOOVJ0VWwxMVR5SlZnNlFCNnRERk01bUR1dGp6UXZjS25WSTdTYTJ1dlk0NVdWUmg0SmZkbU0=",
+        "output": "Hello world, connected to Vercel with [REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid Vercel App Access Token (too short)",
+        "input_base64": "SGVsbG8gd29ybGQsIGNvbm5lY3RlZCB0byBWZXJjZWwgd2l0aCB2Y2FfYTFCMmMzRDRlNUY2ZzdIOGk5SjBrMUwybTNONG81UDZxN1I4czlUMHUxVjJ3M1g0eTVaNg==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "vercel_app_refresh_token",
+    "pattern": "\\bvcr_[A-Za-z0-9]{56}\\b",
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "last_part",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "after": "last"
+            }
+          },
+          {
+            "name": "body",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[:-6]"
+            },
+            "output": "body"
+          },
+          {
+            "name": "embedded",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[-6:]"
+            },
+            "output": "embedded"
+          },
+          {
+            "name": "verify",
+            "comment": "base62 is compared by value; the rule regex pins the 6-character width",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$embedded",
+              "alg": "crc32",
+              "scheme": "base62"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Vercel App Refresh Token to be scrubbed",
+        "input_base64": "SGVsbG8gd29ybGQsIGNvbm5lY3RlZCB0byBWZXJjZWwgd2l0aCB2Y3JfMnpVY1U4UnBkcXpuemozM2NTTlRaR0pXSHdydms2NXY5ME5zODhzRlJOR2VScll3MHYxN2VMeXY=",
+        "output": "Hello world, connected to Vercel with [REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid Vercel App Refresh Token (too long)",
+        "input_base64": "MjAyNC0wMS0xNSAxMDozMDowMCBJTkZPIGF1dGg6IHRva2VuPXZjcl8yelVjVThScGRxem56ajMzY1NOVFpHSldId3J2azY1djkwTnM4OHNGUk5HZVJyWXcwdjE3ZUx5IHVzZWQ=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "vercel_integration_token",
+    "pattern": "\\bvci_[A-Za-z0-9]{56}\\b",
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "last_part",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "after": "last"
+            }
+          },
+          {
+            "name": "body",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[:-6]"
+            },
+            "output": "body"
+          },
+          {
+            "name": "embedded",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[-6:]"
+            },
+            "output": "embedded"
+          },
+          {
+            "name": "verify",
+            "comment": "base62 is compared by value; the rule regex pins the 6-character width",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$embedded",
+              "alg": "crc32",
+              "scheme": "base62"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "Valid Vercel Integration Token to be scrubbed",
+        "input_base64": "MjAyNC0wMS0xNSAxMDozMDowMCBJTkZPIGF1dGg6IHRva2VuPXZjaV8yelVjVThScGRxem56ajMzY1NOVFpHSldId3J2azY1djkwTnM4OHNGUk5HZVJyWXcwdjE3ZUx5diB1c2Vk",
+        "output": "2024-01-15 10:30:00 INFO auth: token=[REDACTED] used",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid Vercel Integration Token (too long)",
+        "input_base64": "eyJ0b2tlbiI6ICJ2Y2lfMnpVY1U4UnBkcXpuemozM2NTTlRaR0pXSHdydms2NXY5ME5zODhzRlJOR2VScll3MHYxN2VMeXY1In0=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  },
+  {
+    "id": "chief_tools_token",
+    "pattern": "\\b(?<sds_match>ct[ptor]_[0-9a-zA-Z]{36})\\b",
+    "pattern_capture_groups": [
+      "sds_match"
+    ],
+    "default_included_keywords": [],
+    "validator": {
+      "type": "ChainedStepValidator",
+      "default_response": "pass",
+      "config": {
+        "version": 1,
+        "steps": [
+          {
+            "name": "last_part",
+            "op": "Split",
+            "input": {
+              "param": "$GLOBAL_MATCH",
+              "separator": "_",
+              "occurrence": -1
+            },
+            "output": {
+              "after": "last"
+            }
+          },
+          {
+            "name": "body",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[:-6]"
+            },
+            "output": "body"
+          },
+          {
+            "name": "embedded",
+            "op": "Extract",
+            "input": {
+              "param": "$last",
+              "slice": "[-6:]"
+            },
+            "output": "embedded"
+          },
+          {
+            "name": "verify",
+            "comment": "base62 is compared by value; the rule regex pins the 6-character width",
+            "op": "VerifyChecksum",
+            "input": {
+              "payload": "$body",
+              "embedded": "$embedded",
+              "alg": "crc32",
+              "scheme": "base62"
+            }
+          }
+        ]
+      }
+    },
+    "positive": [
+      {
+        "description": "valid Chief Tools personal access token",
+        "input_base64": "Y3RwX283clg1T2VZYUhpZm1NR1c3QkNCR3U0WUQ5N25tSDJvTWtRQg==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Chief Tools personal access token (second sample)",
+        "input_base64": "Y3RwX2Vlc3licG9qQUUwaklTNDBQVXA2cFVCMWRuUlpBdDFrMzlQeA==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Chief Tools personal access token (third sample)",
+        "input_base64": "Y3RwX1lpbEhzZUE5dnpPcXRtQTVWTWI2TkVBTURvSUppUDE3MnhReA==",
+        "output": "[REDACTED]",
+        "use_included_keywords": false
+      },
+      {
+        "description": "valid Chief Tools personal access token embedded in text",
+        "input_base64": "QXV0aG9yaXphdGlvbjogQmVhcmVyIGN0cF9vN3JYNU9lWWFIaWZtTUdXN0JDQkd1NFlEOTdubUgyb01rUUI=",
+        "output": "Authorization: Bearer [REDACTED]",
+        "use_included_keywords": false
+      }
+    ],
+    "negative": [
+      {
+        "description": "invalid - body too long (37 characters)",
+        "input_base64": "Y3RwX283clg1T2VZYUhpZm1NR1c3QkNCR3U0WUQ5N25tSDJvTWtRQkI=",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - forbidden character in body (hyphen)",
+        "input_base64": "Y3RwX283clg1T2VZYUhpZm1NR1c3QkNCR3U0WUQ5N25tSDJvTWstQg==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - truncated body (35 characters)",
+        "input_base64": "Y3RwX283clg1T2VZYUhpZm1NR1c3QkNCR3U0WUQ5N25tSDJvTWtR",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      },
+      {
+        "description": "invalid - wrong prefix (ctx_ instead of ctp_)",
+        "input_base64": "Y3R4X283clg1T2VZYUhpZm1NR1c3QkNCR3U0WUQ5N25tSDJvTWtRQg==",
+        "rejected_by": "pattern",
+        "use_included_keywords": false
+      }
+    ]
+  }
+]

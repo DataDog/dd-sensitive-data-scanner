@@ -119,6 +119,10 @@ pub use scanner::{
 #[cfg(feature = "dd-sds")]
 pub use scoped_ruleset::ExclusionCheck;
 #[cfg(feature = "dd-sds")]
+pub use secondary_validation::chained_step::{
+    CHAINED_STEP_VALIDATOR_VERSION, ChainValidationError, validate_chain_strict,
+};
+#[cfg(feature = "dd-sds")]
 pub use tokio::TOKIO_RUNTIME;
 #[cfg(feature = "dd-sds")]
 pub use validation::{
